@@ -2,23 +2,40 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\ServiceProvider;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 
-class AppServiceProvider extends ServiceProvider
+class RouteServiceProvider extends ServiceProvider
 {
     /**
-     * Register any application services.
+     * O caminho para a rota "home" da sua aplicação.
+     *
+     * Tipicamente, usuários são redirecionados para cá após a autenticação.
+     * Alteramos de '/dashboard' para o painel de gerenciamento de reservas.
+     *
+     * @var string
      */
-    public function register(): void
-    {
-        //
-    }
+    public const HOME = '/admin/reservas'; // ⬅️ ALTERAÇÃO AQUI
 
     /**
-     * Bootstrap any application services.
+     * Define seu mapeamento de rotas, constraints de padrão, filtros, e muito mais.
      */
     public function boot(): void
     {
-        //
+        RateLimiter::for('api', function (Request $request) {
+            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+        });
+
+        $this->routes(function () {
+            Route::middleware('api')
+                ->prefix('api')
+                ->group(base_path('routes/api.php'));
+
+            Route::middleware('web')
+                ->group(base_path('routes/web.php'));
+        });
     }
 }
