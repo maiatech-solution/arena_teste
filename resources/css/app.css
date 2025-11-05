@@ -1,3 +1,8 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Estilo de fundo padrão para todo o site, movido da tela de boas-vindas para ser global */
+.arena-bg {
+    background: linear-gradient(135deg, #10b981 0%, #064e3b 100%); /* Verde Esmeralda/Verde Escuro */
+}

@@ -14,11 +14,12 @@ class RouteServiceProvider extends ServiceProvider
      * O caminho para a rota "home" da sua aplicação.
      *
      * Tipicamente, usuários são redirecionados para cá após a autenticação.
-     * Alteramos de '/dashboard' para o painel de gerenciamento de reservas.
+     * Alteramos de '/dashboard' para o painel de gerenciamento de reservas,
+     * que é o destino imediato para o gestor.
      *
      * @var string
      */
-    public const HOME = '/admin/reservas'; // ⬅️ ALTERAÇÃO AQUI
+    public const HOME = '/admin/reservas';
 
     /**
      * Define seu mapeamento de rotas, constraints de padrão, filtros, e muito mais.

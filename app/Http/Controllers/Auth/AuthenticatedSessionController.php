@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
-use App\Providers\RouteServiceProvider; // ⬅️ NOVO: Importa o RouteServiceProvider
+use App\Providers\RouteServiceProvider;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -29,8 +29,9 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        // ⬅️ ALTERAÇÃO CHAVE AQUI: Força o redirecionamento para o valor definido em RouteServiceProvider::HOME
-        return redirect()->intended(RouteServiceProvider::HOME);
+        // 🎯 CORREÇÃO: Força o redirecionamento para a rota 'dashboard',
+        // ignorando o RouteServiceProvider::HOME que está apontando para o lugar errado.
+        return redirect()->intended(route('dashboard'));
     }
 
     /**

@@ -3,51 +3,76 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Reserva; // ✅ CRUCIAL: O Model de Reserva precisa ser importado
+use App\Models\Reserva;
 use Illuminate\Http\Request;
-use Carbon\Carbon;
+use Illuminate\Support\Facades\DB; // Necessário se for usar o DB::table em qualquer função
+use Carbon\Carbon; // Mantido para caso de uso futuro
 
 class ReservaController extends Controller
 {
     /**
-     * Exibe a lista de todas as reservas para o administrador.
+     * Exibe a lista de reservas que estão pendentes de confirmação.
+     * Filtra o status por 'pending'.
      */
     public function index()
     {
-        // 1. Busca os dados: Esta linha CRIA a variável $reservas
-        $reservas = Reserva::orderBy('date', 'asc')
-                           ->orderBy('start_time', 'asc')
-                           ->get();
+        // Busca todas as reservas com status 'pending'
+        $reservas = Reserva::with('user', 'quadra')
+                            ->where('status', 'pending')
+                            ->orderBy('date', 'asc')
+                            ->orderBy('start_time', 'asc')
+                            ->get();
 
-        // 2. Passa para a View: Esta linha DEVE passar a variável
-        // O compact('reservas') é um atalho para ['reservas' => $reservas]
+        /*
+        // --- BLOC DE DEBUG CRÍTICO ---
+        // Se a tela de admin estiver vazia, COMENTE as linhas 24-28
+        // e DESCOMENTE o bloco abaixo (linhas 31-33) para descobrir o status real no seu DB.
+        // O código de debug deve ser colocado no método que sua rota está chamando (indexReservasPendentes no AdminController)!
+
+        // $reservas_raw = DB::table('reservas')->get();
+        // dd($reservas_raw->pluck('status', 'id')->toArray());
+
+        // --- FIM DO BLOC DE DEBUG CRÍTICO ---
+        */
+
         return view('admin.reservas.index', compact('reservas'));
     }
 
     /**
-     * Confirma uma reserva, alterando o status para 'confirmed'.
+     * Confirma uma reserva, alterando seu status para 'confirmed'.
+     * O nome do método está alinhado com a rota 'admin.reservas.confirmar'.
      */
-    public function confirm(Reserva $reserva)
+    public function confirmar(Reserva $reserva)
     {
-        // Verifica se a reserva não está rejeitada para evitar confirmação dupla
-        if ($reserva->status !== 'rejected') {
-            $reserva->status = 'confirmed';
-            $reserva->save();
+        // Verifica se a reserva está realmente pendente antes de confirmar
+        if ($reserva->status === 'pending') {
+            // Usa o método update para uma operação mais limpa
+            $reserva->update(['status' => 'confirmed']);
 
-            return redirect()->route('admin.reservas.index')->with('success', 'Reserva de ' . $reserva->client_name . ' confirmada com sucesso!');
+            $clientName = $reserva->user->name ?? 'Cliente';
+
+            return redirect()->route('admin.reservas.index')->with('success', "Reserva de {$clientName} confirmada com sucesso!");
         }
 
-        return redirect()->route('admin.reservas.index')->with('error', 'A reserva já havia sido rejeitada.');
+        return redirect()->route('admin.reservas.index')->with('error', 'A reserva não está em status pendente e não pode ser confirmada.');
     }
 
     /**
-     * Rejeita uma reserva, alterando o status para 'rejected'.
+     * Cancela (rejeita) uma reserva, alterando seu status para 'cancelled'.
+     * O nome do método está alinhado com a rota 'admin.reservas.cancelar'.
      */
-    public function reject(Reserva $reserva)
+    public function cancelar(Reserva $reserva)
     {
-        $reserva->status = 'rejected';
-        $reserva->save();
+        // Verifica se a reserva está realmente pendente antes de cancelar
+        if ($reserva->status === 'pending') {
+            // Usa o método update para uma operação mais limpa
+            $reserva->update(['status' => 'cancelled']);
 
-        return redirect()->route('admin.reservas.index')->with('success', 'Reserva de ' . $reserva->client_name . ' rejeitada com sucesso!');
+            $clientName = $reserva->user->name ?? 'Cliente';
+
+            return redirect()->route('admin.reservas.index')->with('success', "Reserva de {$clientName} cancelada com sucesso!");
+        }
+
+        return redirect()->route('admin.reservas.index')->with('error', 'A reserva não está em status pendente e não pode ser cancelada.');
     }
 }

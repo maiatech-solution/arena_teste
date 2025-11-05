@@ -24,6 +24,7 @@ return new class extends Migration
             // Dados do Cliente (quem reservou)
             $table->string('client_name');
             $table->string('client_contact'); // Contato do cliente (para o WhatsApp)
+            //$table->decimal('signal_value', 8, 2);
             $table->text('notes')->nullable(); // Alguma nota adicional
 
             // Status: 'pending' é o padrão inicial

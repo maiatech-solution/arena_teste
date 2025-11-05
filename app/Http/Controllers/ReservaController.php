@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Schedule;
 use App\Models\Reserva;
+use App\Http\Requests\StoreReservaRequest;
+use App\Http\Requests\UpdateReservaStatusRequest; // <-- ESSENCIAL: Certifique-se desta importação
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -11,22 +13,20 @@ use Carbon\CarbonPeriod;
 class ReservaController extends Controller
 {
     /**
-     * Exibe a grade de horários disponíveis para o cliente,
-     * excluindo slots que já possuem reservas Pendentes ou Confirmadas.
+     * Exibe a grade de horários disponíveis.
      */
     public function index()
     {
         // 1. HORÁRIOS FIXOS: Busca todos os horários fixos ativos
         $fixedSchedules = Schedule::where('is_active', true)
-                                  ->orderBy('day_of_week')
-                                  ->orderBy('start_time')
-                                  ->get();
+                                     ->orderBy('day_of_week')
+                                     ->orderBy('start_time')
+                                     ->get();
 
         // 2. RESERVAS QUE OCUPAM O SLOT:
-        // Busca todas as reservas que não foram rejeitadas (ou seja, Pendentes ou Confirmadas)
-        $occupiedSlots = Reserva::where('status', '!=', 'rejected')
-                                ->where('date', '>=', Carbon::today()->toDateString()) // Apenas futuras ou de hoje
-                                ->get();
+        $occupiedSlots = Reserva::whereIn('status', ['pending', 'confirmed'])
+                                     ->where('date', '>=', Carbon::today()->toDateString())
+                                     ->get();
 
         // Mapeia os slots ocupados para fácil verificação (chave: 'Y-m-d H:i')
         $occupiedMap = $occupiedSlots->mapWithKeys(function ($reserva) {
@@ -37,33 +37,31 @@ class ReservaController extends Controller
         // 3. CALCULA O CRONOGRAMA SEMANAL (próximas 2 semanas)
         $weeklySchedule = [];
         $startDate = Carbon::today();
-        $endDate = $startDate->copy()->addWeeks(2); // Agenda para as próximas 2 semanas
+        $endDate = $startDate->copy()->addWeeks(2);
 
         $period = CarbonPeriod::create($startDate, $endDate);
 
         foreach ($period as $date) {
-            $dayOfWeek = $date->dayOfWeekIso; // 1 (Segunda) a 7 (Domingo)
+            $dayOfWeek = $date->dayOfWeekIso;
             $daySchedules = $fixedSchedules->where('day_of_week', $dayOfWeek);
 
             foreach ($daySchedules as $schedule) {
                 $startTime = Carbon::parse($schedule->start_time);
                 $endTime = Carbon::parse($schedule->end_time);
 
-                // Formata a data e hora do slot atual
-                // Garante que o slot de hoje só é exibido se for futuro (já que estamos usando Carbon::today())
                 if ($date->isToday() && $startTime->lt(Carbon::now())) {
-                    continue; // Pula horários que já passaram hoje
+                    continue;
                 }
 
                 $slotDateTime = $date->copy()->setTime($startTime->hour, $startTime->minute);
                 $slotKey = $slotDateTime->format('Y-m-d H:i');
 
-                // Verifica se o slot já está ocupado por uma reserva Pendente ou Confirmada
                 if (!isset($occupiedMap[$slotKey])) {
                     $weeklySchedule[$date->toDateString()][] = [
                         'start_time' => $startTime->format('H:i'),
                         'end_time'   => $endTime->format('H:i'),
                         'price'      => $schedule->price,
+                        'schedule_id' => $schedule->id,
                     ];
                 }
             }
@@ -73,46 +71,33 @@ class ReservaController extends Controller
     }
 
     /**
-     * Salva a pré-reserva e gera o link de WhatsApp.
+     * Salva a pré-reserva.
      */
-    public function store(Request $request)
+    public function store(StoreReservaRequest $request)
     {
-        $validated = $request->validate([
-            'date'           => 'required|date',
-            'start_time'     => 'required|date_format:H:i',
-            'end_time'       => 'required|date_format:H:i',
-            'client_name'    => 'required|string|max:255',
-            'client_contact' => 'required|string|max:255',
-            'price'          => 'required|numeric',
-        ]);
+        $validated = $request->validated();
 
-        // Verifica novamente se o slot não está ocupado ANTES de salvar (proteção extra)
-        $isOccupied = Reserva::where('status', '!=', 'rejected')
-                            ->where('date', $validated['date'])
-                            ->where('start_time', $validated['start_time'])
-                            ->exists();
+        $isOccupied = Reserva::whereIn('status', ['pending', 'confirmed'])
+                              ->where('date', $validated['date'])
+                              ->where('start_time', $validated['start_time'])
+                              ->exists();
 
         if ($isOccupied) {
             return redirect()->route('reserva.index')->with('error', 'Desculpe, este horário acabou de ser reservado. Por favor, escolha outro.');
         }
 
-        // Salva a reserva como PENDENTE
         $reserva = Reserva::create([
-            'date' => $validated['date'],
-            'start_time' => $validated['start_time'],
-            'end_time' => $validated['end_time'],
-            'client_name' => $validated['client_name'],
+            'date'           => $validated['date'],
+            'start_time'     => $validated['start_time'],
+            'end_time'       => $validated['end_time'],
+            'client_name'    => $validated['client_name'],
             'client_contact' => $validated['client_contact'],
-            'price' => $validated['price'],
-            'status' => 'pending', // Status inicial
+            'signal_value'  => $validated['signal_value'],
+            'price'          => $validated['price'],
+            'status'         => 'pending',
         ]);
 
-        // ----------------------------------------------------
-        // 💬 GERAÇÃO DA MENSAGEM DE WHATSAPP PARA O GESTOR
-        // ----------------------------------------------------
-
-        // ⚠️ AJUSTE AQUI: Substitua este valor pelo WhatsApp do Administrador/Gestor.
-        $whatsappNumber = '91985320997';
+        $whatsappNumber = '91985320997'; // Altere para o seu número WhatsApp
 
         $data = Carbon::parse($reserva->date)->format('d/m/Y');
         $hora = Carbon::parse($reserva->start_time)->format('H:i');
@@ -121,6 +106,7 @@ class ReservaController extends Controller
                        "Cliente: {$reserva->client_name}\n" .
                        "Contato: {$reserva->client_contact}\n" .
                        "Data/Hora: {$data} às {$hora}\n" .
+                       //"Valor do Sinal: R$ " . number_format($reserva->signal_value, 2, ',', '.') . "\n" .
                        "Valor: R$ " . number_format($reserva->price, 2, ',', '.') . "\n";
 
         $whatsappLink = "https://api.whatsapp.com/send?phone={$whatsappNumber}&text=" . urlencode($messageText);
@@ -130,5 +116,59 @@ class ReservaController extends Controller
                          ->with('success', 'Pré-reserva enviada! Por favor, entre em contato via WhatsApp para confirmar o agendamento.');
     }
 
-    // ... você pode adicionar outros métodos aqui se necessário
+    /**
+     * 🎯 Implementação do método: Atualiza o status de uma reserva existente.
+     * * @param  \App\Http\Requests\UpdateReservaStatusRequest  $request
+     * @param  \App\Models\Reserva  $reserva (Injetado via Route Model Binding)
+     * @return \Illuminate\Http\Response (Retorno JSON para uso em API/Painel)
+     */
+    public function updateStatus(UpdateReservaStatusRequest $request, Reserva $reserva)
+    {
+        // O status é validado automaticamente pelo Form Request (se é 'confirmed', 'cancelled' ou 'rejected').
+        $newStatus = $request->validated('status');
+        $oldStatus = $reserva->status;
+
+        try {
+            // 1. Regra de Negócio: Não permitir alteração se o status final já foi alcançado.
+            if (in_array($oldStatus, ['cancelled', 'rejected'])) {
+                return response()->json([
+                    'message' => 'O status de uma reserva cancelada ou rejeitada não pode ser alterado.',
+                    'current_status' => $oldStatus
+                ], 400); // 400 Bad Request
+            }
+
+            // 2. Regra de Negócio Crítica: Impedir confirmação (confirmed) se o slot já estiver ocupado.
+            if ($newStatus === 'confirmed') {
+                $isOccupiedByAnother = Reserva::where('id', '!=', $reserva->id) // Exclui a reserva atual
+                                              ->whereIn('status', ['pending', 'confirmed'])
+                                              ->where('date', $reserva->date)
+                                              ->where('start_time', $reserva->start_time)
+                                              ->exists();
+
+                if ($isOccupiedByAnother) {
+                    return response()->json([
+                        'message' => 'Não foi possível confirmar. O horário já está ocupado por outra reserva Pendente/Confirmada.',
+                    ], 409); // 409 Conflict
+                }
+            }
+
+            // 3. Atualiza o status no banco de dados
+            $reserva->status = $newStatus;
+            $reserva->save();
+
+            // Retorno de sucesso
+            return response()->json([
+                'message' => "Status da reserva #{$reserva->id} alterado de '{$oldStatus}' para '{$newStatus}' com sucesso.",
+                'reserva' => $reserva
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error("Erro ao atualizar status da reserva {$reserva->id}: " . $e->getMessage());
+
+            return response()->json([
+                'message' => 'Ocorreu um erro interno ao tentar atualizar o status.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
