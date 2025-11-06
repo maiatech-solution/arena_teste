@@ -6,8 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\User;
 use App\Models\Schedule;
-// Não foi necessário Horario, pois Schedule está sendo usado para o relacionamento
-// use App\Models\Horario;
 
 class Reserva extends Model
 {
@@ -33,6 +31,9 @@ class Reserva extends Model
         'notes',
         'status',
 
+        // 🔑 NOVO: Permitir preenchimento do ID do Gestor que criou a reserva manual
+        'manager_id',
+
         // 💡 NOVOS CAMPOS PARA RECORRÊNCIA
         'recurrent_series_id', // ID para agrupar todas as reservas de uma série fixa (ex: 20 semanas)
         'is_recurrent'         // Flag para indicar que esta reserva faz parte de uma série
@@ -50,8 +51,18 @@ class Reserva extends Model
      */
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'user_id'); // 💡 Explicitando a chave para maior clareza
     }
+
+    /**
+     * 🔑 NOVO: Relacionamento com o gestor (usuário) que criou a reserva manual.
+     */
+    public function manager()
+    {
+        // Define a relação com o modelo User usando a chave estrangeira 'manager_id'
+        return $this->belongsTo(User::class, 'manager_id');
+    }
+
 
     /**
      * Relacionamento com a regra de horário fixo (Schedule).
