@@ -5,8 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\User;
-use App\Models\Horario; // Corrigindo para Horario, se Schedule não existir
-use App\Models\Schedule; // Mantendo se Schedule for o correto
+use App\Models\Schedule;
+// Não foi necessário Horario, pois Schedule está sendo usado para o relacionamento
+// use App\Models\Horario;
 
 class Reserva extends Model
 {
@@ -30,7 +31,11 @@ class Reserva extends Model
         'client_name',
         'client_contact',
         'notes',
-        'status'
+        'status',
+
+        // 💡 NOVOS CAMPOS PARA RECORRÊNCIA
+        'recurrent_series_id', // ID para agrupar todas as reservas de uma série fixa (ex: 20 semanas)
+        'is_recurrent'         // Flag para indicar que esta reserva faz parte de uma série
     ];
 
     // CRÍTICO: Define o casting para string para evitar a confusão do Eloquent.
@@ -40,20 +45,25 @@ class Reserva extends Model
         'end_time' => 'string',
     ];
 
+    /**
+     * Relacionamento com o usuário (cliente que fez a reserva).
+     */
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * Relacionamento com a regra de horário fixo (Schedule).
+     */
     public function schedule()
     {
-        // Se você estiver usando o modelo Schedule para horários fixos
         return $this->belongsTo(Schedule::class, 'schedule_id');
-
-        // Se você estiver usando o modelo Horario (como no seu controller)
-        // return $this->belongsTo(Horario::class, 'schedule_id');
     }
 
+    /**
+     * Acessório para retornar o nome do status em português.
+     */
     public function getStatusTextAttribute()
     {
         switch ($this->status) {

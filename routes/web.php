@@ -3,10 +3,10 @@
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
-// ➡️ IMPORTAÇÕES ADICIONADAS
+// ➡️ IMPORTAÇÕES CORRIGIDAS
 use App\Http\Controllers\ReservaController;
 use App\Http\Controllers\AdminController;
-use App\Http\Controllers\Admin\HorarioController; // Assumindo que este controller está em Admin/
+use App\Http\Controllers\Admin\HorarioController; // ⬅️ CORREÇÃO: Ponto crucial, aponta para a subpasta Admin
 
 // -----------------------------------------------------------------------------------
 // 🏠 ROTA RAIZ (PÚBLICA) - Bem-vindo à Arena
@@ -23,7 +23,12 @@ Route::get('/', function () {
 Route::get('/agendamento', [ReservaController::class, 'index'])->name('reserva.index');
 Route::post('/agendamento', [ReservaController::class, 'store'])->name('reserva.store');
 
-// ===============================================
+
+// =========================================================================
+// ROTA API PARA BUSCA DE HORÁRIOS DISPONÍVEIS (USADA PELO JS NO ADMIN E CLIENTE)
+// =========================================================================
+Route::get('/api/reservas/available-times', [ReservaController::class, 'getAvailableTimes'])
+    ->name('api.reservas.available-times'); // <--- NOVA ROTA ADICIONADA AQUI!
 
 
 // ===============================================
@@ -42,25 +47,46 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
 
         // ROTAS DE HORÁRIOS
         Route::get('/horarios', [HorarioController::class, 'index'])->name('horarios.index');
+
+        // ROTA POST UNIFICADA. Usa o método 'store' do HorarioController
         Route::post('/horarios', [HorarioController::class, 'store'])->name('horarios.store');
-        Route::patch('/horarios/{horario}/status', [HorarioController::class, 'update_status'])->name('horarios.update_status');
+
+        // 🆕 CORREÇÃO: ROTA GET PARA EXIBIR O FORMULÁRIO DE EDIÇÃO
+        Route::get('/horarios/{horario}/edit', [HorarioController::class, 'edit'])->name('horarios.edit');
+
+        // 🆕 CORREÇÃO: ROTA PATCH PARA SALVAR AS MUDANÇAS DE EDIÇÃO
+        Route::patch('/horarios/{horario}', [HorarioController::class, 'update'])->name('horarios.update');
+
+        // Mapeia para o método correto 'updateStatus' (CamelCase)
+        Route::patch('/horarios/{horario}/status', [HorarioController::class, 'updateStatus'])->name('horarios.update_status');
+
         Route::delete('/horarios/{horario}', [HorarioController::class, 'destroy'])->name('horarios.destroy');
 
 
         // ROTAS DE GERENCIAMENTO DE RESERVAS
         Route::get('reservas', [AdminController::class, 'indexReservas'])->name('reservas.index');
+
+        // 🆕 NOVO: ROTA PARA EXIBIR O FORMULÁRIO DE CRIAÇÃO MANUAL DE RESERVA
+        Route::get('reservas/create', [AdminController::class, 'createReserva'])->name('reservas.create');
+        // 🆕 NOVO: ROTA PARA PROCESSAR A CRIAÇÃO MANUAL DE RESERVA
+        Route::post('reservas', [AdminController::class, 'storeReserva'])->name('reservas.store');
+
+
+        // NOVA ROTA: Processa o formulário para criar a série de reservas fixas (Horário Fixo para Cliente)
+        Route::post('reservas/tornar-fixo', [AdminController::class, 'makeRecurrent'])->name('reservas.make_recurrent');
+
         Route::get('reservas/confirmadas', [AdminController::class, 'confirmed_index'])->name('reservas.confirmed_index');
 
-        // ❌ CORREÇÃO DA CONFIRMAÇÃO: Mapeia para o método confirmarReserva()
+        // ROTA DE CONFIRMAÇÃO
         Route::patch('reservas/{reserva}/confirmar', [AdminController::class, 'confirmarReserva'])->name('reservas.confirmar');
 
-        // ✅ NOVA ROTA DE REJEIÇÃO: Mapeia para o novo método rejectReserva()
+        // ROTA DE REJEIÇÃO
         Route::patch('reservas/{reserva}/rejeitar', [AdminController::class, 'rejectReserva'])->name('reservas.rejeitar');
 
-        // ❌ CORREÇÃO DO CANCELAMENTO: Mapeia para o método cancelarReserva()
+        // ROTA DE CANCELAMENTO
         Route::delete('reservas/{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('reservas.cancelar');
 
-        // NOVAS ROTAS DE GERENCIAMENTO DE USUÁRIOS
+        // ROTAS DE GERENCIAMENTO DE USUÁRIOS
         Route::get('users', [AdminController::class, 'indexUsers'])->name('users.index');
         Route::get('users/create', [AdminController::class, 'createUser'])->name('users.create');
         Route::post('users', [AdminController::class, 'storeUser'])->name('users.store');

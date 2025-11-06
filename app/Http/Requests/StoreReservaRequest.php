@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Carbon\Carbon;
 
 class StoreReservaRequest extends FormRequest
 {
@@ -19,18 +20,26 @@ class StoreReservaRequest extends FormRequest
      */
     public function rules(): array
     {
+        // Define a data mínima como "hoje"
+        $minDate = Carbon::now()->format('Y-m-d');
+
         return [
-            // Campos de Horário
-            'date'          => ['required', 'date', 'after_or_equal:today'],
-            'start_time'    => ['required', 'date_format:H:i'],
-            'end_time'      => ['nullable', 'date_format:H:i', 'after:start_time'],
-            'price'         => ['required', 'numeric', 'min:0'],
+            // Nomes de input SINCRONIZADOS com create.blade.php
 
             // Campos do Cliente
-            'client_name'   => ['required', 'string', 'max:255'],
+            'nome_cliente'    => ['required', 'string', 'max:255'],
+            'contato_cliente' => ['required', 'string', 'max:50'],
 
-            // CORREÇÃO: Apenas verifica se é obrigatório e string, max 50 caracteres (mais que suficiente para WhatsApp)
-            'client_contact'=> ['required', 'string', 'max:50'],
+            // Campos de Horário
+            // Agora usa 'data_reserva'
+            'data_reserva'    => ['required', 'date', "after_or_equal:{$minDate}"],
+            // Agora usa 'hora_inicio'
+            'hora_inicio'     => ['required', 'date_format:H:i'],
+            // Agora usa 'hora_fim'
+            'hora_fim'        => ['required', 'date_format:H:i', 'after:hora_inicio'],
+
+            // O campo 'price' foi removido da validação, pois não está no formulário.
+            // Se ele for um campo obrigatório no seu Controller, certifique-se de adicioná-lo ao Blade.
         ];
     }
 
@@ -40,13 +49,15 @@ class StoreReservaRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'date.required' => 'A data da reserva é obrigatória.',
-            'date.after_or_equal' => 'Não é possível agendar em datas passadas.',
-            'start_time.required' => 'O horário de início é obrigatório.',
-            'end_time.after' => 'O horário de término deve ser após o horário de início.',
-            'price.required' => 'O valor é obrigatório.',
-            'client_name.required' => 'O seu nome é obrigatório.',
-            'client_contact.required' => 'O número do WhatsApp é obrigatório para contato.',
+            // Mensagens sincronizadas com os novos nomes de campo
+            'data_reserva.required' => 'A data da reserva é obrigatória.',
+            'data_reserva.after_or_equal' => 'Não é possível agendar em datas passadas.',
+            'hora_inicio.required' => 'O horário de início é obrigatório.',
+            'hora_fim.required' => 'O horário de fim é obrigatório.',
+            'hora_fim.after' => 'O horário de término deve ser após o horário de início.',
+
+            'nome_cliente.required' => 'O nome completo do cliente é obrigatório.',
+            'contato_cliente.required' => 'O contato (telefone ou e-mail) é obrigatório.',
         ];
     }
 }

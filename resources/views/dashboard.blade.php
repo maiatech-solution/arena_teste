@@ -58,6 +58,11 @@
                     Gerenciar Horários
                 </a>
 
+                <!-- NOVO BOTÃO DE AGENDAMENTO MANUAL -->
+                <a href="{{ route('admin.reservas.create') }}" class="w-full sm:w-auto text-sm font-medium px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 transition duration-150 text-center font-bold">
+                    Agendar Reserva Manual
+                </a>
+
                 <a href="{{ route('admin.users.create') }}" class="w-full sm:w-auto text-sm font-medium px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 transition duration-150 text-center">
                     Novo Usuário
                 </a>
@@ -116,13 +121,12 @@
 
             // ######################################################################
             // INJEÇÃO DINÂMICA FINAL
+            // Usando {!! $eventsJson !!} para injetar a string JSON sem escapar (solução Blade/Laravel)
             var eventsJson;
             try {
-                // Usando {!! $eventsJson !!} para injetar a string JSON sem escapar (solução Blade/Laravel)
                 eventsJson = JSON.parse('{!! isset($eventsJson) ? $eventsJson : "[]" !!}');
             } catch (e) {
                 console.error("Erro ao parsear $eventsJson. Verifique a saída JSON do Laravel.", e);
-                // Se houver erro de parse, usa um array vazio
                 eventsJson = [];
             }
             // ######################################################################
@@ -144,7 +148,6 @@
                 height: 'auto',
 
                 // CORREÇÃO CRÍTICA: Define o fuso horário como 'local' para evitar o deslocamento de 3 horas.
-                // Isso diz ao FullCalendar para tratar as strings de data/hora (Ex: 12:00:00) como hora local.
                 timeZone: 'local',
 
                 // Configuração para traduzir os botões de visualização
@@ -181,7 +184,7 @@
                     let timeDisplay = startTime.toLocaleTimeString('pt-BR', timeOptions);
 
                     if (endTime) {
-                            timeDisplay += ' - ' + endTime.toLocaleTimeString('pt-BR', timeOptions);
+                                timeDisplay += ' - ' + endTime.toLocaleTimeString('pt-BR', timeOptions);
                     }
 
                     // Conteúdo do Modal: Extrai o nome e o preço (se houver)
