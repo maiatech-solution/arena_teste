@@ -2,12 +2,17 @@
 
 namespace App\Http\Controllers;
 
+// Imports do seu código original
 use App\Models\User;
 use App\Models\Reserva;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
-use Illuminate\Support\Carbon;
+
+// 💡 IMPORTS ADICIONADOS/CORRIGIDOS
+use App\Models\Horario;     // ⬅️ CORREÇÃO: Usar o modelo Horario.php
+use Carbon\CarbonPeriod;     // Necessário para o loop de datas
+use Illuminate\Support\Carbon; // Corrigido para o namespace correto do Carbon
 
 class AdminController extends Controller
 {
@@ -27,12 +32,16 @@ class AdminController extends Controller
         $events = [];
         foreach ($reservas as $reserva) {
 
+            // Verificação de segurança para dados corrompidos
+            if (!isset($reserva->getAttributes()['date']) || !$reserva->start_time) {
+                continue; // Pula a reserva se dados essenciais faltarem
+            }
+
             // CORREÇÃO CRÍTICA DA DATA: Acessa o atributo de forma bruta.
             $bookingDate = $reserva->getAttributes()['date'];
-
             $startDateTimeString = $bookingDate . ' ' . $reserva->start_time;
 
-            // CORREÇÃO CRÍTICA DO TIMEZONE: Usamos o timezone da aplicação (geralmente America/Sao_Paulo).
+            // CORREÇÃO CRÍTICA DO TIMEZONE: Usamos o timezone da aplicação (config/app.php).
             $start = Carbon::parse($startDateTimeString);
 
             if ($reserva->end_time) {
@@ -43,7 +52,6 @@ class AdminController extends Controller
             }
 
             // CORRIGIDO: Usa optional() para lidar com $reserva->user nulo.
-            // Para reservas manuais sem user_id, usa client_name/nome_cliente
             $userName = optional($reserva->user)->name;
             $clientName = $userName ?? $reserva->client_name ?? 'Cliente Desconhecido';
 
@@ -56,7 +64,6 @@ class AdminController extends Controller
             $events[] = [
                 'id' => $reserva->id,
                 'title' => $title,
-                // CRÍTICO: Usamos format('Y-m-d\TH:i:s') para gerar a string ISO 8601 com 'T'
                 'start' => $start->format('Y-m-d\TH:i:s'),
                 'end' => $end->format('Y-m-d\TH:i:s'),
                 'backgroundColor' => '#10B981',
@@ -77,7 +84,6 @@ class AdminController extends Controller
      */
     public function indexReservas()
     {
-        // Busca por status 'pending'
         $reservas = Reserva::where('status', Reserva::STATUS_PENDENTE)
                             ->with('user')
                             ->orderBy('created_at', 'desc')
@@ -89,32 +95,26 @@ class AdminController extends Controller
     }
 
     /**
-     * Exibe a lista de todas as reservas confirmadas, com opção de filtrar
-     * pelas reservas criadas manualmente pelo gestor logado.
+     * Exibe a lista de todas as reservas confirmadas.
      */
     public function confirmed_index(Request $request)
     {
         $query = Reserva::where('status', Reserva::STATUS_CONFIRMADA)
-                        ->with('user');
+                            ->with('user');
 
-        // Verifica se o parâmetro 'only_mine=true' está na URL
         $isOnlyMine = $request->get('only_mine') === 'true';
 
         if ($isOnlyMine) {
-            // APLICA O FILTRO: Mostra APENAS as reservas criadas por este gestor
-            // Para isso, o manager_id da reserva deve ser igual ao ID do gestor logado.
             $query->where('manager_id', auth()->id());
             $pageTitle = 'Minhas Reservas Manuais Confirmadas';
         } else {
-            // Caso contrário, mostra TODAS as reservas confirmadas (clientes e gestores)
             $pageTitle = 'Todas as Reservas Confirmadas';
         }
 
         $reservas = $query->orderBy('date', 'desc')
-                          ->orderBy('start_time', 'asc')
-                          ->paginate(15);
+                            ->orderBy('start_time', 'asc')
+                            ->paginate(15);
 
-        // Passa o estado do filtro para a view, permitindo que os botões mudem o estado
         return view('admin.reservas.confirmed_index', compact('reservas', 'pageTitle', 'isOnlyMine'));
     }
 
@@ -124,20 +124,17 @@ class AdminController extends Controller
     public function confirmarReserva(Reserva $reserva)
     {
         try {
-            // 1. Verificação de Conflito antes de confirmar (Prevenção dupla)
-            $start_time = Carbon::parse($reserva->date . ' ' . $reserva->start_time);
-            $end_time = Carbon::parse($reserva->date . ' ' . $reserva->end_time);
+            // 1. Verificação de Conflito
+            $start_time_carbon = Carbon::parse($reserva->date . ' ' . $reserva->start_time);
+            $end_time_carbon = Carbon::parse($reserva->date . ' ' . $reserva->end_time);
 
             $isConflict = Reserva::where('id', '!=', $reserva->id)
-                                 ->whereIn('status', [Reserva::STATUS_CONFIRMADA])
-                                 ->where(function ($query) use ($start_time, $end_time) {
-                                     $query->where('date', $start_time->toDateString())
-                                           ->where(function ($q) use ($start_time, $end_time) {
-                                               // A nova reserva começa ou termina dentro de uma reserva existente
-                                               $q->where('start_time', '<', $end_time->toTimeString())
-                                                 ->where('end_time', '>', $start_time->toTimeString());
-                                           });
-                                 })->exists();
+                                    ->whereIn('status', [Reserva::STATUS_CONFIRMADA])
+                                    ->where('date', $start_time_carbon->toDateString())
+                                    ->where(function ($q) use ($start_time_carbon, $end_time_carbon) {
+                                        $q->where('start_time', '<', $end_time_carbon->toTimeString())
+                                          ->where('end_time', '>', $start_time_carbon->toTimeString());
+                                    })->exists();
 
             if ($isConflict) {
                 return back()->with('error', 'Conflito detectado: Esta reserva não pode ser confirmada pois já existe outro agendamento CONFIRMADO no mesmo horário.');
@@ -148,7 +145,7 @@ class AdminController extends Controller
             $reserva->save();
 
             return redirect()->route('dashboard')
-                                 ->with('success', 'Reserva confirmada com sucesso! O horário está agora visível no calendário.');
+                                ->with('success', 'Reserva confirmada com sucesso! O horário está agora visível no calendário.');
 
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao confirmar a reserva: ' . $e->getMessage());
@@ -165,7 +162,7 @@ class AdminController extends Controller
             $reserva->save();
 
             return redirect()->route('admin.reservas.index')
-                                 ->with('success', 'Reserva rejeitada com sucesso e removida da lista de pendentes.');
+                                ->with('success', 'Reserva rejeitada com sucesso e removida da lista de pendentes.');
 
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao rejeitar a reserva: ' . $e->getMessage());
@@ -182,7 +179,7 @@ class AdminController extends Controller
             $reserva->save();
 
             return redirect()->route('admin.reservas.index')
-                                 ->with('success', 'Reserva cancelada com sucesso.');
+                                ->with('success', 'Reserva cancelada com sucesso.');
 
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao cancelar a reserva: ' . $e->getMessage());
@@ -190,7 +187,7 @@ class AdminController extends Controller
     }
 
     /**
-     * 💡 NOVO MÉTODO: Gera uma série de reservas recorrentes (Horário Fixo) para um cliente.
+     * Gera uma série de reservas recorrentes (Horário Fixo) para um cliente.
      */
     public function makeRecurrent(Request $request)
     {
@@ -207,11 +204,9 @@ class AdminController extends Controller
 
         $startDate = Carbon::parse($validated['start_date']);
         $endDate = Carbon::parse($validated['end_date']);
-        $dayOfWeek = $startDate->dayOfWeek; // O dia da semana da primeira reserva (ex: 1 para Segunda)
+        $dayOfWeek = $startDate->dayOfWeek; // O dia da semana da primeira reserva (0=Dom a 6=Sáb)
 
-        // Gera um ID único para agrupar todas as reservas desta série
         $recurrentSeriesId = now()->timestamp . $validated['user_id'];
-
         $reservasCriadas = 0;
         $conflitos = 0;
 
@@ -222,12 +217,12 @@ class AdminController extends Controller
 
             if ($currentDate->dayOfWeek === $dayOfWeek) {
 
-                // 3. Verificação de Conflito (CRÍTICO!)
+                // 3. Verificação de Conflito
                 $conflitoExistente = Reserva::where('date', $currentDate->toDateString())
                     ->where('status', Reserva::STATUS_CONFIRMADA)
                     ->where(function ($query) use ($validated) {
                         $query->where('start_time', '<', $validated['end_time'])
-                              ->where('end_time', '>', $validated['start_time']);
+                                ->where('end_time', '>', $validated['start_time']);
                     })
                     ->exists();
 
@@ -246,15 +241,14 @@ class AdminController extends Controller
                         'status' => Reserva::STATUS_CONFIRMADA,
                         'recurrent_series_id' => $recurrentSeriesId,
                         'is_recurrent' => true,
-                        // Não é necessário manager_id aqui, pois é uma reserva de cliente
+                        // Adicionando o dia da semana (0-6)
+                        'day_of_week' => $dayOfWeek,
                     ]);
                     $reservasCriadas++;
                 } else {
                     $conflitos++;
                 }
             }
-
-            // Move para a próxima semana
             $currentDate->addWeek();
         }
 
@@ -267,46 +261,113 @@ class AdminController extends Controller
         return redirect()->route('admin.reservas.confirmed_index')->with('success', $message);
     }
 
-    // ===============================================
-    // 🆕 MÉTODOS DE CRIAÇÃO MANUAL DE RESERVA (GESTOR)
-    // ===============================================
+    // =================================================================
+    // 💡 MÉTODOS DE CRIAÇÃO MANUAL DE RESERVA (GESTOR) - CORRIGIDOS
+    // =================================================================
 
     /**
      * Exibe o formulário para o gestor criar uma reserva manual.
+     * 💡 CORREÇÃO: Adicionada a lógica para buscar e injetar os dias disponíveis.
      */
     public function createReserva()
     {
-        return view('admin.reservas.create');
+        // 1. DADOS DE DISPONIBILIDADE RECORRENTE (Schedule - Reservas Fixas)
+        // (Usando convenção 0=Dom a 6=Sáb)
+
+        // a) Busca todos os slots de reserva fixos e ativos (chave de exclusão)
+        $fixedReservaSlots = Reserva::where('is_fixed', true)
+                                   ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                   ->select('day_of_week', 'start_time', 'end_time')
+                                   ->get();
+
+        $fixedReservaMap = $fixedReservaSlots->map(function ($reserva) {
+            // Garante que a chave use o padrão 0-6
+            return "{$reserva->day_of_week}-{$reserva->start_time}-{$reserva->end_time}";
+        })->toArray();
+
+        // b) Busca schedules recorrentes e remove os slots ocupados por reservas fixas
+        $availableRecurringSchedules = Horario::whereNotNull('day_of_week') // ⬅️ CORREÇÃO: Usar Horario
+                                             ->whereNull('date')
+                                             ->where('is_active', true)
+                                             ->get()
+                                             ->filter(function ($schedule) use ($fixedReservaMap) {
+                                                 // Garante que a chave de checagem use o padrão 0-6
+                                                 $scheduleKey = "{$schedule->day_of_week}-{$schedule->start_time}-{$schedule->end_time}";
+                                                 return !in_array($scheduleKey, $fixedReservaMap);
+                                             });
+
+        // c) Extrai os dias da semana (dayOfWeek: 0 a 6)
+        $availableDayOfWeeks = $availableRecurringSchedules->pluck('day_of_week')->unique()->map(fn($day) => (int)$day)->toArray();
+
+        // 2. DADOS DE DISPONIBILIDADE AVULSA (Schedule.date)
+        $hoje = Carbon::today();
+        $diasParaVerificar = 180; // Período de busca
+
+        $adHocDates = Horario::whereNotNull('date') // ⬅️ CORREÇÃO: Usar Horario
+                             ->where('is_active', true)
+                             // 💡 FIX: Comparando Objeto Carbon (do DB) com Objeto Carbon ($hoje)
+                             ->where('date', '>=', $hoje)
+                             ->where('date', '<=', $hoje->copy()->addDays($diasParaVerificar))
+                             ->pluck('date') // Retorna Objetos Carbon
+                             // 💡 FIX: Mapeia os Objetos Carbon para Strings (YYYY-MM-DD)
+                             ->map(fn($date) => $date->toDateString())
+                             ->unique()
+                             ->toArray();
+
+        // 3. COMBINAÇÃO E PROJEÇÃO NO TEMPO
+        $diasDisponiveisNoFuturo = [];
+        $period = CarbonPeriod::create($hoje, $hoje->copy()->addDays($diasParaVerificar));
+
+        foreach ($period as $date) {
+            $currentDateString = $date->toDateString();
+            $dayOfWeek = $date->dayOfWeek; // 0 (Dom) a 6 (Sáb)
+
+            $isRecurringAvailable = in_array($dayOfWeek, $availableDayOfWeeks);
+            $isAdHocAvailable = in_array($currentDateString, $adHocDates);
+
+            if ($isRecurringAvailable || $isAdHocAvailable) {
+                $diasDisponiveisNoFuturo[] = $currentDateString;
+            }
+        }
+
+        // 4. RETORNO PARA A VIEW
+        // 💡 CORREÇÃO: Passa a variável $diasDisponiveisJson para a view.
+        return view('admin.reservas.create', [
+            'diasDisponiveisJson' => json_encode(array_values(array_unique($diasDisponiveisNoFuturo))),
+        ]);
     }
 
     /**
      * Armazena uma nova reserva criada manualmente pelo gestor.
-     * Esta reserva é confirmada imediatamente e não requer um user_id.
+     * 💡 CORREÇÃO: Alinhado os nomes dos campos da validação com o formulário
+     * (ex: 'nome_cliente' -> 'client_name').
      */
     public function storeReserva(Request $request)
     {
+        // 💡 CORREÇÃO: Nomes dos campos alinhados com o formulário (create.blade.php)
         $data = $request->validate([
-            'nome_cliente' => 'required|string|max:255',
-            'contato_cliente' => 'required|string|max:255', // Ex: Telefone ou E-mail
-            'data_reserva' => 'required|date|after_or_equal:today',
-            'hora_inicio' => 'required|date_format:H:i',
-            'hora_fim' => 'required|date_format:H:i|after:hora_inicio',
+            'client_name' => 'required|string|max:255',
+            'client_contact' => 'required|string|max:255',
+            'date' => 'required|date|after_or_equal:today',
+            'start_time' => 'required|date_format:H:i',
+            'end_time' => 'required|date_format:H:i|after:start_time',
+            'price' => 'required|numeric|min:0', // 💡 Preço agora é obrigatório vindo do form
+            'schedule_id' => 'required|exists:schedules,id', // 💡 ID do horário
+            'notes' => 'nullable|string|max:500', // 💡 Campo de observações
         ], [
-            'data_reserva.after_or_equal' => 'A data da reserva deve ser hoje ou uma data futura.',
-            'hora_fim.after' => 'A hora de fim deve ser depois da hora de início.',
+            'date.after_or_equal' => 'A data da reserva deve ser hoje ou uma data futura.',
+            'end_time.after' => 'A hora de fim deve ser depois da hora de início.',
         ]);
 
-        // 1. Prepara os dados de data/hora para a verificação e salvamento no BD
-        $date = $data['data_reserva'];
-        $startTime = $data['hora_inicio'];
-        $endTime = $data['hora_fim'];
+        // 1. Prepara os dados de data/hora
+        $date = $data['date'];
+        $startTime = $data['start_time'];
+        $endTime = $data['end_time'];
 
         // 2. VERIFICAÇÃO CRUCIAL DE CONFLITO
-        // Busca por reservas existentes (pendentes ou confirmadas) na mesma data que se sobreponham
         $overlap = Reserva::whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-            ->where('date', $date) // Filtra pela data
+            ->where('date', $date)
             ->where(function ($query) use ($startTime, $endTime) {
-                // Conflito: A nova reserva começa ou termina dentro de uma reserva existente
                 $query->where('start_time', '<', $endTime)
                       ->where('end_time', '>', $startTime);
             })->exists();
@@ -317,25 +378,24 @@ class AdminController extends Controller
 
         // 3. CRIAÇÃO E CONFIRMAÇÃO IMEDIATA
         Reserva::create([
-            // Campos específicos para a criação manual:
-            'client_name' => $data['nome_cliente'],
-            'client_contact' => $data['contato_cliente'],
-            'price' => 0.00, // Pode ser ajustado se o formulário pedir o preço
-            'notes' => 'Reserva criada manualmente pelo gestor.',
+            'client_name' => $data['client_name'],
+            'client_contact' => $data['client_contact'],
+            'price' => $data['price'], // 💡 Salva o preço vindo do formulário
+            'notes' => $data['notes'] ?? 'Reserva criada manualmente pelo gestor.', // 💡 Salva as notas
+            'schedule_id' => $data['schedule_id'], // 💡 Salva o ID do horário
 
-            // Campos de agendamento (alinhados com o esquema do BD)
             'date' => $date,
             'start_time' => $startTime,
             'end_time' => $endTime,
 
-            // ⭐️ NOVO: Associa a reserva ao Gestor logado
-            'manager_id' => auth()->id(),
-
+            'manager_id' => auth()->id(), // Associa ao Gestor logado
             'user_id' => null, // Cliente não autenticado
-            'status' => Reserva::STATUS_CONFIRMADA, // 🔑 CHAVE: Confirmada na hora
+            'status' => Reserva::STATUS_CONFIRMADA, // Confirmada na hora
+            'is_fixed' => false, // Manual é pontual
+            'day_of_week' => Carbon::parse($date)->dayOfWeek, // Salva o dia (0-6)
         ]);
 
-        return redirect()->route('admin.reservas.confirmed_index')->with('success', 'Reserva manual criada e confirmada com sucesso para ' . $data['nome_cliente'] . '!');
+        return redirect()->route('admin.reservas.confirmed_index')->with('success', 'Reserva manual criada e confirmada com sucesso para ' . $data['client_name'] . '!');
     }
 
 

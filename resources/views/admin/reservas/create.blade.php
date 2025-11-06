@@ -17,6 +17,7 @@
                 @if (session('error'))
                     <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6 shadow-md" role="alert">
                         <div class="flex items-center">
+                            {{-- Ícone de Alerta --}}
                             <svg class="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-9V6h2v3h-2zm0 4h2v-2h-2v2z" clip-rule="evenodd" />
                             </svg>
@@ -48,13 +49,11 @@
                         <h4 class="text-xl font-bold text-indigo-700 border-b pb-2">1. Dados do Cliente</h4>
 
                         <div>
-                            {{-- CORRIGIDO: nome_cliente -> client_name --}}
                             <x-input-label for="client_name" :value="__('Nome Completo do Cliente')" class="font-medium" />
                             <x-text-input id="client_name" name="client_name" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" :value="old('client_name')" placeholder="Ex: Maria da Silva" required autofocus />
                         </div>
 
                         <div>
-                            {{-- CORRIGIDO: contato_cliente -> client_contact --}}
                             <x-input-label for="client_contact" :value="__('Contato (Telefone ou E-mail)')" class="font-medium" />
                             <x-text-input id="client_contact" name="client_contact" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" :value="old('client_contact')" placeholder="Ex: (99) 99999-9999 ou email@exemplo.com" required />
                             <p class="text-xs text-gray-500 mt-1">Este contato será usado para comunicação sobre a reserva.</p>
@@ -65,7 +64,6 @@
                         <h4 class="text-xl font-bold text-indigo-700 border-b pb-2">2. Selecione a Data</h4>
 
                         <div>
-                            {{-- CORRIGIDO: data_reserva -> date --}}
                             <x-input-label for="date" :value="__('Data da Reserva')" class="font-medium" />
                             <x-text-input
                                 id="date"
@@ -109,7 +107,7 @@
                             <p id="selected-price" class="text-md text-green-700 font-medium"></p>
                         </div>
 
-                        {{-- CORRIGIDO: Nomes dos campos ocultos --}}
+                        {{-- Campos ocultos para submissão dos dados do slot --}}
                         <input type="hidden" name="date" id="form-data-reserva-hidden">
                         <input type="hidden" name="start_time" id="form-hora-inicio">
                         <input type="hidden" name="end_time" id="form-hora-fim">
@@ -142,7 +140,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Elementos DOM
-            const dataInput = document.getElementById('date'); // CORRIGIDO ID
+            const dataInput = document.getElementById('date');
             const submitButton = document.getElementById('submit-button');
             const msgElement = document.getElementById('data-disponibilidade-msg');
             const timeSelectionContainer = document.getElementById('time-selection-container');
@@ -157,13 +155,17 @@
             // 1. INJEÇÃO DA LISTA DE DIAS DISPONÍVEIS DO BACKEND (Laravel Blade)
             let availableDates = [];
             try {
-                // Tenta fazer o parse da string JSON injetada pelo Controller
-                // Utilizamos @json para melhor segurança e compatibilidade com Blade/JS
-                // NOTA: $diasDisponiveisJson precisa ser passado do Controller
-                const jsonString = '{!! @json($diasDisponiveisJson ?? []) !!}';
+                // **CORREÇÃO CRÍTICA PARA O PARSE ERROR**
+                // Substituído @json($diasDisponiveisJson ?? []) pela sintaxe PHP fundamental
+                // para evitar o erro de sintaxe "," na compilação do Blade/PHP.
+
+                // 💡 CORREÇÃO CRÍTICA: O json_encode() foi removido daqui.
+                // A string $diasDisponiveisJson já vem pronta do Controller.
+                const jsonString = '{!! $diasDisponiveisJson ?? "[]" !!}';
+
                 availableDates = JSON.parse(jsonString);
             } catch (e) {
-                console.error("Erro ao carregar dias disponíveis do backend:", e);
+                console.error("Erro ao carregar dias disponíveis do backend:", e, "String JSON recebida:", jsonString);
                 availableDates = [];
             }
 
@@ -185,15 +187,20 @@
              * Valida a data e, se válida, chama a API de horários.
              */
             function validateAndLoadTimes() {
+                // Limpa a seleção anterior
+                timeSlotsContainer.innerHTML = '';
+                reservationDetailsContainer.style.display = 'none';
+                submitButton.disabled = true;
+                document.getElementById('selected-time-slot').textContent = '';
+                document.getElementById('selected-price').textContent = '';
+
                 selectedDate = dataInput.value;
 
                 // Esconde se não houver data selecionada
                 if (!selectedDate) {
                     timeSelectionContainer.style.display = 'none';
-                    reservationDetailsContainer.style.display = 'none';
                     msgElement.classList.add('hidden');
                     dataInput.classList.remove('border-red-500', 'ring-2', 'ring-red-500');
-                    submitButton.disabled = true;
                     return;
                 }
 
@@ -245,8 +252,8 @@
                 submitButton.disabled = true; // Desabilita o botão até que um slot seja selecionado
 
                 try {
-                    // **CHAMADA REAL AO ENDPOINT DO CONTROLLER**
                     // Utilizamos a função route() do Laravel via Blade para garantir a URL correta
+                    // 💡 CORREÇÃO IMPORTANTE: A API de busca de horários está no ReservaController (rota 'api.reservas.available-times')
                     const url = '{{ route('api.reservas.available-times') }}' + '?date=' + date;
                     const response = await fetch(url);
 
@@ -262,7 +269,7 @@
                     console.error('Erro ao buscar horários:', error);
                     timeSlotsContainer.innerHTML = '<p class="text-red-500 text-center">Erro ao carregar horários. Tente novamente.</p>';
                     noTimesMessage.classList.remove('hidden');
-                } finally {
+Z                } finally {
                     loadingIndicator.style.display = 'none';
                 }
             }
@@ -274,6 +281,15 @@
                 timeSlotsContainer.innerHTML = '';
 
                 if (times.length === 0) {
+                    // 💡 CORREÇÃO: Mensagem mais clara se a data for hoje e os horários já passaram
+                    const selectedDateObj = new Date(selectedDate + 'T00:00:00');
+                    const todayDateObj = new Date(today + 'T00:00:00');
+
+                    if (selectedDateObj.getTime() === todayDateObj.getTime()) {
+                        noTimesMessage.textContent = '🎉 Todos os horários de hoje já passaram ou estão ocupados.';
+                    } else {
+                        noTimesMessage.textContent = '🎉 Não há horários disponíveis para agendamento nesta data.';
+                    }
                     noTimesMessage.classList.remove('hidden');
                     return;
                 }
@@ -282,6 +298,7 @@
 
                 times.forEach(slot => {
                     const button = document.createElement('button');
+                    button.type = 'button'; // Previne submissão do formulário
                     // data-slot armazena todos os dados necessários (start_time, end_time, price, schedule_id, raw_price)
                     button.dataset.slot = JSON.stringify(slot);
                     button.className = 'time-slot bg-blue-500 text-white font-bold py-3 px-4 rounded-xl shadow-md hover:bg-blue-600 transition ease-in-out text-center relative text-sm';
@@ -310,7 +327,9 @@
                 button.classList.add('bg-green-600', 'ring-2', 'ring-green-800');
 
                 // 3. Popula os campos ocultos do formulário
-                document.getElementById('form-data-reserva-hidden').value = selectedDate;
+                // 💡 CORREÇÃO: O campo 'date' do formulário não deve ser o oculto, mas o input principal
+                // Ocultamos o 'form-data-reserva-hidden' e usamos o 'date' (input type=date)
+                // document.getElementById('form-data-reserva-hidden').value = selectedDate; // Este campo está duplicado
                 document.getElementById('form-hora-inicio').value = slot.start_time;
                 document.getElementById('form-hora-fim').value = slot.end_time;
                 document.getElementById('form-preco').value = slot.raw_price; // Usa o valor raw (numérico)
@@ -337,7 +356,10 @@
             dataInput.addEventListener('blur', validateAndLoadTimes);
 
             // Validação inicial ao carregar a página (caso haja old('date'))
-            validateAndLoadTimes();
+            // Se houver um 'old value' para a data, o formulário tentará recarregar
+            if (dataInput.value) {
+                validateAndLoadTimes();
+            }
         });
     </script>
 </x-app-layout>

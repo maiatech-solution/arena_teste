@@ -3,10 +3,10 @@
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
-// ➡️ IMPORTAÇÕES CORRIGIDAS
+// ➡️ IMPORTAÇÕES NECESSÁRIAS
 use App\Http\Controllers\ReservaController;
 use App\Http\Controllers\AdminController;
-use App\Http\Controllers\Admin\HorarioController; // ⬅️ CORREÇÃO: Ponto crucial, aponta para a subpasta Admin
+use App\Http\Controllers\Admin\HorarioController; // ⬅️ Controller de Horários na subpasta Admin
 
 // -----------------------------------------------------------------------------------
 // 🏠 ROTA RAIZ (PÚBLICA) - Bem-vindo à Arena
@@ -28,7 +28,7 @@ Route::post('/agendamento', [ReservaController::class, 'store'])->name('reserva.
 // ROTA API PARA BUSCA DE HORÁRIOS DISPONÍVEIS (USADA PELO JS NO ADMIN E CLIENTE)
 // =========================================================================
 Route::get('/api/reservas/available-times', [ReservaController::class, 'getAvailableTimes'])
-    ->name('api.reservas.available-times'); // <--- NOVA ROTA ADICIONADA AQUI!
+    ->name('api.reservas.available-times');
 
 
 // ===============================================
@@ -51,10 +51,10 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
         // ROTA POST UNIFICADA. Usa o método 'store' do HorarioController
         Route::post('/horarios', [HorarioController::class, 'store'])->name('horarios.store');
 
-        // 🆕 CORREÇÃO: ROTA GET PARA EXIBIR O FORMULÁRIO DE EDIÇÃO
+        // ROTA GET PARA EXIBIR O FORMULÁRIO DE EDIÇÃO
         Route::get('/horarios/{horario}/edit', [HorarioController::class, 'edit'])->name('horarios.edit');
 
-        // 🆕 CORREÇÃO: ROTA PATCH PARA SALVAR AS MUDANÇAS DE EDIÇÃO
+        // ROTA PATCH PARA SALVAR AS MUDANÇAS DE EDIÇÃO
         Route::patch('/horarios/{horario}', [HorarioController::class, 'update'])->name('horarios.update');
 
         // Mapeia para o método correto 'updateStatus' (CamelCase)
@@ -66,9 +66,9 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
         // ROTAS DE GERENCIAMENTO DE RESERVAS
         Route::get('reservas', [AdminController::class, 'indexReservas'])->name('reservas.index');
 
-        // 🆕 NOVO: ROTA PARA EXIBIR O FORMULÁRIO DE CRIAÇÃO MANUAL DE RESERVA
+        // ROTA PARA EXIBIR O FORMULÁRIO DE CRIAÇÃO MANUAL DE RESERVA
         Route::get('reservas/create', [AdminController::class, 'createReserva'])->name('reservas.create');
-        // 🆕 NOVO: ROTA PARA PROCESSAR A CRIAÇÃO MANUAL DE RESERVA
+        // ROTA PARA PROCESSAR A CRIAÇÃO MANUAL DE RESERVA
         Route::post('reservas', [AdminController::class, 'storeReserva'])->name('reservas.store');
 
 
