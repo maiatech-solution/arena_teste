@@ -36,6 +36,12 @@
             align-items: center;
             z-index: 1000;
         }
+        /* Estilo customizado para garantir que o contêiner de links do menu tenha margem inferior em mobile */
+        @media (max-width: 639px) { /* sm breakpoint no tailwind */
+            .mobile-nav-stack > * {
+                margin-bottom: 0.5rem; /* Adiciona um pequeno espaço entre os botões empilhados */
+            }
+        }
     </style>
 
     <link href='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/main.min.css' rel='stylesheet' />
@@ -43,21 +49,21 @@
 <body class="bg-gray-100 min-h-screen font-sans">
 
     <header class="bg-indigo-700 text-white shadow-lg">
-        <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+        <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between sm:items-center space-y-4 sm:space-y-0">
             <h1 class="text-2xl font-extrabold tracking-tight">Sistema de Reservas | Gestor</h1>
 
-            <nav class="flex items-center space-x-4">
+            <nav class="flex items-center flex-wrap gap-3 mobile-nav-stack mt-2 sm:mt-0">
 
-                <a href="{{ route('admin.horarios.index') }}" class="text-sm font-medium px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 transition duration-150">
+                <a href="{{ route('admin.horarios.index') }}" class="w-full sm:w-auto text-sm font-medium px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 transition duration-150 text-center">
                     Gerenciar Horários
                 </a>
 
-                <a href="{{ route('admin.users.create') }}" class="text-sm font-medium px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 transition duration-150">
+                <a href="{{ route('admin.users.create') }}" class="w-full sm:w-auto text-sm font-medium px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 transition duration-150 text-center">
                     Novo Usuário
                 </a>
 
                 @if(isset($reservasPendentesCount) && $reservasPendentesCount > 0)
-                    <a href="{{ route('admin.reservas.index') }}" class="relative inline-flex items-center p-3 text-sm font-medium text-center text-white bg-red-600 rounded-lg hover:bg-red-700 focus:ring-4 focus:outline-none focus:ring-red-300 transition duration-150 ease-in-out">
+                    <a href="{{ route('admin.reservas.index') }}" class="w-full sm:w-auto relative inline-flex items-center justify-center p-3 text-sm font-medium text-center text-white bg-red-600 rounded-lg hover:bg-red-700 focus:ring-4 focus:outline-none focus:ring-red-300 transition duration-150 ease-in-out">
                         <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 14 20">
                             <path d="M12.133 10.126A4.062 4.062 0 0 1 1.706 7.82V3.535C1.706 1.183 3.473 0 6.6 0c3.127 0 4.894 1.183 4.894 3.535v4.285c.038.271.184.526.4.708l1.45 1.258a1 1 0 0 1 0 1.54L11.895 12a1 1 0 0 1-1.15 0L9.27 10.975A5.048 5.048 0 0 0 6.6 11c-2.43 0-4.408-1.551-4.894-3.535H1.706A4.062 4.062 0 0 1 0 7.82v1.306a1 1 0 0 0 .272.693l.723.723A.98.98 0 0 0 1.5 12.5v.5a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-.5a.98.98 0 0 0-.272-.693l-.723-.723a1 1 0 0 0-.4-.708Z"/>
                         </svg>
@@ -65,7 +71,7 @@
                         <div class="absolute inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-red-800 border-2 border-white rounded-full -top-2 -end-2">{{ $reservasPendentesCount }}</div>
                     </a>
                 @else
-                    <a href="{{ route('admin.reservas.index') }}" class="text-sm font-medium px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 transition duration-150">
+                    <a href="{{ route('admin.reservas.index') }}" class="w-full sm:w-auto text-sm font-medium px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 transition duration-150 text-center">
                         Ver Reservas Pendentes
                     </a>
                 @endif
@@ -108,16 +114,21 @@
             var modal = document.getElementById('event-modal');
             var modalContent = document.getElementById('modal-content');
 
-            // CRÍTICO: Injeta a STRING JSON pré-codificada
-            var eventsJson = {!! $eventsJson !!};
+            // ######################################################################
+            // INJEÇÃO DINÂMICA FINAL
+            var eventsJson;
+            try {
+                // Usando {!! $eventsJson !!} para injetar a string JSON sem escapar (solução Blade/Laravel)
+                eventsJson = JSON.parse('{!! isset($eventsJson) ? $eventsJson : "[]" !!}');
+            } catch (e) {
+                console.error("Erro ao parsear $eventsJson. Verifique a saída JSON do Laravel.", e);
+                // Se houver erro de parse, usa um array vazio
+                eventsJson = [];
+            }
+            // ######################################################################
 
-            // INÍCIO DO DEBUG - Loga os dados no console para verificação
-            console.log("--- DEBUG: Eventos JSON enviados pelo Laravel ---");
             console.log("Eventos carregados:", eventsJson);
-            console.log("-------------------------------------------------");
-            // FIM DO DEBUG
 
-            // Verificação de segurança (DEBUG)
             if (typeof FullCalendar === 'undefined') {
                 console.error("ERRO CRÍTICO: FullCalendar ainda não está definido.");
                 if (calendarEl) {
@@ -132,8 +143,16 @@
                 initialView: 'dayGridMonth',
                 height: 'auto',
 
-                // CRÍTICO: FullCalendar usará 'UTC' para interpretar as strings ISO 8601 do Controller.
-                timeZone: 'UTC',
+                // CORREÇÃO CRÍTICA: Define o fuso horário como 'local' para evitar o deslocamento de 3 horas.
+                // Isso diz ao FullCalendar para tratar as strings de data/hora (Ex: 12:00:00) como hora local.
+                timeZone: 'local',
+
+                // Configuração para traduzir os botões de visualização
+                views: {
+                    dayGridMonth: { buttonText: 'Mês' },
+                    timeGridWeek: { buttonText: 'Semana' },
+                    timeGridDay: { buttonText: 'Dia' }
+                },
 
                 headerToolbar: {
                     left: 'prev,next today',
@@ -141,9 +160,8 @@
                     right: 'dayGridMonth,timeGridWeek,timeGridDay'
                 },
                 editable: false,
-                // eventLimit foi removido para corrigir o erro no console
 
-                // Carrega os eventos
+                // Carrega os eventos dinâmicos (via Laravel)
                 events: eventsJson,
 
                 // A data inicial deve focar no mês de novembro
@@ -163,7 +181,7 @@
                     let timeDisplay = startTime.toLocaleTimeString('pt-BR', timeOptions);
 
                     if (endTime) {
-                         timeDisplay += ' - ' + endTime.toLocaleTimeString('pt-BR', timeOptions);
+                            timeDisplay += ' - ' + endTime.toLocaleTimeString('pt-BR', timeOptions);
                     }
 
                     // Conteúdo do Modal: Extrai o nome e o preço (se houver)

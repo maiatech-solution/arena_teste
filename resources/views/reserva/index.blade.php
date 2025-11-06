@@ -174,15 +174,7 @@
                             <p class="text-xs text-red-500 mt-1">{{ $message }}</p>
                         @enderror
                     </div>
-                    <div class="mb-5">
-                        <label for="signal_value" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Seu Nome Completo</label>
-                        <input type="number" step="0.01" min="0.01" name="signal_value" id="signal_value" required
-                            class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-lg shadow-md focus:border-indigo-500 focus:ring-indigo-500 @error('client_name') border-red-500 @enderror"
-                            value="{{ old('price', $schedule->price ?? null) }}">
-                        @error('signal_value')
-                            <p class="text-xs text-red-500 mt-1">{{ $message }}</p>
-                        @enderror
-                    </div>
+
 
                     <div class="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4 pt-4 border-t dark:border-gray-700">
                         {{-- Botão Cancelar --}}

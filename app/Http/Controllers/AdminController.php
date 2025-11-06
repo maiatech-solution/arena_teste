@@ -29,17 +29,19 @@ class AdminController extends Controller
         foreach ($reservas as $reserva) {
 
             // CORREÇÃO CRÍTICA DA DATA: Acessa o atributo de forma bruta.
-            // O acesso direto ao array de atributos é a forma mais segura contra casting forçado.
             $bookingDate = $reserva->getAttributes()['date'];
 
             $startDateTimeString = $bookingDate . ' ' . $reserva->start_time;
 
-            // Timezone Fix
-            $start = Carbon::parse($startDateTimeString)->setTimezone('UTC');
+            // CORREÇÃO CRÍTICA DO TIMEZONE:
+            // 1. Removemos a chamada a setTimeZone('UTC'). Carbon::parse() agora usará
+            // o timezone da sua aplicação (geralmente America/Sao_Paulo).
+            $start = Carbon::parse($startDateTimeString);
 
             if ($reserva->end_time) {
                 $endDateTimeString = $bookingDate . ' ' . $reserva->end_time;
-                $end = Carbon::parse($endDateTimeString)->setTimezone('UTC');
+                // 2. Apenas parseamos a string, sem forçar o timezone.
+                $end = Carbon::parse($endDateTimeString);
             } else {
                 $end = $start->copy()->addHour();
             }
@@ -57,8 +59,10 @@ class AdminController extends Controller
             $events[] = [
                 'id' => $reserva->id,
                 'title' => $title,
-                'start' => $start->toIso8601String(),
-                'end' => $end->toIso8601String(),
+                // CRÍTICO: Usamos format('Y-m-d\TH:i:s') para gerar a string ISO 8601 com 'T',
+                // mas SEM o indicador de fuso horário ('Z' ou offset), sincronizando com o 'timeZone: local' no front-end.
+                'start' => $start->format('Y-m-d\TH:i:s'),
+                'end' => $end->format('Y-m-d\TH:i:s'),
                 'backgroundColor' => '#10B981',
                 'borderColor' => '#059669',
             ];

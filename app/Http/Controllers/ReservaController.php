@@ -92,7 +92,6 @@ class ReservaController extends Controller
             'end_time'       => $validated['end_time'],
             'client_name'    => $validated['client_name'],
             'client_contact' => $validated['client_contact'],
-            'signal_value'  => $validated['signal_value'],
             'price'          => $validated['price'],
             'status'         => 'pending',
         ]);
