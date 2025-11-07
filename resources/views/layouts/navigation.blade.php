@@ -10,15 +10,63 @@
                     </a>
                 </div>
 
-                <!-- Navigation Links -->
-                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                    <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
-                        {{ __('Dashboard') }}
+                <!-- Navigation Links (Desktop) -->
+                <!-- Links administrativos com URLs CORRIGIDAS para o seu web.php e estilo discreto -->
+                <div class="hidden space-x-4 sm:-my-px sm:ms-10 sm:flex items-center">
+
+                    <!-- 1. Dashboard -->
+                    <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')" class="px-3 py-2">
+                        {{ __('Home') }}
+                    </x-nav-link>
+
+                    <!-- 2. Ver Reservas Pendentes (Rota Correta: admin.reservas.index) -->
+                    <x-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.index')" class="
+                        px-3 py-2 rounded-lg text-sm text-orange-600 font-semibold
+                        hover:bg-orange-50 hover:text-orange-700
+                        focus:outline-none focus:bg-orange-50 focus:text-orange-700
+                    ">
+                        {{ __('Reservas Pendentes') }}
+                    </x-nav-link>
+
+                    <!-- 3. Reservas Confirmadas (Rota Correta: admin.reservas.confirmed_index) -->
+                    <x-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="
+                       px-3 py-2 rounded-lg text-sm text-orange-600 font-semibold
+                        hover:bg-orange-50 hover:text-orange-700
+                        focus:outline-none focus:bg-orange-50 focus:text-orange-700
+                    ">
+                        {{ __('Reservas Confirmadas') }}
+                    </x-nav-link>
+
+                    <!-- 4. Gerenciar Horário (Rota Correta: admin.horarios.index) -->
+                    <x-nav-link :href="route('admin.horarios.index')" :active="request()->routeIs('admin.horarios.index')" class="
+                        px-3 py-2 rounded-lg text-sm text-orange-600 font-semibold
+                        hover:bg-orange-50 hover:text-orange-700
+                        focus:outline-none focus:bg-orange-50 focus:text-orange-700
+                    ">
+                        {{ __('Gerenciar Horários') }}
+                    </x-nav-link>
+
+                    <!-- 5. Agendar Reserva Manual (Rota Correta: admin.reservas.create) -->
+                    <x-nav-link :href="route('admin.reservas.create')" :active="request()->routeIs('admin.reservas.create')" class="
+                        px-3 py-2 rounded-lg text-sm text-orange-600 font-semibold
+                        hover:bg-orange-50 hover:text-orange-700
+                        focus:outline-none focus:bg-orange-50 focus:text-orange-700
+                    ">
+                        {{ __('Agendar') }}
+                    </x-nav-link>
+
+                    <!-- 6. Novo Usuário (Rota Correta: admin.users.create) -->
+                    <x-nav-link :href="route('admin.users.create')" :active="request()->routeIs('admin.users.create')" class="
+                        px-3 py-2 rounded-lg text-sm text-orange-600 font-semibold
+                        hover:bg-orange-50 hover:text-orange-700
+                        focus:outline-none focus:bg-orange-50 focus:text-orange-700
+                    ">
+                        {{ __('Novo Usuário') }}
                     </x-nav-link>
                 </div>
             </div>
 
-            <!-- Settings Dropdown -->
+            <!-- Settings Dropdown (Sem alterações abaixo) -->
             <div class="hidden sm:flex sm:items-center sm:ms-6">
                 <x-dropdown align="right" width="48">
                     <x-slot name="trigger">
@@ -64,11 +112,29 @@
         </div>
     </div>
 
-    <!-- Responsive Navigation Menu -->
+    <!-- Responsive Navigation Menu (Mobile) -->
     <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
         <div class="pt-2 pb-3 space-y-1">
+            <!-- Dashboard (Existing) -->
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
+            </x-responsive-nav-link>
+
+            <!-- NEW: Admin Links for Mobile/Responsive View (URLs Corrigidas) -->
+            <x-responsive-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.index')" class="border-l-4 border-red-500 text-red-600">
+                {{ __('Reservas Pendentes') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="border-l-4 border-green-500 text-green-600">
+                {{ __('Reservas Confirmadas') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('admin.horarios.index')" :active="request()->routeIs('admin.horarios.index')" class="border-l-4 border-orange-500 text-orange-600">
+                {{ __('Gerenciar Horário') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('admin.reservas.create')" :active="request()->routeIs('admin.reservas.create')" class="border-l-4 border-blue-500 text-blue-600">
+                {{ __('Agendar') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('admin.users.create')" :active="request()->routeIs('admin.users.create')" class="border-l-4 border-indigo-500 text-indigo-600">
+                {{ __('Novo Usuário') }}
             </x-responsive-nav-link>
         </div>
 
@@ -89,8 +155,8 @@
                     @csrf
 
                     <x-responsive-nav-link :href="route('logout')"
-                            onclick="event.preventDefault();
-                                        this.closest('form').submit();">
+                                onclick="event.preventDefault();
+                                            this.closest('form').submit();">
                         {{ __('Log Out') }}
                     </x-responsive-nav-link>
                 </form>
