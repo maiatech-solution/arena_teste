@@ -19,7 +19,6 @@ class ReservaController extends Controller
 {
     /**
      * Mapeamento dos dias da semana para exibição.
-     * CORREÇÃO CRÍTICA: Corrigido o mapeamento do índice 5 (Sexta-feira).
      * Mapeamento: 0 (Domingo) a 6 (Sábado), consistente com Carbon::dayOfWeek.
      */
     protected $dayNames = [
@@ -28,7 +27,7 @@ class ReservaController extends Controller
         2 => 'Terça-feira',
         3 => 'Quarta-feira',
         4 => 'Quinta-feira',
-        5 => 'Sexta-feira', // <-- CORRIGIDO!
+        5 => 'Sexta-feira',
         6 => 'Sábado',
     ];
 
@@ -104,9 +103,9 @@ class ReservaController extends Controller
         // Busca todas as reservas de cliente marcadas como fixas e ativas.
         // ====================================================================
         $fixedReservaSlots = Reserva::where('is_fixed', true)
-                                           ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-                                           ->select('day_of_week', 'start_time', 'end_time')
-                                           ->get();
+                                         ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                         ->select('day_of_week', 'start_time', 'end_time')
+                                         ->get();
 
         // Mapeia os slots fixos reservados para fácil exclusão
         $fixedReservaMap = $fixedReservaSlots->map(function ($reserva) {
@@ -172,6 +171,9 @@ class ReservaController extends Controller
         $weeklySchedule = [];
         $period = CarbonPeriod::create($startDate, $endDate);
 
+        // Pega o Carbon::now() uma vez, que agora está no fuso horário correto (America/Sao_Paulo)
+        $now = Carbon::now();
+
         foreach ($period as $date) {
             $currentDateString = $date->toDateString();
             // CORREÇÃO: Usando dayOfWeek (0-6)
@@ -190,8 +192,11 @@ class ReservaController extends Controller
                 $startTime = Carbon::parse($schedule->start_time);
                 $endTime = Carbon::parse($schedule->end_time);
 
-                // Ignorar horários que já passaram hoje
-                if ($date->isToday() && $startTime->lt(Carbon::now())) {
+                // Constrói o DateTime completo para o FIM do slot, usando a data do loop.
+                $scheduleEndDateTime = $date->copy()->setTime($endTime->hour, $endTime->minute);
+
+                // CORREÇÃO DE LÓGICA: Ignorar horários que JÁ PASSARAM hoje (comparando com o FIM do slot)
+                if ($date->isToday() && $scheduleEndDateTime->lt($now)) {
                     continue;
                 }
 
@@ -236,9 +241,9 @@ class ReservaController extends Controller
 
         // a) Busca todos os slots de reserva fixos e ativos (chave de exclusão)
         $fixedReservaSlots = Reserva::where('is_fixed', true)
-                                           ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-                                           ->select('day_of_week', 'start_time', 'end_time')
-                                           ->get();
+                                         ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                         ->select('day_of_week', 'start_time', 'end_time')
+                                         ->get();
 
         $fixedReservaMap = $fixedReservaSlots->map(function ($reserva) {
             return "{$reserva->day_of_week}-{$reserva->start_time}-{$reserva->end_time}";
@@ -246,14 +251,14 @@ class ReservaController extends Controller
 
         // b) Busca schedules recorrentes e remove os slots ocupados por reservas fixas
         $availableRecurringSchedules = Schedule::whereNotNull('day_of_week')
-                                                    ->whereNull('date')
-                                                    ->where('is_active', true)
-                                                    ->get()
-                                                    ->filter(function ($schedule) use ($fixedReservaMap) {
-                                                        // Remove slots de Schedule que são anulados por Reservas Fixas
-                                                        $scheduleKey = "{$schedule->day_of_week}-{$schedule->start_time}-{$schedule->end_time}";
-                                                        return !in_array($scheduleKey, $fixedReservaMap);
-                                                    });
+                                                     ->whereNull('date')
+                                                     ->where('is_active', true)
+                                                     ->get()
+                                                     ->filter(function ($schedule) use ($fixedReservaMap) {
+                                                         // Remove slots de Schedule que são anulados por Reservas Fixas
+                                                         $scheduleKey = "{$schedule->day_of_week}-{$schedule->start_time}-{$schedule->end_time}";
+                                                         return !in_array($scheduleKey, $fixedReservaMap);
+                                                     });
 
         // c) Extrai os dias da semana (dayOfWeek: 0 a 6) que têm pelo menos 1 slot recorrente disponível
         $availableDayOfWeeks = $availableRecurringSchedules->pluck('day_of_week')->unique()->map(fn($day) => (int)$day)->toArray();
@@ -312,6 +317,8 @@ class ReservaController extends Controller
         $selectedDate = Carbon::parse($dateString);
         $dayOfWeek = $selectedDate->dayOfWeek;
         $isToday = $selectedDate->isToday();
+
+        // Pega o Carbon::now() uma vez, que agora está no fuso horário correto (America/Sao_Paulo)
         $now = Carbon::now();
 
         // 2. Schedules (slots) definidos para este dia (Recorrentes ou Avulsos)
@@ -338,17 +345,23 @@ class ReservaController extends Controller
 
         // --- LOG DE DEBUG FINAL (Crítico para validação) ---
         Log::info("DEBUG AGENDAMENTO (ReservaController) para data: {$dateString} ({$dayOfWeek})");
+        Log::info("  Hora atual (America/Sao_Paulo): {$now->toDateTimeString()}");
         foreach ($occupiedReservas as $reserva) {
-            Log::info(" - Reserva ID: {$reserva->id}, Horário: {$reserva->start_time} - {$reserva->end_time}, Fixa: " . ($reserva->is_fixed ? 'SIM' : 'NÃO'));
+             Log::info(" - Reserva ID: {$reserva->id}, Horário: {$reserva->start_time} - {$reserva->end_time}, Fixa: " . ($reserva->is_fixed ? 'SIM' : 'NÃO'));
         }
         // --- FIM DO LOG DE DEBUG ---
 
         // 4. Filtrar Schedules Ocupados (Usando Lógica de Sobreposição)
-        $availableTimes = $allSchedules->filter(function ($schedule) use ($isToday, $now, $selectedDate, $occupiedReservas) {
+        $availableTimes = $allSchedules->filter(function ($schedule) use ($isToday, $now, $selectedDate, $occupiedReservas, $dateString) {
+
+            // CORREÇÃO: Usando Carbon::parse robusto para criar o DateTime do FIM do slot.
+            // Esta alteração garante que o formato do banco de dados (HH:MM ou HH:MM:SS) seja tratado corretamente.
+            $scheduleEndDateTime = Carbon::parse($selectedDate->toDateString() . ' ' . $schedule->end_time);
 
             // A. Checagem de slots passados (apenas se for hoje)
-            $scheduleStartDateTime = Carbon::parse($selectedDate->toDateString() . ' ' . $schedule->start_time);
-            if ($isToday && $scheduleStartDateTime->lt(Carbon::now())) { // Use Carbon::now() aqui para comparação
+            // Lógica: Compara o FIM do slot com o horário atual ($now).
+            if ($isToday && $scheduleEndDateTime->lt($now)) {
+                Log::info(" - Slot {$schedule->start_time}-{$schedule->end_time} ignorado. Passado: {$scheduleEndDateTime->toDateTimeString()} < {$now->toDateTimeString()}");
                 return false;
             }
 
@@ -403,6 +416,12 @@ class ReservaController extends Controller
         $request->merge(['client_contact' => $cleanedContact]); // Sobrescreve o valor original
         Log::info("DEBUG ADMIN: Contato Original: '{$contactValue}', Limpo: '{$cleanedContact}'");
 
+        // Pega o ID do gestor logado UMA VEZ. Se não estiver autenticado, será null.
+        $managerId = Auth::id();
+        // DEBUG CRÍTICO: Registra o ID do gestor antes de salvar
+        Log::info("DEBUG MANAGER ID CRÍTICO: ID do Gestor logado (manager_id) é: " . ($managerId ?? 'NULL'));
+
+
         // 1. Validação dos dados vindos do formulário Admin
         $validator = Validator::make($request->all(), [
             'client_name' => 'required|string|max:255',
@@ -453,9 +472,10 @@ class ReservaController extends Controller
             $dayOfWeek = Carbon::parse($date)->dayOfWeek;
 
             try {
+                // INJEÇÃO CRÍTICA DO manager_id
                 Reserva::create([
                     'user_id' => null, // Admin está criando para um cliente
-                    'manager_id' => Auth::id(), // ID do admin logado
+                    'manager_id' => $managerId, // ID do admin logado (agora é a variável)
                     'schedule_id' => $validatedData['schedule_id'],
                     'date' => $date,
                     'start_time' => $startTime,
@@ -520,9 +540,10 @@ class ReservaController extends Controller
                 }
 
                 // 5. Criar a reserva da semana
+                // INJEÇÃO CRÍTICA DO manager_id
                 Reserva::create([
                     'user_id' => null,
-                    'manager_id' => Auth::id(),
+                    'manager_id' => $managerId, // ID do admin logado (agora é a variável)
                     'schedule_id' => $validatedData['schedule_id'],
                     'date' => $currentDateString, // A data específica desta semana
                     'start_time' => $startTime,
@@ -597,7 +618,8 @@ class ReservaController extends Controller
             // A validação 'digits_between' agora trabalha sobre o campo limpo
             'contato_cliente'   => ['required', 'digits_between:10,11'],
             // Regra: Data não pode ser passada
-            'data_reserva'      => ['required', 'date', "after_or_equal:" . Carbon::now()->format('Y-m-d')],
+            // CORREÇÃO DE LÓGICA: Apenas garante que a data seja HOJE ou futura.
+            'data_reserva'      => ['required', 'date', "after_or_equal:" . Carbon::today()->format('Y-m-d')],
             'hora_inicio'       => ['required', 'date_format:H:i'],
             'hora_fim'          => ['required', 'date_format:H:i', 'after:hora_inicio'],
             'price'             => ['required', 'numeric', 'min:0'],
@@ -726,7 +748,14 @@ class ReservaController extends Controller
                 }
             }
 
-            // 3. Atualiza o status no banco de dados
+            // 3. Atualiza o manager_id se estivermos confirmando/alterando status de algo que era Pendente (cliente)
+            // e atribui o ID do gestor logado
+            if ($reserva->manager_id === null && in_array($newStatus, [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CANCELADA, Reserva::STATUS_REJEITADA])) {
+                 $reserva->manager_id = Auth::id();
+            }
+
+
+            // 4. Atualiza o status no banco de dados
             $reserva->status = $newStatus;
             $reserva->save();
 

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\User; // NECESSÁRIO para referenciar o modelo User no Accessor
 
 class Reserva extends Model
 {
@@ -34,13 +35,13 @@ class Reserva extends Model
         'client_contact',
         'notes',
         'status',
-        'manager_id',          // ID do gestor que criou/confirmou
+        'manager_id', // ID do gestor que criou/confirmou
 
         // --- Campos para Recorrência ---
-        'is_fixed',            // Se é uma reserva fixa recorrente
-        'day_of_week',         // Dia da semana para reservas fixas (0=Dom, 1=Seg, ...)
+        'is_fixed', // Se é uma reserva fixa recorrente
+        'day_of_week', // Dia da semana para reservas fixas (0=Dom, 1=Seg, ...)
         'recurrent_series_id', // ID para agrupar a série recorrente
-        'week_index',          // Índice dentro da série (0 a 51)
+        'week_index', // Índice dentro da série (0 a 51)
     ];
 
     /**
@@ -99,5 +100,17 @@ class Reserva extends Model
             self::STATUS_EXPIRADA => 'Expirada',
             default => 'Desconhecido',
         };
+    }
+
+    /**
+     * Retorna o nome do criador (Gestor ou Cliente via Web).
+     * Este é o Accessor que resolve o seu problema de exibição.
+     */
+    public function getCriadoPorLabelAttribute(): string
+    {
+        // Se manager_id estiver preenchido, retorna o nome do gestor associado.
+        // O operador '?' (nullsafe) garante que não haverá erro se a relação for nula.
+        // Caso contrário, retorna 'Cliente via Web'.
+        return $this->manager?->name ?? 'Cliente via Web';
     }
 }
