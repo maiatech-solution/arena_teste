@@ -125,7 +125,7 @@
                     {{-- Campos ocultos para submissão dos dados do slot --}}
                     <input type="hidden" name="start_time" id="form-hora-inicio">
                     <input type="hidden" name="end_time" id="form-hora-fim">
-                    <input type="hidden" name="price" id="form-preco">
+                    <input type="hidden" name="price" id="form-preco"> {{-- CRÍTICO: name="price" é o que o Laravel espera --}}
                     <input type="hidden" name="schedule_id" id="form-schedule-id">
 
                     {{-- CAMPO DE OBSERVAÇÕES OPCIONAL --}}
@@ -140,8 +140,8 @@
                     <div class="block pt-4 mt-4 border-t border-green-200">
                         <label for="is_fixed" class="flex items-center space-x-3 cursor-pointer">
                             <input type="checkbox" id="is_fixed" name="is_fixed" value="1"
-                                        class="h-5 w-5 rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                        {{ old('is_fixed') ? 'checked' : '' }}>
+                                             class="h-5 w-5 rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                             {{ old('is_fixed') ? 'checked' : '' }}>
                             <div class="flex flex-col">
                                 <span class="text-sm text-gray-800 font-semibold">Deixar fixo (Repetir semanalmente por 1 ano)</span>
                                 <p class="text-xs text-gray-500 mt-1">
@@ -184,12 +184,18 @@
         const noTimesMessage = document.getElementById('no-times-message');
         const reservationDetailsContainer = document.getElementById('reservation-details-container');
 
+        // Campos ocultos
+        const formPreco = document.getElementById('form-preco');
+        const formHoraInicio = document.getElementById('form-hora-inicio');
+        const formHoraFim = document.getElementById('form-hora-fim');
+        const formScheduleId = document.getElementById('form-schedule-id');
+
+
         // Estado
         let selectedDate = null;
         const today = new Date().toISOString().split('T')[0];
 
         // 1. INJEÇÃO DA LISTA DE DIAS DISPONÍVEIS DO BACKEND (Laravel Blade)
-        // Mantida apenas para referência e compatibilidade, não para a validação principal.
         let availableDates = [];
         try {
             const jsonString = '{!! $diasDisponiveisJson ?? "[]" !!}';
@@ -223,6 +229,12 @@
             submitButton.disabled = true;
             document.getElementById('selected-time-slot').textContent = '';
             document.getElementById('selected-price').textContent = '';
+
+            // Limpa campos hidden
+            formPreco.value = '';
+            formHoraInicio.value = '';
+            formHoraFim.value = '';
+            formScheduleId.value = '';
 
             selectedDate = dataInput.value;
 
@@ -298,11 +310,6 @@
 
                 const times = await response.json();
 
-                // ===========================================================
-                // LINHA DE LOG ADICIONADA AQUI PARA DEBUGAR O BACKEND
-                // ===========================================================
-                console.log('Horários Recebidos da API:', times);
-
                 renderAvailableTimes(times);
 
             } catch (error) {
@@ -338,13 +345,13 @@
             times.forEach(slot => {
                 const button = document.createElement('button');
                 button.type = 'button'; // Previne submissão do formulário
-                // data-slot armazena todos os dados necessários (start_time, end_time, price, schedule_id, raw_price)
+                // data-slot armazena todos os dados necessários
                 button.dataset.slot = JSON.stringify(slot);
-                // 💡 CORRIGIDO O CONTRASTE: Usando bg-blue-600 para melhor visibilidade sobre o fundo e garantindo text-white.
+
                 button.className = 'time-slot bg-blue-600 text-white font-bold py-3 px-4 rounded-xl shadow-md hover:bg-blue-700 transition ease-in-out text-center relative text-sm';
                 button.innerHTML = `
                     <span class="text-md font-semibold">${slot.time_slot}</span>
-                    <span class="block text-xs font-medium opacity-80 mt-0.5">R$ ${slot.price}</span>
+                    <span class="block text-xs font-medium opacity-80 mt-0.5">R$ ${slot.price_formatted}</span>
                 `;
                 // Passamos a slot inteira e o próprio botão para a função
                 button.onclick = (e) => selectTimeSlot(e.currentTarget, slot);
@@ -372,22 +379,22 @@
             button.classList.add('bg-green-600', 'ring-2', 'ring-green-800'); // Adiciona o verde
 
             // 3. Popula os campos ocultos do formulário
-            document.getElementById('form-hora-inicio').value = slot.start_time;
-            document.getElementById('form-hora-fim').value = slot.end_time;
-            document.getElementById('form-preco').value = slot.raw_price; // Usa o valor raw (numérico)
-            document.getElementById('form-schedule-id').value = slot.schedule_id;
+            formHoraInicio.value = slot.start_time;
+            formHoraFim.value = slot.end_time;
+            // ***** CORREÇÃO CRÍTICA APLICADA AQUI *****
+            // Usa slot.price (o valor RAW, ex: 140.00) que o Laravel espera
+            formPreco.value = slot.price;
+            formScheduleId.value = slot.schedule_id;
 
-            // 4. Atualiza o display
+            // 4. Atualiza o display (usando o valor formatado)
             document.getElementById('selected-time-slot').textContent = `${slot.time_slot}`;
-            document.getElementById('selected-price').textContent = `Valor: R$ ${slot.price}`;
+            document.getElementById('selected-price').textContent = `Valor: R$ ${slot.price_formatted}`;
 
             // 5. Exibe a seção de confirmação e habilita o botão
             reservationDetailsContainer.style.display = 'block';
             submitButton.disabled = false;
 
-            // ===================================================================
-            // [NOVA LINHA] Atualiza o texto de ajuda do "Deixar Fixo"
-            // ===================================================================
+            // Atualiza o texto de ajuda do "Deixar Fixo"
             document.getElementById('fixed-time-display').textContent = slot.time_slot;
 
             // Opcional: Rolagem suave até o botão de submissão

@@ -5,7 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Models\User; // NECESSÁRIO para referenciar o modelo User no Accessor
+use Illuminate\Database\Eloquent\Casts\Attribute; // NOVO: Para usar o formato moderno de Accessors/Mutators
+use App\Models\User; // Necessário para as relações com User
 
 class Reserva extends Model
 {
@@ -22,7 +23,7 @@ class Reserva extends Model
 
     /**
      * Os atributos que são mass assignable.
-     * ATUALIZADO: Incluindo os campos de recorrência.
+     * Incluindo os campos de recorrência.
      */
     protected $fillable = [
         'user_id',
@@ -46,7 +47,7 @@ class Reserva extends Model
 
     /**
      * Os atributos que devem ser convertidos (casted) para tipos nativos.
-     * ATUALIZADO: Incluindo is_fixed.
+     * Incluindo is_fixed.
      */
     protected $casts = [
         'date' => 'date',
@@ -102,6 +103,7 @@ class Reserva extends Model
 
     /**
      * Relação com a regra de horário (Schedule) que originou a reserva.
+     * Nota: O modelo Schedule deve ser importado ou estar no namespace correto.
      */
     public function schedule(): BelongsTo
     {
@@ -110,32 +112,37 @@ class Reserva extends Model
 
 
     // ------------------------------------------------------------------------
-    // ACESSORES
+    // ACESSORES MODERNOS (Laravel 9/10+)
     // ------------------------------------------------------------------------
 
     /**
      * Retorna o nome amigável do status (usado nas listas do Admin).
+     * Usa o novo formato Attribute::make().
      */
-    public function getStatusTextAttribute(): string
+    protected function statusText(): Attribute
     {
-        return match ($this->status) {
-            self::STATUS_PENDENTE => 'Pendente',
-            self::STATUS_CONFIRMADA => 'Confirmada',
-            self::STATUS_CANCELADA => 'Cancelada',
-            self::STATUS_REJEITADA => 'Rejeitada',
-            self::STATUS_EXPIRADA => 'Expirada',
-            default => 'Desconhecido',
-        };
+        return Attribute::make(
+            get: fn () => match ($this->status) {
+                self::STATUS_PENDENTE => 'Pendente',
+                self::STATUS_CONFIRMADA => 'Confirmada',
+                self::STATUS_CANCELADA => 'Cancelada',
+                self::STATUS_REJEITADA => 'Rejeitada',
+                self::STATUS_EXPIRADA => 'Expirada',
+                default => 'Desconhecido',
+            },
+        );
     }
 
     /**
      * Retorna o nome do criador (Gestor ou Cliente via Web).
+     * Usa o novo formato Attribute::make().
      */
-    public function getCriadoPorLabelAttribute(): string
+    protected function criadoPorLabel(): Attribute
     {
-        // Se manager_id estiver preenchido, retorna o nome do gestor associado.
-        // O operador '?' (nullsafe) garante que não haverá erro se a relação for nula.
-        // Caso contrário, retorna 'Cliente via Web'.
-        return $this->manager?->name ?? 'Cliente via Web';
+        return Attribute::make(
+            // Se manager_id estiver preenchido, retorna o nome do gestor associado.
+            // Caso contrário, retorna 'Cliente via Web'.
+            get: fn () => $this->manager?->name ?? 'Cliente via Web',
+        );
     }
 }

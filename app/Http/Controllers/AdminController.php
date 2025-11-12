@@ -13,10 +13,10 @@ use Illuminate\Validation\Rule;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
 
-// --- NOVOS IMPORTS ---
+// --- IMPORTS ---
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Log; // MANTIDO
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
@@ -63,11 +63,16 @@ class AdminController extends Controller
     }
 
     // =========================================================================
-    // MÉTODO HELPER (LOGICALLY CORRECT)
+    // MÉTODO HELPER (CORRIGIDO PARA O CASO DE EXCEÇÕES FIXAS)
     // =========================================================================
     protected function checkOverlap(string $date, string $startTime, string $endTime, bool $isFixed, ?int $ignoreReservaId = null): bool
     {
         $dayOfWeek = Carbon::parse($date)->dayOfWeek;
+
+        // Query Base:
+        // 1. Ignora a reserva atual (se estiver em edição)
+        // 2. Considera apenas status que bloqueiam (PENDENTE/CONFIRMADA)
+        // 3. Checa a sobreposição de tempo (início antes do fim do outro E fim depois do início do outro)
         $baseQuery = Reserva::whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
             ->when($ignoreReservaId, function ($query) use ($ignoreReservaId) {
                 return $query->where('id', '!=', $ignoreReservaId);
@@ -76,24 +81,42 @@ class AdminController extends Controller
                 $query->where('start_time', '<', $endTime)
                     ->where('end_time', '>', $startTime);
             });
+
+        Log::debug(">>> checkOverlap INICIADO (Data: {$date}, Horário: {$startTime}-{$endTime}, Dia Semana: {$dayOfWeek}, Fixo: " . ($isFixed ? 'SIM' : 'NÃO') . ", Ignorar ID: {$ignoreReservaId})");
+
         if ($isFixed) {
-            return (clone $baseQuery)
+            // Se estamos checando uma reserva FIXA (Fixo vs Fixo):
+            // Checamos apenas contra OUTRAS fixas no mesmo dia da semana e horário.
+            // (Isso é para evitar a criação de séries fixas sobrepostas, ignorando a data para o conflito recorrente)
+            $queryFixoVsFixo = (clone $baseQuery)
                 ->where('is_fixed', true)
-                ->where('day_of_week', $dayOfWeek)
-                ->exists();
-        } else {
-            $conflitoPontual = (clone $baseQuery)
-                ->where('is_fixed', false)
-                ->where('date', $date)
-                ->exists();
-            if ($conflitoPontual) {
-                return true;
+                ->where('day_of_week', $dayOfWeek);
+
+            $conflito = $queryFixoVsFixo->exists();
+
+            if ($conflito) {
+                 Log::error("!!! CONFLITO FIXO detectado. Query: " . $queryFixoVsFixo->toSql() . " | Params: " . json_encode($queryFixoVsFixo->getBindings()));
             }
-            $conflitoComFixo = (clone $baseQuery)
-                ->where('is_fixed', true)
-                ->where('day_of_week', $dayOfWeek)
-                ->exists();
-            return $conflitoComFixo;
+
+            return $conflito;
+
+        } else {
+            // Se estamos checando uma reserva PONTUAL (Pontual vs Tudo):
+            // Checamos contra QUALQUER reserva (fixa ou pontual) que esteja CONFIRMADA/PENDENTE
+            // NA DATA ESPECÍFICA.
+            // Esta é a correção: Ao buscar linhas fixas (is_fixed=true), o filtro pela 'date'
+            // garante que só olhamos para aquela ocorrência da série, e o 'baseQuery'
+            // ignora automaticamente se a ocorrência estiver 'cancelled'.
+            $queryVsTudoNaData = (clone $baseQuery)
+                ->where('date', $date);
+
+            $conflito = $queryVsTudoNaData->exists();
+
+            if ($conflito) {
+                Log::error("!!! CONFLITO PONTUAL/FIXO NA DATA detectado. Query: " . $queryVsTudoNaData->toSql() . " | Params: " . json_encode($queryVsTudoNaData->getBindings()));
+            }
+
+            return $conflito;
         }
     }
 
@@ -117,7 +140,7 @@ class AdminController extends Controller
         $isOnlyMine = $request->get('only_mine') === 'true';
         if ($isOnlyMine) {
             $pageTitle = 'Minhas Reservas Manuais Confirmadas';
-            // Se você quer apenas as reservas criadas pelo gestor logado, use manager_id:
+            // Filtra por reservas criadas/confirmadas pelo gestor logado
             $query->where('manager_id', Auth::id());
         } else {
             $pageTitle = 'Todas as Reservas Confirmadas';
@@ -140,16 +163,22 @@ class AdminController extends Controller
             $dateString = $reserva->date->toDateString();
             $isFixed = $reserva->is_fixed;
             $ignoreId = $reserva->id;
+
+            // 1. Checagem de Conflito
             if ($this->checkOverlap($dateString, $reserva->start_time, $reserva->end_time, $isFixed, $ignoreId)) {
                  return back()->with('error', 'Conflito detectado: Esta reserva não pode ser confirmada pois já existe outro agendamento (Pendente ou Confirmado) no mesmo horário.');
             }
-            // --- INJETAR manager_id AQUI TAMBÉM ---
-            $reserva->status = Reserva::STATUS_CONFIRMADA;
-            $reserva->manager_id = Auth::id(); // O gestor que confirma
-            $reserva->save();
+
+            // 2. Atualiza Status e atribui o Gestor
+            $reserva->update([
+                'status' => Reserva::STATUS_CONFIRMADA,
+                'manager_id' => Auth::id(), // O gestor que confirma
+            ]);
+
             return redirect()->route('dashboard')
-                             ->with('success', 'Reserva confirmada com sucesso! O horário está agora visível no calendário.');
+                              ->with('success', 'Reserva confirmada com sucesso! O horário está agora visível no calendário.');
         } catch (\Exception $e) {
+            Log::error("Erro ao confirmar a reserva ID {$reserva->id}: " . $e->getMessage());
             return back()->with('error', 'Erro ao confirmar a reserva: ' . $e->getMessage());
         }
     }
@@ -157,23 +186,37 @@ class AdminController extends Controller
     public final function rejeitarReserva(Reserva $reserva)
     {
         try {
-            $reserva->status = Reserva::STATUS_REJEITADA;
-            $reserva->save();
+            // 1. Atualiza Status e atribui o Gestor
+            $reserva->update([
+                'status' => Reserva::STATUS_REJEITADA,
+                'manager_id' => Auth::id(), // Atribui o gestor que rejeitou
+            ]);
+
             return redirect()->route('admin.reservas.index')
-                             ->with('success', 'Reserva rejeitada com sucesso e removida da lista de pendentes.');
+                              ->with('success', 'Reserva rejeitada com sucesso e removida da lista de pendentes.');
         } catch (\Exception $e) {
+            Log::error("Erro ao rejeitar a reserva ID {$reserva->id}: " . $e->getMessage());
             return back()->with('error', 'Erro ao rejeitar a reserva: ' . $e->getMessage());
         }
     }
 
+    /**
+     * CORRIGIDO: Este método estava quebrado devido a código de debug.
+     * Agora ele atualiza o status para CANCELADA e registra o manager_id.
+     */
     public function cancelarReserva(Reserva $reserva)
     {
         try {
-            $reserva->status = Reserva::STATUS_CANCELADA;
-            $reserva->save();
+            // 1. Atualiza Status e atribui o Gestor
+            $reserva->update([
+                'status' => Reserva::STATUS_CANCELADA,
+                'manager_id' => Auth::id(), // Atribui o gestor que cancelou
+            ]);
+
             return redirect()->route('admin.reservas.confirmed_index')
-                             ->with('success', 'Reserva cancelada com sucesso.');
+                              ->with('success', 'Reserva cancelada com sucesso.');
         } catch (\Exception $e) {
+            Log::error("Erro ao cancelar a reserva ID {$reserva->id}: " . $e->getMessage());
             return back()->with('error', 'Erro ao cancelar a reserva: ' . $e->getMessage());
         }
     }
@@ -189,25 +232,34 @@ class AdminController extends Controller
             ])],
         ]);
         $newStatus = $validated['status'];
+
+        $updateData = ['status' => $newStatus];
+
         if ($newStatus === Reserva::STATUS_CONFIRMADA) {
             try {
                 $dateString = $reserva->date->toDateString();
                 $isFixed = $reserva->is_fixed;
                 $ignoreId = $reserva->id;
+
                 if ($this->checkOverlap($dateString, $reserva->start_time, $reserva->end_time, $isFixed, $ignoreId)) {
                     return back()->with('error', 'Conflito detectado: Não é possível confirmar, pois já existe outro agendamento (Pendente ou Confirmado) neste horário.');
                 }
                 // Se for confirmada, define o gestor atual como o responsável pela ação
-                $reserva->manager_id = Auth::id();
+                $updateData['manager_id'] = Auth::id();
             } catch (\Exception $e) {
                 return back()->with('error', 'Erro na verificação de conflito: ' . $e->getMessage());
             }
         }
+
+        // Também registra o manager_id se estivermos cancelando ou rejeitando, por segurança de auditoria
+        if (in_array($newStatus, [Reserva::STATUS_REJEITADA, Reserva::STATUS_CANCELADA]) && !isset($updateData['manager_id'])) {
+            $updateData['manager_id'] = Auth::id();
+        }
+
         try {
-            $reserva->status = $newStatus;
-            $reserva->save();
+            $reserva->update($updateData);
             return redirect()->route('admin.reservas.show', $reserva)
-                             ->with('success', "Status da reserva alterado para '{$newStatus}' com sucesso.");
+                              ->with('success', "Status da reserva alterado para '{$newStatus}' com sucesso.");
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao atualizar o status da reserva: ' . $e->getMessage());
         }
@@ -218,14 +270,14 @@ class AdminController extends Controller
         try {
             $reserva->delete();
             return redirect()->route('admin.reservas.index')
-                             ->with('success', 'Reserva excluída permanentemente com sucesso.');
+                              ->with('success', 'Reserva excluída permanentemente com sucesso.');
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao excluir a reserva: ' . $e->getMessage());
         }
     }
 
     // ==========================================================
-    // FUNÇÃO 'makeRecurrent'
+    // FUNÇÃO 'makeRecurrent' (CRIA SÉRIE RECORRENTE)
     // ==========================================================
     public function makeRecurrent(Request $request)
     {
@@ -262,12 +314,12 @@ class AdminController extends Controller
 
             while ($currentDate->lessThanOrEqualTo($endDate)) {
                 if ($currentDate->dayOfWeek === $dayOfWeek) {
-                    // 5. Verificação de Conflito
+                    // 5. Verificação de Conflito (Usa 'false' para checar conflitos contra TUDO - pontuais e fixas)
                     $conflitoExistente = $this->checkOverlap(
                         $currentDate->toDateString(),
                         $validated['start_time'],
                         $validated['end_time'],
-                        true
+                        false // Checa contra qualquer reserva já existente nessa data (fixa ou pontual)
                     );
 
                     if (!$conflitoExistente) {
@@ -284,9 +336,8 @@ class AdminController extends Controller
                             'notes' => $validated['notes'],
                             'status' => Reserva::STATUS_CONFIRMADA,
                             'recurrent_series_id' => $recurrentSeriesId,
-                            'is_fixed' => true,
+                            'is_fixed' => true, // Esta é uma série fixa
                             'day_of_week' => $dayOfWeek,
-                            // *** ADICIONANDO MANAGER_ID AQUI ***
                             'manager_id' => Auth::id(),
                         ]);
                         $reservasCriadas++;
@@ -294,7 +345,8 @@ class AdminController extends Controller
                         $conflitos++;
                     }
                 }
-                $currentDate->addDay();
+                // Adiciona uma semana para pular para a próxima ocorrência (mais eficiente que addDay())
+                $currentDate->addWeek();
             }
 
             // 7. Sucesso!
@@ -371,7 +423,7 @@ class AdminController extends Controller
     }
 
     // =========================================================================
-    // FUNÇÃO 'storeReserva' CORRIGIDA
+    // FUNÇÃO 'storeReserva' (CRIA RESERVA MANUALMENTE)
     // =========================================================================
     public function storeReserva(Request $request)
     {
@@ -383,7 +435,7 @@ class AdminController extends Controller
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'required|date_format:H:i|after:start_time',
             'price' => 'required|numeric|min:0',
-            // Tornando o schedule_id opcional (pode ser null para reservas manuais avulsas)
+            // schedule_id é opcional (pode ser null para reservas manuais avulsas)
             'schedule_id' => 'nullable|integer|exists:schedules,id',
             'notes' => 'nullable|string|max:500',
         ], [
@@ -405,13 +457,11 @@ class AdminController extends Controller
         }
 
         $validatedData = $validator->validated();
-        // A flag 'is_fixed' é enviada do formulário se for uma reserva fixa
         $isFixed = $request->has('is_fixed');
         $date = $validatedData['date'];
         $startTime = $validatedData['start_time'];
         $endTime = $validatedData['end_time'];
 
-        // --- INJEÇÃO PRINCIPAL: O ID do Gestor ---
         $managerId = Auth::id();
 
 
@@ -419,6 +469,10 @@ class AdminController extends Controller
         // CASO 1: RESERVA PONTUAL (is_fixed = false)
         // ==========================================================
         if (!$isFixed) {
+            // Checagem de Conflito contra qualquer tipo de reserva (pontual ou fixa)
+            Log::debug("Tentativa de Reserva Pontual. Checando conflito...");
+            // A função checkOverlap foi corrigida para olhar APENAS a data,
+            // ignorando registros cancelados, o que resolve o problema de exceção.
             if ($this->checkOverlap($date, $startTime, $endTime, false)) {
                 return redirect()->back()
                     ->with('error', 'Conflito! O horário já está ocupado por uma reserva pontual ou fixa existente.')
@@ -427,7 +481,7 @@ class AdminController extends Controller
             $dayOfWeek = Carbon::parse($date)->dayOfWeek;
             try {
                 Reserva::create([
-                    'user_id' => null,
+                    'user_id' => null, // Cliente manual (avulso) não tem user_id
                     'schedule_id' => $validatedData['schedule_id'],
                     'date' => $date,
                     'start_time' => $startTime,
@@ -440,11 +494,10 @@ class AdminController extends Controller
                     'is_fixed' => false,
                     'day_of_week' => $dayOfWeek,
                     'recurrent_series_id' => null,
-                    // *** INJEÇÃO DO MANAGER_ID ***
                     'manager_id' => $managerId,
                 ]);
                 return redirect()->route('admin.reservas.confirmed_index')
-                               ->with('success', 'Reserva pontual confirmada com sucesso!');
+                                 ->with('success', 'Reserva pontual confirmada com sucesso!');
             } catch (\Exception $e) {
                 $errorMessage = $e->getMessage();
                 Log::error("Erro ao criar reserva pontual (Admin): " . $errorMessage);
@@ -455,11 +508,11 @@ class AdminController extends Controller
         }
 
         // ==========================================================
-        // CASO 2: RESERVA FIXA (is_fixed = true)
+        // CASO 2: RESERVA FIXA (is_fixed = true) - Criação de Série
         // ==========================================================
 
-        // 1. Checagem de conflito (só contra OUTRAS fixas) - Checagem antes do loop
-        // Nota: A função checkOverlap($date, $startTime, $endTime, true) já faz esta checagem.
+        // 1. Checagem de conflito: Checa APENAS contra OUTRAS fixas no mesmo dia/horário.
+        Log::debug("Tentativa de Reserva Fixa. Checando conflito com outras fixas...");
         if ($this->checkOverlap($date, $startTime, $endTime, true)) {
             return redirect()->back()
                 ->with('error', 'Conflito Fixo! Este dia da semana/horário já está reservado por outra reserva fixa.')
@@ -469,7 +522,7 @@ class AdminController extends Controller
         // 2. Preparar dados
         $startDate = Carbon::parse($date);
         $dayOfWeek = $startDate->dayOfWeek;
-        $totalWeeks = 52;
+        $totalWeeks = 52; // Cria reservas para um ano (52 semanas)
         $reservasCriadas = 0;
         $reservasFalhadas = 0;
         $datasPuladas = [];
@@ -490,8 +543,7 @@ class AdminController extends Controller
                 $currentDate = $startDate->copy()->addWeeks($i);
                 $currentDateString = $currentDate->toDateString();
 
-                // 6. Checagem de conflito:
-                // Checa APENAS contra reservas pontuais (is_fixed=false) nesta data.
+                // 6. Checagem de conflito: Checa APENAS contra reservas pontuais (is_fixed=false) nesta data.
                 $isBlockedByPunctual = Reserva::where('is_fixed', false)
                     ->whereDate('date', $currentDateString) // Checa apenas nesta data
                     ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
@@ -524,7 +576,6 @@ class AdminController extends Controller
                     'is_fixed' => true,
                     'day_of_week' => $dayOfWeek,
                     'recurrent_series_id' => $seriesId,
-                    // *** INJEÇÃO DO MANAGER_ID ***
                     'manager_id' => $managerId,
                 ]);
                 $reservasCriadas++;
@@ -540,8 +591,8 @@ class AdminController extends Controller
                 $warningMessage = "{$reservasFalhadas} datas foram puladas por já estarem ocupadas por reservas pontuais: " . implode(', ', $datasPuladas);
             }
             return redirect()->route('admin.reservas.create')
-                             ->with('success', $successMessage)
-                             ->with('warning', $warningMessage);
+                              ->with('success', $successMessage)
+                              ->with('warning', $warningMessage);
 
         } catch (\Exception $e) {
             // 10. Falha!
@@ -559,7 +610,7 @@ class AdminController extends Controller
 
 
     // =========================================================================
-    // 💡 FUNÇÃO 'getAvailableTimes' CORRIGIDA - USANDO LÓGICA DE SOBREPOSIÇÃO E LOG
+    // FUNÇÃO 'getAvailableTimes'
     // =========================================================================
     /**
      * Calcula e retorna os horários disponíveis para uma data específica,
@@ -596,8 +647,8 @@ class AdminController extends Controller
 
         // 3. Reservas Confirmadas/Pendentes para a data
         $occupiedReservas = Reserva::whereDate('date', $dateString)
-                                            ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-                                            ->get();
+                                        ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                        ->get();
 
         // --- LOG DE DEBUG ---
         Log::info("DEBUG AGENDAMENTO para data: {$dateString} ({$dayOfWeek})");
@@ -681,4 +732,3 @@ class AdminController extends Controller
         return redirect()->route('admin.users.index')->with('success', 'Usuário criado com sucesso!');
     }
 }
-// [END OF FILE]
