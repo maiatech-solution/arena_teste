@@ -40,10 +40,25 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
     // 🎯 1. DASHBOARD: Rota principal do painel
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
 
-    // ✅ NOVA ROTA API INTERNA PARA O DASHBOARD (Contagem de Pendências)
-    // Rota protegida pelo middleware 'gestor', usada pelo JS no dashboard para checagem em tempo real.
+    // ✅ ROTA API INTERNA PARA O DASHBOARD (Contagem de Pendências)
     Route::get('/api/reservas/pendentes', [ReservaController::class, 'countPending'])
-        ->name('api.reservas.pendentes'); // O nome de rota original, caso você precise do helper route()
+        ->name('api.reservas.pendentes');
+
+    // =========================================================================
+    // 🗓️ NOVAS ROTAS API PARA FULLCALENDAR (DASHBOARD) - ADICIONADAS AQUI
+    // =========================================================================
+    // 1. Endpoint para RESERVAS CONFIRMADAS (AdminController)
+    Route::get('/api/reservas/confirmadas', [AdminController::class, 'getConfirmedReservasApi'])
+        ->name('api.reservas.confirmadas');
+
+    // 2. Endpoint para HORÁRIOS DISPONÍVEIS (HorarioController)
+    Route::get('/api/horarios/disponiveis', [HorarioController::class, 'getAvailableSlotsApi'])
+        ->name('api.horarios.disponiveis');
+
+    // 🚀 NOVO: Rota API para Agendamento Rápido Manual (POST)
+    Route::post('/api/reservas/store-quick', [AdminController::class, 'storeQuickReservaApi'])
+        ->name('api.reservas.store_quick');
+    // =========================================================================
 
     // ===============================================
     // 🛡️ GRUPO DE ROTAS DE ADMINISTRAÇÃO COM PREFIXO

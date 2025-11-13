@@ -16,9 +16,9 @@ class Schedule extends Model
 
     /**
      * Os atributos que são mass assignable (seguros para serem preenchidos em massa).
-     * ESSENCIAL para o Schedule::create() no Controller.
      */
     protected $fillable = [
+        'date', // <--- CORREÇÃO 1: ESSENCIAL para o agendamento avulso
         'day_of_week',
         'start_time',
         'end_time',
@@ -36,7 +36,7 @@ class Schedule extends Model
 
     /**
      * Retorna o nome do dia da semana (Helper usado na View).
-     * O $dayOfWeek é opcional; se não for passado, usa a propriedade do modelo.
+     * Mapeia os índices de 0 (Domingo) a 6 (Sábado).
      */
     public function getDayName(int $dayOfWeek = null): string
     {
@@ -44,13 +44,13 @@ class Schedule extends Model
         $dayOfWeek = $dayOfWeek ?? $this->day_of_week;
 
         return match ($dayOfWeek) {
+            0 => 'Domingo',         // 🚨 CORREÇÃO 2: Domingo é 0
             1 => 'Segunda-feira',
             2 => 'Terça-feira',
             3 => 'Quarta-feira',
             4 => 'Quinta-feira',
             5 => 'Sexta-feira',
             6 => 'Sábado',
-            7 => 'Domingo',
             default => 'Dia Inválido',
         };
     }

@@ -16,7 +16,7 @@ use Illuminate\Support\Carbon;
 // --- IMPORTS ---
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log; // MANTIDO
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
@@ -24,46 +24,164 @@ class AdminController extends Controller
 {
     /**
      * Exibe o dashboard principal do gestor.
+     * 🚨 CORRIGIDO: Remove a lógica de eventos, que agora é feita via API.
      */
     public function dashboard()
     {
-        $reservas = Reserva::where('status', Reserva::STATUS_CONFIRMADA)
-                            ->with('user')
-                            ->get()
-                            ->filter();
-        $events = [];
-        foreach ($reservas as $reserva) {
-            $bookingDate = $reserva->date->toDateString();
-            $startDateTimeString = $bookingDate . ' ' . $reserva->start_time;
-            $start = Carbon::parse($startDateTimeString);
-            if ($reserva->end_time) {
-                $endDateTimeString = $bookingDate . ' ' . $reserva->end_time;
-                $end = Carbon::parse($endDateTimeString);
-            } else {
-                $end = $start->copy()->addHour();
-            }
-            $userName = optional($reserva->user)->name;
-            $clientName = $userName ?? $reserva->client_name ?? 'Cliente Desconhecido';
-            $title = 'Reservado: ' . $clientName;
-            if (isset($reserva->price)) {
-                $title .= ' - R$ ' . number_format($reserva->price, 2, ',', '.');
-            }
-            $events[] = [
-                'id' => $reserva->id,
-                'title' => $title,
-                'start' => $start->format('Y-m-d\TH:i:s'),
-                'end' => $end->format('Y-m-d\TH:i:s'),
-                'backgroundColor' => '#10B981',
-                'borderColor' => '#059669',
-            ];
-        }
-        $eventsJson = json_encode($events);
+        // >>> A lógica de coleta de $reservas e $events foi REMOVIDA daqui. <<<
 
         // >>> ESTA LINHA CALCULA A CONTAGEM DE PENDÊNCIAS <<<
         $reservasPendentesCount = Reserva::where('status', Reserva::STATUS_PENDENTE)->count();
 
-        return view('dashboard', compact('eventsJson', 'reservasPendentesCount'));
+        // 🚨 O método retorna APENAS a contagem de pendências. O calendário carrega os eventos via API.
+        return view('dashboard', compact('reservasPendentesCount'));
     }
+
+    // =========================================================================
+    // 🗓️ MÉTODO API: RESERVAS CONFIRMADAS PARA FULLCALENDAR
+    // (Conectado à rota '/api/reservas/confirmadas')
+    // =========================================================================
+    /**
+     * Retorna as reservas confirmadas em formato JSON para o FullCalendar.
+     */
+    public function getConfirmedReservasApi(Request $request)
+    {
+        // O FullCalendar envia os parâmetros 'start' e 'end' para filtrar o período
+        $start = $request->input('start') ? Carbon::parse($request->input('start')) : Carbon::now()->startOfMonth();
+        $end = $request->input('end') ? Carbon::parse($request->input('end')) : Carbon::now()->endOfMonth();
+
+        // Busca apenas reservas confirmadas e que se enquadram no período de visualização
+        $reservas = Reserva::where('status', Reserva::STATUS_CONFIRMADA)
+                            ->whereDate('date', '>=', $start->toDateString())
+                            ->whereDate('date', '<=', $end->toDateString())
+                            ->with('user')
+                            ->get();
+
+        $events = $reservas->map(function ($reserva) {
+            // A sua tabela Reserva usa colunas separadas para data, start_time e end_time.
+            $bookingDate = $reserva->date->toDateString();
+
+            // É fundamental garantir que o parse seja feito com o campo correto, que aqui é TIME
+            $start = Carbon::parse($bookingDate . ' ' . $reserva->start_time);
+            $end = $reserva->end_time ? Carbon::parse($bookingDate . ' ' . $reserva->end_time) : $start->copy()->addHour();
+
+            $userName = optional($reserva->user)->name;
+            $clientName = $userName ?? $reserva->client_name ?? 'Cliente Desconhecido';
+
+            // Monta o título do evento
+            $title = 'Reservado: ' . $clientName;
+            if (isset($reserva->price)) {
+                $title .= ' - R$ ' . number_format($reserva->price, 2, ',', '.');
+            }
+
+            return [
+                'id' => $reserva->id,
+                'title' => $title,
+                'start' => $start->format('Y-m-d\TH:i:s'),
+                'end' => $end->format('Y-m-d\TH:i:s'),
+                'color' => '#4f46e5', // Indigo para reservas confirmadas
+                'className' => 'fc-event-booked', // Classe CSS
+                'extendedProps' => [
+                    'status' => 'booked',
+                    'client_contact' => $reserva->client_contact,
+                ]
+            ];
+        });
+
+        return response()->json($events);
+    }
+    // =========================================================================
+
+    // =========================================================================
+    // 🚀 NOVO MÉTODO API: Agendamento Rápido via Calendário
+    // (Localizado após as APIs do calendário e antes dos métodos de CRUD)
+    // =========================================================================
+    /**
+     * Armazena uma reserva de cliente criada manualmente via API de Agendamento Rápido.
+     * Esta reserva é confirmada imediatamente.
+     */
+    public function storeQuickReservaApi(Request $request)
+    {
+        // 1. Validação (Valores básicos do cliente e do slot)
+        $validated = $request->validate([
+            'client_name' => ['required', 'string', 'max:255'],
+            'client_contact' => ['required', 'string', 'max:255'],
+            'schedule_id' => ['required', 'integer', 'exists:schedules,id'],
+            'date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
+            'start_time' => ['required', 'date_format:H:i'],
+            'end_time' => ['required', 'date_format:H:i', 'after:start_time'],
+            'price' => ['required', 'numeric', 'min:0.01'],
+        ]);
+
+        $date = $validated['date'];
+        $startTime = $validated['start_time'];
+        $endTime = $validated['end_time'];
+
+        // Constrói o DATETIME completo para os campos 'start_time' e 'end_time' da Reserva.
+        // Isso é crucial para a lógica de sobreposição e para consistência dos dados.
+        $startDatetime = Carbon::parse($date . ' ' . $startTime);
+        $endDatetime = Carbon::parse($date . ' ' . $endTime);
+
+        // 2. Checagem de Conflito (Garantia de que o slot não foi reservado no meio tempo)
+        // Checa conflito contra QUALQUER reserva (fixa ou pontual) confirmada/pendente na data
+        $conflictReserva = Reserva::whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+             ->where(function ($query) use ($startDatetime, $endDatetime) {
+                 // Verifica sobreposição de períodos de tempo (datetimes)
+                 // Se o novo horário (start) é antes do fim de um existente, E
+                 // o novo horário (end) é depois do início de um existente, HÁ CONFLITO.
+                 $query->where('start_time', '<', $endDatetime->toDateTimeString())
+                       ->where('end_time', '>', $startDatetime->toDateTimeString());
+             })
+             ->exists();
+
+        if ($conflictReserva) {
+             // Retorna um erro JSON se houver conflito
+            return response()->json([
+                'success' => false,
+                'message' => 'Conflito! O horário acabou de ser reservado ou existe um conflito de horário. Recarregue a página.',
+            ], 409); // 409 Conflict
+        }
+
+        // 3. Criação da Reserva (Imediatamente Confirmada)
+        try {
+            Reserva::create([
+                'user_id' => null, // Cliente avulso/manual
+                'schedule_id' => $validated['schedule_id'], // Linka ao slot de disponibilidade (Schedule)
+                'date' => $date, // Mantém a data no campo de data avulsa
+                'start_time' => $startDatetime->toDateTimeString(), // Salva o datetime completo
+                'end_time' => $endDatetime->toDateTimeString(),     // Salva o datetime completo
+                'price' => $validated['price'],
+                'client_name' => $validated['client_name'],
+                'client_contact' => $validated['client_contact'],
+                'notes' => 'Agendamento Rápido via Gestor',
+                'status' => Reserva::STATUS_CONFIRMADA,
+                'is_fixed' => false,
+                'day_of_week' => $startDatetime->dayOfWeek,
+                'manager_id' => Auth::id(), // Registra o gestor que criou
+            ]);
+
+            // 🚨 CORREÇÃO: Usar um retorno de resposta mais explícito para evitar corrupção JSON
+            $responseArray = [
+                'success' => true,
+                'message' => 'Reserva rápida criada e confirmada com sucesso! O calendário será atualizado.',
+            ];
+
+            return response(json_encode($responseArray), 200)
+                ->header('Content-Type', 'application/json');
+
+        } catch (\Exception $e) {
+            // Retorna erro 500 para qualquer falha de DB ou lógica
+            Log::error("Erro ao criar reserva rápida (Admin): " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro interno ao salvar a reserva: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+    // =========================================================================
+    // FIM DO NOVO MÉTODO API
+    // =========================================================================
+
 
     // =========================================================================
     // MÉTODO HELPER (CORRIGIDO PARA O CASO DE EXCEÇÕES FIXAS)
@@ -142,11 +260,6 @@ class AdminController extends Controller
                                 // Filtra reservas que ainda não passaram
                                 // Consideramos que a reserva passou se a data for anterior a hoje.
                                 $q->whereDate('date', '>=', Carbon::today()->toDateString());
-
-                                // Opcional: Para horários de hoje, você pode refinar para checar se a hora de fim já passou,
-                                // mas o filtro acima já é suficiente para a maioria dos casos.
-                                // Se quiser ser muito preciso:
-                                // ->orWhere(fn($q) => $q->whereDate('date', Carbon::today()->toDateString())->where('end_time', '>', Carbon::now()->format('H:i:s')))
                             })
                             ->with('user');
 
@@ -393,23 +506,23 @@ class AdminController extends Controller
     {
         // 1. Coleta os Schedules que estão bloqueados por serem usados como horário fixo (recorrente)
         $fixedReservaSlots = Reserva::where('is_fixed', true)
-                                            ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-                                            ->select('day_of_week', 'start_time', 'end_time')
-                                            ->get();
+                                           ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                           ->select('day_of_week', 'start_time', 'end_time')
+                                           ->get();
         $fixedReservaMap = $fixedReservaSlots->map(function ($reserva) {
             return "{$reserva->day_of_week}-{$reserva->start_time}-{$reserva->end_time}";
         })->toArray();
 
         // 2. Filtra schedules recorrentes baseados no FixedReservaMap
         $availableRecurringSchedules = Schedule::whereNotNull('day_of_week')
-                                                ->whereNull('date')
-                                                ->where('is_active', true)
-                                                ->get()
-                                                ->filter(function ($schedule) use ($fixedReservaMap) {
-                                                    $scheduleKey = "{$schedule->day_of_week}-{$schedule->start_time}-{$schedule->end_time}";
-                                                    // Retorna TRUE se o schedule não estiver no mapa de slots fixos
-                                                    return !in_array($scheduleKey, $fixedReservaMap);
-                                                });
+                                                     ->whereNull('date')
+                                                     ->where('is_active', true)
+                                                     ->get()
+                                                     ->filter(function ($schedule) use ($fixedReservaMap) {
+                                                         $scheduleKey = "{$schedule->day_of_week}-{$schedule->start_time}-{$schedule->end_time}";
+                                                         // Retorna TRUE se o schedule não estiver no mapa de slots fixos
+                                                         return !in_array($scheduleKey, $fixedReservaMap);
+                                                     });
 
         $availableDayOfWeeks = $availableRecurringSchedules->pluck('day_of_week')->unique()->map(fn($day) => (int)$day)->toArray();
 
@@ -608,8 +721,8 @@ class AdminController extends Controller
                 $warningMessage = "{$reservasFalhadas} datas foram puladas por já estarem ocupadas por reservas pontuais: " . implode(', ', $datasPuladas);
             }
             return redirect()->route('admin.reservas.create')
-                              ->with('success', $successMessage)
-                              ->with('warning', $warningMessage);
+                             ->with('success', $successMessage)
+                             ->with('warning', $warningMessage);
 
         } catch (\Exception $e) {
             // 10. Falha!
@@ -627,7 +740,7 @@ class AdminController extends Controller
 
 
     // =========================================================================
-    // FUNÇÃO 'getAvailableTimes'
+    // FUNÇÃO 'getAvailableTimes' (MANTIDA, MAS RECOMENDADO MOVER PARA ReservaController)
     // =========================================================================
     /**
      * Calcula e retorna os horários disponíveis para uma data específica,
@@ -635,6 +748,10 @@ class AdminController extends Controller
      */
     public function getAvailableTimes(Request $request)
     {
+        // Este método deve ser movido para ReservaController, onde ele já estava.
+        // Se a rota aponta para ReservaController, este método aqui pode ser apagado.
+        // Mantendo apenas para referência no estado atual.
+
         // 1. Validação
         $request->validate([
              'date' => 'required|date_format:Y-m-d',
@@ -664,16 +781,11 @@ class AdminController extends Controller
 
         // 3. Reservas Confirmadas/Pendentes para a data
         $occupiedReservas = Reserva::whereDate('date', $dateString)
-                                        ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-                                        ->get();
+                                           ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                           ->get();
 
         // --- LOG DE DEBUG ---
         Log::info("DEBUG AGENDAMENTO para data: {$dateString} ({$dayOfWeek})");
-        Log::info("Schedules Encontrados (total: {$allSchedules->count()})");
-        Log::info("Reservas Ocupadas encontradas (total: {$occupiedReservas->count()}):");
-        foreach ($occupiedReservas as $reserva) {
-            Log::info(" - Reserva ID: {$reserva->id}, Schedule ID: {$reserva->schedule_id}, Horário: {$reserva->start_time} - {$reserva->end_time}, Fixa: " . ($reserva->is_fixed ? 'SIM' : 'NÃO'));
-        }
         // --- FIM DO LOG DE DEBUG ---
 
         // 4. Filtrar Schedules Ocupados (Usando Lógica de Sobreposição)
@@ -688,14 +800,7 @@ class AdminController extends Controller
             // B. Checagem de Conflito de Horário
             $isBooked = $occupiedReservas->contains(function ($reservation) use ($schedule) {
                 // Checa se há sobreposição de horário:
-                // Reserva (start) < Schedule (end) E Reserva (end) > Schedule (start)
                 $overlap = $reservation->start_time < $schedule->end_time && $reservation->end_time > $schedule->start_time;
-
-                // --- LOG DE DEBUG DETALHADO (MOSTRA O CONFLITO) ---
-                if ($overlap) {
-                    Log::warning("CONFLITO DETECTADO! Schedule ID {$schedule->id} ({$schedule->start_time}-{$schedule->end_time}) CONFLITA com Reserva ID {$reservation->id} ({$reservation->start_time}-{$reservation->end_time}). Este Schedule será ocultado.");
-                }
-                // --- FIM DO LOG DE DEBUG DETALHADO ---
 
                 return $overlap;
             });
@@ -718,6 +823,7 @@ class AdminController extends Controller
 
         return response()->json($availableTimes);
     }
+
 
     // --- Métodos de CRUD de Usuários ---
 
