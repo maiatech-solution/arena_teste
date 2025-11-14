@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Reserva;
+// ❌ REMOVIDO: use App\Models\Schedule;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -110,24 +112,41 @@ class AdminController extends Controller
     public function confirmed_index(Request $request)
     {
         $query = Reserva::where('status', Reserva::STATUS_CONFIRMADA)
+                            // 🛑 CRÍTICO: Exclui reservas fixas de clientes reais (se houver a série recorrente antiga)
+                            // O foco aqui é gerenciar agendamentos PONTUAIS confirmados e a grade (que agora está no /config).
                             ->where('is_fixed', false)
                             ->whereDate('date', '>=', Carbon::today()->toDateString())
                             ->with('user');
 
         $isOnlyMine = $request->get('only_mine') === 'true';
+        $search = $request->get('search'); // <<-- NOVO: Captura o termo de busca
 
-        if ($isOnlyMine) {
+        if ($search) { // <<-- NOVO: Aplica o filtro de busca
+            $query->where(function ($q) use ($search) {
+                // Filtra pelo nome do cliente manual ou contato
+                $q->where('client_name', 'like', '%' . $search . '%')
+                  ->orWhere('client_contact', 'like', '%' . $search . '%')
+                  // Filtra pelo nome do usuário registrado (user->name)
+                  ->orWhereHas('user', function ($subQuery) use ($search) {
+                      $subQuery->where('name', 'like', '%' . $search . '%');
+                  });
+            });
+            $pageTitle = "Reservas Confirmadas (Resultado da Busca: '{$search}')";
+        } elseif ($isOnlyMine) {
             $pageTitle = 'Minhas Reservas Manuais Confirmadas';
             $query->where('manager_id', Auth::id());
         } else {
             $pageTitle = 'Todas as Reservas Confirmadas (Próximos Agendamentos)';
         }
 
+
         $reservas = $query->orderBy('date', 'asc')
                             ->orderBy('start_time', 'asc')
-                            ->paginate(15);
+                            ->paginate(15)
+                            ->appends($request->query()); // CRÍTICO: Mantém os parâmetros na paginação
 
-        return view('admin.reservas.confirmed_index', compact('reservas', 'pageTitle', 'isOnlyMine'));
+        // Passa o termo de busca para a view para manter o campo preenchido
+        return view('admin.reservas.confirmed_index', compact('reservas', 'pageTitle', 'isOnlyMine', 'search'));
     }
 
     public function showReserva(Reserva $reserva)
@@ -143,75 +162,87 @@ class AdminController extends Controller
     }
 
     // --- NOVO MÉTODO: Cancelamento Pontual de Reserva Recorrente (Exceção) ---
+    /**
+     * Cancela UMA única reserva que faz parte de uma série recorrente.
+     * Após o cancelamento, o slot FIXO de disponibilidade é recriado
+     * para que o horário fique liberado APENAS para agendamento pontual público/gestor.
+     */
     public function cancelarReservaRecorrente(Reserva $reserva)
     {
         if (!$reserva->is_recurrent) {
-            // ✅ CORREÇÃO: Retorno JSON para o AJAX
-            return response()->json(['error' => 'Esta reserva não faz parte de uma série recorrente.'], 400);
+            return response()->json(['success' => false, 'message' => 'Esta reserva não faz parte de uma série recorrente e deve ser cancelada diretamente.'], 400);
         }
 
+        // 1. Captura as informações do slot original
         $originalData = $reserva->only(['date', 'day_of_week', 'start_time', 'end_time', 'price']);
 
+        // 2. Apaga a reserva real do cliente (A reserva recorrente)
         $reserva->delete();
 
+        // 3. Recria o slot fixo de disponibilidade (o evento verde)
         try {
             Reserva::create([
-                'date' => $originalData['date']->toDateString(),
+                'date' => $originalData['date']->toDateString(), // O cast do Model garante que 'date' é um Carbon
                 'day_of_week' => $originalData['day_of_week'],
                 'start_time' => $originalData['start_time'],
                 'end_time' => $originalData['end_time'],
                 'price' => $originalData['price'],
-                'client_name' => 'Slot Fixo de 1h',
+                'client_name' => 'Slot Fixo de 1h', // Nome padrão
                 'client_contact' => 'N/A',
-                'status' => Reserva::STATUS_CONFIRMADA,
-                'is_fixed' => true,
+                'status' => Reserva::STATUS_CONFIRMADA, // Torna o slot DISPONÍVEL (verde)
+                'is_fixed' => true, // Volta a ser um slot fixo, mas apenas para esta data!
             ]);
 
-            // ✅ CORREÇÃO: Retorna JSON em vez de redirect
-            return response()->json([
-                'success' => true,
-                'message' => "Cancelamento pontual realizado! O horário de {$reserva->client_name} no dia {$originalData['date']->format('d/m/Y')} foi liberado para novos agendamentos PONTUAIS.",
-            ], 200);
+            return response()->json(['success' => true, 'message' => "Cancelamento pontual realizado! O horário de {$reserva->client_name} foi liberado para novos agendamentos PONTUAIS."], 200);
 
         } catch (\Exception $e) {
             Log::error("Erro ao recriar slot fixo após cancelamento pontual: " . $e->getMessage());
-            // ✅ CORREÇÃO: Retorno JSON
-            return response()->json(['error' => 'Erro ao processar o cancelamento pontual.'], 500);
+            return response()->json(['success' => false, 'message' => 'Erro ao processar o cancelamento pontual.'], 500);
         }
     }
 
     // --- NOVO MÉTODO: Cancelamento de SÉRIE Recorrente ---
+    /**
+     * Cancela uma série inteira de reservas recorrentes a partir da reserva mestra.
+     */
     public function cancelarSerieRecorrente(Reserva $reserva)
     {
         if (!$reserva->is_recurrent) {
-             // ✅ CORREÇÃO: Retorno JSON para o AJAX
-             return response()->json(['error' => 'Esta reserva não faz parte de uma série recorrente.'], 400);
+             return response()->json(['success' => false, 'message' => 'Esta reserva não faz parte de uma série recorrente e não pode ser cancelada em série.'], 400);
         }
 
+        // 1. Identifica a série (mestra ou membro)
         $masterId = $reserva->recurrent_series_id ?? $reserva->id;
         $clientName = $reserva->client_name;
         $startTime = $reserva->start_time;
 
+        // 2. Busca o slot mestre e todos os membros futuros
         $reservasToCancel = Reserva::where(function($query) use ($masterId) {
+                // Inclui o mestre (se a reserva atual for o mestre)
                 $query->where('id', $masterId)
+                      // Inclui todos os membros vinculados, mas apenas os futuros
                       ->orWhere('recurrent_series_id', $masterId);
             })
+            // Apenas reservas futuras (a partir de amanhã) ou a reserva do dia atual
             ->whereDate('date', '>=', Carbon::today()->toDateString())
             ->get();
 
         $count = $reservasToCancel->count();
 
+        // 3. Executa o cancelamento em massa (Deletar as reservas reais)
         DB::beginTransaction();
         try {
+            // Captura as datas e horários antes de deletar
             $dates = $reservasToCancel->pluck('date');
-            $firstSlot = $reservasToCancel->first();
-            $start = $firstSlot->start_time;
-            $end = $firstSlot->end_time;
-            $dayOfWeek = $firstSlot->day_of_week;
-            $price = $firstSlot->price;
+            $start = $reservasToCancel->first()->start_time;
+            $end = $reservasToCancel->first()->end_time;
+            $dayOfWeek = $reservasToCancel->first()->day_of_week;
+            $price = $reservasToCancel->first()->price;
 
+            // Apaga todas as reservas reais da série
             Reserva::whereIn('id', $reservasToCancel->pluck('id'))->delete();
 
+            // 4. Recria a série de slots fixos genéricos para o mesmo período
             $dates->each(function($date) use ($dayOfWeek, $start, $end, $price) {
                 Reserva::create([
                     'date' => $date->toDateString(),
@@ -221,30 +252,26 @@ class AdminController extends Controller
                     'price' => $price,
                     'client_name' => 'Slot Fixo de 1h',
                     'client_contact' => 'N/A',
-                    'status' => Reserva::STATUS_CONFIRMADA,
+                    'status' => Reserva::STATUS_CONFIRMADA, // Volta a ser Disponível
                     'is_fixed' => true,
                 ]);
             });
 
             DB::commit();
 
-            // ✅ CORREÇÃO: Retorna JSON em vez de redirect
-            return response()->json([
-                'success' => true,
-                'message' => "Série recorrente do cliente '{$clientName}' ({$start}h) cancelada com sucesso! {$count} slots foram liberados para agendamentos pontuais.",
-            ], 200);
+            return response()->json(['success' => true, 'message' => "Série recorrente do cliente '{$clientName}' ({$start}h) cancelada com sucesso! {$count} slots foram liberados para agendamentos pontuais."], 200);
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao cancelar série recorrente (ID Mestra: {$masterId}): " . $e->getMessage());
-            // ✅ CORREÇÃO: Retorno JSON
-            return response()->json(['error' => 'Erro ao cancelar a série recorrente.'], 500);
+            return response()->json(['success' => false, 'message' => 'Erro ao cancelar a série recorrente.'], 500);
         }
     }
 
 
     public function confirmarReserva(Reserva $reserva)
     {
+        // Garante que o método checkOverlap é chamado a partir do ReservaController (agora público)
         $reservaController = app(\App\Http\Controllers\ReservaController::class);
 
         try {
@@ -252,13 +279,15 @@ class AdminController extends Controller
             $isFixed = $reserva->is_fixed;
             $ignoreId = $reserva->id;
 
+            // 1. Checagem de Conflito (Usando ReservaController)
             if ($reservaController->checkOverlap($dateString, $reserva->start_time, $reserva->end_time, $isFixed, $ignoreId)) {
-                 return back()->with('error', 'Conflito detectado: Esta reserva não pode ser confirmada pois já existe outro agendamento (Pendente ou Confirmado) neste horário.');
+                 return back()->with('error', 'Conflito detectado: Esta reserva não pode ser confirmada pois já existe outro agendamento (Pendente ou Confirmado) no mesmo horário.');
             }
 
+            // 2. Atualiza Status e atribui o Gestor
             $reserva->update([
                 'status' => Reserva::STATUS_CONFIRMADA,
-                'manager_id' => Auth::id(),
+                'manager_id' => Auth::id(), // O gestor que confirma
             ]);
 
             return redirect()->route('dashboard')
@@ -291,10 +320,18 @@ class AdminController extends Controller
                 'status' => Reserva::STATUS_CANCELADA,
                 'manager_id' => Auth::id(),
             ]);
+            // Retorno JSON para a tabela e redirect para a view de detalhes
+            if (request()->expectsJson()) {
+                 return response()->json(['success' => true, 'message' => 'Reserva cancelada com sucesso.'], 200);
+            }
             return redirect()->route('admin.reservas.confirmed_index')
                                  ->with('success', 'Reserva cancelada com sucesso.');
         } catch (\Exception $e) {
             Log::error("Erro ao cancelar a reserva ID {$reserva->id}: " . $e->getMessage());
+            // Retorno JSON para a tabela
+            if (request()->expectsJson()) {
+                return response()->json(['success' => false, 'message' => 'Erro ao cancelar a reserva.'], 500);
+            }
             return back()->with('error', 'Erro ao cancelar a reserva: ' . $e->getMessage());
         }
     }
@@ -309,7 +346,6 @@ class AdminController extends Controller
                 Reserva::STATUS_CANCELADA,
             ])],
         ]);
-
         $newStatus = $validated['status'];
         $updateData = ['status' => $newStatus];
 
@@ -342,7 +378,6 @@ class AdminController extends Controller
         }
     }
 
-    // O método 'destroyReserva' agora verifica se é recorrente e redireciona.
     public function destroyReserva(Reserva $reserva)
     {
         if ($reserva->is_recurrent) {

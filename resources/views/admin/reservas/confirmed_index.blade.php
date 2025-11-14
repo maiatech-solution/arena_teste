@@ -27,16 +27,47 @@
 
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 space-y-4 md:space-y-0">
 
-                    <div class="flex space-x-3 p-1 bg-gray-100 rounded-xl shadow-inner">
-                        <a href="{{ route('admin.reservas.confirmed_index') }}"
-                            class="px-4 py-2 text-sm font-semibold rounded-lg shadow-md transition duration-150
-                                @if (!$isOnlyMine)
-                                    bg-indigo-600 text-white hover:bg-indigo-700
-                                @else
-                                    text-indigo-600 hover:bg-white
-                                @endif">
-                            Todas Confirmadas
-                        </a>
+                    {{-- GRUPO DE FILTROS E PESQUISA --}}
+                    <div class="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4 w-full md:w-auto">
+
+                        {{-- Botões de Filtro Rápido --}}
+                        <div class="flex space-x-3 p-1 bg-gray-100 rounded-xl shadow-inner flex-shrink-0">
+                            <a href="{{ route('admin.reservas.confirmed_index') }}"
+                                class="px-4 py-2 text-sm font-semibold rounded-lg shadow-md transition duration-150
+                                    @if (!isset($search) && !$isOnlyMine)
+                                        bg-indigo-600 text-white hover:bg-indigo-700
+                                    @else
+                                        text-indigo-600 hover:bg-white
+                                    @endif">
+                                Todas Confirmadas
+                            </a>
+                        </div>
+
+                        {{-- ✅ NOVO: Formulário de Pesquisa --}}
+                        <form method="GET" action="{{ route('admin.reservas.confirmed_index') }}" class="flex items-center space-x-2 w-full md:w-auto">
+                            {{-- Mantém o filtro 'only_mine' se estiver ativo --}}
+                            <input type="hidden" name="only_mine" value="{{ $isOnlyMine ? 'true' : 'false' }}">
+
+                            <input type="text"
+                                name="search"
+                                value="{{ $search ?? '' }}"
+                                placeholder="Pesquisar por cliente, contato..."
+                                class="px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150 w-full md:w-64">
+
+                            <button type="submit"
+                                    class="bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded-lg shadow-md transition duration-150 flex-shrink-0"
+                                    title="Buscar">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg>
+                            </button>
+
+                            @if (isset($search) && $search)
+                                <a href="{{ route('admin.reservas.confirmed_index', ['only_mine' => $isOnlyMine ? 'true' : 'false']) }}"
+                                   class="text-red-500 hover:text-red-700 p-2 transition duration-150 flex-shrink-0"
+                                   title="Limpar Busca">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>
+                                </a>
+                            @endif
+                        </form>
                     </div>
                 </div>
 
@@ -129,6 +160,9 @@
                                 <tr>
                                     <td colspan="5" class="px-6 py-8 whitespace-nowrap text-center text-base text-gray-500 italic">
                                         Nenhuma reserva confirmada encontrada
+                                        @if (isset($search) && $search)
+                                            para a busca por "{{ $search }}".
+                                        @endif
                                     </td>
                                 </tr>
                             @endforelse
@@ -168,7 +202,6 @@
                         'X-CSRF-TOKEN': CSRF_TOKEN,
                         'X-Requested-With': 'XMLHttpRequest',
                         'Accept': 'application/json',
-                        // Se for PATCH, o Body deve ser vazio ou incluir o status, mas aqui apenas PATCH já resolve.
                     }
                 });
 
@@ -219,10 +252,6 @@
             // Rota PATCH /admin/reservas/{reserva}/cancelar que muda o status para 'cancelled'
             const url = CANCEL_PADRAO_URL.replace(':id', reservaId);
             const confirmation = "Tem certeza que deseja CANCELAR esta reserva PONTUAL? Isso a marcará como cancelada no sistema.";
-
-            // Enviamos um PATCH, mas o corpo precisa ser um FormData contendo o status.
-            // Para rotas PATCH com status, é mais seguro simular o PATCH com um POST e o método,
-            // ou simplificar e apenas usar o PATCH vazio, pois o Controller sabe o que fazer.
 
             // Como o Controller já sabe que deve mudar o status para 'cancelled' na rota, usamos PATCH.
             sendAjaxRequest(url, 'PATCH', confirmation);
