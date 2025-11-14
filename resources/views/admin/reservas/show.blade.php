@@ -1,181 +1,177 @@
 <x-app-layout>
-    {{-- Assume-se que você está usando um layout chamado 'app-layout' ou similar --}}
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            Detalhes da Reserva #{{ $reserva->id }}
+        <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
+            {{ __('Detalhes da Reserva') }}
         </h2>
     </x-slot>
 
     <div class="py-12">
         <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
-            {{-- Mensagens de feedback (sucesso/erro) --}}
-            @if (session('success'))
-                <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4" role="alert">
-                    <span class="block sm:inline">{{ session('success') }}</span>
-                </div>
-            @endif
-            @if (session('error'))
-                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
-                    <span class="block sm:inline">{{ session('error') }}</span>
-                </div>
-            @endif
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-2xl sm:rounded-lg">
 
-            <div class="bg-white overflow-hidden shadow-xl sm:rounded-lg p-6 mb-8">
-                <div class="flex justify-between items-start mb-6 border-b pb-4">
-                    <div>
-                        <h3 class="text-2xl font-bold text-gray-900">
-                            Reserva para {{ $reserva->client_name }}
+                {{-- Notificações --}}
+                @if (session('success'))
+                    <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4 rounded-t-lg" role="alert">
+                        <p>{{ session('success') }}</p>
+                    </div>
+                @endif
+                @if (session('error'))
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded-t-lg" role="alert">
+                        <p>{{ session('error') }}</p>
+                    </div>
+                @endif
+
+                <div class="p-6 sm:p-8">
+
+                    {{-- Cabeçalho e Status --}}
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-4 mb-6">
+                        <h3 class="text-2xl font-bold text-gray-900 dark:text-white">
+                            Reserva #{{ $reserva->id }}
                         </h3>
-                        <p class="mt-1 text-sm text-gray-500">
-                            Criado em: {{ $reserva->created_at->format('d/m/Y H:i') }}
-                        </p>
+                        @php
+                            // Lógica para colorir o status
+                            $statusClass = [
+                                'pending' => 'bg-orange-100 text-orange-800',
+                                'confirmed' => 'bg-indigo-100 text-indigo-800',
+                                'cancelled' => 'bg-red-100 text-red-800',
+                                'rejected' => 'bg-gray-100 text-gray-800',
+                                'expired' => 'bg-yellow-100 text-yellow-800',
+                            ][$reserva->status] ?? 'bg-gray-100 text-gray-800';
+                        @endphp
+                        <span class="mt-2 md:mt-0 px-3 py-1 text-sm font-semibold rounded-full uppercase {{ $statusClass }}">
+                            {{ $reserva->statusText }}
+                        </span>
                     </div>
-                    <span class="px-3 py-1 text-sm font-semibold rounded-full
-                        @if($reserva->status == \App\Models\Reserva::STATUS_CONFIRMADA) bg-green-100 text-green-800
-                        @elseif($reserva->status == \App\Models\Reserva::STATUS_PENDENTE) bg-yellow-100 text-yellow-800
-                        @elseif($reserva->status == \App\Models\Reserva::STATUS_CANCELADA) bg-red-100 text-red-800
-                        @else bg-gray-100 text-gray-800
-                        @endif">
-                        Status: {{ strtoupper($reserva->status) }}
-                    </span>
-                </div>
 
-                <div class="space-y-4">
-                    <div class="grid grid-cols-2 gap-4">
-                        {{-- Data e Hora --}}
-                        <div class="detail-box">
-                            <p class="text-sm font-medium text-gray-500">Data e Hora</p>
-                            <p class="mt-1 text-lg font-semibold text-gray-900">
+                    {{-- Card de Informações Principais --}}
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg shadow-inner">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase">Data e Horário</p>
+                            <p class="text-xl font-extrabold text-indigo-600 dark:text-indigo-400">
                                 {{ \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') }}
-                                das {{ $reserva->start_time }} às {{ $reserva->end_time }}
+                            </p>
+                            <p class="text-lg font-semibold text-gray-700 dark:text-gray-300">
+                                {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }} - {{ \Carbon\Carbon::parse($reserva->end_time)->format('H:i') }}
                             </p>
                         </div>
 
-                        {{-- Cliente (Registrado ou Manual) --}}
-                        <div class="detail-box">
-                            <p class="text-sm font-medium text-gray-500">Cliente</p>
-                            <p class="mt-1 text-lg font-semibold text-gray-900">
-                                @if ($reserva->user)
-                                    {{ $reserva->user->name }} (Reg.)
-                                @else
-                                    {{ $reserva->client_name }} (Manual)
-                                @endif
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        {{-- Contato --}}
-                        <div class="detail-box">
-                            <p class="text-sm font-medium text-gray-500">Contato</p>
-                            <p class="mt-1 text-base text-gray-900">{{ $reserva->client_contact ?? 'N/A' }}</p>
-                        </div>
-
-                        {{-- Preço --}}
-                        <div class="detail-box">
-                            <p class="text-sm font-medium text-gray-500">Preço</p>
-                            <p class="mt-1 text-lg font-semibold text-indigo-600">
+                        <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg shadow-inner">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase">Valor</p>
+                            <p class="text-3xl font-extrabold text-green-600 dark:text-green-400">
                                 R$ {{ number_format($reserva->price, 2, ',', '.') }}
                             </p>
                         </div>
                     </div>
 
-                    {{-- Notas/Observações --}}
-                    <div class="detail-box bg-gray-50 p-4 rounded-lg">
-                        <p class="text-sm font-medium text-gray-500">Notas/Observações</p>
-                        <p class="mt-1 text-base text-gray-900 whitespace-pre-wrap">
-                            {{ $reserva->notes ?? 'Nenhuma observação fornecida.' }}
-                        </p>
+                    {{-- Detalhes do Cliente e Gestor --}}
+                    <div class="space-y-4 mb-8">
+
+                        {{-- Detalhes do Cliente --}}
+                        <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Cliente</h4>
+                            <div class="flex flex-col space-y-1">
+                                {{-- Usa client_name se for manual, ou user->name se for registrado --}}
+                                <p class="text-base font-bold text-indigo-700 dark:text-indigo-300">
+                                    {{ $reserva->client_name ?? ($reserva->user ? $reserva->user->name : 'N/A') }}
+                                </p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">
+                                    Contato: {{ $reserva->client_contact ?? ($reserva->user ? $reserva->user->email : 'Não informado') }}
+                                </p>
+                            </div>
+                        </div>
+
+                        {{-- Detalhes da Criação --}}
+                        <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Origem e Recorrência</h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Criada por: {{ $reserva->criadoPorLabel }}</p>
+
+                            @if ($reserva->manager)
+                                <p class="text-sm text-gray-600 dark:text-gray-400">Gestor: {{ $reserva->manager->name }}</p>
+                            @endif
+
+                            <p class="mt-2 text-sm font-semibold {{ $reserva->is_recurrent ? 'text-indigo-600' : 'text-gray-500' }}">
+                                Tipo: {{ $reserva->is_recurrent ? 'Série Recorrente' : 'Reserva Pontual' }}
+                                @if ($reserva->is_recurrent && $reserva->recurrent_series_id)
+                                    (Membro da Série #{{ $reserva->recurrent_series_id }})
+                                @endif
+                            </p>
+                        </div>
+
+                        {{-- Observações --}}
+                        @if ($reserva->notes)
+                            <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                                <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Observações</h4>
+                                <p class="p-3 bg-yellow-50 dark:bg-yellow-900/50 border-l-4 border-yellow-400 text-sm text-yellow-800 dark:text-yellow-200 rounded-lg">
+                                    {{ $reserva->notes }}
+                                </p>
+                            </div>
+                        @endif
+
                     </div>
 
-                    {{-- Gestor Responsável pela Ação --}}
-                    @if ($reserva->manager_id)
-                        <div class="detail-box">
-                            <p class="text-sm font-medium text-gray-500">Gerida por</p>
-                            <p class="mt-1 text-sm text-gray-600">
-                                {{ $reserva->manager->name ?? 'Gestor Desconhecido' }}
+                    {{-- Ações de Status (Aparecem apenas se o status permitir a mudança) --}}
+                    @if ($reserva->status === $reserva::STATUS_PENDENTE || $reserva->status === $reserva::STATUS_CONFIRMADA)
+                        <div class="border-t border-gray-200 dark:border-gray-700 pt-6">
+                            <h4 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Mudar Status da Reserva</h4>
+                            <div class="flex flex-col space-y-3">
+
+                                @if ($reserva->status === $reserva::STATUS_PENDENTE)
+                                    {{-- Botão Confirmar --}}
+                                    <form method="POST" action="{{ route('admin.reservas.confirmar', $reserva) }}" onsubmit="return confirm('Confirmar o agendamento de {{ $reserva->client_name }}?');">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="submit" class="w-full md:w-auto px-6 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg">
+                                            Confirmar Agendamento
+                                        </button>
+                                    </form>
+
+                                    {{-- Botão Rejeitar --}}
+                                    <form method="POST" action="{{ route('admin.reservas.rejeitar', $reserva) }}" onsubmit="return confirm('Tem certeza que deseja REJEITAR a pré-reserva de {{ $reserva->client_name }}?');">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="submit" class="w-full md:w-auto px-6 py-2 bg-gray-500 text-white font-bold rounded-lg hover:bg-gray-600 transition duration-150 shadow-lg">
+                                            Rejeitar Pré-Reserva
+                                        </button>
+                                    </form>
+                                @endif
+
+                                @if ($reserva->status === $reserva::STATUS_CONFIRMADA)
+                                    {{-- Botão Cancelar --}}
+                                    <form method="POST" action="{{ route('admin.reservas.cancelar', $reserva) }}" onsubmit="return confirm('Tem certeza que deseja CANCELAR a reserva de {{ $reserva->client_name }}?');">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="submit" class="w-full md:w-auto px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150 shadow-lg">
+                                            Mudar para Status Cancelada
+                                        </button>
+                                    </form>
+                                @endif
+
+                                {{-- Aviso de Recorrência (Substitui os botões redundantes) --}}
+                                @if ($reserva->is_recurrent)
+                                    <p class="text-sm text-yellow-600 dark:text-yellow-400 p-2 border border-yellow-300 rounded-md">
+                                        ⚠️ Esta é uma reserva recorrente. Para gerenciar o cancelamento pontual ou da série inteira, use a lista de **Reservas Confirmadas** ou o **Calendário**.
+                                    </p>
+                                @endif
+                            </div>
+                        </div>
+                    @else
+                        <div class="border-t border-gray-200 dark:border-gray-700 pt-6">
+                            <p class="text-lg font-semibold text-gray-500 dark:text-gray-400">
+                                Não há ações de status disponíveis, pois a reserva está **{{ $reserva->statusText }}**.
                             </p>
                         </div>
                     @endif
-                </div>
-            </div>
 
-            {{-- GESTÃO DE AÇÕES --}}
-            <div class="bg-white overflow-hidden shadow-xl sm:rounded-lg p-6">
-                <h4 class="text-xl font-bold mb-4 border-b pb-2">Ações de Gestão</h4>
+                    {{-- Retorno para a Lista --}}
+                    <div class="mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
+                        <a href="{{ route('admin.reservas.confirmed_index') }}" class="inline-flex items-center text-indigo-600 hover:text-indigo-800 transition duration-150">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                            Voltar para a Lista de Confirmadas
+                        </a>
+                    </div>
 
-                <div class="flex flex-wrap gap-4">
-                    {{-- 1. Formulário de Confirmação --}}
-                    @if($reserva->status != \App\Models\Reserva::STATUS_CONFIRMADA)
-                        <form action="{{ route('admin.reservas.updateStatus', $reserva) }}" method="POST">
-                            @csrf
-                            @method('PATCH')
-                            <input type="hidden" name="status" value="confirmed">
-                            <button type="submit" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 active:bg-green-900 focus:outline-none focus:border-green-900 focus:ring ring-green-300 disabled:opacity-25 transition ease-in-out duration-150">
-                                Confirmar Reserva
-                            </button>
-                        </form>
-                    @endif
-
-                    {{-- 2. Formulário de Rejeição (Apenas se não estiver cancelada/rejeitada e não confirmada) --}}
-                    @if($reserva->status == \App\Models\Reserva::STATUS_PENDENTE)
-                        <form action="{{ route('admin.reservas.updateStatus', $reserva) }}" method="POST">
-                            @csrf
-                            @method('PATCH')
-                            <input type="hidden" name="status" value="rejected">
-                            <button type="submit" class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-700 active:bg-red-900 focus:outline-none focus:border-red-900 focus:ring ring-red-300 disabled:opacity-25 transition ease-in-out duration-150">
-                                Rejeitar Pré-Reserva
-                            </button>
-                        </form>
-                    @endif
-
-                    {{-- 3. Formulário de Cancelamento (Se estiver confirmada) --}}
-                    @if($reserva->status == \App\Models\Reserva::STATUS_CONFIRMADA)
-                        <form action="{{ route('admin.reservas.updateStatus', $reserva) }}" method="POST">
-                            @csrf
-                            @method('PATCH')
-                            <input type="hidden" name="status" value="cancelled">
-                            <button type="submit" class="inline-flex items-center px-4 py-2 bg-yellow-500 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-yellow-600 active:bg-yellow-700 focus:outline-none focus:border-yellow-700 focus:ring ring-yellow-300 disabled:opacity-25 transition ease-in-out duration-150">
-                                Cancelar Reserva
-                            </button>
-                        </form>
-                    @endif
-
-                    {{-- 4. Formulário de Exclusão (Perigo!) --}}
-                    <form id="delete-form-{{ $reserva->id }}" action="{{ route('admin.reservas.destroy', $reserva) }}" method="POST">
-                        @csrf
-                        @method('DELETE')
-                        <button type="button" onclick="confirmDelete()" class="inline-flex items-center px-4 py-2 bg-gray-500 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-600 active:bg-gray-700 focus:outline-none focus:border-gray-700 focus:ring ring-gray-300 disabled:opacity-25 transition ease-in-out duration-150">
-                            Excluir Permanentemente
-                        </button>
-                    </form>
                 </div>
             </div>
         </div>
     </div>
-
-    {{-- Script para a exclusão (simulando um confirm com JavaScript simples) --}}
-    <script>
-        function confirmDelete() {
-            // OBS: Como não podemos usar window.confirm() em iframes,
-            // esta função deve ser substituída por um modal de confirmação.
-            // Para simular a intenção, usaremos um prompt simples.
-            const confirmation = prompt("ATENÇÃO: Digite 'EXCLUIR' para confirmar a exclusão permanente desta reserva.");
-
-            if (confirmation === 'EXCLUIR') {
-                document.getElementById('delete-form-{{ $reserva->id }}').submit();
-            } else {
-                // Mensagem de erro ou cancelamento
-                console.log('Exclusão cancelada ou confirmação incorreta.');
-            }
-        }
-    </script>
-    <style>
-        .detail-box {
-            padding: 0.5rem 0;
-        }
-        .detail-box p:last-child {
-            margin-top: 0.25rem;
-        }
-    </style>
 </x-app-layout>
