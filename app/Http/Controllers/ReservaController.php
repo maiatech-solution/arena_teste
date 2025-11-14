@@ -172,6 +172,17 @@ class ReservaController extends Controller
 
             $countUpdated = 0;
 
+            // 🛑 CRÍTICO: Se o usuário marcou "recorrente" e encontramos 0 slots futuros, ABORTAR!
+            // Isso significa que os slots futuros estão ocupados por outra série recorrente.
+            if ($futureFixedSlots->isEmpty()) {
+                 DB::rollBack();
+                 return response()->json([
+                     'success' => false,
+                     'message' => 'Não é possível criar uma reserva recorrente. Os horários futuros desta série já estão ocupados por outro cliente fixo ou exceções. Por favor, remova a opção Recorrente e agende apenas pontualmente.',
+                 ], 409);
+            }
+
+
             foreach ($futureFixedSlots as $futureSlot) {
                 // Converte cada slot fixo em uma reserva confirmada para o cliente
                 $futureSlot->update([

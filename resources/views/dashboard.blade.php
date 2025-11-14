@@ -79,6 +79,12 @@
                     </div>
                 @endif
 
+                @if (session('error'))
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded" role="alert">
+                        <p>{{ session('error') }}</p>
+                    </div>
+                @endif
+
 
                 {{-- PLACEHOLDER DINÂMICO PARA NOTIFICAÇÕES --}}
                 <div id="realtime-notification">
@@ -110,9 +116,11 @@
             <h3 class="text-xl font-bold text-indigo-700 mb-4 border-b pb-2">Detalhes da Reserva</h3>
             <div class="space-y-3 text-gray-700" id="modal-content">
                 </div>
-            <button onclick="document.getElementById('event-modal').classList.add('hidden')" class="mt-6 w-full px-4 py-2 bg-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-400 transition duration-150">
-                Fechar
-            </button>
+            <div class="mt-6 w-full" id="modal-actions">
+                <button onclick="document.getElementById('event-modal').classList.add('hidden')" class="w-full px-4 py-2 bg-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-400 transition duration-150">
+                    Fechar
+                </button>
+            </div>
         </div>
     </div>
 
@@ -121,7 +129,6 @@
         <div class="bg-white p-6 rounded-xl shadow-2xl max-w-lg w-full transition-all duration-300 transform scale-100" onclick="event.stopPropagation()">
             <h3 class="text-xl font-bold text-green-700 mb-4 border-b pb-2">Agendamento Rápido de Slot</h3>
 
-            {{-- A URL de submissão é definida no JavaScript, dependendo se é Recorrente ou Pontual --}}
             <form id="quick-booking-form" action="{{ route('api.reservas.store_quick') }}" method="POST">
                 @csrf
 
@@ -194,7 +201,18 @@
         // ROTAS DE SUBMISSÃO
         const RECURRENT_STORE_URL = '{{ route("api.reservas.store_recurrent") }}';
         const QUICK_STORE_URL = '{{ route("api.reservas.store_quick") }}';
+
+        // ROTAS DE CANCELAMENTO
+        const CANCEL_PONTUAL_URL = '{{ route("admin.reservas.cancelar_pontual", ":id") }}';
+        const CANCEL_SERIE_URL = '{{ route("admin.reservas.cancelar_serie", ":id") }}';
         // ======================================
+
+        // TOKEN CSRF
+        const csrfToken = document.querySelector('input[name="_token"]').value;
+
+        // VARIÁVEL DE ESCOPO GLOBAL/DO WINDOW.ONLOAD PARA O CALENDÁRIO
+        var calendar;
+
 
         /**
          * FUNÇÃO PARA CHECAR AS RESERVAS PENDENTES EM TEMPO REAL (PERIÓDICO)
@@ -261,18 +279,80 @@
             }
         };
 
+        // Função Genérica para Ações de Cancelamento
+        const handleCancellation = async (url, confirmationMessage, calendarInstance) => {
+            if (!confirm(confirmationMessage)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(url, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                });
+
+                // Tenta ler a resposta JSON para sucesso ou erro
+                let result = {};
+                try {
+                    result = await response.json();
+                } catch (e) {
+                    console.error("Falha ao ler JSON de resposta, verificando resposta bruta.", e);
+                }
+
+                if (response.ok) {
+                    // Sucesso: Fecha modal, mostra mensagem de sucesso e atualiza calendário
+                    document.getElementById('event-modal').classList.add('hidden');
+                    alert(result.message || "Ação de cancelamento realizada com sucesso.");
+
+                    // ✅ CORREÇÃO APLICADA: Usa setTimeout para garantir que refetch seja executado APÓS o alert fechar
+                    setTimeout(() => {
+                        calendarInstance.refetchEvents();
+                    }, 50);
+
+                } else {
+                    // Falha (400, 403, 409, 500 etc.)
+                    alert(result.error || result.message || "Erro desconhecido ao processar o cancelamento.");
+                }
+
+            } catch (error) {
+                console.error('Erro de Rede/Comunicação no Cancelamento:', error);
+                alert("Erro de conexão ao tentar cancelar. Tente novamente.");
+            }
+        };
+
+        // Funções específicas de Cancelamento (Expostas globalmente/ao window.onload)
+        const cancelarPontual = (id) => {
+            const url = CANCEL_PONTUAL_URL.replace(':id', id);
+            const confirmation = "Tem certeza que deseja cancelar SOMENTE ESTA reserva? O horário será liberado para agendamentos pontuais.";
+            // ✅ CORREÇÃO APLICADA: Passa a variável global 'calendar'
+            handleCancellation(url, confirmation, window.calendar);
+        };
+
+        const cancelarSerie = (id) => {
+            const url = CANCEL_SERIE_URL.replace(':id', id);
+            const confirmation = "⚠️ ATENÇÃO: Tem certeza que deseja cancelar TODA A SÉRIE desta reserva (a partir de hoje)? Todos os horários futuros serão liberados.";
+            // ✅ CORREÇÃO APLICADA: Passa a variável global 'calendar'
+            handleCancellation(url, confirmation, window.calendar);
+        };
+
 
         window.onload = function() {
             var calendarEl = document.getElementById('calendar');
             var modal = document.getElementById('event-modal');
             var modalContent = document.getElementById('modal-content');
+            var modalActions = document.getElementById('modal-actions');
+
 
             // 1. Inicializa a checagem de pendências imediatamente e configura o intervalo
             checkPendingReservations();
             setInterval(checkPendingReservations, 30000);
 
             // [Lógica do FullCalendar]
-            var calendar = new FullCalendar.Calendar(calendarEl, {
+            calendar = new FullCalendar.Calendar(calendarEl, { // ✅ CORREÇÃO: Atribui à variável 'calendar'
                 locale: 'pt-br',
                 initialView: 'dayGridMonth',
                 height: 'auto',
@@ -317,30 +397,26 @@
                 eventClick: function(info) {
                     const event = info.event;
                     const isAvailable = event.classNames.includes('fc-event-available');
-                    const modal = document.getElementById('event-modal');
                     const isRecurrentCheckbox = document.getElementById('is-recurrent');
 
                     // --- LÓGICA DE SLOT DISPONÍVEL (Agendamento Rápido) ---
                     if (isAvailable) {
                         const quickBookingModal = document.getElementById('quick-booking-modal');
 
-                        // Garante que o start e end são objetos Date para formatar
                         const startDate = moment(event.start);
                         const endDate = moment(event.end);
 
-                        const dateString = startDate.format('YYYY-MM-DD'); // Para o input hidden date
+                        const dateString = startDate.format('YYYY-MM-DD');
                         const dateDisplay = startDate.format('DD/MM/YYYY');
 
-                        const startTimeInput = startDate.format('HH:mm'); // Ex: "14:00"
-                        const endTimeInput = endDate.format('HH:mm');  // Ex: "15:00"
+                        const startTimeInput = startDate.format('HH:mm');
+                        const endTimeInput = endDate.format('HH:mm');
 
                         const timeSlotDisplay = startTimeInput + ' - ' + endTimeInput;
 
-                        // CORREÇÃO: Usar encadeamento opcional para acessar extendedProps com segurança
                         const extendedProps = event.extendedProps || {};
                         const price = extendedProps.price || 0;
 
-                        // ID da reserva fixa existente que será atualizada com os dados do cliente
                         const reservaIdToUpdate = event.id;
 
                         // 1. Preencher os campos ocultos do modal (para envio ao servidor)
@@ -354,7 +430,7 @@
                         document.getElementById('notes').value = '';
                         document.getElementById('client_name').value = '';
                         document.getElementById('client_contact').value = '';
-                        isRecurrentCheckbox.checked = false; // <-- Limpa o checkbox
+                        isRecurrentCheckbox.checked = false;
 
                         // 2. Injetar a informação visível
                         document.getElementById('slot-info-display').innerHTML = `
@@ -369,14 +445,15 @@
 
                     }
                     // --- LÓGICA DE RESERVA EXISTENTE (Modal de Detalhes) ---
-                    else if (event.id) { // Só entra aqui se for uma reserva (tem ID)
+                    else if (event.id) {
                         const startTime = event.start;
                         const endTime = event.end;
-                        const reservaId = event.id; // Pegando o ID da reserva
-                        const modalContent = document.getElementById('modal-content');
+                        const reservaId = event.id;
 
-                        const dateOptions = { day: '2-digit', month: '2-digit', year: 'numeric' };
-                        const timeOptions = { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
+                        const extendedProps = event.extendedProps || {};
+                        const isRecurrent = extendedProps.is_recurrent;
+                        const status = extendedProps.status;
+
                         const dateDisplay = moment(startTime).format('DD/MM/YYYY');
 
                         let timeDisplay = moment(startTime).format('HH:mm');
@@ -384,26 +461,51 @@
                             timeDisplay += ' - ' + moment(endTime).format('HH:mm');
                         }
 
-                        // Tenta extrair o nome e o preço do título (Ex: "Reservado: Cliente X - R$ 100,00")
                         const titleParts = event.title.split(' - R$ ');
                         const title = titleParts[0];
                         const priceDisplay = titleParts.length > 1 ? `R$ ${titleParts[1]}` : 'N/A';
 
-                        // Monta a URL de redirecionamento usando a Rota e o ID
                         const showUrl = SHOW_RESERVA_URL.replace(':id', reservaId);
+
+                        let recurrentStatus = isRecurrent ?
+                            '<p class="text-sm font-semibold text-indigo-600">Parte de uma Série Recorrente</p>' :
+                            '<p class="text-sm font-semibold text-gray-500">Reserva Pontual</p>';
 
 
                         modalContent.innerHTML = `
                             <p class="font-semibold text-gray-900">${title}</p>
+                            <p><strong>Status:</strong> <span class="uppercase font-bold text-sm text-${status === 'pending' ? 'orange' : 'indigo'}-600">${status}</span></p>
                             <p><strong>Data:</strong> ${dateDisplay}</p>
                             <p><strong>Horário:</strong> ${timeDisplay}</p>
                             <p><strong>Valor:</strong> <span class="text-green-600 font-bold">${priceDisplay}</span></p>
-                            <div class="mt-4 pt-4 border-t border-gray-100">
-                                <a href="${showUrl}" class="w-full inline-block text-center px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition duration-150">
-                                    Ver Detalhes / Gerenciar Reserva
-                                </a>
-                            </div>
+                            ${recurrentStatus}
                         `;
+
+                        // --- LÓGICA CONDICIONAL PARA OS BOTÕES DE AÇÃO ---
+                        let actionButtons = ``;
+
+                        if (isRecurrent) {
+                            // ✅ CHAMADA CORRIGIDA: Usa a função exposta globalmente
+                            actionButtons += `
+                                <button onclick="window.cancelarPontual(${reservaId})" class="w-full mb-2 px-4 py-2 bg-yellow-500 text-white font-medium rounded-lg hover:bg-yellow-600 transition duration-150 text-sm">
+                                    Cancelar APENAS ESTE DIA
+                                </button>
+                                <button onclick="window.cancelarSerie(${reservaId})" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition duration-150 text-sm">
+                                    Cancelar SÉRIE INTEIRA (Futuros)
+                                </button>
+                            `;
+                        }
+
+                        actionButtons += `
+                            <a href="${showUrl}" class="w-full inline-block text-center mb-2 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition duration-150 text-sm">
+                                Ver Detalhes / Gerenciar Reserva
+                            </a>
+                            <button onclick="document.getElementById('event-modal').classList.add('hidden')" class="w-full px-4 py-2 bg-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-400 transition duration-150 text-sm">
+                                Fechar
+                            </button>
+                        `;
+
+                        modalActions.innerHTML = actionButtons;
 
                         modal.classList.remove('hidden');
                     }
@@ -411,9 +513,11 @@
             });
 
             calendar.render();
+            // ✅ CORREÇÃO: Expõe a variável do calendário no escopo global
+            window.calendar = calendar;
 
 
-            // --- LÓGICA DE SUBMISSÃO AJAX DO FORMULÁRIO RÁPIDO (AGORA DENTRO DO window.onload) ---
+            // --- LÓGICA DE SUBMISSÃO AJAX DO FORMULÁRIO RÁPIDO ---
             const form = document.getElementById('quick-booking-form');
             const quickBookingModal = document.getElementById('quick-booking-modal');
             const isRecurrentCheckbox = document.getElementById('is-recurrent');
@@ -427,10 +531,11 @@
                     const submitButton = document.getElementById('submit-quick-booking');
                     submitButton.disabled = true;
 
-                    // 🛑 CRÍTICO: Define a rota e o texto do botão com base no checkbox
                     const isRecurrent = isRecurrentCheckbox.checked;
                     form.action = isRecurrent ? RECURRENT_STORE_URL : QUICK_STORE_URL;
-                    submitButton.textContent = isRecurrent ? 'Reservando Recorrente...' : 'Confirmar Agendamento...';
+
+                    const originalButtonText = isRecurrent ? 'Reservar Recorrente' : 'Confirmar Agendamento';
+                    submitButton.textContent = isRecurrent ? 'Reservando Recorrente...' : 'Confirmando Agendamento...';
 
 
                     hasCommunicationError = false;
@@ -441,9 +546,8 @@
                         const response = await fetch(form.action, {
                             method: 'POST',
                             body: new FormData(form),
-                            // 🛑 CORREÇÃO CRÍTICA: GARANTE QUE O LARAVEL RESPONDA COM JSON
                             headers: {
-                                'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+                                'X-CSRF-TOKEN': csrfToken,
                                 'X-Requested-With': 'XMLHttpRequest',
                                 'Accept': 'application/json'
                             }
@@ -452,14 +556,10 @@
                         let result = {};
 
                         try {
-                            // Se a resposta NÃO for OK, o status não é 200, e o Laravel tentará enviar o JSON do erro.
                             if (!response.ok) {
-                                // Tenta ler o erro do JSON
                                 result = await response.json();
-                                // Se for 409, é conflito. Se for 422, é validação.
                                 message = result.message || (result.errors ? 'Erro de Validação. Verifique os campos.' : 'Erro desconhecido do servidor.');
 
-                                // Se for um erro de validação (422), mostra os detalhes.
                                 if (response.status === 422 && result.errors) {
                                     let validationErrors = Object.values(result.errors).flat().join('\n- ');
                                     alert('Erro de Validação:\n- ' + validationErrors);
@@ -471,20 +571,18 @@
                                 return;
                             }
 
-                            // Resposta OK (Status 200)
                             result = await response.json();
                             isSuccess = result.success;
                             message = result.message;
 
                         } catch (jsonError) {
-                            // Erro ao decodificar JSON (Pode ser um erro 500 PHP que não retornou JSON válido)
                             hasCommunicationError = true;
                             console.error('Falha ao decodificar JSON (possível 500 no PHP):', jsonError);
                             const responseText = await response.text();
                             console.error('Resposta bruta recebida:', responseText);
                             alert("Erro interno do servidor. Por favor, verifique os logs.");
                             isSuccess = false;
-                            return; // Sai do try-catch para o bloco finally
+                            return;
                         }
 
                         if (isSuccess) {
@@ -499,20 +597,21 @@
 
                     } finally {
                         if (calendar) {
-                            // Refaz a busca dos eventos, garantindo que o slot reservado suma (ou vire azul)
-                            calendar.refetchEvents();
+                             // ✅ Chama o refetch usando setTimeout para garantir a atualização
+                            setTimeout(() => {
+                                calendar.refetchEvents();
+                            }, 50);
                         }
 
                         submitButton.disabled = false;
-                        submitButton.textContent = 'Confirmar Agendamento';
-                        if (isRecurrent) {
-                             submitButton.textContent = 'Reservar Recorrente';
-                        } else {
-                            submitButton.textContent = 'Confirmar Agendamento';
-                        }
+                        submitButton.textContent = originalButtonText;
                     }
                 });
             }
+
+            // ✅ Expor as funções de cancelamento (Elas usam window.calendar)
+            window.cancelarPontual = cancelarPontual;
+            window.cancelarSerie = cancelarSerie;
         };
     </script>
 </x-app-layout>
