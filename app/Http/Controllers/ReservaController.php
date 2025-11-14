@@ -121,6 +121,7 @@ class ReservaController extends Controller
         $endTime = $validated['end_time'];
         $managerId = Auth::id();
         $reservaIdToUpdate = $validated['reserva_id_to_update'];
+        $isRecurrentFlag = true;
 
         // 2. Checagem de Conflito para o primeiro slot (Pontual vs Tudo)
         $slotFixo = Reserva::where('id', $reservaIdToUpdate)
@@ -128,7 +129,6 @@ class ReservaController extends Controller
             ->where('date', $date)
             ->first();
 
-        // Checa se o slot existe E se há conflito (exclui o próprio slot da checagem)
         if (!$slotFixo || $this->checkOverlap($date, $startTime, $endTime, false, $reservaIdToUpdate)) {
              return response()->json([
                  'success' => false,
@@ -136,12 +136,34 @@ class ReservaController extends Controller
              ], 409);
         }
 
+        // --- 2.5. CHECAGEM CRÍTICA DE PROTEÇÃO ANTI-SOBRESCRITA ---
+        $dayOfWeek = Carbon::parse($date)->dayOfWeek;
+        $endDateLimit = Carbon::today()->addYear()->toDateString();
+
+        $conflitoFuturo = Reserva::where('day_of_week', $dayOfWeek)
+            ->where('start_time', $startTime)
+            ->where('end_time', $endTime)
+            ->whereDate('date', '>', $date)
+            ->whereDate('date', '<', $endDateLimit)
+            // 🛑 CRÍTICO: Verifica se há reservas REAIS (is_fixed=0) já ocupando este slot futuro
+            ->where('is_fixed', false)
+            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+            ->exists();
+
+        if ($conflitoFuturo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Não é possível criar uma reserva recorrente. Os horários futuros desta série já estão ocupados por outro cliente fixo ou exceções. Por favor, remova a opção Recorrente e agende apenas pontualmente.',
+            ], 409);
+        }
+        // --- FIM DA CHECAGEM CRÍTICA ---
+
+
         // --- 3. CONVERTER TODA A SÉRIE RECORRENTE ---
         DB::beginTransaction();
         try {
-            $dayOfWeek = Carbon::parse($date)->dayOfWeek;
 
-            // 3.1. Converte o primeiro slot (clicado) no Mestre da Série
+            // 3.1. Converte o primeiro slot (clicado)
             $slotFixo->update([
                 'user_id' => null,
                 'manager_id' => $managerId,
@@ -152,16 +174,13 @@ class ReservaController extends Controller
                 'notes' => $validated['notes'] ?? 'Reserva Recorrente - Slot Inicial',
                 'status' => Reserva::STATUS_CONFIRMADA,
                 'is_fixed' => false, // O slot inicial VIRA a reserva pontual (real)
-                'is_recurrent' => true, // ✅ CORREÇÃO: Força o mestre como recorrente (1)
+                'is_recurrent' => $isRecurrentFlag, // Marca como recorrente
+                'recurrent_series_id' => null, // É a mestra
             ]);
 
-            // Captura o ID do slot Mestre para vincular os futuros
-            $masterReservaId = $slotFixo->id;
+            $masterReservaId = $slotFixo->id; // Captura o ID da mestra
 
             // 3.2. Localiza e BLOQUEIA os slots futuros correspondentes
-            // A data limite é o fim do período de geração (1 ano)
-            $endDateLimit = Carbon::today()->addYear()->toDateString();
-
             $futureFixedSlots = Reserva::where('is_fixed', true)
                 ->where('day_of_week', $dayOfWeek)
                 ->where('start_time', $startTime)
@@ -171,17 +190,6 @@ class ReservaController extends Controller
                 ->get();
 
             $countUpdated = 0;
-
-            // 🛑 CRÍTICO: Se o usuário marcou "recorrente" e encontramos 0 slots futuros, ABORTAR!
-            // Isso significa que os slots futuros estão ocupados por outra série recorrente.
-            if ($futureFixedSlots->isEmpty()) {
-                 DB::rollBack();
-                 return response()->json([
-                     'success' => false,
-                     'message' => 'Não é possível criar uma reserva recorrente. Os horários futuros desta série já estão ocupados por outro cliente fixo ou exceções. Por favor, remova a opção Recorrente e agende apenas pontualmente.',
-                 ], 409);
-            }
-
 
             foreach ($futureFixedSlots as $futureSlot) {
                 // Converte cada slot fixo em uma reserva confirmada para o cliente
@@ -195,8 +203,8 @@ class ReservaController extends Controller
                     'notes' => $validated['notes'] ?? 'Reserva Recorrente - Série',
                     'status' => Reserva::STATUS_CONFIRMADA,
                     'is_fixed' => false,
-                    'is_recurrent' => true, // ✅ CORREÇÃO: Força o membro como recorrente (1)
-                    'recurrent_series_id' => $masterReservaId, // ✅ Vincula ao mestre
+                    'is_recurrent' => $isRecurrentFlag, // Marca como recorrente
+                    'recurrent_series_id' => $masterReservaId, // Vincula à mestra
                 ]);
                 $countUpdated++;
             }
@@ -213,7 +221,7 @@ class ReservaController extends Controller
             Log::error("Erro ao converter slot fixo em reserva recorrente (API): " . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Erro interno ao salvar a reserva recorrente.',
+                'message' => 'Erro interno ao salvar a reserva recorrente. Detalhes no log.',
             ], 500);
         }
     }
@@ -257,8 +265,12 @@ class ReservaController extends Controller
              ], 409);
         }
 
+        // 3. Checagem de Proteção Anti-Sobrescrita (Pontual)
+        // Se este slot pontual for uma exceção liberada, ele não pode ser parte de uma série já ativa,
+        // mas a lógica de cancelamento pontual do `AdminController` já garante que o slot não interfere na série.
+        // O `checkOverlap` acima já é suficiente para garantir que o slot não está ocupado por outro.
 
-        // 3. Criação/Atualização da Reserva (Convertendo o Slot Fixo em Reserva de Cliente)
+        // 4. Criação/Atualização da Reserva (Convertendo o Slot Fixo em Reserva de Cliente)
         DB::beginTransaction();
         try {
             // Atualiza o slot fixo existente com os dados do cliente, convertendo-o em uma reserva pontual
@@ -272,8 +284,8 @@ class ReservaController extends Controller
                 'notes' => $validated['notes'] ?? 'Agendamento Rápido via Gestor',
                 'status' => Reserva::STATUS_CONFIRMADA, // Já era CONFIRMADA, mas garantimos o status
                 'is_fixed' => false, // 🛑 CRÍTICO: MARCA COMO RESERVA PONTUAL REAL!
-                'is_recurrent' => false, // Garante que reservas pontuais não são marcadas como recorrentes
-                'recurrent_series_id' => null, // Garante que não há vínculo de série
+                'is_recurrent' => false, // Garante que nunca seja marcado como recorrente
+                'recurrent_series_id' => null,
             ]);
 
             DB::commit();
@@ -386,7 +398,7 @@ class ReservaController extends Controller
         // 2. Busca todas as RESERVAS PONTUAIS (ocupações)
         $occupiedReservas = Reserva::where('is_fixed', false)
                                      ->whereDate('date', $dateString)
-                                     ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+                                     ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
                                      ->get();
 
         $availableTimes = [];
