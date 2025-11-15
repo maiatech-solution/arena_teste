@@ -114,6 +114,9 @@ Route::middleware(['auth', 'verified', 'gestor'])->group(function () {
         // 3. Cancelamento da Série Inteira (DELETE SÉRIE & RECRIAR SLOTS)
         Route::post('reservas/{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('reservas.cancelar_serie');
 
+        // 🚀 4. RENOVAÇÃO DE SÉRIE RECORRENTE (A ROTA QUE ESTAVA FALTANDO)
+        Route::post('reservas/{masterReserva}/renew-serie', [ReservaController::class, 'renewRecurrentSeries'])->name('reservas.renew_serie');
+
 
         // --- ROTAS DE GERENCIAMENTO DE USUÁRIOS ---
         Route::get('users', [AdminController::class, 'indexUsers'])->name('users.index');

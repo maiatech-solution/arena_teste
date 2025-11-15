@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log; // 🛑 CRÍTICO: Importar Log
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -113,10 +113,160 @@ class ReservaController extends Controller
     }
 
     // =========================================================================
+    // ✅ LÓGICA DE RENOVAÇÃO RECORRENTE
+    // =========================================================================
+
+    /**
+     * Identifica as séries recorrentes ativas que estão terminando nos próximos 30 dias.
+     */
+    public function getEndingRecurrentSeries()
+    {
+        $today = Carbon::today();
+        $alertDate = $today->copy()->addDays(30);
+
+        // 1. Encontra a última data de cada série recorrente ativa
+        // Buscamos todas as reservas recorrentes (master e membros)
+        $reservasRecorrentes = Reserva::where('is_recurrent', true)
+            ->where('is_fixed', false) // Apenas reservas de clientes
+            ->where('status', Reserva::STATUS_CONFIRMADA)
+            ->whereDate('date', '>=', $today)
+            ->get();
+
+        // 2. Agrupa pelo ID da série (o master_id)
+        $seriesGroups = $reservasRecorrentes->groupBy(function($reserva) {
+            return $reserva->recurrent_series_id ?? $reserva->id;
+        });
+
+        $expiringSeries = [];
+
+        foreach ($seriesGroups as $masterId => $series) {
+            $lastDate = $series->max('date');
+
+            // 3. Verifica se a série termina EM BREVE (próximos 30 dias)
+            if ($lastDate && $lastDate->lessThanOrEqualTo($alertDate) && $lastDate->greaterThanOrEqualTo($today)) {
+                // Pega a reserva mestre (o mais antigo da série) para obter os dados do slot
+                $masterReserva = $series->sortBy('date')->first();
+
+                if ($masterReserva) {
+                    $expiringSeries[] = [
+                        'master_id' => $masterId,
+                        'client_name' => $masterReserva->client_name,
+                        'last_date' => $lastDate->format('d/m/Y'),
+                        'slot_time' => Carbon::parse($masterReserva->start_time)->format('H:i') . ' - ' . Carbon::parse($masterReserva->end_time)->format('H:i'),
+                        'slot_start_time' => $masterReserva->start_time,
+                        'slot_end_time' => $masterReserva->end_time,
+                        'slot_price' => $masterReserva->price,
+                    ];
+                }
+            }
+        }
+
+        return $expiringSeries;
+    }
+
+    /**
+     * Renova uma série recorrente por mais um ano, checando conflitos.
+     */
+    public function renewRecurrentSeries(Request $request, int $masterReservaId)
+    {
+        // 1. Busca a reserva mestra para obter os dados do slot recorrente
+        $masterSlot = Reserva::where('is_fixed', false)
+                            ->where(function($query) use ($masterReservaId) {
+                                $query->where('id', $masterReservaId)
+                                      ->orWhere('recurrent_series_id', $masterReservaId);
+                            })
+                            ->orderBy('date', 'asc')
+                            ->first();
+
+        if (!$masterSlot) {
+            Log::error("Tentativa de renovação falhou: Série recorrente ID {$masterReservaId} não encontrada.");
+            return response()->json(['success' => false, 'message' => 'Série recorrente não encontrada.'], 404);
+        }
+
+        // 2. Define o período de renovação
+        $maxLastDate = Reserva::where(function($query) use ($masterReservaId) {
+                                $query->where('id', $masterReservaId)
+                                      ->orWhere('recurrent_series_id', $masterReservaId);
+                            })
+                            ->max('date');
+
+        // A nova série começa no dia seguinte ao fim da série antiga
+        $startDate = Carbon::parse($maxLastDate)->addDay();
+        $endDate = $startDate->copy()->addYear();
+
+        // Configuração do slot
+        $slotConfig = $masterSlot->only(['day_of_week', 'start_time', 'end_time', 'price', 'client_name', 'client_contact', 'notes', 'day_of_week']);
+        $dayOfWeek = $slotConfig['day_of_week'];
+
+        $newReservasCount = 0;
+
+        DB::beginTransaction();
+        try {
+            // --- Loop de Renovação ---
+            for ($date = $startDate->copy(); $date->lessThan($endDate); $date->addDay()) {
+
+                // Só renova no dia da semana correto
+                if ($date->dayOfWeek != $dayOfWeek) {
+                    continue;
+                }
+
+                $currentDateString = $date->toDateString();
+
+                // 🛑 CRÍTICO: Checa se o horário já está OCUPADO por OUTRO cliente (is_fixed=false)
+                if ($this->checkOverlap($currentDateString, $slotConfig['start_time'], $slotConfig['end_time'], false)) {
+                    // Se houver conflito, PULA o dia e LOGA.
+                    Log::warning("Renovação pulada para {$slotConfig['client_name']} em {$currentDateString} devido a conflito com outra reserva de cliente.");
+                    continue;
+                }
+
+                // 🛑 CRÍTICO: Recria a Reserva do Cliente (is_fixed=false)
+                Reserva::create([
+                    'date' => $currentDateString,
+                    'day_of_week' => $dayOfWeek,
+                    'start_time' => $slotConfig['start_time'],
+                    'end_time' => $slotConfig['end_time'],
+                    'price' => $slotConfig['price'],
+                    'client_name' => $slotConfig['client_name'],
+                    'client_contact' => $slotConfig['client_contact'],
+                    'notes' => $slotConfig['notes'] ?? 'Renovação automática anual.',
+                    'status' => Reserva::STATUS_CONFIRMADA,
+                    'is_fixed' => false,
+                    'is_recurrent' => true,
+                    'recurrent_series_id' => $masterReservaId, // Vincula ao ID mestre original
+                    'manager_id' => Auth::id() // Registra o gestor que renovou
+                ]);
+                $newReservasCount++;
+            }
+
+            DB::commit();
+
+            if ($newReservasCount === 0) {
+                // Se nenhum slot foi agendado (por exemplo, porque todos os horários futuros estavam conflitantes)
+                Log::warning("Renovação da série {$masterReservaId} concluída, mas 0 slots criados (conflito total?).");
+                return response()->json(['success' => false, 'message' => "Renovação concluída, mas 0 slots foram criados. Verifique o calendário, pois o horário pode ter conflitos futuros."], 409);
+            }
+
+            return response()->json(['success' => true, 'message' => "Renovação completa! **{$newReservasCount} novos slots** foram agendados para {$masterSlot->client_name} no próximo ano."], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Erro FATAL na renovação recorrente da série {$masterReservaId}: " . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Erro interno ao processar a renovação. Verifique o log.'], 500);
+        }
+    }
+
+    // =========================================================================
+    // ... (restante dos métodos de store/api) ...
+    // =========================================================================
+
+
+    // =========================================================================
     // ✅ MÉTODO: Agendamento Rápido RECORRENTE via Calendário (API)
     // =========================================================================
     public function storeRecurrentReservaApi(Request $request)
     {
+        Log::info('[DEBUG STORE RECURRENT] Input Recebido:', $request->all());
+
         // 1. Validação (Corrigido para G:i)
         $validated = $request->validate([
             'client_name' => ['required', 'string', 'max:255'],
@@ -146,10 +296,18 @@ class ReservaController extends Controller
             ->where('date', $date)
             ->first();
 
+        // 🛑 DEBUG: Se o slot fixo não existe, loga o problema de ID
+        if (!$slotFixo) {
+            Log::error("[DEBUG STORE RECURRENT] Falha Crítica: Slot Fixo ID {$reservaIdToUpdate} não encontrado na data {$date}. ID Inválido ou Deletado.");
+            return response()->json([
+                 'success' => false,
+                 'message' => 'ERRO CRÍTICO: O slot de disponibilidade foi removido ou não existe. Atualize a página e tente novamente.',
+             ], 409);
+        }
+
+
         // Faz a checagem de sobreposição, ignorando a si mesmo (o slot fixo)
-        // 🛑 Aqui o checkOverlap irá rodar com is_fixed=false, mas irá checar
-        // contra is_fixed=false APENAS (graças à correção dentro do método).
-        if (!$slotFixo || $this->checkOverlap($date, $startTime, $endTime, false, $reservaIdToUpdate)) {
+        if ($this->checkOverlap($date, $startTime, $endTime, false, $reservaIdToUpdate)) {
 
             $conflictingIds = $this->getConflictingReservaIds($date, $startTime, $endTime, $reservaIdToUpdate);
 
@@ -174,6 +332,7 @@ class ReservaController extends Controller
             ->exists();
 
         if ($conflitoFuturo) {
+            Log::warning("[DEBUG STORE RECURRENT] Conflito Futuro Detectado para slot fixo ID {$reservaIdToUpdate}.");
             return response()->json([
                 'success' => false,
                 'message' => 'Não é possível criar uma reserva recorrente. Os horários futuros desta série já estão ocupados por outro cliente fixo ou exceções. Por favor, remova a opção Recorrente e agende apenas pontualmente.',
@@ -185,12 +344,13 @@ class ReservaController extends Controller
         // --- 3. CONVERTER TODA A SÉRIE RECORRENTE ---
         DB::beginTransaction();
         try {
+            // 🛑 CRÍTICO: Converte o slot fixo Clicado em uma RESERVA REAL (Mestra da série)
 
             // 3.1. Converte o primeiro slot (clicado)
             $slotFixo->update([
                 'user_id' => null,
                 'manager_id' => $managerId,
-                'schedule_id' => null,
+                'schedule_id' => null, // Limpa o schedule_id que apontava para a config, pois agora é real
                 'price' => $validated['price'],
                 'client_name' => $validated['client_name'],
                 'client_contact' => $validated['client_contact'],
@@ -198,7 +358,7 @@ class ReservaController extends Controller
                 'status' => Reserva::STATUS_CONFIRMADA,
                 'is_fixed' => false, // O slot inicial VIRA a reserva pontual (real)
                 'is_recurrent' => $isRecurrentFlag, // Marca como recorrente
-                'recurrent_series_id' => null, // É a mestra
+                'recurrent_series_id' => null, // É a mestra (id = id original)
 
                 // 🛑 CRÍTICO: Usa a hora normalizada
                 'start_time' => $startTime,
@@ -207,9 +367,9 @@ class ReservaController extends Controller
 
             $masterReservaId = $slotFixo->id; // Captura o ID da mestra
 
-            // 3.2. Localiza e BLOQUEIA os slots futuros correspondentes
+            // 3.2. Localiza e CONVERTE os slots futuros correspondentes
             $futureFixedSlots = Reserva::where('is_fixed', true)
-                ->where('day_of-week', $dayOfWeek)
+                ->where('day_of_week', $dayOfWeek)
                 ->where('start_time', $startTime)
                 ->where('end_time', $endTime)
                 ->whereDate('date', '>', $date) // Apenas datas futuras
@@ -238,6 +398,7 @@ class ReservaController extends Controller
 
             DB::commit();
 
+            Log::info("[DEBUG STORE RECURRENT] Sucesso: Série recorrente ID {$masterReservaId} criada com {$countUpdated} membros.");
             return response()->json([
                 'success' => true,
                 'message' => "Reserva Recorrente criada com sucesso! O slot inicial (ID {$masterReservaId}) foi agendado e mais {$countUpdated} slots futuros foram reservados e vinculados.",
@@ -245,7 +406,7 @@ class ReservaController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Erro ao converter slot fixo em reserva recorrente (API): " . $e->getMessage());
+            Log::error("[DEBUG STORE RECURRENT] Erro FATAL: " . $e->getMessage() . " - Linha: " . $e->getLine());
             return response()->json([
                 'success' => false,
                 'message' => 'Erro interno ao salvar a reserva recorrente. Detalhes no log.',

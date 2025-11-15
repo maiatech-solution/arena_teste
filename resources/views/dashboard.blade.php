@@ -42,14 +42,35 @@
             display: none !important;
         }
 
-        /* Estilo para Eventos Reservados (Azul) */
-        .fc-event-booked {
+        /* ✅ NOVO: Estilo para Eventos RECORRENTES (Fúcsia/Roxo) */
+        .fc-event-recurrent {
+            background-color: #C026D3 !important; /* Fuchsia 700 */
+            border-color: #A21CAF !important;
+            color: white !important;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        /* 🛑 MANTIDO: Estilo para Eventos AVULSOS/RÁPIDOS (Indigo/Azul) */
+        .fc-event-quick {
             background-color: #4f46e5 !important; /* Indigo 600 */
             border-color: #4338ca !important;
             color: white !important;
             padding: 2px 5px;
             border-radius: 4px;
         }
+
+        /* 🛑 MANTIDO: Estilo para Eventos PENDENTES (Laranja) */
+        .fc-event-pending {
+            background-color: #ff9800 !important; /* Orange 500 */
+            border-color: #f97316 !important;
+            color: white !important;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-style: italic;
+        }
+
 
         /* Estilo para Eventos Disponíveis (Verde) */
         .fc-event-available {
@@ -87,16 +108,45 @@
                 @endif
 
 
-                {{-- PLACEHOLDER DINÂMICO PARA NOTIFICAÇÕES --}}
+                {{-- PLACEHOLDER DINÂMICO PARA NOTIFICAÇÕES (PENDENTES) --}}
                 <div id="realtime-notification">
                 </div>
                 {{-- FIM DO PLACEHOLDER --}}
 
-                {{-- Legenda para explicar as cores --}}
+                {{-- ✅ NOVO: ALERTA E BOTÃO PARA RENOVAÇÃO RECORRENTE --}}
+                @if (isset($expiringSeriesCount) && $expiringSeriesCount > 0)
+                    <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-lg shadow-md flex flex-col items-start transition-all duration-300 transform hover:scale-[1.005]" role="alert">
+                        <div class="flex items-start mb-2">
+                            <svg class="h-6 w-6 flex-shrink-0 mt-0.5 mr-3 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                            <div>
+                                <p class="font-bold text-lg">ALERTA DE RENOVAÇÃO</p>
+                                <p class="mt-1 text-sm">
+                                    <span class="font-extrabold text-yellow-900">{{ $expiringSeriesCount }}</span> série(s) de agendamento recorrente de clientes está(ão) prestes a expirar nos próximos 30 dias.
+                                </p>
+                            </div>
+                        </div>
+                        <button onclick="openRenewalModal({{ json_encode($expiringSeries) }})" class="mt-2 bg-yellow-600 hover:bg-yellow-700 active:bg-yellow-800 text-white font-bold py-2 px-6 rounded-lg text-sm transition duration-150 ease-in-out shadow-lg">
+                            Revisar Renovações
+                        </button>
+                    </div>
+                @endif
+                {{-- FIM DO NOVO ALERTA --}}
+
+                {{-- ✅ Legenda ATUALIZADA para explicar as cores --}}
                 <div class="flex flex-wrap gap-4 mb-4 text-sm font-medium">
+                    <div class="flex items-center p-2 bg-fuchsia-50 rounded-lg shadow-sm">
+                        <span class="inline-block w-4 h-4 rounded-full bg-fuchsia-700 mr-2"></span>
+                        <span>Reservado Recorrente (Fixo)</span>
+                    </div>
                     <div class="flex items-center p-2 bg-indigo-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-indigo-600 mr-2"></span>
-                        <span>Reservado (Confirmado)</span>
+                        <span>Reservado Avulso (Rápido)</span>
+                    </div>
+                    <div class="flex items-center p-2 bg-orange-50 rounded-lg shadow-sm">
+                        <span class="inline-block w-4 h-4 rounded-full bg-orange-500 mr-2"></span>
+                        <span>Pré-Reserva Pendente</span>
                     </div>
                     <div class="flex items-center p-2 bg-green-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-green-500 mr-2"></span>
@@ -127,7 +177,7 @@
         </div>
     </div>
 
-    {{-- ✅ NOVO MODAL (para o Motivo do Cancelamento) --}}
+    {{-- ✅ MODAL DE CANCELAMENTO (para o Motivo do Cancelamento) --}}
     <div id="cancellation-modal" class="modal-overlay hidden">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 m-4 transform transition-transform duration-300 scale-95 opacity-0" id="cancellation-modal-content" onclick="event.stopPropagation()">
             <h3 id="modal-title-cancel" class="text-xl font-bold text-red-700 mb-4 border-b pb-2">Confirmação de Cancelamento</h3>
@@ -147,6 +197,29 @@
                 </button>
                 <button id="confirm-cancellation-btn" type="button" class="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150">
                     Confirmar Ação
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    {{-- ✅ NOVO MODAL DE RENOVAÇÃO DE SÉRIE --}}
+    <div id="renewal-modal" class="modal-overlay hidden" onclick="closeRenewalModal()">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+            <h3 class="text-xl font-bold text-yellow-700 mb-4 border-b pb-2">Gerenciar Renovações Recorrentes</h3>
+
+            <p class="text-sm text-gray-700 mb-4">
+                Abaixo estão as séries de reservas que atingirão o limite de 1 ano (expirarão) nas próximas semanas.
+                **Ao clicar em Renovar, o sistema tentará estender a série por mais um ano.**
+            </p>
+
+            <div id="renewal-list" class="space-y-4">
+                {{-- Lista injetada pelo JS --}}
+            </div>
+
+            <div class="mt-6 flex justify-end">
+                <button onclick="closeRenewalModal()" class="px-4 py-2 bg-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-400 transition duration-150">
+                    Fechar
                 </button>
             </div>
         </div>
@@ -229,6 +302,9 @@
         // ROTAS DE SUBMISSÃO
         const RECURRENT_STORE_URL = '{{ route("api.reservas.store_recurrent") }}';
         const QUICK_STORE_URL = '{{ route("api.reservas.store_quick") }}';
+
+        // 🛑 ROTA DE RENOVAÇÃO
+        const RENEW_SERIE_URL = '{{ route("admin.reservas.renew_serie", ":masterReserva") }}';
 
         // ROTAS DE CANCELAMENTO (POST para enviar o motivo no body)
         const CANCEL_PONTUAL_URL = '{{ route("admin.reservas.cancelar_pontual", ":id") }}';
@@ -372,7 +448,7 @@
 
             } catch (error) {
                 console.error('Erro de Rede:', error);
-                alert("Erro de conexão. Tente novamente.");
+                alert("Erro de Rede. Tente novamente.");
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Confirmar Agendamento';
@@ -380,7 +456,7 @@
         }
 
         // =========================================================
-        // ✅ NOVO FLUXO DE CANCELAMENTO (Motivo)
+        // ✅ FLUXO DE CANCELAMENTO E RENOVAÇÃO (JS)
         // =========================================================
 
         function closeEventModal() {
@@ -424,17 +500,10 @@
         async function sendCancellationRequest(reservaId, method, urlBase, reason) {
             const url = urlBase.replace(':id', reservaId);
 
-            // LOG DE DEBUG PARA VER O QUE ESTÁ SENDO ENVIADO
-            console.log(`[DEBUG] Tentando enviar AJAX para: ${url}`);
-            console.log(`[DEBUG] Método Lógico (_method): ${method}`);
-            console.log(`[DEBUG] Motivo: ${reason}`);
-
             const bodyData = {
                 cancellation_reason: reason,
                 _token: csrfToken,
             };
-
-            // 🛑 O _method foi removido de todos os fluxos para evitar o 405.
 
             const fetchConfig = {
                 // ✅ CRÍTICO: O método de transporte DEVE ser POST para a rota Laravel.
@@ -468,8 +537,7 @@
                     alert(result.message || "Ação realizada com sucesso. O calendário será atualizado.");
                     closeCancellationModal();
 
-                    // 🛑 AQUI ESTÁ A MUDANÇA: FORÇA A RECARGA DA PÁGINA PARA GARANTIR
-                    // A ATUALIZAÇÃO VISUAL APÓS OPERAÇÕES DE DELEÇÃO/RECRIÇÃO DE SLOTS
+                    // 🛑 FORÇA A RECARGA DA PÁGINA
                     setTimeout(() => {
                          window.location.reload();
                     }, 50);
@@ -478,8 +546,6 @@
                      const reasonError = result.errors.cancellation_reason ? result.errors.cancellation_reason.join(', ') : 'Erro de validação desconhecido.';
                      alert(`ERRO DE VALIDAÇÃO: ${reasonError}`);
                 } else {
-                    // Se a resposta for 405 ou outro erro, o result.error não será JSON,
-                    // mas o log acima já nos deu a pista (405).
                     alert(result.error || result.message || `Erro desconhecido ao processar a ação. Status: ${response.status}.`);
                 }
 
@@ -503,7 +569,7 @@
             }
 
             if (currentReservaId && currentMethod && currentUrlBase) {
-                // Note que enviamos 'PATCH' ou 'DELETE' como método LÓGICO, mas o AJAX será POST
+                // O método LÓGICO é ignorado aqui, pois a rota Laravel é POST com payload
                 sendCancellationRequest(currentReservaId, currentMethod, currentUrlBase, reason);
             } else {
                 alert("Erro: Dados da reserva não configurados corretamente.");
@@ -518,7 +584,7 @@
             const method = isRecurrent ? 'DELETE' : 'PATCH';
             const confirmation = isRecurrent
                 ? "Cancelar SOMENTE ESTA reserva? O slot será liberado pontualmente."
-                : "Cancelar esta reserva pontual (Status mudará para 'Cancelada').";
+                : "Cancelar esta reserva pontual (O slot será liberado e a reserva deletada).";
             const buttonText = isRecurrent ? 'Cancelar ESTE DIA' : 'Confirmar Cancelamento';
 
             openCancellationModal(id, method, urlBase, confirmation, buttonText);
@@ -533,7 +599,109 @@
             openCancellationModal(id, method, urlBase, confirmation, buttonText);
         };
 
-        // =========================================================
+        // --- LÓGICA DO MODAL DE RENOVAÇÃO ---
+
+        function closeRenewalModal() {
+            document.getElementById('renewal-modal').classList.add('hidden');
+        }
+
+        function openRenewalModal(series) {
+            const listContainer = document.getElementById('renewal-list');
+            listContainer.innerHTML = ''; // Limpa a lista antes de popular
+
+            if (series.length === 0) {
+                 listContainer.innerHTML = '<p class="text-gray-500 italic">Nenhuma série a ser renovada no momento.</p>';
+            } else {
+                series.forEach(item => {
+                    const dayNames = {0: 'Domingo', 1: 'Segunda', 2: 'Terça', 3: 'Quarta', 4: 'Quinta', 5: 'Sexta', 6: 'Sábado'};
+                    const dayName = dayNames[item.day_of_week] || 'Dia Desconhecido';
+
+                    const itemHtml = `
+                        <div id="renewal-item-${item.master_id}" class="p-4 border border-yellow-300 rounded-lg bg-yellow-50 flex flex-col md:flex-row justify-between items-start md:items-center shadow-md">
+                            <div>
+                                <p class="font-bold text-indigo-700">${item.client_name}</p>
+                                <p class="text-sm text-gray-600">
+                                    Slot: ${item.slot_time} (${dayName}) - R$ ${parseFloat(item.slot_price).toFixed(2).replace('.', ',')}
+                                </p>
+                                <p class="text-xs text-red-600 font-medium mt-1">
+                                    Expira em: ${item.last_date}
+                                </p>
+                            </div>
+                            <div class="mt-3 md:mt-0">
+                                <button onclick="handleRenewal(${item.master_id})"
+                                        class="renew-btn-${item.master_id} w-full md:w-auto px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg">
+                                    Renovar por 1 Ano
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    listContainer.insertAdjacentHTML('beforeend', itemHtml);
+                });
+            }
+
+
+            document.getElementById('renewal-modal').classList.remove('hidden');
+        }
+
+        async function handleRenewal(masterId) {
+            const url = RENEW_SERIE_URL.replace(':masterReserva', masterId);
+            const itemContainer = document.getElementById(`renewal-item-${masterId}`);
+            const renewBtn = document.querySelector(`.renew-btn-${masterId}`);
+
+            // Substitui alert/confirm
+            if (!confirm("Confirmar a renovação por mais 1 ano? O sistema checará se há conflitos futuros.")) {
+                return;
+            }
+
+            renewBtn.disabled = true;
+            renewBtn.textContent = 'Processando...';
+            renewBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+            renewBtn.classList.add('bg-gray-500');
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({}) // Sem dados no corpo
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    // Sucesso: Remove o item do modal e notifica
+                    itemContainer.remove();
+                    alert(`Sucesso na renovação: ${result.message}`);
+                    checkPendingReservations(); // Atualiza a contagem de alertas (embora seja só um alerta de renovação)
+
+                    // Se a lista estiver vazia, fecha o modal
+                    if (document.getElementById('renewal-list').children.length === 0) {
+                        closeRenewalModal();
+                    }
+
+                    // Recarrega o calendário após sucesso para mostrar os novos slots
+                    calendar.refetchEvents();
+
+                } else {
+                    // Falha: Reativa o botão e exibe o erro
+                    alert(`Falha na renovação: ${result.message || 'Erro desconhecido.'}`);
+                    renewBtn.disabled = false;
+                    renewBtn.textContent = 'Renovar por 1 Ano';
+                    renewBtn.classList.remove('bg-gray-500');
+                    renewBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                }
+            } catch (error) {
+                console.error('Erro de Rede:', error);
+                alert("Erro de conexão ao tentar renovar.");
+                renewBtn.disabled = false;
+                renewBtn.textContent = 'Renovar por 1 Ano';
+                renewBtn.classList.remove('bg-gray-500');
+                renewBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+            }
+        }
 
 
         window.onload = function() {
@@ -559,14 +727,14 @@
                 timeZone: 'local',
 
                 eventSources: [
-                    // 1. Fonte de Reservas Confirmadas (Eventos Azuis)
+                    // 1. Fonte de Reservas Confirmadas (Eventos Azuis/Fúcsia/Laranja)
                     {
                         url: RESERVED_API_URL,
                         method: 'GET',
                         failure: function() {
                             console.error('Falha ao carregar reservas confirmadas via API.');
                         },
-                        className: 'fc-event-booked',
+                        // A classe agora é definida dinamicamente pelo PHP (fc-event-recurrent, fc-event-quick, fc-event-pending)
                         textColor: 'white'
                     },
                     // 2. Fonte de Horários Disponíveis (Eventos Verdes)
@@ -608,10 +776,11 @@
                         const dateString = startDate.format('YYYY-MM-DD');
                         const dateDisplay = startDate.format('DD/MM/YYYY');
 
+                        // Garante o formato H:mm (ex: 6:00, não 06:00) para o input do controller
                         const startTimeInput = startDate.format('H:mm');
                         const endTimeInput = endDate.format('H:mm');
 
-                        const timeSlotDisplay = startTimeInput + ' - ' + endTimeInput;
+                        const timeSlotDisplay = startDate.format('HH:mm') + ' - ' + endDate.format('HH:mm'); // Display no modal
 
                         const extendedProps = event.extendedProps || {};
                         const price = extendedProps.price || 0;
@@ -660,6 +829,7 @@
                             timeDisplay += ' - ' + moment(endTime).format('H:i');
                         }
 
+                        // Lógica para extrair título e preço
                         const titleParts = event.title.split(' - R$ ');
                         const title = titleParts[0];
                         const priceDisplay = titleParts.length > 1 ? `R$ ${titleParts[1]}` : 'N/A';
@@ -672,8 +842,9 @@
 
                         const showUrl = SHOW_RESERVA_URL.replace(':id', reservaId);
 
+                        // ✅ ATUALIZAÇÃO DO DISPLAY DE RECORRÊNCIA PARA NOVA COR
                         let recurrentStatus = isRecurrent ?
-                            '<p class="text-sm font-semibold text-indigo-600">Parte de uma Série Recorrente</p>' :
+                            '<p class="text-sm font-semibold text-fuchsia-600">Parte de uma Série Recorrente</p>' :
                             '<p class="text-sm font-semibold text-gray-500">Reserva Pontual</p>';
 
 

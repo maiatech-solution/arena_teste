@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str; // Adicionado para uso do helper str_contains (se necessário, mas o Laravel já deve carregar)
 
 class ConfigurationController extends Controller
 {
@@ -69,9 +68,9 @@ class ConfigurationController extends Controller
 
         $validator->setRules(array_merge($validator->getRules(), $rulesForSlots));
 
-        // 🛑 Validação customizada para checar sobreposição de faixas de horário no mesmo dia
+        // 🛑 NOVO: Validação customizada para checar sobreposição de faixas de horário no mesmo dia
         $validator->after(function ($validator) {
-            // Se já houver erros de validação básica, não executa este loop complexo
+            // Se já houver erros de validação básica (ex: horário final antes do inicial), não executa este loop complexo
             if ($validator->errors()->count()) {
                 return;
             }
@@ -79,7 +78,7 @@ class ConfigurationController extends Controller
             $configsByDay = $validator->validated()['configs'] ?? [];
 
             foreach ($configsByDay as $dayOfWeek => $slots) {
-                // Filtra apenas os slots que estão ativos e possuem dados válidos (conforme validação básica)
+                // Filtra apenas os slots que estão ativos e possuem dados válidos
                 $activeSlots = collect($slots)->filter(function ($slot) {
                     return isset($slot['is_active']) && (bool)$slot['is_active'] &&
                            !empty($slot['start_time']) && !empty($slot['end_time']);
@@ -101,6 +100,7 @@ class ConfigurationController extends Controller
                         $endB = Carbon::createFromFormat('H:i', $slotB['end_time']);
 
                         // Checa a condição de sobreposição: (A_start < B_end) AND (B_start < A_end)
+                        // Note que estamos usando lt (less than) para permitir que um slot comece exatamente onde o outro termina.
                         if ($startA->lt($endB) && $startB->lt($endA)) {
                             $dayName = \App\Models\ArenaConfiguration::DAY_NAMES[$dayOfWeek] ?? 'Dia Desconhecido';
 
@@ -108,6 +108,7 @@ class ConfigurationController extends Controller
 
                             // Adiciona o erro ao validador, referenciando o array do dia.
                             $validator->errors()->add("configs.{$dayOfWeek}", $errorMsg);
+                            // Interrompe o loop do dia após encontrar o primeiro conflito
                             return;
                         }
                     }
@@ -120,17 +121,15 @@ class ConfigurationController extends Controller
         } catch (ValidationException $e) {
             Log::error('[ERRO DE VALIDAÇÃO NA CONFIGURAÇÃO DE HORÁRIOS]', ['erros' => $e->errors(), 'input' => $request->all()]);
 
-            // 🛑 CORREÇÃO AQUI: Garante que estamos usando o objeto MessageBag do validador.
-            $messageBag = $e->validator->errors();
+            $errors = $e->errors();
             $genericError = false;
             $customOverlapError = null;
 
-            foreach ($messageBag->keys() as $key) {
-                if (str_starts_with($key, 'configs.')) {
+            foreach ($errors->keys() as $key) {
+                if (strpos($key, 'configs.') === 0) {
                     // Captura a mensagem de erro de sobreposição (se existir)
-                    // Usamos str_contains, pois a mensagem é customizada
-                    if (str_contains($messageBag->first($key), 'sobrepõem')) {
-                        $customOverlapError = $messageBag->first($key);
+                    if (str_contains($errors->first($key), 'sobrepõem')) {
+                        $customOverlapError = $errors->first($key);
                     }
                     $genericError = true;
                 }
@@ -141,7 +140,7 @@ class ConfigurationController extends Controller
                 return redirect()->back()->withInput()->with('error', 'ERRO DE CONFLITO: ' . $customOverlapError);
             }
 
-            // Se for erro de validação básica (required, after, etc.)
+
             if ($genericError) {
                 return redirect()->back()->withInput()->with('error', 'Houve um erro na validação dos dados. Verifique se todos os campos (Início, Fim, Preço) estão preenchidos para os dias ativos, ou se o Horário de Fim é posterior ao de Início.');
             }
@@ -195,14 +194,16 @@ class ConfigurationController extends Controller
 
     /**
      * Limpa e Recria TODAS as FixedReservas com base na ArenaConfiguration.
+     * 🛑 CRÍTICO: Agora checa se o horário já está ocupado por um cliente (is_fixed=false).
      */
     public function generateFixedReservas(Request $request)
     {
         $today = Carbon::today();
         $endDate = $today->copy()->addYear();
 
-        // Limpa todas as FixedReservas futuras
+        // 🛑 CORREÇÃO DE SEGURANÇA: Limpa APENAS os FixedReservas futuras que são slots GENÉRICOS
         Reserva::where('is_fixed', true)
+            ->where('client_name', 'Slot Fixo de 1h') // ⬅️ CONDIÇÃO CRÍTICA
             ->where('date', '>=', $today->toDateString())
             ->delete();
 
@@ -231,11 +232,32 @@ class ConfigurationController extends Controller
                                 break;
                             }
 
+                            $currentDateString = $date->toDateString();
+                            $currentSlotStartTime = $currentSlotTime->format('H:i:s');
+                            $nextSlotEndTime = $nextSlotTime->format('H:i:s');
+
+                            // 🛑 Checagem de Conflito CRÍTICA
+                            // Verifica se o horário já está ocupado por uma reserva REAL de cliente (is_fixed=false)
+                            // OU se já existe um SLOT FIXO NÃO-GENÉRICO (preservado acima)
+                            $isOccupied = Reserva::isOccupied($currentDateString, $currentSlotStartTime, $nextSlotEndTime)
+                                ->where(function ($query) {
+                                    $query->where('is_fixed', false) // Reserva de cliente REAL
+                                          ->orWhere('client_name', '!=', 'Slot Fixo de 1h'); // Slot fixo editado
+                                })
+                                ->exists();
+
+                            if ($isOccupied) {
+                                // Se estiver ocupado, PULA a criação do slot fixo genérico para este horário.
+                                $currentSlotTime->addHour();
+                                continue;
+                            }
+
+                            // Se não houver conflito, cria o slot fixo
                             Reserva::create([
-                                'date' => $date->toDateString(),
+                                'date' => $currentDateString,
                                 'day_of_week' => $dayOfWeek,
-                                'start_time' => $currentSlotTime->format('H:i:s'),
-                                'end_time' => $nextSlotTime->format('H:i:s'),
+                                'start_time' => $currentSlotStartTime,
+                                'end_time' => $nextSlotEndTime,
                                 'price' => $price,
                                 'client_name' => 'Slot Fixo de 1h',
                                 'client_contact' => 'N/A',
