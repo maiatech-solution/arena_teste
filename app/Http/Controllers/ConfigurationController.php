@@ -349,7 +349,7 @@ class ConfigurationController extends Controller
         $reserva->status = $newStatus;
         $reserva->save();
 
-        $action = $newStatus === Reserva::STATUS_CONFIRMADA ? 'disponibilizado' : 'marcado como indisponível (manutenção)';
+        $action = $newStatus === Reserva::STATUS_CONFIRMADA ? 'disponibilizado' : 'marcado como indisponível';
 
         return response()->json(['success' => true, 'message' => "Slot $action com sucesso."]);
     }
