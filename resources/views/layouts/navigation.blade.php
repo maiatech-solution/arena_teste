@@ -5,7 +5,8 @@
             <div class="flex">
                 <!-- Logo -->
                 <div class="shrink-0 flex items-center">
-                    <a href="{{ route('dashboard') }}">
+                    <!-- Redireciona para o Dashboard se for gestor, ou para a Home se não for -->
+                    <a href="{{ Auth::check() && Auth::user()->is_gestor ? route('dashboard') : route('home') }}">
                         <x-application-logo class="block h-9 w-auto fill-current text-gray-800" />
                     </a>
                 </div>
@@ -13,52 +14,67 @@
                 <!-- Navigation Links (Desktop) -->
                 <div class="hidden space-x-4 sm:-my-px sm:ms-10 sm:flex items-center">
 
-                    <!-- 1. Dashboard -->
-                    <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')" class="px-3 py-2">
-                        {{ __('Home') }}
-                    </x-nav-link>
+                    {{-- 🛑 1. LINKS DE GESTÃO (VISÍVEIS APENAS PARA GESTORES) 🛑 --}}
+                    @if (Auth::check() && Auth::user()->is_gestor)
+                        <!-- 1. Dashboard -->
+                        <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')" class="px-3 py-2">
+                            {{ __('Home') }}
+                        </x-nav-link>
 
-                    <!-- 2. Reservas Confirmadas -->
-                    <x-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="
-                        px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
-                        hover:bg-gray-50 hover:text-gray-700
-                        focus:outline-none focus:bg-gray-50 focus:text-gray-700
-                    ">
-                        {{ __('Confirmadas') }}
-                    </x-nav-link>
+                        <!-- 2. Reservas Confirmadas -->
+                        <x-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="
+                            px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
+                            hover:bg-gray-50 hover:text-gray-700
+                            focus:outline-none focus:bg-gray-50 focus:text-gray-700
+                        ">
+                            {{ __('Confirmadas') }}
+                        </x-nav-link>
 
-                    <!-- 3. Reservas Pendentes WEB -->
-                    <x-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.index')" class="
-                        px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
-                        hover:bg-gray-50 hover:text-gray-700
-                        focus:outline-none focus:bg-gray-50 focus:text-gray-700
-                    ">
-                        {{ __('Pendentes') }}
-                    </x-nav-link>
+                        <!-- 3. Reservas Pendentes WEB -->
+                        <x-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.index')" class="
+                            px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
+                            hover:bg-gray-50 hover:text-gray-700
+                            focus:outline-none focus:bg-gray-50 focus:text-gray-700
+                        ">
+                            {{ __('Pendentes') }}
+                        </x-nav-link>
 
-                    <!-- 4. Novo Usuário -->
-                    <x-nav-link :href="route('admin.users.create')" :active="request()->routeIs('admin.users.create')" class="
-                        px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
-                        hover:bg-gray-50 hover:text-gray-700
-                        focus:outline-none focus:bg-gray-50 focus:text-gray-700
-                    ">
-                        {{ __('Novo Usuário') }}
-                    </x-nav-link>
+                        <!-- 4. Novo Usuário -->
+                        <x-nav-link :href="route('admin.users.create')" :active="request()->routeIs('admin.users.create')" class="
+                            px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
+                            hover:bg-gray-50 hover:text-gray-700
+                            focus:outline-none focus:bg-gray-50 focus:text-gray-700
+                        ">
+                            {{ __('Novo Usuário') }}
+                        </x-nav-link>
 
-                    <!-- 5. Configuração de Horários (ÚLTIMA POSIÇÃO) -->
-                    <x-nav-link :href="route('admin.config.index')" :active="request()->routeIs('admin.config.index')" class="
-                        px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
-                        hover:bg-gray-50 hover:text-gray-700
-                        focus:outline-none focus:bg-gray-50 focus:text-gray-700
-                    ">
-                        {{ __('Funcionamento') }}
-                    </x-nav-link>
+                        <!-- 5. Configuração de Horários (ÚLTIMA POSIÇÃO) -->
+                        <x-nav-link :href="route('admin.config.index')" :active="request()->routeIs('admin.config.index')" class="
+                            px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
+                            hover:bg-gray-50 hover:text-gray-700
+                            focus:outline-none focus:bg-gray-50 focus:text-gray-700
+                        ">
+                            {{ __('Funcionamento') }}
+                        </x-nav-link>
+                    @endif
+
+                    {{-- 🟢 2. LINKS DE CLIENTE (VISÍVEIS APENAS PARA CLIENTES AUTENTICADOS) 🟢 --}}
+                    @if (Auth::check() && !Auth::user()->is_gestor)
+                        <x-nav-link :href="route('customer.reservations.history')" :active="request()->routeIs('customer.reservations.history')" class="
+                            px-3 py-2 rounded-lg text-sm font-bold text-indigo-700
+                            hover:bg-indigo-50 hover:text-indigo-900
+                            focus:outline-none focus:bg-indigo-50 focus:text-indigo-900
+                        ">
+                            {{ __('Minhas Reservas') }}
+                        </x-nav-link>
+                    @endif
 
                 </div>
             </div>
 
             <!-- Settings Dropdown (Sem alterações) -->
             <div class="hidden sm:flex sm:items-center sm:ms-6">
+                @if (Auth::check()) {{-- Verifica se o usuário está logado --}}
                 <x-dropdown align="right" width="48">
                     <x-slot name="trigger">
                         <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
@@ -89,6 +105,12 @@
                         </form>
                     </x-slot>
                 </x-dropdown>
+                @else
+                    {{-- Se não estiver logado, mostra link para o Login do Cliente --}}
+                    <a href="{{ route('customer.login') }}" class="px-3 py-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition duration-150">
+                        {{ __('Login Cliente') }}
+                    </a>
+                @endif
             </div>
 
             <!-- Hamburger -->
@@ -106,55 +128,75 @@
     <!-- Responsive Navigation Menu (Mobile) -->
     <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
         <div class="pt-2 pb-3 space-y-1">
-            <!-- 1. Dashboard -->
-            <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
-                {{ __('Dashboard') }}
-            </x-responsive-nav-link>
 
-            <!-- 2. Reservas Confirmadas -->
-            <x-responsive-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="border-l-4 border-gray-500 text-gray-600">
-                 {{ __('Confirmadas') }}
-             </x-responsive-nav-link>
+            {{-- 🛑 1. LINKS DE GESTÃO RESPONSIVOS --}}
+            @if (Auth::check() && Auth::user()->is_gestor)
+                <!-- 1. Dashboard -->
+                <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
+                    {{ __('Dashboard') }}
+                </x-responsive-nav-link>
 
-            <!-- 3. Reservas Pendentes -->
-            <x-responsive-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.index')" class="border-l-4 border-gray-500 text-gray-600">
-                {{ __('Pendentes') }}
-            </x-responsive-nav-link>
+                <!-- 2. Reservas Confirmadas -->
+                <x-responsive-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="border-l-4 border-gray-500 text-gray-600">
+                     {{ __('Confirmadas') }}
+                 </x-responsive-nav-link>
 
-            <!-- 4. Novo Usuário -->
-            <x-responsive-nav-link :href="route('admin.users.create')" :active="request()->routeIs('admin.users.create')" class="border-l-4 border-gray-500 text-gray-600">
-                {{ __('Novo Usuário') }}
-            </x-responsive-nav-link>
+                <!-- 3. Reservas Pendentes -->
+                <x-responsive-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.index')" class="border-l-4 border-gray-500 text-gray-600">
+                    {{ __('Pendentes') }}
+                </x-responsive-nav-link>
 
-            <!-- 5. Configuração de Horários (ÚLTIMA POSIÇÃO) -->
-            <x-responsive-nav-link :href="route('admin.config.index')" :active="request()->routeIs('admin.config.index')" class="border-l-4 border-indigo-500 text-indigo-600">
-                {{ __('Funcionamento') }}
-            </x-responsive-nav-link>
+                <!-- 4. Novo Usuário -->
+                <x-responsive-nav-link :href="route('admin.users.create')" :active="request()->routeIs('admin.users.create')" class="border-l-4 border-gray-500 text-gray-600">
+                    {{ __('Novo Usuário') }}
+                </x-responsive-nav-link>
+
+                <!-- 5. Configuração de Horários (ÚLTIMA POSIÇÃO) -->
+                <x-responsive-nav-link :href="route('admin.config.index')" :active="request()->routeIs('admin.config.index')" class="border-l-4 border-indigo-500 text-indigo-600">
+                    {{ __('Funcionamento') }}
+                </x-responsive-nav-link>
+            @endif
+
+            {{-- 🟢 2. LINKS DE CLIENTE RESPONSIVOS --}}
+            @if (Auth::check() && !Auth::user()->is_gestor)
+                <x-responsive-nav-link :href="route('customer.reservations.history')" :active="request()->routeIs('customer.reservations.history')" class="border-l-4 border-indigo-500 text-indigo-600 font-bold">
+                    {{ __('Minhas Reservas') }}
+                </x-responsive-nav-link>
+            @endif
+
         </div>
 
         <!-- Responsive Settings Options -->
         <div class="pt-4 pb-1 border-t border-gray-200">
-            <div class="px-4">
-                <div class="font-medium text-base text-gray-800">{{ Auth::user()->name }}</div>
-                <div class="font-medium text-sm text-gray-500">{{ Auth::user()->email }}</div>
-            </div>
+            @if (Auth::check())
+                <div class="px-4">
+                    <div class="font-medium text-base text-gray-800">{{ Auth::user()->name }}</div>
+                    <div class="font-medium text-sm text-gray-500">{{ Auth::user()->email }}</div>
+                </div>
 
-            <div class="mt-3 space-y-1">
-                <x-responsive-nav-link :href="route('profile.edit')">
-                    {{ __('Profile') }}
-                </x-responsive-nav-link>
-
-                <!-- Authentication -->
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-
-                    <x-responsive-nav-link :href="route('logout')"
-                                                 onclick="event.preventDefault();
-                                                                this.closest('form').submit();">
-                        {{ __('Log Out') }}
+                <div class="mt-3 space-y-1">
+                    <x-responsive-nav-link :href="route('profile.edit')">
+                        {{ __('Profile') }}
                     </x-responsive-nav-link>
-                </form>
-            </div>
+
+                    <!-- Authentication -->
+                    <form method="POST" action="{{ route('logout') }}">
+                        @csrf
+
+                        <x-responsive-nav-link :href="route('logout')"
+                                                     onclick="event.preventDefault();
+                                                                    this.closest('form').submit();">
+                            {{ __('Log Out') }}
+                        </x-responsive-nav-link>
+                    </form>
+                </div>
+            @else
+                <div class="mt-3 space-y-1">
+                    <x-responsive-nav-link :href="route('customer.login')">
+                        {{ __('Login Cliente') }}
+                    </x-responsive-nav-link>
+                </div>
+            @endif
         </div>
     </div>
 </nav>

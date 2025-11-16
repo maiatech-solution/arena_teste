@@ -115,19 +115,20 @@
 
                 {{-- ✅ NOVO: ALERTA E BOTÃO PARA RENOVAÇÃO RECORRENTE --}}
                 @if (isset($expiringSeriesCount) && $expiringSeriesCount > 0)
-                    <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-lg shadow-md flex flex-col items-start transition-all duration-300 transform hover:scale-[1.005]" role="alert">
+                    <div id="renewal-alert-container" data-series='@json($expiringSeries)' data-count="{{ $expiringSeriesCount }}"
+                        class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-lg shadow-md flex flex-col items-start transition-all duration-300 transform hover:scale-[1.005]" role="alert">
                         <div class="flex items-start mb-2">
                             <svg class="h-6 w-6 flex-shrink-0 mt-0.5 mr-3 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                             </svg>
                             <div>
                                 <p class="font-bold text-lg">ALERTA DE RENOVAÇÃO</p>
-                                <p class="mt-1 text-sm">
+                                <p id="renewal-message" class="mt-1 text-sm">
                                     <span class="font-extrabold text-yellow-900">{{ $expiringSeriesCount }}</span> série(s) de agendamento recorrente de clientes está(ão) prestes a expirar nos próximos 30 dias.
                                 </p>
                             </div>
                         </div>
-                        <button onclick="openRenewalModal({{ json_encode($expiringSeries) }})" class="mt-2 bg-yellow-600 hover:bg-yellow-700 active:bg-yellow-800 text-white font-bold py-2 px-6 rounded-lg text-sm transition duration-150 ease-in-out shadow-lg">
+                        <button onclick="openRenewalModal()" class="mt-2 bg-yellow-600 hover:bg-yellow-700 active:bg-yellow-800 text-white font-bold py-2 px-6 rounded-lg text-sm transition duration-150 ease-in-out shadow-lg">
                             Revisar Renovações
                         </button>
                     </div>
@@ -162,7 +163,6 @@
     </div>
 
     {{-- Modal de Detalhes de Reserva (RESERVAS EXISTENTES) --}}
-    {{-- Mantido o ID original para o fluxo do seu JS --}}
     <div id="event-modal" class="modal-overlay hidden" onclick="closeEventModal()">
         <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full transition-all duration-300 transform scale-100" onclick="event.stopPropagation()">
             <h3 class="text-xl font-bold text-indigo-700 mb-4 border-b pb-2">Detalhes da Reserva</h3>
@@ -213,8 +213,11 @@
                 **Ao clicar em Renovar, o sistema tentará estender a série por mais um ano.**
             </p>
 
+            <div id="renewal-message-box" class="hidden p-3 mb-4 rounded-lg text-sm font-medium"></div>
+
             <div id="renewal-list" class="space-y-4">
                 {{-- Lista injetada pelo JS --}}
+                <p class="text-gray-500 italic">Nenhuma série a ser renovada no momento.</p>
             </div>
 
             <div class="mt-6 flex justify-end">
@@ -226,15 +229,13 @@
     </div>
 
 
-    {{-- Modal de Agendamento Rápido (SLOTS DISPONÍVEIS) --}}
+    {{-- Modal de Agendamento Rápido (SLOTS DISPONÍVEIS) - ATUALIZADO COM BUSCA DE CLIENTE --}}
     <div id="quick-booking-modal" class="modal-overlay hidden" onclick="document.getElementById('quick-booking-modal').classList.add('hidden')">
-        {{-- 🛑 REMOVIDA A PROPRIEDADE 'action' e 'method' DO FORM HTML --}}
         <div class="bg-white p-6 rounded-xl shadow-2xl max-w-lg w-full transition-all duration-300 transform scale-100" onclick="event.stopPropagation()">
             <h3 class="text-xl font-bold text-green-700 mb-4 border-b pb-2">Agendamento Rápido de Slot</h3>
 
             <form id="quick-booking-form">
                 @csrf
-                {{-- O token CSRF deve estar presente para o JS pegar, mas o action e method são desnecessários agora --}}
 
                 <div id="slot-info-display" class="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700">
                 </div>
@@ -246,27 +247,59 @@
                 <input type="hidden" name="price" id="quick-price">
                 <input type="hidden" name="reserva_id_to_update" id="reserva-id-to-update">
 
+
+                <!-- 🛑 NOVO: Bloco de Busca de Cliente Registrado -->
                 <div class="mb-4">
-                    <label for="client_name" class="block text-sm font-medium text-gray-700">Nome do Cliente *</label>
-                    <input type="text" name="client_name" id="client_name" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    <label for="client_search" class="block text-sm font-medium text-gray-700">
+                        Buscar Cliente Registrado (Opcional):
+                    </label>
+                    <div class="relative">
+                        <input type="text" name="client_search" id="client_search" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500" placeholder="Nome, Email ou WhatsApp">
+                        <div id="client_results" class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto hidden">
+                            <!-- Resultados da busca aqui -->
+                        </div>
+                    </div>
+                    <!-- Campo Oculto para o ID do Cliente Registrado -->
+                    <input type="hidden" name="user_id" id="quick-user-id">
+
+                    <!-- Exibição do Cliente Selecionado -->
+                    <div id="selected_client_info" class="mt-2 p-2 bg-green-100 border border-green-300 rounded-md hidden">
+                        <p class="text-sm font-semibold text-green-800 flex justify-between items-center">
+                            Cliente Selecionado: <span id="selected_client_name" class="font-normal"></span>
+                            <button type="button" onclick="clearSelectedClient()" class="text-red-500 hover:text-red-700 text-sm ml-4">
+                                (Limpar)
+                            </button>
+                        </p>
+                    </div>
                 </div>
 
-                <div class="mb-4">
-                    <label for="client_contact" class="block text-sm font-medium text-gray-700">Contato (Telefone/Email) *</label>
-                    <input type="text" name="client_contact" id="client_contact" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                <!-- Campos Manuais (Visíveis se nenhum cliente registrado for selecionado) -->
+                <div id="manual_client_fields">
+                    <p class="text-sm font-semibold text-gray-700 mb-2">Detalhes Manuais (Preencha se não houver cliente registrado):</p>
+                    <div class="mb-4">
+                        <label for="client_name" class="block text-sm font-medium text-gray-700">Nome do Cliente *</label>
+                        <input type="text" name="client_name" id="client_name" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="client_contact" class="block text-sm font-medium text-gray-700">Contato (Telefone/Email) *</label>
+                        <input type="text" name="client_contact" id="client_contact" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
                 </div>
+                <!-- FIM DO BLOCO DE BUSCA -->
+
 
                 {{-- ✅ CHECKBOX PARA RECORRÊNCIA --}}
                 <div class="mb-4 p-3 border border-indigo-200 rounded-lg bg-indigo-50">
                     <div class="flex items-center">
                         <input type="checkbox" name="is_recurrent" id="is-recurrent" value="1"
-                               class="h-5 w-5 text-indigo-600 border-indigo-300 rounded focus:ring-indigo-500">
+                                class="h-5 w-5 text-indigo-600 border-indigo-300 rounded focus:ring-indigo-500">
                         <label for="is-recurrent" class="ml-3 text-base font-semibold text-indigo-700">
                             Tornar esta reserva Recorrente (Anual)
                         </label>
                     </div>
                     <p class="text-xs text-indigo-600 mt-1 pl-8">
-                        Ao marcar, todos os slots futuros desta faixa de horário serão reservados para este cliente.
+                        Se marcado, o sistema criará reservas para esta faixa de horário em todas as semanas por um ano.
                     </p>
                 </div>
                 {{-- FIM DO NOVO CHECKBOX --}}
@@ -297,16 +330,18 @@
         const PENDING_API_URL = '{{ route("api.reservas.pendentes") }}';
         const RESERVED_API_URL = '{{ route("api.reservas.confirmadas") }}';
         const AVAILABLE_API_URL = '{{ route("api.horarios.disponiveis") }}';
-        const SHOW_RESERVA_URL = '{{ route("admin.reservas.show", ":id") }}'; // Rota para detalhes/gerenciamento
+        const SHOW_RESERVA_URL = '{{ route("admin.reservas.show", ":id") }}';
 
         // ROTAS DE SUBMISSÃO
+        // Assumindo que você definiu as rotas corretamente para o novo controller:
         const RECURRENT_STORE_URL = '{{ route("api.reservas.store_recurrent") }}';
         const QUICK_STORE_URL = '{{ route("api.reservas.store_quick") }}';
+        const SEARCH_CLIENTS_API_URL = '{{ route("admin.api.search-clients") }}';
 
-        // 🛑 ROTA DE RENOVAÇÃO
+        // ROTA DE RENOVAÇÃO
         const RENEW_SERIE_URL = '{{ route("admin.reservas.renew_serie", ":masterReserva") }}';
 
-        // ROTAS DE CANCELAMENTO (POST para enviar o motivo no body)
+        // ROTAS DE CANCELAMENTO
         const CANCEL_PONTUAL_URL = '{{ route("admin.reservas.cancelar_pontual", ":id") }}';
         const CANCEL_SERIE_URL = '{{ route("admin.reservas.cancelar_serie", ":id") }}';
         const CANCEL_PADRAO_URL = '{{ route("admin.reservas.cancelar", ":id") }}';
@@ -320,6 +355,22 @@
         let currentReservaId = null;
         let currentMethod = null;
         let currentUrlBase = null;
+
+        // ✅ NOVO: Armazena as séries recorrentes globalmente
+        let globalExpiringSeries = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Inicializa a lista de séries a partir do atributo data do container do alerta
+            const renewalAlertContainer = document.getElementById('renewal-alert-container');
+            if (renewalAlertContainer) {
+                try {
+                    // JSON.parse é necessário porque o Blade envia como string JSON
+                    globalExpiringSeries = JSON.parse(renewalAlertContainer.getAttribute('data-series'));
+                } catch (e) {
+                    console.error("Erro ao carregar dados de séries expirando:", e);
+                }
+            }
+        });
 
 
         /**
@@ -388,7 +439,130 @@
         };
 
         // =========================================================
-        // ✅ FUNÇÃO CRÍTICA: Lidar com a submissão do Agendamento Rápido via AJAX
+        // 🔎 FUNÇÕES DE BUSCA DE CLIENTE (MANTIDO)
+        // =========================================================
+        let clientSearchTimeout;
+        const clientSearchInput = () => document.getElementById('client_search');
+        const clientResultsDiv = () => document.getElementById('client_results');
+        const manualFieldsDiv = () => document.getElementById('manual_client_fields');
+        const selectedClientInfoDiv = () => document.getElementById('selected_client_info');
+        const quickUserIdInput = () => document.getElementById('quick-user-id');
+        const clientNameInput = () => document.getElementById('client_name');
+        const clientContactInput = () => document.getElementById('client_contact');
+
+
+        function initClientSearch() {
+            clientSearchInput().addEventListener('input', function() {
+                clearTimeout(clientSearchTimeout);
+                const query = this.value;
+
+                if (query.length < 2) {
+                    clientResultsDiv().classList.add('hidden');
+                    clientResultsDiv().innerHTML = '';
+                    return;
+                }
+
+                clientSearchTimeout = setTimeout(() => {
+                    searchClients(query);
+                }, 300); // Debounce de 300ms
+            });
+
+            // Handle focus/blur to hide results gracefully
+            clientSearchInput().addEventListener('blur', function() {
+                setTimeout(() => {
+                    clientResultsDiv().classList.add('hidden');
+                }, 200);
+            });
+
+            clientSearchInput().addEventListener('focus', function() {
+                 // Show results if there is a query and results
+                 if (this.value.length >= 2 && clientResultsDiv().innerHTML.trim() !== '') {
+                     clientResultsDiv().classList.remove('hidden');
+                 }
+            });
+        }
+
+        async function searchClients(query) {
+            try {
+                // Rota que busca clientes por nome, email ou whatsapp
+                const response = await fetch(SEARCH_CLIENTS_API_URL + '?query=' + encodeURIComponent(query));
+                const clients = await response.json();
+
+                clientResultsDiv().innerHTML = '';
+                if (clients.length > 0) {
+                    clients.forEach(client => {
+                        const item = document.createElement('div');
+                        item.className = 'p-2 cursor-pointer hover:bg-indigo-100 border-b border-gray-100 last:border-b-0 text-sm';
+                        // Prioritize whatsapp_contact if available
+                        const contactDisplay = client.whatsapp_contact || client.email || 'N/A';
+                        item.innerHTML = `<p class="font-semibold">${client.name}</p><p class="text-xs text-gray-500">${contactDisplay}</p>`;
+
+                        // Use mousedown para evitar que o blur feche a lista antes do click
+                        item.addEventListener('mousedown', (e) => {
+                            e.preventDefault();
+                            selectClient(client);
+                        });
+                        clientResultsDiv().appendChild(item);
+                    });
+                    clientResultsDiv().classList.remove('hidden');
+                } else {
+                    clientResultsDiv().innerHTML = `<div class="p-2 text-sm text-gray-500">Nenhum cliente registrado encontrado.</div>`;
+                    clientResultsDiv().classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Erro na busca de clientes:', error);
+                clientResultsDiv().classList.add('hidden');
+            }
+        }
+
+        function selectClient(client) {
+            // 1. Preenche o campo oculto com o ID do cliente
+            quickUserIdInput().value = client.id;
+
+            // 2. Atualiza a exibição
+            const contactDisplay = client.whatsapp_contact || client.email || 'N/A';
+            document.getElementById('selected_client_name').textContent = `${client.name} (${contactDisplay})`;
+            selectedClientInfoDiv().classList.remove('hidden');
+
+            // 3. Oculta os campos de entrada manual e resultados
+            manualFieldsDiv().classList.add('hidden');
+            clientResultsDiv().classList.add('hidden');
+
+            // 4. Remove a obrigatoriedade dos campos manuais
+            clientNameInput().removeAttribute('required');
+            clientContactInput().removeAttribute('required');
+
+            // 5. Preenche os campos manuais (em background, para fins de consistência)
+            clientNameInput().value = client.name;
+            clientContactInput().value = client.whatsapp_contact || client.email || '';
+
+            // 6. Atualiza o input de busca para mostrar o nome do cliente selecionado
+            clientSearchInput().value = client.name;
+        }
+
+        function clearSelectedClient() {
+            // 1. Limpa o ID do cliente
+            quickUserIdInput().value = '';
+
+            // 2. Oculta a exibição do cliente selecionado
+            selectedClientInfoDiv().classList.add('hidden');
+
+            // 3. Reexibe os campos manuais
+            manualFieldsDiv().classList.remove('hidden');
+
+            // 4. Restaura a obrigatoriedade dos campos manuais
+            clientNameInput().setAttribute('required', 'required');
+            clientContactInput().setAttribute('required', 'required');
+
+            // 5. Limpa os campos manuais e o input de busca
+            clientNameInput().value = '';
+            clientContactInput().value = '';
+            clientSearchInput().value = '';
+            clientResultsDiv().innerHTML = ''; // Limpa resultados
+        }
+
+        // =========================================================
+        // ✅ FUNÇÃO CRÍTICA: Lidar com a submissão do Agendamento Rápido via AJAX (MANTIDO)
         // =========================================================
         async function handleQuickBookingSubmit(event) {
             event.preventDefault(); // CRÍTICO: Previne a navegação de página
@@ -398,6 +572,17 @@
             const data = Object.fromEntries(formData.entries());
 
             const isRecurrent = document.getElementById('is-recurrent').checked;
+
+            // 🛑 NOVO: Validação para garantir que user_id OU nome/contato manual foi preenchido
+            const userId = data.user_id;
+            const clientName = data.client_name ? data.client_name.trim() : '';
+            const clientContact = data.client_contact ? data.client_contact.trim() : '';
+
+            if (!userId && (!clientName || !clientContact)) {
+                // Usando alert() pois o código original usava, mas idealmente seria um modal
+                alert("Por favor, selecione um cliente registrado OU preencha Nome e Contato manualmente.");
+                return;
+            }
 
             // Altera a URL de destino com base no checkbox de recorrência
             const targetUrl = isRecurrent ? RECURRENT_STORE_URL : QUICK_STORE_URL;
@@ -432,13 +617,13 @@
                     // Fecha o modal
                     document.getElementById('quick-booking-modal').classList.add('hidden');
 
-                    // Recarrega a página para garantir a atualização visual (Azul -> Verde ou Vice-versa)
+                    // Recarrega a página para garantir a atualização visual
                     setTimeout(() => {
                         window.location.reload();
                     }, 50);
 
                 } else if (response.status === 422 && result.errors) {
-                    // Erros de validação (ex: nome do cliente faltando)
+                    // Erros de validação
                     const errors = Object.values(result.errors).flat().join('\n');
                     alert(`ERRO DE VALIDAÇÃO:\n${errors}`);
                 } else {
@@ -456,7 +641,7 @@
         }
 
         // =========================================================
-        // ✅ FLUXO DE CANCELAMENTO E RENOVAÇÃO (JS)
+        // ✅ FLUXO DE CANCELAMENTO E RENOVAÇÃO (JS) - ATUALIZADO
         // =========================================================
 
         function closeEventModal() {
@@ -498,15 +683,16 @@
          * FUNÇÃO AJAX GENÉRICA PARA CANCELAMENTO
          */
         async function sendCancellationRequest(reservaId, method, urlBase, reason) {
+            // Usa a URL base do Laravel, que aceita POST e trata o cancelamento
             const url = urlBase.replace(':id', reservaId);
 
             const bodyData = {
                 cancellation_reason: reason,
                 _token: csrfToken,
+                _method: method, // Envia o método PATCH/DELETE, se necessário
             };
 
             const fetchConfig = {
-                // ✅ CRÍTICO: O método de transporte DEVE ser POST para a rota Laravel.
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -533,18 +719,18 @@
                     result = { error: `Erro do Servidor (${response.status}). Verifique o console.` };
                 }
 
-                if (response.ok) {
+                if (response.ok && result.success) {
                     alert(result.message || "Ação realizada com sucesso. O calendário será atualizado.");
                     closeCancellationModal();
 
                     // 🛑 FORÇA A RECARGA DA PÁGINA
                     setTimeout(() => {
-                         window.location.reload();
+                            window.location.reload();
                     }, 50);
 
                 } else if (response.status === 422 && result.errors) {
-                     const reasonError = result.errors.cancellation_reason ? result.errors.cancellation_reason.join(', ') : 'Erro de validação desconhecido.';
-                     alert(`ERRO DE VALIDAÇÃO: ${reasonError}`);
+                    const reasonError = result.errors.cancellation_reason ? result.errors.cancellation_reason.join(', ') : 'Erro de validação desconhecido.';
+                    alert(`ERRO DE VALIDAÇÃO: ${reasonError}`);
                 } else {
                     alert(result.error || result.message || `Erro desconhecido ao processar a ação. Status: ${response.status}.`);
                 }
@@ -553,8 +739,8 @@
                 console.error('Erro de Rede/Comunicação:', error);
                 alert("Erro de conexão. Tente novamente.");
             } finally {
-                 submitBtn.disabled = false;
-                 submitBtn.textContent = 'Confirmar Ação';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Confirmar Ação';
             }
         }
 
@@ -569,21 +755,21 @@
             }
 
             if (currentReservaId && currentMethod && currentUrlBase) {
-                // O método LÓGICO é ignorado aqui, pois a rota Laravel é POST com payload
+                // Passa o currentMethod para a função AJAX
                 sendCancellationRequest(currentReservaId, currentMethod, currentUrlBase, reason);
             } else {
                 alert("Erro: Dados da reserva não configurados corretamente.");
             }
         });
 
-        // --- Funções Chamadas pelos Botões do #event-modal ---
-        // Funções específicas de Cancelamento (Expostas globalmente/ao window.onload)
+        // --- Funções Chamadas pelos Botões do #event-modal (Expostas globalmente) ---
+        // Funções específicas de Cancelamento
         const cancelarPontual = (id, isRecurrent) => {
+            // O Controller precisa saber se deve limpar apenas o slot ou o dia inteiro (recorrente)
             const urlBase = isRecurrent ? CANCEL_PONTUAL_URL : CANCEL_PADRAO_URL;
-            // O método LÓGICO é PATCH/DELETE, mas o transporte será POST para a rota específica
-            const method = isRecurrent ? 'DELETE' : 'PATCH';
+            const method = 'PATCH'; // Usamos PATCH/POST para atualizar o status no Controller
             const confirmation = isRecurrent
-                ? "Cancelar SOMENTE ESTA reserva? O slot será liberado pontualmente."
+                ? "Cancelar SOMENTE ESTA reserva (exceção)? O slot será liberado pontualmente."
                 : "Cancelar esta reserva pontual (O slot será liberado e a reserva deletada).";
             const buttonText = isRecurrent ? 'Cancelar ESTE DIA' : 'Confirmar Cancelamento';
 
@@ -592,7 +778,7 @@
 
         const cancelarSerie = (id) => {
             const urlBase = CANCEL_SERIE_URL;
-            const method = 'DELETE';
+            const method = 'DELETE'; // Usamos DELETE/POST para o cancelamento da série
             const confirmation = "⚠️ ATENÇÃO: Cancelar TODA A SÉRIE desta reserva? Todos os horários futuros serão liberados.";
             const buttonText = 'Confirmar Cancelamento de SÉRIE';
 
@@ -605,31 +791,51 @@
             document.getElementById('renewal-modal').classList.add('hidden');
         }
 
-        function openRenewalModal(series) {
+        // Atualiza o texto do alerta principal e sua visibilidade
+        function updateMainAlert() {
+             const alertContainer = document.getElementById('renewal-alert-container');
+             const count = globalExpiringSeries.length;
+
+             if (count > 0) {
+                 document.getElementById('renewal-message').innerHTML = `<span class="font-extrabold text-yellow-900">${count}</span> série(s) de agendamento recorrente de clientes está(ão) prestes a expirar nos próximos 30 dias.`;
+                 alertContainer.classList.remove('hidden');
+             } else {
+                 alertContainer.classList.add('hidden');
+             }
+        }
+
+        function openRenewalModal() {
+            const series = globalExpiringSeries;
             const listContainer = document.getElementById('renewal-list');
             listContainer.innerHTML = ''; // Limpa a lista antes de popular
+            document.getElementById('renewal-message-box').classList.add('hidden');
 
             if (series.length === 0) {
-                 listContainer.innerHTML = '<p class="text-gray-500 italic">Nenhuma série a ser renovada no momento.</p>';
+                listContainer.innerHTML = '<p class="text-gray-500 italic text-center p-4">Nenhuma série a ser renovada no momento. Bom trabalho!</p>';
             } else {
                 series.forEach(item => {
                     const dayNames = {0: 'Domingo', 1: 'Segunda', 2: 'Terça', 3: 'Quarta', 4: 'Quinta', 5: 'Sexta', 6: 'Sábado'};
                     const dayName = dayNames[item.day_of_week] || 'Dia Desconhecido';
 
+                    // Converte a data de 'YYYY-MM-DD' para 'DD/MM/YYYY'
+                    const lastDateDisplay = moment(item.last_date, 'YYYY-MM-DD').format('DD/MM/YYYY');
+                    const priceDisplay = parseFloat(item.slot_price).toFixed(2).replace('.', ',');
+
+
                     const itemHtml = `
-                        <div id="renewal-item-${item.master_id}" class="p-4 border border-yellow-300 rounded-lg bg-yellow-50 flex flex-col md:flex-row justify-between items-start md:items-center shadow-md">
+                        <div id="renewal-item-${item.master_id}" class="p-4 border border-yellow-300 rounded-lg bg-yellow-50 flex flex-col md:flex-row justify-between items-start md:items-center shadow-md transition duration-300 hover:bg-yellow-100">
                             <div>
                                 <p class="font-bold text-indigo-700">${item.client_name}</p>
                                 <p class="text-sm text-gray-600">
-                                    Slot: ${item.slot_time} (${dayName}) - R$ ${parseFloat(item.slot_price).toFixed(2).replace('.', ',')}
+                                    Slot: ${item.slot_time} (${dayName}) - R$ ${priceDisplay}
                                 </p>
                                 <p class="text-xs text-red-600 font-medium mt-1">
-                                    Expira em: ${item.last_date}
+                                    Expira em: ${lastDateDisplay}
                                 </p>
                             </div>
                             <div class="mt-3 md:mt-0">
                                 <button onclick="handleRenewal(${item.master_id})"
-                                        class="renew-btn-${item.master_id} w-full md:w-auto px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg">
+                                            class="renew-btn-${item.master_id} w-full md:w-auto px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg text-sm">
                                     Renovar por 1 Ano
                                 </button>
                             </div>
@@ -643,13 +849,25 @@
             document.getElementById('renewal-modal').classList.remove('hidden');
         }
 
+        // Função para exibir mensagens no modal
+        function displayRenewalMessage(message, isSuccess) {
+            const msgBox = document.getElementById('renewal-message-box');
+            msgBox.textContent = message;
+            if (isSuccess) {
+                msgBox.className = 'p-3 mb-4 rounded-lg text-sm font-medium bg-green-100 border border-green-400 text-green-700';
+            } else {
+                msgBox.className = 'p-3 mb-4 rounded-lg text-sm font-medium bg-red-100 border border-red-400 text-red-700';
+            }
+            msgBox.classList.remove('hidden');
+        }
+
+
         async function handleRenewal(masterId) {
             const url = RENEW_SERIE_URL.replace(':masterReserva', masterId);
             const itemContainer = document.getElementById(`renewal-item-${masterId}`);
             const renewBtn = document.querySelector(`.renew-btn-${masterId}`);
 
-            // Substitui alert/confirm
-            if (!confirm("Confirmar a renovação por mais 1 ano? O sistema checará se há conflitos futuros.")) {
+            if (!confirm(`Confirmar a renovação da série #${masterId} por mais 1 ano para ${itemContainer.querySelector('.font-bold').textContent.trim()}?`)) {
                 return;
             }
 
@@ -669,17 +887,31 @@
                     body: JSON.stringify({}) // Sem dados no corpo
                 });
 
-                const result = await response.json();
+                let result = {};
+                try {
+                    result = await response.json();
+                } catch (e) {
+                    // Trata caso o servidor retorne HTML em erro 500
+                    const errorText = await response.text();
+                    console.error("Falha ao ler JSON de resposta.", errorText);
+                    result = { success: false, message: `Erro do Servidor (${response.status}). Verifique o console.` };
+                }
 
                 if (response.ok && result.success) {
                     // Sucesso: Remove o item do modal e notifica
+                    displayRenewalMessage(result.message, true);
                     itemContainer.remove();
-                    alert(`Sucesso na renovação: ${result.message}`);
-                    checkPendingReservations(); // Atualiza a contagem de alertas (embora seja só um alerta de renovação)
 
-                    // Se a lista estiver vazia, fecha o modal
+                    // Remove do array global
+                    globalExpiringSeries = globalExpiringSeries.filter(s => s.master_id !== masterId);
+
+                    // Atualiza o alerta principal na página
+                    updateMainAlert();
+
+                    // Se a lista estiver vazia, atualiza o modal e fecha
                     if (document.getElementById('renewal-list').children.length === 0) {
-                        closeRenewalModal();
+                         document.getElementById('renewal-list').innerHTML = '<p class="text-gray-500 italic text-center p-4">Nenhuma série a ser renovada no momento. Bom trabalho!</p>';
+                         setTimeout(() => closeRenewalModal(), 3000); // Fecha após 3s
                     }
 
                     // Recarrega o calendário após sucesso para mostrar os novos slots
@@ -687,7 +919,7 @@
 
                 } else {
                     // Falha: Reativa o botão e exibe o erro
-                    alert(`Falha na renovação: ${result.message || 'Erro desconhecido.'}`);
+                    displayRenewalMessage(`Falha na renovação: ${result.message || 'Erro desconhecido.'}`, false);
                     renewBtn.disabled = false;
                     renewBtn.textContent = 'Renovar por 1 Ano';
                     renewBtn.classList.remove('bg-gray-500');
@@ -695,7 +927,7 @@
                 }
             } catch (error) {
                 console.error('Erro de Rede:', error);
-                alert("Erro de conexão ao tentar renovar.");
+                displayRenewalMessage("Erro de conexão ao tentar renovar.", false);
                 renewBtn.disabled = false;
                 renewBtn.textContent = 'Renovar por 1 Ano';
                 renewBtn.classList.remove('bg-gray-500');
@@ -709,11 +941,15 @@
             var eventModal = document.getElementById('event-modal');
             var modalContent = document.getElementById('modal-content');
             var modalActions = document.getElementById('modal-actions');
+            const quickBookingModal = document.getElementById('quick-booking-modal'); // Referência ao modal de Agendamento Rápido
             const quickBookingForm = document.getElementById('quick-booking-form');
 
             // 1. Inicializa a checagem de pendências imediatamente e configura o intervalo
             checkPendingReservations();
             setInterval(checkPendingReservations, 30000);
+
+            // 🛑 NOVO: Inicializa a funcionalidade de busca de cliente
+            initClientSearch();
 
             // 🛑 NOVO: Adiciona o listener para a submissão AJAX do agendamento rápido
             quickBookingForm.addEventListener('submit', handleQuickBookingSubmit);
@@ -725,6 +961,9 @@
                 initialView: 'dayGridMonth',
                 height: 'auto',
                 timeZone: 'local',
+                slotMinTime: '06:00:00',
+                slotMaxTime: '23:00:00',
+
 
                 eventSources: [
                     // 1. Fonte de Reservas Confirmadas (Eventos Azuis/Fúcsia/Laranja)
@@ -734,7 +973,6 @@
                         failure: function() {
                             console.error('Falha ao carregar reservas confirmadas via API.');
                         },
-                        // A classe agora é definida dinamicamente pelo PHP (fc-event-recurrent, fc-event-quick, fc-event-pending)
                         textColor: 'white'
                     },
                     // 2. Fonte de Horários Disponíveis (Eventos Verdes)
@@ -768,8 +1006,6 @@
 
                     // --- LÓGICA DE SLOT DISPONÍVEL (Agendamento Rápido) ---
                     if (isAvailable) {
-                        const quickBookingModal = document.getElementById('quick-booking-modal');
-
                         const startDate = moment(event.start);
                         const endDate = moment(event.end);
 
@@ -794,11 +1030,13 @@
                         document.getElementById('quick-end-time').value = endTimeInput;
                         document.getElementById('quick-price').value = price;
 
-                        // Limpa campos do cliente e checkbox de recorrência
+                        // 🛑 NOVO: Resetar o estado de busca de cliente ao abrir o modal
+                        clearSelectedClient();
+
+                        // Limpa notas e checkbox de recorrência
                         document.getElementById('notes').value = '';
-                        document.getElementById('client_name').value = '';
-                        document.getElementById('client_contact').value = '';
                         document.getElementById('is-recurrent').checked = false;
+
 
                         // 2. Injetar a informação visível
                         document.getElementById('slot-info-display').innerHTML = `
@@ -899,6 +1137,14 @@
             });
 
             calendar.render();
+            // Torna o calendário globalmente acessível para funções como handleRenewal
+            window.calendar = calendar;
         };
+        // Expondo funções globais
+        window.cancelarPontual = cancelarPontual;
+        window.cancelarSerie = cancelarSerie;
+        window.openRenewalModal = openRenewalModal;
+        window.handleRenewal = handleRenewal;
+        window.clearSelectedClient = clearSelectedClient;
     </script>
 </x-app-layout>
