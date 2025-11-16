@@ -6,8 +6,20 @@
         </h2>
     </x-slot>
 
-    {{-- IMPORTAÇÕES (Mantidas do seu código original) --}}
+    {{-- GARANTIA DE VARIÁVEIS: Define valores padrão para evitar 'Undefined Variable' se o Controller falhar --}}
+    @php
+        $pendingReservationsCount = $pendingReservationsCount ?? 0;
+        $expiringSeriesCount = $expiringSeriesCount ?? 0;
+        $expiringSeries = $expiringSeries ?? [];
+    @endphp
+
+    {{-- IMPORTAÇÕES (Mantidas) --}}
     <link href='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/main.min.css' rel='stylesheet' />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js'></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/locale/pt-br.min.js'></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+
 
     <style>
         .calendar-container {
@@ -42,7 +54,7 @@
             display: none !important;
         }
 
-        /* ✅ NOVO: Estilo para Eventos RECORRENTES (Fúcsia/Roxo) */
+        /* Estilo para Eventos RECORRENTES (Fúcsia/Roxo) */
         .fc-event-recurrent {
             background-color: #C026D3 !important; /* Fuchsia 700 */
             border-color: #A21CAF !important;
@@ -52,7 +64,7 @@
             font-weight: bold;
         }
 
-        /* 🛑 MANTIDO: Estilo para Eventos AVULSOS/RÁPIDOS (Indigo/Azul) */
+        /* Estilo para Eventos AVULSOS/RÁPIDOS (Indigo/Azul) */
         .fc-event-quick {
             background-color: #4f46e5 !important; /* Indigo 600 */
             border-color: #4338ca !important;
@@ -61,7 +73,7 @@
             border-radius: 4px;
         }
 
-        /* 🛑 MANTIDO: Estilo para Eventos PENDENTES (Laranja) */
+        /* Estilo para Eventos PENDENTES (Laranja) */
         .fc-event-pending {
             background-color: #ff9800 !important; /* Orange 500 */
             border-color: #f97316 !important;
@@ -107,14 +119,32 @@
                     </div>
                 @endif
 
-
-                {{-- PLACEHOLDER DINÂMICO PARA NOTIFICAÇÕES (PENDENTES) --}}
-                <div id="realtime-notification">
+                {{-- ALERTA DE PENDÊNCIA RENDERIZADO PELO SERVIDOR (COM VERIFICAÇÃO DE SEGURANÇA) --}}
+                <div id="pending-alert-container">
+                    @if ($pendingReservationsCount > 0)
+                        <div class="bg-orange-100 border-l-4 border-orange-500 text-orange-700 p-4 mb-6 rounded-lg shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between transition-all duration-300 transform hover:scale-[1.005]" role="alert">
+                            <div class="flex items-start">
+                                <svg class="h-6 w-6 flex-shrink-0 mt-0.5 sm:mt-0 mr-3 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                </svg>
+                                <div>
+                                    <p class="font-bold text-lg">Atenção: Pendências!</p>
+                                    <p class="mt-1 text-sm">Você tem <span class="font-extrabold text-orange-900">{{ $pendingReservationsCount }}</span> pré-reserva(s) aguardando sua ação.</p>
+                                </div>
+                            </div>
+                            <div class="mt-4 sm:mt-0 sm:ml-6">
+                                {{-- Assumindo que 'admin.reservas.index' é a página de listagem de todas as reservas --}}
+                                <a href="{{ route('admin.reservas.index') }}" class="inline-block bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white font-bold py-2 px-6 rounded-lg text-sm transition duration-150 ease-in-out shadow-lg">
+                                    Revisar Pendências
+                                </a>
+                            </div>
+                        </div>
+                    @endif
                 </div>
-                {{-- FIM DO PLACEHOLDER --}}
 
-                {{-- ✅ NOVO: ALERTA E BOTÃO PARA RENOVAÇÃO RECORRENTE --}}
-                @if (isset($expiringSeriesCount) && $expiringSeriesCount > 0)
+
+                {{-- ALERTA E BOTÃO PARA RENOVAÇÃO RECORRENTE (COM VERIFICAÇÃO DE SEGURANÇA) --}}
+                @if ($expiringSeriesCount > 0)
                     <div id="renewal-alert-container" data-series='@json($expiringSeries)' data-count="{{ $expiringSeriesCount }}"
                         class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-lg shadow-md flex flex-col items-start transition-all duration-300 transform hover:scale-[1.005]" role="alert">
                         <div class="flex items-start mb-2">
@@ -133,9 +163,8 @@
                         </button>
                     </div>
                 @endif
-                {{-- FIM DO NOVO ALERTA --}}
 
-                {{-- ✅ Legenda ATUALIZADA para explicar as cores --}}
+                {{-- Legenda --}}
                 <div class="flex flex-wrap gap-4 mb-4 text-sm font-medium">
                     <div class="flex items-center p-2 bg-fuchsia-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-fuchsia-700 mr-2"></span>
@@ -177,7 +206,7 @@
         </div>
     </div>
 
-    {{-- ✅ MODAL DE CANCELAMENTO (para o Motivo do Cancelamento) --}}
+    {{-- MODAL DE CANCELAMENTO (para o Motivo do Cancelamento) --}}
     <div id="cancellation-modal" class="modal-overlay hidden">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 m-4 transform transition-transform duration-300 scale-95 opacity-0" id="cancellation-modal-content" onclick="event.stopPropagation()">
             <h3 id="modal-title-cancel" class="text-xl font-bold text-red-700 mb-4 border-b pb-2">Confirmação de Cancelamento</h3>
@@ -203,7 +232,7 @@
     </div>
 
 
-    {{-- ✅ NOVO MODAL DE RENOVAÇÃO DE SÉRIE --}}
+    {{-- MODAL DE RENOVAÇÃO DE SÉRIE --}}
     <div id="renewal-modal" class="modal-overlay hidden" onclick="closeRenewalModal()">
         <div class="bg-white p-6 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
             <h3 class="text-xl font-bold text-yellow-700 mb-4 border-b pb-2">Gerenciar Renovações Recorrentes</h3>
@@ -248,7 +277,6 @@
                 <input type="hidden" name="reserva_id_to_update" id="reserva-id-to-update">
 
 
-                <!-- 🛑 NOVO: Bloco de Busca de Cliente Registrado -->
                 <div class="mb-4">
                     <label for="client_search" class="block text-sm font-medium text-gray-700">
                         Buscar Cliente Registrado (Opcional):
@@ -256,13 +284,10 @@
                     <div class="relative">
                         <input type="text" name="client_search" id="client_search" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500" placeholder="Nome, Email ou WhatsApp">
                         <div id="client_results" class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto hidden">
-                            <!-- Resultados da busca aqui -->
                         </div>
                     </div>
-                    <!-- Campo Oculto para o ID do Cliente Registrado -->
                     <input type="hidden" name="user_id" id="quick-user-id">
 
-                    <!-- Exibição do Cliente Selecionado -->
                     <div id="selected_client_info" class="mt-2 p-2 bg-green-100 border border-green-300 rounded-md hidden">
                         <p class="text-sm font-semibold text-green-800 flex justify-between items-center">
                             Cliente Selecionado: <span id="selected_client_name" class="font-normal"></span>
@@ -273,7 +298,6 @@
                     </div>
                 </div>
 
-                <!-- Campos Manuais (Visíveis se nenhum cliente registrado for selecionado) -->
                 <div id="manual_client_fields">
                     <p class="text-sm font-semibold text-gray-700 mb-2">Detalhes Manuais (Preencha se não houver cliente registrado):</p>
                     <div class="mb-4">
@@ -286,10 +310,7 @@
                         <input type="text" name="client_contact" id="client_contact" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                     </div>
                 </div>
-                <!-- FIM DO BLOCO DE BUSCA -->
-
-
-                {{-- ✅ CHECKBOX PARA RECORRÊNCIA --}}
+                {{-- CHECKBOX PARA RECORRÊNCIA --}}
                 <div class="mb-4 p-3 border border-indigo-200 rounded-lg bg-indigo-50">
                     <div class="flex items-center">
                         <input type="checkbox" name="is_recurrent" id="is-recurrent" value="1"
@@ -320,25 +341,17 @@
     </div>
 
 
-    <script src='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js'></script>
-    <script src='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/locale/pt-br.min.js'></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
-
-
     <script>
         // === CONFIGURAÇÕES E ROTAS ===
-        const PENDING_API_URL = '{{ route("api.reservas.pendentes") }}';
+        const PENDING_API_URL = '{{ route("api.reservas.pendentes.count") }}';
         const RESERVED_API_URL = '{{ route("api.reservas.confirmadas") }}';
         const AVAILABLE_API_URL = '{{ route("api.horarios.disponiveis") }}';
         const SHOW_RESERVA_URL = '{{ route("admin.reservas.show", ":id") }}';
 
         // ROTAS DE SUBMISSÃO
-        // Assumindo que você definiu as rotas corretamente para o novo controller:
         const RECURRENT_STORE_URL = '{{ route("api.reservas.store_recurrent") }}';
         const QUICK_STORE_URL = '{{ route("api.reservas.store_quick") }}';
         const SEARCH_CLIENTS_API_URL = '{{ route("admin.api.search-clients") }}';
-
-        // ROTA DE RENOVAÇÃO
         const RENEW_SERIE_URL = '{{ route("admin.reservas.renew_serie", ":masterReserva") }}';
 
         // ROTAS DE CANCELAMENTO
@@ -351,23 +364,22 @@
         const csrfToken = document.querySelector('input[name="_token"]').value;
 
         // VARIÁVEIS GLOBAIS DE ESTADO
-        let calendar; // Instância do FullCalendar
+        let calendar;
         let currentReservaId = null;
         let currentMethod = null;
         let currentUrlBase = null;
-
-        // ✅ NOVO: Armazena as séries recorrentes globalmente
         let globalExpiringSeries = [];
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Inicializa a lista de séries a partir do atributo data do container do alerta
             const renewalAlertContainer = document.getElementById('renewal-alert-container');
             if (renewalAlertContainer) {
                 try {
-                    // JSON.parse é necessário porque o Blade envia como string JSON
-                    globalExpiringSeries = JSON.parse(renewalAlertContainer.getAttribute('data-series'));
+                    // Garante que o atributo data-series exista antes de tentar parsear
+                    const dataSeriesAttr = renewalAlertContainer.getAttribute('data-series');
+                    globalExpiringSeries = dataSeriesAttr ? JSON.parse(dataSeriesAttr) : [];
                 } catch (e) {
                     console.error("Erro ao carregar dados de séries expirando:", e);
+                    globalExpiringSeries = [];
                 }
             }
         });
@@ -375,23 +387,37 @@
 
         /**
          * FUNÇÃO PARA CHECAR AS RESERVAS PENDENTES EM TEMPO REAL (PERIÓDICO)
+         * Interage com o container estático do Blade para garantir visibilidade imediata.
          */
         const checkPendingReservations = async () => {
-            const notificationContainer = document.getElementById('realtime-notification');
+            console.log("Iniciando verificação de reservas pendentes...");
+            const notificationContainer = document.getElementById('pending-alert-container');
             const apiUrl = PENDING_API_URL;
 
             try {
                 const response = await fetch(apiUrl);
+
+                // --- LOGGING CRÍTICO PARA DEBUGGING ---
+                console.log(`[PENDÊNCIA DEBUG] URL de chamada: ${apiUrl}`);
+                console.log(`[PENDÊNCIA DEBUG] Status HTTP: ${response.status}`);
+                // ------------------------------------
+
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
                 const data = await response.json();
                 const count = data.count || 0;
+
+                // --- LOGGING CRÍTICO 2 PARA DEBUGGING ---
+                console.log('[PENDÊNCIA DEBUG] Dados da API recebidos:', data);
+                console.log(`[PENDÊNCIA DEBUG] Contagem de Pendências: ${count}`);
+                // --------------------------------------
+
                 let htmlContent = '';
 
                 if (count > 0) {
-                    // Alerta Laranja (Pendências)
+                    // Alerta Laranja (Pendências) - Copiado do Blade para consistência
                     htmlContent = `
                         <div class="bg-orange-100 border-l-4 border-orange-500 text-orange-700 p-4 mb-6 rounded-lg shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between transition-all duration-300 transform hover:scale-[1.005]" role="alert">
                             <div class="flex items-start">
@@ -411,30 +437,19 @@
                         </div>
                     `;
                 } else {
-                    // Alerta Verde (Status OK)
-                    htmlContent = `
-                        <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg shadow-md" role="alert">
-                            <div class="flex items-center">
-                                <svg class="h-6 w-6 flex-shrink-0 mr-3 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <p class="font-medium">Status OK</p>
-                                <p class="ml-4 text-sm">Nenhuma pré-reserva pendente. O painel está limpo.</p>
-                            </div>
-                        </div>
-                    `;
+                    // Se a contagem for zero, o HTML fica vazio, removendo o alerta.
+                    htmlContent = '';
                 }
 
-                notificationContainer.innerHTML = htmlContent;
+                // Garante que o container só seja atualizado se o conteúdo for diferente
+                if (notificationContainer.innerHTML.trim() !== htmlContent.trim()) {
+                    notificationContainer.innerHTML = htmlContent;
+                }
 
             } catch (error) {
-                console.error('Erro ao buscar o status de pendências:', error);
-                notificationContainer.innerHTML = `
-                    <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-lg shadow-md" role="alert">
-                        <p class="font-medium">Erro de Conexão</p>
-                        <p class="ml-4 text-sm">Não foi possível carregar o status de pendências em tempo real. ${error.message}</p>
-                    </div>
-                `;
+                console.error('[PENDÊNCIA DEBUG] Erro ao buscar o status de pendências:', error);
+                // Deixa o container vazio em caso de erro para não poluir a tela
+                notificationContainer.innerHTML = '';
             }
         };
 
@@ -477,7 +492,7 @@
             clientSearchInput().addEventListener('focus', function() {
                  // Show results if there is a query and results
                  if (this.value.length >= 2 && clientResultsDiv().innerHTML.trim() !== '') {
-                     clientResultsDiv().classList.remove('hidden');
+                    clientResultsDiv().classList.remove('hidden');
                  }
             });
         }
@@ -493,7 +508,7 @@
                     clients.forEach(client => {
                         const item = document.createElement('div');
                         item.className = 'p-2 cursor-pointer hover:bg-indigo-100 border-b border-gray-100 last:border-b-0 text-sm';
-                        // Prioritize whatsapp_contact if available
+                        // Priorize whatsapp_contact if available
                         const contactDisplay = client.whatsapp_contact || client.email || 'N/A';
                         item.innerHTML = `<p class="font-semibold">${client.name}</p><p class="text-xs text-gray-500">${contactDisplay}</p>`;
 
@@ -562,7 +577,7 @@
         }
 
         // =========================================================
-        // ✅ FUNÇÃO CRÍTICA: Lidar com a submissão do Agendamento Rápido via AJAX (MANTIDO)
+        // FUNÇÃO CRÍTICA: Lidar com a submissão do Agendamento Rápido via AJAX (MANTIDO)
         // =========================================================
         async function handleQuickBookingSubmit(event) {
             event.preventDefault(); // CRÍTICO: Previne a navegação de página
@@ -573,7 +588,7 @@
 
             const isRecurrent = document.getElementById('is-recurrent').checked;
 
-            // 🛑 NOVO: Validação para garantir que user_id OU nome/contato manual foi preenchido
+            // Validação para garantir que user_id OU nome/contato manual foi preenchido
             const userId = data.user_id;
             const clientName = data.client_name ? data.client_name.trim() : '';
             const clientContact = data.client_contact ? data.client_contact.trim() : '';
@@ -641,7 +656,7 @@
         }
 
         // =========================================================
-        // ✅ FLUXO DE CANCELAMENTO E RENOVAÇÃO (JS) - ATUALIZADO
+        // FLUXO DE CANCELAMENTO E RENOVAÇÃO (JS) - MANTIDO
         // =========================================================
 
         function closeEventModal() {
@@ -675,7 +690,10 @@
          * Fecha o modal de cancelamento.
          */
         function closeCancellationModal() {
-            document.getElementById('cancellation-modal').classList.add('hidden');
+            document.getElementById('cancellation-modal-content').classList.add('opacity-0', 'scale-95');
+            setTimeout(() => {
+                document.getElementById('cancellation-modal').classList.add('hidden');
+            }, 300);
         }
 
 
@@ -684,6 +702,7 @@
          */
         async function sendCancellationRequest(reservaId, method, urlBase, reason) {
             // Usa a URL base do Laravel, que aceita POST e trata o cancelamento
+            // CRÍTICO: Troca o :id pelo ID real
             const url = urlBase.replace(':id', reservaId);
 
             const bodyData = {
@@ -693,6 +712,7 @@
             };
 
             const fetchConfig = {
+                // CRÍTICO: O fetch SEMPRE usa POST para rotas que esperam PATCH/DELETE
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -723,9 +743,9 @@
                     alert(result.message || "Ação realizada com sucesso. O calendário será atualizado.");
                     closeCancellationModal();
 
-                    // 🛑 FORÇA A RECARGA DA PÁGINA
+                    // FORÇA A RECARGA DA PÁGINA
                     setTimeout(() => {
-                            window.location.reload();
+                        window.location.reload();
                     }, 50);
 
                 } else if (response.status === 422 && result.errors) {
@@ -766,6 +786,7 @@
         // Funções específicas de Cancelamento
         const cancelarPontual = (id, isRecurrent) => {
             // O Controller precisa saber se deve limpar apenas o slot ou o dia inteiro (recorrente)
+            // CORREÇÃO DA ROTA: Se for recorrente, usa CANCEL_PONTUAL_URL
             const urlBase = isRecurrent ? CANCEL_PONTUAL_URL : CANCEL_PADRAO_URL;
             const method = 'PATCH'; // Usamos PATCH/POST para atualizar o status no Controller
             const confirmation = isRecurrent
@@ -789,19 +810,21 @@
 
         function closeRenewalModal() {
             document.getElementById('renewal-modal').classList.add('hidden');
+            // Opcional: Limpar mensagens ao fechar
+            document.getElementById('renewal-message-box').classList.add('hidden');
         }
 
         // Atualiza o texto do alerta principal e sua visibilidade
         function updateMainAlert() {
-             const alertContainer = document.getElementById('renewal-alert-container');
-             const count = globalExpiringSeries.length;
+            const alertContainer = document.getElementById('renewal-alert-container');
+            const count = globalExpiringSeries.length;
 
-             if (count > 0) {
-                 document.getElementById('renewal-message').innerHTML = `<span class="font-extrabold text-yellow-900">${count}</span> série(s) de agendamento recorrente de clientes está(ão) prestes a expirar nos próximos 30 dias.`;
-                 alertContainer.classList.remove('hidden');
-             } else {
-                 alertContainer.classList.add('hidden');
-             }
+            if (count > 0) {
+                document.getElementById('renewal-message').innerHTML = `<span class="font-extrabold text-yellow-900">${count}</span> série(s) de agendamento recorrente de clientes está(ão) prestes a expirar nos próximos 30 dias.`;
+                alertContainer.classList.remove('hidden');
+            } else {
+                alertContainer.classList.add('hidden');
+            }
         }
 
         function openRenewalModal() {
@@ -835,7 +858,7 @@
                             </div>
                             <div class="mt-3 md:mt-0">
                                 <button onclick="handleRenewal(${item.master_id})"
-                                            class="renew-btn-${item.master_id} w-full md:w-auto px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg text-sm">
+                                                class="renew-btn-${item.master_id} w-full md:w-auto px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg text-sm">
                                     Renovar por 1 Ano
                                 </button>
                             </div>
@@ -867,7 +890,11 @@
             const itemContainer = document.getElementById(`renewal-item-${masterId}`);
             const renewBtn = document.querySelector(`.renew-btn-${masterId}`);
 
-            if (!confirm(`Confirmar a renovação da série #${masterId} por mais 1 ano para ${itemContainer.querySelector('.font-bold').textContent.trim()}?`)) {
+            // Busca os dados do cliente para o confirm
+            const seriesData = globalExpiringSeries.find(s => s.master_id === masterId);
+            const clientName = seriesData ? seriesData.client_name : 'Cliente Desconhecido';
+
+            if (!confirm(`Confirmar a renovação da série #${masterId} por mais 1 ano para ${clientName}?`)) {
                 return;
             }
 
@@ -905,7 +932,7 @@
                     // Remove do array global
                     globalExpiringSeries = globalExpiringSeries.filter(s => s.master_id !== masterId);
 
-                    // Atualiza o alerta principal na página
+                    // Atualiza o alerta principal na página (no frontend)
                     updateMainAlert();
 
                     // Se a lista estiver vazia, atualiza o modal e fecha
@@ -915,7 +942,10 @@
                     }
 
                     // Recarrega o calendário após sucesso para mostrar os novos slots
-                    calendar.refetchEvents();
+                    // CRÍTICO: Recarrega a página para sumir com o alerta
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 50);
 
                 } else {
                     // Falha: Reativa o botão e exibe o erro
@@ -941,17 +971,17 @@
             var eventModal = document.getElementById('event-modal');
             var modalContent = document.getElementById('modal-content');
             var modalActions = document.getElementById('modal-actions');
-            const quickBookingModal = document.getElementById('quick-booking-modal'); // Referência ao modal de Agendamento Rápido
+            const quickBookingModal = document.getElementById('quick-booking-modal');
             const quickBookingForm = document.getElementById('quick-booking-form');
 
-            // 1. Inicializa a checagem de pendências imediatamente e configura o intervalo
+            // 1. Inicializa a checagem de pendências e configura o intervalo
             checkPendingReservations();
             setInterval(checkPendingReservations, 30000);
 
-            // 🛑 NOVO: Inicializa a funcionalidade de busca de cliente
+            // 2. Inicializa a funcionalidade de busca de cliente
             initClientSearch();
 
-            // 🛑 NOVO: Adiciona o listener para a submissão AJAX do agendamento rápido
+            // 3. Adiciona o listener para a submissão AJAX do agendamento rápido
             quickBookingForm.addEventListener('submit', handleQuickBookingSubmit);
 
 
@@ -966,7 +996,7 @@
 
 
                 eventSources: [
-                    // 1. Fonte de Reservas Confirmadas (Eventos Azuis/Fúcsia/Laranja)
+                    // 1. Fonte de Reservas Confirmadas/Pendentes (Azuis/Fúcsia/Laranja)
                     {
                         url: RESERVED_API_URL,
                         method: 'GET',
@@ -975,15 +1005,54 @@
                         },
                         textColor: 'white'
                     },
-                    // 2. Fonte de Horários Disponíveis (Eventos Verdes)
+                    // 2. Fonte de Horários Disponíveis (Eventos Verdes) - AGORA COM FILTRAGEM DE TEMPO
                     {
-                        url: AVAILABLE_API_URL,
-                        method: 'GET',
-                        failure: function() {
-                            console.error('Falha ao carregar horários disponíveis via API.');
-                        },
+                        // CRÍTICO: ID para recarga no setInterval
+                        id: 'available-slots-source-id',
                         className: 'fc-event-available',
-                        display: 'block'
+                        display: 'block',
+                        // Utilizamos a propriedade 'events' para buscar os dados via JS e aplicar o filtro
+                        events: function(fetchInfo, successCallback, failureCallback) {
+                            const now = moment();
+                            // Formato YYYY-MM-DD para comparação de data
+                            const todayDate = now.format('YYYY-MM-DD');
+
+                            // O FullCalendar passa os limites de data/hora (start/end) no fetchInfo, mas
+                            // a rota AVAILABLE_API_URL provavelmente já usa esses limites internamente.
+                            // Vamos usar a URL original (com os parâmetros de start/end adicionados pelo FC)
+                            const urlWithParams = AVAILABLE_API_URL +
+                                '?start=' + encodeURIComponent(fetchInfo.startStr) +
+                                '&end=' + encodeURIComponent(fetchInfo.endStr);
+
+                            fetch(urlWithParams)
+                                .then(response => {
+                                    if (!response.ok) throw new Error('Falha ao buscar slots disponíveis.');
+                                    return response.json();
+                                })
+                                .then(availableEvents => {
+                                    const filteredEvents = availableEvents.filter(event => {
+                                        const eventDate = moment(event.start).format('YYYY-MM-DD');
+
+                                        // 1. Se não for hoje, sempre exibe.
+                                        if (eventDate !== todayDate) {
+                                            return true;
+                                        }
+
+                                        // 2. Se for hoje, verifica a hora final do slot.
+                                        const eventEnd = moment(event.end);
+
+                                        // Retorna TRUE se o horário de término do evento for AGORA ou FUTURO.
+                                        return eventEnd.isSameOrAfter(now);
+                                    });
+
+                                    // 3. Retorna a lista filtrada para o FullCalendar
+                                    successCallback(filteredEvents);
+                                })
+                                .catch(error => {
+                                    console.error('Falha ao carregar e filtrar horários disponíveis:', error);
+                                    failureCallback(error);
+                                });
+                        }
                     }
                 ],
 
@@ -1012,7 +1081,7 @@
                         const dateString = startDate.format('YYYY-MM-DD');
                         const dateDisplay = startDate.format('DD/MM/YYYY');
 
-                        // Garante o formato H:mm (ex: 6:00, não 06:00) para o input do controller
+                        // Garante o formato H:mm (ex: 6:00, não 06:00) para o controller
                         const startTimeInput = startDate.format('H:mm');
                         const endTimeInput = endDate.format('H:mm');
 
@@ -1080,7 +1149,7 @@
 
                         const showUrl = SHOW_RESERVA_URL.replace(':id', reservaId);
 
-                        // ✅ ATUALIZAÇÃO DO DISPLAY DE RECORRÊNCIA PARA NOVA COR
+                        // ATUALIZAÇÃO DO DISPLAY DE RECORRÊNCIA PARA NOVA COR
                         let recurrentStatus = isRecurrent ?
                             '<p class="text-sm font-semibold text-fuchsia-600">Parte de uma Série Recorrente</p>' :
                             '<p class="text-sm font-semibold text-gray-500">Reserva Pontual</p>';
@@ -1102,7 +1171,7 @@
                             </a>
                         `;
 
-                        // ✅ ADICIONA BOTÕES DE CANCELAMENTO QUE CHAMAM O MODAL DE MOTIVO
+                        // ADICIONA BOTÕES DE CANCELAMENTO QUE CHAMAM O MODAL DE MOTIVO
                         if (status === 'confirmed' || status === 'pending') {
                             if (isRecurrent) {
                                 actionButtons += `
@@ -1139,6 +1208,14 @@
             calendar.render();
             // Torna o calendário globalmente acessível para funções como handleRenewal
             window.calendar = calendar;
+
+            // CRÍTICO: Recarrega os eventos a cada 60 segundos
+            // Isso garante que os slots "disponíveis" no dia atual sejam corretamente filtrados.
+            // O getEventSourceById só é seguro se o ID foi definido (como fizemos: 'available-slots-source-id')
+            setInterval(() => {
+                console.log("Forçando recarga de eventos para atualizar slots passados...");
+                calendar.getEventSourceById('available-slots-source-id')?.refetch();
+            }, 60000); // 60 segundos
         };
         // Expondo funções globais
         window.cancelarPontual = cancelarPontual;

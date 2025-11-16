@@ -6,29 +6,37 @@
     <title>{{ config('app.name', 'Laravel') }} | Agendamento Online</title>
 
     {{-- Tailwind CSS & JS (assumindo que o vite as carrega) --}}
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    {{-- ATENÇÃO: Estou assumindo que Tailwind está carregado globalmente no ambiente de demonstração. --}}
+    <script src="https://cdn.tailwindcss.com"></script>
 
     {{-- FullCalendar Imports --}}
     <link href='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/main.min.css' rel='stylesheet' />
-
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+
+        * { font-family: 'Inter', sans-serif; }
+
+        /* Fundo Gradiente para a "Arena" */
         .arena-bg {
             background: linear-gradient(135deg, #1e3a8a 0%, #10b981 100%);
         }
+
+        /* Container do Calendário */
         .calendar-container {
-            margin: 0 auto;
-            padding: 20px;
             background-color: #ffffff;
             border-radius: 12px;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
         }
+
+        /* Estilos do FullCalendar */
         .fc {
-            font-family: 'Inter', sans-serif;
             color: #333;
         }
         .fc-toolbar-title {
             font-size: 1.5rem !important;
         }
+
+        /* Estilos do Modal (Ajustado para Tailwind) */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -39,7 +47,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 1000;
+            z-index: 50; /* Z-index alto para sobrepor tudo */
         }
         .modal-overlay.hidden {
             display: none !important;
@@ -52,14 +60,19 @@
             color: white !important;
             cursor: pointer;
             padding: 2px 5px;
-            border-radius: 4px;
-            opacity: 0.9;
+            border-radius: 6px;
+            opacity: 0.95;
             transition: opacity 0.2s;
-            font-size: 0.75rem;
-            line-height: 1.2;
+            font-size: 0.8rem;
+            line-height: 1.3;
+            font-weight: 600;
+        }
+        .fc-event-available:hover {
+            opacity: 1;
+            box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.5), 0 2px 4px -2px rgba(16, 185, 129, 0.5);
         }
 
-        /* Estilos para os marcadores de dia (substitutos dos slots) */
+        /* Estilos para os marcadores de dia (resumo) */
         .day-marker {
             display: flex;
             align-items: center;
@@ -85,11 +98,7 @@
             background-color: #FEE2E2; /* Red 100 */
             color: #991B1B; /* Red 800 */
             border: 1px solid #FCA5A5; /* Red 300 */
-        }
-
-        /* Garante que o day-frame seja clicável */
-        .fc-daygrid-day-frame {
-            cursor: pointer;
+            cursor: default;
         }
     </style>
 </head>
@@ -97,6 +106,7 @@
 <body class="font-sans antialiased arena-bg">
 
 {{-- 🛑 BARRA DE NAVEGAÇÃO SUPERIOR PARA CLIENTES LOGADOS (Incluindo Sair) --}}
+{{-- ATENÇÃO: Os blocos @auth e @guest dependem do seu ambiente Laravel real. --}}
 @auth
     @if (Auth::user()->isClient())
         <nav class="bg-indigo-700/80 backdrop-blur-sm shadow-lg p-3">
@@ -112,7 +122,7 @@
                     </a>
                     {{-- Botão Sair (Logout) --}}
                     <form method="POST" action="{{ route('customer.logout') }}" class="inline">
-                         @csrf
+                        @csrf
                         <button type="submit" class="px-3 py-1 bg-red-500 text-white font-bold rounded-full shadow-md hover:bg-red-600 transition text-sm">
                             Sair
                         </button>
@@ -121,19 +131,18 @@
             </div>
         </nav>
     @else
-        {{-- Se for Gestor/Admin, pode ter um link para o Dashboard e um botão de Sair --}}
         <nav class="bg-purple-700/80 backdrop-blur-sm shadow-lg p-3">
             <div class="max-w-7xl mx-auto flex justify-between items-center">
                 <span class="text-white text-sm font-semibold">
                     Logado como: {{ Auth::user()->name }} (Gestor)
                 </span>
                 <div class="flex space-x-4">
-                     <a href="{{ route('dashboard') }}"
+                    <a href="{{ route('dashboard') }}"
                        class="px-3 py-1 bg-white text-purple-700 font-bold rounded-full shadow-md hover:bg-gray-100 transition">
                         Dashboard Admin
                     </a>
                     <form method="POST" action="{{ route('logout') }}" class="inline">
-                         @csrf
+                        @csrf
                         <button type="submit" class="px-3 py-1 bg-red-500 text-white font-bold rounded-full shadow-md hover:bg-red-600 transition text-sm">
                             Sair (Admin)
                         </button>
@@ -143,7 +152,7 @@
         </nav>
     @endif
 @else
-    {{-- Se NÃO estiver logado, mostra o botão de Fazer Login --}}
+    {{-- Se NÃO estiver logado, mostra o botão de Fazer Login (Opção para quem quer ter conta) --}}
     <nav class="bg-gray-800/80 backdrop-blur-sm shadow-lg p-3">
         <div class="max-w-7xl mx-auto flex justify-end items-center">
             <a href="{{ route('customer.login') }}"
@@ -173,7 +182,7 @@
             Selecione uma data no calendário abaixo e **clique nela** para ver os horários detalhados.
         </p>
 
-        {{-- --- Mensagens de Status --- --}}
+        {{-- --- Mensagens de Status (Mantidas) --- --}}
         @if (session('success'))
             <div class="bg-green-100 dark:bg-green-900/50 border-l-4 border-green-600 text-green-800 dark:text-green-300 p-4 rounded-xl relative mb-6 flex items-center shadow-lg" role="alert">
                 <span class="font-bold text-lg">SUCESSO!</span> <span class="ml-2">{{ session('success') }}</span>
@@ -217,9 +226,9 @@
 </div>
 
 {{-- --- Modal de Confirmação de Dados --- --}}
-<div id="booking-modal" class="fixed inset-0 bg-gray-900 bg-opacity-80 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+<div id="booking-modal" class="modal-overlay hidden items-center justify-center z-50 p-4">
     <div id="modal-content" class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto transform transition-all duration-300 scale-100 border-t-8
-        @if ($errors->any() && old('data_reserva')) border-red-600 dark:border-red-500 @else border-indigo-600 dark:border-indigo-500 @endif">
+        @if ($errors->any() && old('data_reserva')) border-red-600 dark:border-red-500 @else border-indigo-600 dark:border-indigo-500 @endif" onclick="event.stopPropagation()">
 
         {{-- Área de Mensagens de Erro (reutilizada) --}}
         @if ($errors->any() && old('data_reserva'))
@@ -246,7 +255,7 @@
             @endif
         @endif
 
-        {{-- Alerta para Erros de Validação Front-End --}}
+        {{-- Alerta para Erros de Validação Front-End (Substituto de alert()) --}}
         <div class="mb-6 p-4 bg-red-100 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-300 rounded-xl relative shadow-md hidden" role="alert" id="frontend-alert-box">
             <p id="frontend-alert-message" class="font-bold flex items-center text-lg">
                 <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
@@ -254,71 +263,117 @@
             </p>
         </div>
 
-        {{-- CRÍTICO: ÁREA DE AUTENTICAÇÃO (Visível apenas se o usuário NÃO estiver logado) --}}
-        @guest
-        <div id="auth-prompt" class="p-8 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl border border-indigo-300 dark:border-indigo-700 shadow-xl mb-8 text-center">
-            <h4 class="text-2xl font-extrabold text-indigo-700 dark:text-indigo-300 mb-4">
-                Pré-Requisito: Login
-            </h4>
-            <p class="text-gray-700 dark:text-gray-300 mb-6">
-                Para prosseguir com a pré-reserva, você deve estar logado em sua conta de cliente.
-            </p>
-
-            <div class="flex flex-col sm:flex-row justify-center gap-4">
-                {{-- ✅ CORRIGIDO: Rota customer.login --}}
-                <a href="{{ route('customer.login') }}" class="w-full sm:w-auto p-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 transition transform hover:scale-[1.03]">
-                    Fazer Login
-                </a>
-                {{-- ✅ CORRIGIDO: Rota customer.register --}}
-                <a href="{{ route('customer.register') }}" class="w-full sm:w-auto p-3 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-700 transition transform hover:scale-[1.03]">
-                    Criar Conta
-                </a>
-            </div>
-        </div>
-        @endguest
-        {{-- FIM DA ÁREA DE AUTENTICAÇÃO --}}
-
-        {{-- CRÍTICO: O restante do conteúdo (Detalhes e Formulário) só aparece se estiver autenticado --}}
+        {{-- 🛑 BLOQUEIO PARA GESTOR/ADMIN LOGADO 🛑 --}}
         @auth
-
-            {{-- Estrutura If/Else Reforçada --}}
             @if (Auth::user()->isGestor())
                 <div class="p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded mb-4" role="alert">
                     <p class="font-bold">Acesso Negado</p>
                     <p>Contas de Gestor/Admin não podem fazer reservas pelo painel público. Por favor, deslogue ou use o agendamento rápido no Dashboard.</p>
-                    {{-- Rota customer.logout MANTIDA --}}
                     <form method="POST" action="{{ route('logout') }}" class="mt-2">
-                         @csrf
+                        @csrf
                         <button type="submit" class="text-red-500 underline hover:text-red-700 text-sm">Deslogar</button>
                     </form>
                 </div>
-            @else
-                {{-- O formulário de reserva aparece SOMENTE se NÃO for Gestor --}}
+            @endif
+        @endauth
+        {{-- FIM DO BLOQUEIO PARA GESTOR/ADMIN --}}
 
-                <div class="mb-8 p-6 bg-red-50 dark:bg-red-900/30 border-l-4 border-red-600 text-red-800 rounded-xl shadow-md dark:border-red-400 dark:text-red-200">
-                    <div class="flex items-center mb-2">
-                        <svg class="w-6 h-6 mr-3 text-red-600 flex-shrink-0 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        <p class="font-black text-lg uppercase tracking-wider">Atenção!</p>
+
+        {{-- 🛑 FORMULÁRIO PRINCIPAL (Visível para Guest E Cliente Logado) 🛑 --}}
+        @if (!Auth::check() || (Auth::check() && Auth::user()->isClient()))
+
+            <h4 class="text-3xl font-extrabold mb-6 text-gray-900 dark:text-gray-100 border-b pb-3">Confirme Sua Pré-Reserva</h4>
+
+            <form id="booking-form" method="POST" action="{{ route('reserva.store') }}">
+                @csrf
+
+                {{-- Campos Hidden da Reserva (Sempre obrigatórios) --}}
+                <input type="hidden" name="data_reserva" id="form-date" value="{{ old('data_reserva') }}">
+                <input type="hidden" name="hora_inicio" id="form-start" value="{{ old('hora_inicio') }}">
+                <input type="hidden" name="hora_fim" id="form-end" value="{{ old('hora_fim') }}">
+                <input type="hidden" name="price" id="form-price" value="{{ old('price') }}">
+                <input type="hidden" name="reserva_conflito_id" value="" />
+                <input type="hidden" name="schedule_id" id="form-schedule-id" value="{{ old('schedule_id') }}">
+
+                {{-- ========================================================= --}}
+                {{-- 🛑 LÓGICA CONDICIONAL: DADOS DO CLIENTE (MANTIDA) 🛑 --}}
+                {{-- ========================================================= --}}
+
+                @guest
+                    <p class="text-gray-700 dark:text-gray-300 mb-6 text-sm">
+                        Preencha seus dados para registrar sua pré-reserva. Seus dados serão usados para **criar ou identificar sua conta**.
+                    </p>
+                    <div class="space-y-4 p-4 bg-indigo-50 dark:bg-gray-900 rounded-xl border border-indigo-200 dark:border-gray-700 mb-8 shadow-inner">
+                        <h5 class="text-lg font-bold text-indigo-700 dark:text-indigo-400 border-b pb-2 mb-2">Seus Dados</h5>
+
+                        {{-- Nome Completo --}}
+                        <div>
+                            <label for="guest-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome Completo <span class="text-red-500">*</span></label>
+                            <input type="text" name="nome_cliente" id="guest-name" required value="{{ old('nome_cliente') }}"
+                                class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 rounded-xl shadow-md p-3 @error('nome_cliente') border-red-500 ring-1 ring-red-500 @enderror">
+                            @error('nome_cliente')
+                                <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        {{-- WhatsApp (Contato) --}}
+                        <div>
+                            <label for="guest-contact" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">WhatsApp (Apenas números) <span class="text-red-500">*</span></label>
+                            <input type="tel" name="contato_cliente" id="guest-contact" required value="{{ old('contato_cliente') }}"
+                                class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 rounded-xl shadow-md p-3 @error('contato_cliente') border-red-500 ring-1 ring-red-500 @enderror">
+                            @error('contato_cliente')
+                                <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        {{-- Data de Nascimento --}}
+                        <div>
+                            <label for="guest-dob" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data de Nascimento <span class="text-red-500">*</span></label>
+                            <input type="date" name="data_nascimento" id="guest-dob" required value="{{ old('data_nascimento') }}"
+                                class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 rounded-xl shadow-md p-3 @error('data_nascimento') border-red-500 ring-1 ring-red-500 @enderror">
+                            @error('data_nascimento')
+                                <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        {{-- Email (Opcional) --}}
+                        <div>
+                            <label for="guest-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email (Opcional)</label>
+                            <input type="email" name="email_cliente" id="guest-email" value="{{ old('email_cliente') }}"
+                                class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 rounded-xl shadow-md p-3 @error('email_cliente') border-red-500 ring-1 ring-red-500 @enderror">
+                            @error('email_cliente')
+                                <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
+                            @enderror
+                        </div>
                     </div>
-                    <p class="mt-2 text-sm leading-relaxed font-semibold">
-                        Sua vaga é garantida **apenas** após o **envio imediato do comprovante do sinal** via WhatsApp.
-                    </p>
-                </div>
+                @else
+                    {{-- Cliente Logado: Campos ocultos e Bloco informativo --}}
+                    <input type="hidden" name="user_id" id="client_user_id" value="{{ Auth::user()->id }}">
+                    <input type="hidden" name="nome_cliente" id="client_name" value="{{ Auth::user()->name }}">
+                    <input type="hidden" name="contato_cliente" id="client_contact" value="{{ Auth::user()->whatsapp_contact }}">
+                    <input type="hidden" name="email_cliente" id="client_email" value="{{ Auth::user()->email }}">
+                    <input type="hidden" name="data_nascimento" id="client_dob" value="{{ Auth::user()->data_nascimento }}">
 
-                <h4 class="text-3xl font-extrabold mb-6 text-gray-900 dark:text-gray-100 border-b pb-3">Confirme Sua Reserva</h4>
+                    <div class="mb-8 p-6 bg-green-50 dark:bg-green-900/30 rounded-2xl border border-green-300 dark:border-green-700 shadow-xl">
+                        <p class="text-lg font-extrabold text-green-700 dark:text-green-300">
+                            Você está logado!
+                        </p>
+                        <p class="text-sm font-semibold text-gray-700 dark:text-gray-300 mt-1">
+                            A reserva será feita com os dados da sua conta:
+                            <span class="font-extrabold">{{ Auth::user()->name }}</span>
+                            ({{ Auth::user()->whatsapp_contact }})
+                        </p>
+                        <form method="POST" action="{{ route('customer.logout') }}" class="mt-1">
+                            @csrf
+                            <button type="submit" class="text-xs text-indigo-600 underline hover:text-indigo-800">Sair da conta de Cliente</button>
+                        </form>
+                    </div>
 
-                <div class="mb-6 p-4 bg-green-50 dark:bg-green-900/30 rounded-xl border border-green-300 dark:border-green-700">
-                    <p class="text-sm font-semibold text-green-700 dark:text-green-300">
-                        Logado como: <span class="font-extrabold">{{ Auth::user()->name }}</span>
-                        <span class="text-xs text-gray-500 dark:text-gray-400 ml-2">({{ Auth::user()->whatsapp_contact }})</span>
-                    </p>
-                    {{-- Rota customer.logout MANTIDA --}}
-                    <form method="POST" action="{{ route('customer.logout') }}" class="mt-1">
-                         @csrf
-                        <button type="submit" class="text-xs text-indigo-600 underline hover:text-indigo-800">Sair da conta de Cliente</button>
-                    </form>
-                </div>
+                @endguest
 
+                {{-- ========================================================= --}}
+                {{-- DETALHES DA RESERVA (VISUAL) --}}
+                {{-- ========================================================= --}}
                 <div class="mb-8 p-6 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl border border-indigo-300 dark:border-indigo-700 shadow-xl">
                     <div class="space-y-4">
                         <div class="flex justify-between items-center py-2 border-b border-indigo-100 dark:border-indigo-800">
@@ -337,47 +392,41 @@
                     </div>
                 </div>
 
-                <form id="booking-form" method="POST" action="{{ route('reserva.store') }}">
-                    @csrf
-
-                    {{-- Campos Hidden --}}
-                    <input type="hidden" name="data_reserva" id="form-date" value="{{ old('data_reserva') }}">
-                    <input type="hidden" name="hora_inicio" id="form-start" value="{{ old('hora_inicio') }}">
-                    <input type="hidden" name="hora_fim" id="form-end" value="{{ old('hora_fim') }}">
-                    <input type="hidden" name="price" id="form-price" value="{{ old('price') }}">
-                    <input type="hidden" name="reserva_conflito_id" value="" />
-                    <input type="hidden" name="schedule_id" id="form-schedule-id" value="{{ old('schedule_id') }}">
-
-                    {{-- 🛑 CLIENTE ID, NOME E CONTATO INJETADOS (AUTOMÁTICO) --}}
-                    <input type="hidden" name="user_id" id="client_user_id" value="{{ Auth::user()->id }}">
-                    <input type="hidden" name="nome_cliente" id="client_name" value="{{ Auth::user()->name }}">
-                    <input type="hidden" name="contato_cliente" id="client_contact" value="{{ Auth::user()->whatsapp_contact }}">
-
-                    <div class="mb-8">
-                        <label for="notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Observações (Opcional):
-                        </label>
-                        <textarea name="notes" id="notes" rows="3"
-                            class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-md focus:border-indigo-500 focus:ring-indigo-500 @error('notes') border-red-500 ring-1 ring-red-500 @enderror"
-                        >{{ old('notes') }}</textarea>
-                        @error('notes')
-                            <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
-                        @enderror
+                <div class="mb-8 p-6 bg-red-50 dark:bg-red-900/30 border-l-4 border-red-600 text-red-800 rounded-xl shadow-md dark:border-red-400 dark:text-red-200">
+                    <div class="flex items-center mb-2">
+                        <svg class="w-6 h-6 mr-3 text-red-600 flex-shrink-0 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <p class="font-black text-lg uppercase tracking-wider">Atenção!</p>
                     </div>
+                    <p class="mt-2 text-sm leading-relaxed font-semibold">
+                        Sua vaga é garantida **apenas** após o **envio imediato do comprovante do sinal** via WhatsApp.
+                    </p>
+                </div>
 
-                    <div class="flex flex-col sm:flex-row gap-4 justify-end space-y-4 sm:space-y-0 sm:space-x-6 pt-8 border-t dark:border-gray-700">
-                        <button type="button" id="close-modal" class="order-2 sm:order-1 p-4 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-semibold rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition">
-                            Voltar / Cancelar
-                        </button>
-                        <button type="submit" id="submit-booking-button" class="order-1 sm:order-2 p-4 bg-indigo-600 text-white font-extrabold rounded-full hover:bg-indigo-700 transition shadow-xl shadow-indigo-500/50 transform hover:scale-[1.03] active:scale-[0.97]">
-                            Confirmar Pré-Reserva
-                        </button>
-                    </div>
-                </form>
+                {{-- Observações --}}
+                <div class="mb-8">
+                    <label for="notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Observações (Opcional):
+                    </label>
+                    <textarea name="notes" id="notes" rows="3"
+                        class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 rounded-xl shadow-md p-3 focus:border-indigo-500 focus:ring-indigo-500 @error('notes') border-red-500 ring-1 ring-red-500 @enderror"
+                    >{{ old('notes') }}</textarea>
+                    @error('notes')
+                        <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
+                    @enderror
+                </div>
 
-            @endif
-        @endauth
-        {{-- FIM DO @auth --}}
+                <div class="flex flex-col sm:flex-row gap-4 justify-end space-y-4 sm:space-y-0 sm:space-x-6 pt-8 border-t dark:border-gray-700">
+                    <button type="button" id="close-modal" class="order-2 sm:order-1 p-4 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-semibold rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+                        Voltar / Cancelar
+                    </button>
+                    <button type="submit" id="submit-booking-button" class="order-1 sm:order-2 p-4 bg-indigo-600 text-white font-extrabold rounded-full hover:bg-indigo-700 transition shadow-xl shadow-indigo-500/50 transform hover:scale-[1.03] active:scale-[0.97]">
+                        Confirmar Pré-Reserva
+                    </button>
+                </div>
+            </form>
+
+        @endif
+        {{-- FIM DO FORMULÁRIO PRINCIPAL --}}
 
     </div>
 </div>
@@ -395,9 +444,12 @@
     // 🛑 CRÍTICO: Rota API para buscar as reservas (ocupados)
     const RESERVED_API_URL = '{{ route("api.reservas.confirmadas") }}';
 
-    // 🛑 CORREÇÃO CRÍTICA AQUI: Uso de optional() para evitar erro de método em objeto null quando deslogado.
+    // Variáveis de checagem de status de autenticação (simplificadas, mas mantidas)
+    const IS_AUTHENTICATED = @json(Auth::check());
     const IS_AUTHENTICATED_AS_CLIENT = @json(Auth::check() && optional(Auth::user())->isClient());
     const IS_AUTHENTICATED_AS_GESTOR = @json(Auth::check() && optional(Auth::user())->isGestor());
+
+    let calendar; // Variável global para o calendário
 
     /**
      * Formata a data para o padrão Brasileiro (Dia da semana, dia de Mês de Ano).
@@ -425,6 +477,13 @@
         alertMessage.textContent = message;
         alertBox.classList.remove('hidden');
 
+        // Garante que o modal esteja visível se o alerta for acionado por clique no calendário
+        const modal = document.getElementById('booking-modal');
+        if (modal.classList.contains('hidden')) {
+             modal.classList.remove('hidden');
+             modal.classList.add('flex');
+        }
+
         setTimeout(() => {
             alertBox.classList.add('hidden');
         }, 5000); // 5 segundos
@@ -446,9 +505,9 @@
         const oldPrice = @json(old('price'));
         const oldScheduleId = @json(old('schedule_id'));
 
-
         // --- FUNÇÃO CRÍTICA: LÓGICA DE MARCADORES RESUMO ---
         function updateDayMarkers(calendar) {
+            // Só executa na visão de mês
             if (calendar.view.type !== 'dayGridMonth') return;
 
             const dayCells = calendarEl.querySelectorAll('.fc-daygrid-day-frame');
@@ -458,7 +517,7 @@
                 const dateStr = dateEl ? dateEl.getAttribute('data-date') : null;
                 if (!dateStr) return;
 
-                // Remove marcadores antigos antes de adicionar novos
+                // 1. Limpa marcadores antigos
                 const existingMarker = dayEl.querySelector('.day-marker');
                 if (existingMarker) existingMarker.remove();
 
@@ -479,6 +538,7 @@
 
                 let markerHtml = '';
 
+                // 2. Cria o novo marcador
                 if (availableSlots > 0) {
                     markerHtml = `
                         <div class="day-marker marker-available">
@@ -489,11 +549,10 @@
                         ? "Dia Ocupado/Fechado"
                         : "Nenhum horário disponível";
 
-                    // Verifica se a data é anterior ao dia atual (desativa o marcador 'none' para o passado)
+                    // Verifica se a data é anterior ao dia atual (não mostra marcador 'none' para o passado)
                     const today = moment().startOf('day');
                     const dayMoment = moment(dateStr);
                     if (dayMoment.isBefore(today, 'day')) {
-                        // Não mostra marcador de indisponível para dias passados.
                         markerHtml = '';
                     } else {
                         markerHtml = `
@@ -503,7 +562,9 @@
                     }
                 }
 
+                // 3. Adiciona ao DOM
                 if (markerHtml) {
+                    // Adiciona o marcador ao contêiner de dia (abaixo do número do dia)
                     markerContainer.insertAdjacentHTML('beforeend', markerHtml);
                 }
             });
@@ -511,7 +572,7 @@
 
 
         // === Inicialização do FullCalendar ===
-        let calendar = new FullCalendar.Calendar(calendarEl, {
+        calendar = new FullCalendar.Calendar(calendarEl, {
             locale: 'pt-br',
             initialView: 'dayGridMonth',
             height: 'auto',
@@ -520,23 +581,63 @@
             dayMaxEvents: true,
 
             eventSources: [
-                // 1. Reservas Reais (Ocupados)
+                // 1. Reservas Reais (Ocupados - Sem className 'available')
                 {
                     url: RESERVED_API_URL,
                     method: 'GET',
                     failure: function() {
                         console.error('Falha ao carregar reservas reais.');
                     },
+                    // Usar display: 'none' para que não polua a view de mês/dia, mas participe do filtro
+                    display: 'none'
                 },
-                // 2. Slots Disponíveis (Grade Fixa)
+                // 2. Slots Disponíveis (Grade Fixa - Com className 'available')
                 {
-                    url: AVAILABLE_API_URL,
-                    method: 'GET',
-                    failure: function() {
-                        console.error('Falha na API de Horários Disponíveis.');
-                    },
+                    // CRÍTICO: ID para recarga no setInterval
+                    id: 'available-slots-source-id',
                     className: 'fc-event-available',
-                    display: 'block'
+                    display: 'block', // Garante que estejam visíveis na timeGridDay
+                    // USANDO A FUNÇÃO EVENTS PARA FILTRAR OS HORÁRIOS JÁ PASSADOS
+                    events: function(fetchInfo, successCallback, failureCallback) {
+                        const now = moment();
+                        // Formato YYYY-MM-DD para comparação de data
+                        const todayDate = now.format('YYYY-MM-DD');
+
+                        // Adiciona os limites de data/hora (start/end) no fetchInfo para a API
+                        const urlWithParams = AVAILABLE_API_URL +
+                            '?start=' + encodeURIComponent(fetchInfo.startStr) +
+                            '&end=' + encodeURIComponent(fetchInfo.endStr);
+
+                        fetch(urlWithParams)
+                            .then(response => {
+                                if (!response.ok) throw new Error('Falha ao buscar slots disponíveis.');
+                                return response.json();
+                            })
+                            .then(availableEvents => {
+                                // Lógica de Filtro: Remove eventos disponíveis que JÁ PASSARAM (em tempo) se for hoje
+                                const filteredEvents = availableEvents.filter(event => {
+                                    const eventDate = moment(event.start).format('YYYY-MM-DD');
+
+                                    // 1. Se não for hoje, sempre exibe.
+                                    if (eventDate !== todayDate) {
+                                        return true;
+                                    }
+
+                                    // 2. Se for hoje, verifica a hora final do slot.
+                                    const eventEnd = moment(event.end);
+
+                                    // Retorna TRUE se o horário de término do evento for AGORA ou FUTURO.
+                                    return eventEnd.isSameOrAfter(now);
+                                });
+
+                                // 3. Retorna a lista filtrada para o FullCalendar
+                                successCallback(filteredEvents);
+                            })
+                            .catch(error => {
+                                console.error('Falha ao carregar e filtrar horários disponíveis:', error);
+                                failureCallback(error);
+                            });
+                    }
                 }
             ],
 
@@ -558,80 +659,63 @@
             editable: false,
             initialDate: new Date().toISOString().slice(0, 10),
 
+            // Bloqueia dias anteriores ao atual para cliques
+            validRange: function(now) {
+                return {
+                    start: now.toISOString().split('T')[0]
+                };
+            },
+
             eventsSet: function(info) {
                 // Chama o marcador após o carregamento dos eventos
                 updateDayMarkers(calendar);
             },
 
             eventDidMount: function(info) {
-                // 🛑 CORREÇÃO CRÍTICA: Esconde TODOS os eventos na visão de Mês (dayGridMonth)
-                // O resumo é feito pelos 'day-marker' injetados na eventsSet.
+                // 🛑 LÓGICA DE VISIBILIDADE CRÍTICA 🛑
                 if (info.view.type === 'dayGridMonth') {
+                    // Esconde TODOS os eventos na visão de Mês (dayGridMonth) para priorizar o marcador resumo
                     info.el.style.display = 'none';
-                    return;
-                }
-
-                // Lógica de timeGridDay (mantida)
-                if (info.view.type === 'timeGridDay' && !info.event.classNames.includes('fc-event-available')) {
-                     // Esconde eventos OCUPADOS na visão de Dia (para manter a tela limpa para o cliente)
-                     info.el.classList.add('hidden');
-                } else if (info.view.type === 'timeGridDay' && info.event.classNames.includes('fc-event-available')) {
-                     // Garante que os slots disponíveis estejam visíveis na visão de Dia
-                     info.el.classList.remove('hidden');
                 }
             },
 
             dateClick: function(info) {
-                // Bloqueia clique em dias passados
+                // dateClick é acionado ao clicar em um dia *vazio* no mês.
                 const clickedDate = moment(info.dateStr);
                 const today = moment().startOf('day');
 
                 if (clickedDate.isBefore(today, 'day')) {
-                    // Não faz nada se a data for anterior a hoje
-                    return;
+                    return; // Ignora cliques em dias passados
                 }
 
-                // Muda para a visão de Dia apenas para datas futuras ou de hoje
+                // Muda para a visão de Dia
                 calendar.changeView('timeGridDay', info.dateStr);
             },
 
             eventClick: function(info) {
                 const event = info.event;
-                // 🛑 CRÍTICO: Somente processa o agendamento se for um slot disponível
                 const isAvailable = event.classNames.includes('fc-event-available');
 
                 // --- 🛑 LÓGICA DE SLOT DISPONÍVEL ---
                 if (isAvailable) {
 
-                    // 1. FORÇA O LOGIN OU MOSTRA ALERTA SE O CLIENTE NÃO ESTIVER LOGADO (ou for Gestor)
-                    if (!IS_AUTHENTICATED_AS_CLIENT) {
-                        // Abre o modal
-                        modal.classList.remove('hidden');
-                        modal.classList.add('flex');
-
-                        // Exibe apenas o prompt de autenticação
-                        document.getElementById('auth-prompt')?.classList.remove('hidden');
-
-                        // Garante que o formulário de reserva fique escondido
-                        const formContainer = document.querySelector('#booking-form');
-                        if(formContainer) formContainer.style.display = 'none';
-
-                        // Esconde todos os outros elementos do modal que não são o prompt de auth
-                        document.querySelectorAll('#modal-content > *:not(#auth-prompt):not(.mb-6, #modal-content > h4)').forEach(el => {
-                            if (el.id !== 'auth-prompt') {
-                                el.style.display = 'none';
-                            }
-                        });
-
-
+                    // 1. Bloqueio extra para Gestores logados
+                    if (IS_AUTHENTICATED_AS_GESTOR) {
+                        showFrontendAlert("❌ Você está logado como Gestor/Admin. Use o Dashboard para agendamentos rápidos ou deslogue.");
                         return;
                     }
-
-                    // Se o usuário está logado como cliente, processa a reserva
 
                     const startDate = moment(event.start);
                     const endDate = moment(event.end);
                     const extendedProps = event.extendedProps || {};
+
+                    // Validação: garante que o evento não está no passado (segurança extra, mas o filtro já faz isso)
+                    if (endDate.isBefore(moment())) {
+                        showFrontendAlert("❌ Este horário acabou de ser expirado. Por favor, recarregue o calendário e tente um slot futuro.");
+                        // Força a recarga dos slots
+                        calendar.getEventSourceById('available-slots-source-id')?.refetch();
+                        return;
+                    }
 
                     if (!event.id || !startDate.isValid() || !endDate.isValid() || extendedProps.price === undefined) {
                         showFrontendAlert("❌ Não foi possível carregar os detalhes do horário. Tente novamente.");
@@ -639,6 +723,7 @@
                     }
 
                     const dateString = startDate.format('YYYY-MM-DD');
+                    // Garante o formato H:mm (ex: 6:00, não 06:00) para o controller
                     const startTimeInput = startDate.format('H:mm');
                     const endTimeInput = endDate.format('H:mm');
                     const timeSlotDisplay = startDate.format('HH:mm') + ' - ' + endDate.format('HH:mm');
@@ -659,20 +744,12 @@
                     document.getElementById('form-price').value = priceRaw;
                     document.getElementById('form-schedule-id').value = scheduleId;
 
-                    // 2.3 Exibir a área de formulário
-                    // Re-exibe todos os elementos do modal (exceto o auth-prompt)
-                    document.querySelectorAll('#modal-content > *:not(#auth-prompt)').forEach(el => {
-                         el.style.display = 'block';
-                    });
-                    document.getElementById('auth-prompt')?.classList.add('hidden'); // Garante que o prompt de auth está escondido
-
+                    // 2.3 Exibir o modal
                     modal.classList.remove('hidden');
                     modal.classList.add('flex');
 
                 } else {
                     // Clicou em um evento Ocupado/Fechado - Ação de ignorar
-                    console.log('Horário ocupado/fechado. Nenhuma ação de reserva.');
-                    // Aqui, adicionamos um alerta visual para o usuário
                     showFrontendAlert("❌ Este horário está ocupado ou é uma pré-reserva. Por favor, clique em um slot verde (disponível).");
                 }
             }
@@ -680,11 +757,20 @@
 
         calendar.render();
 
+        // Torna o calendário globalmente acessível para funções externas
+        window.calendar = calendar;
+
+        // CRÍTICO: Recarrega os eventos a cada 60 segundos
+        // Isso garante que os slots "disponíveis" no dia atual sejam corretamente filtrados.
+        setInterval(() => {
+            console.log("Forçando recarga de eventos disponíveis para atualizar slots passados...");
+            // O getEventSourceById só funciona se o ID foi definido (id: 'available-slots-source-id')
+            calendar.getEventSourceById('available-slots-source-id')?.refetch();
+        }, 60000); // 60 segundos
+
         // === Lógica de Reabertura do Modal em caso de Erro de Validação ===
         if (oldDate && oldStart) {
-
-            // Se o erro ocorreu, precisamos reabrir o modal para que o usuário veja os erros de validação
-            // Esta lógica só é executada se houver dados 'old', o que implica que o usuário já estava autenticado.
+            // Se o erro ocorreu, reabre o modal com os dados 'old'
 
             const formattedOldPrice = parseFloat(oldPrice).toFixed(2).replace('.', ',');
 
@@ -696,21 +782,21 @@
             // Em caso de erro, reabre no modo Dia na data correta para visualização
             calendar.changeView('timeGridDay', oldDate);
 
+            // Abre o modal
             modal.classList.remove('hidden');
             modal.classList.add('flex');
-
-            // Garante que a área de auth esteja escondida
-            document.getElementById('auth-prompt')?.classList.add('hidden');
-
-            // Garante que todos os elementos do formulário de reserva estejam visíveis para mostrar os erros
-            document.querySelectorAll('#modal-content > *:not(#auth-prompt)').forEach(el => {
-                el.style.display = 'block';
-            });
         }
 
         // Listener para fechar o modal
         closeModalButton.addEventListener('click', () => {
-             modal.classList.add('hidden');
+            modal.classList.add('hidden');
+        });
+
+        // Listener para fechar o modal ao clicar no overlay
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.add('hidden');
+            }
         });
     });
 </script>

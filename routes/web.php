@@ -79,8 +79,9 @@ Route::middleware(['auth', 'gestor'])->group(function () {
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
 
     // ✅ ROTA API INTERNA PARA O DASHBOARD (Contagem de Pendências)
+    // 🛑 CORRIGIDO: O nome da rota deve ser 'api.reservas.pendentes.count'
     Route::get('/api/reservas/pendentes', [ReservaController::class, 'countPending'])
-        ->name('api.reservas.pendentes');
+        ->name('api.reservas.pendentes.count');
 
     // ✅ CORRIGIDO: ROTA API PARA PESQUISA DE CLIENTES (AGORA APONTA PARA USERCONTROLLER)
     Route::get('/api/clientes/search', [UserController::class, 'searchClients'])
