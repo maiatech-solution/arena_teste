@@ -261,7 +261,7 @@
     {{-- Modal de Agendamento Rápido (SLOTS DISPONÍVEIS) - ATUALIZADO COM BUSCA DE CLIENTE --}}
     <div id="quick-booking-modal" class="modal-overlay hidden" onclick="document.getElementById('quick-booking-modal').classList.add('hidden')">
         <div class="bg-white p-6 rounded-xl shadow-2xl max-w-lg w-full transition-all duration-300 transform scale-100" onclick="event.stopPropagation()">
-            <h3 class="text-xl font-bold text-green-700 mb-4 border-b pb-2">Agendamento Rápido de Slot</h3>
+            <h3 class="text-xl font-bold text-green-700 mb-4 border-b pb-2">Agendamento Rápido de Horários</h3>
 
             <form id="quick-booking-form">
                 @csrf
@@ -790,8 +790,8 @@
             const urlBase = isRecurrent ? CANCEL_PONTUAL_URL : CANCEL_PADRAO_URL;
             const method = 'PATCH'; // Usamos PATCH/POST para atualizar o status no Controller
             const confirmation = isRecurrent
-                ? "Cancelar SOMENTE ESTA reserva (exceção)? O slot será liberado pontualmente."
-                : "Cancelar esta reserva pontual (O slot será liberado e a reserva deletada).";
+                ? "Cancelar SOMENTE ESTA reserva (exceção)? O horário será liberado pontualmente."
+                : "Cancelar esta reserva pontual (O horário será liberado e a reserva deletada).";
             const buttonText = isRecurrent ? 'Cancelar ESTE DIA' : 'Confirmar Cancelamento';
 
             openCancellationModal(id, method, urlBase, confirmation, buttonText);
@@ -992,7 +992,13 @@
                 height: 'auto',
                 timeZone: 'local',
                 slotMinTime: '06:00:00',
+                // Corrigido para 23:00 para não estender a barra de tempo
                 slotMaxTime: '23:00:00',
+
+                // CRÍTICO: Impede navegação para datas anteriores a hoje.
+                validRange: {
+                    start: moment().format('YYYY-MM-DD')
+                },
 
 
                 eventSources: [
@@ -1032,20 +1038,28 @@
                                 .then(availableEvents => {
                                     const filteredEvents = availableEvents.filter(event => {
                                         const eventDate = moment(event.start).format('YYYY-MM-DD');
+                                        const eventStart = moment(event.start);
 
-                                        // 1. Se não for hoje, sempre exibe.
-                                        if (eventDate !== todayDate) {
-                                            return true;
+                                        // 1. Se o dia é estritamente anterior a hoje, ignora.
+                                        // (Embora o validRange ajude, este é um filtro de segurança)
+                                        if (eventDate < todayDate) {
+                                            return false;
                                         }
 
-                                        // 2. Se for hoje, verifica a hora final do slot.
-                                        const eventEnd = moment(event.end);
+                                        // 2. Se for hoje, verifica a hora de início/fim do slot.
+                                        if (eventDate === todayDate) {
+                                            const eventEnd = moment(event.end);
 
-                                        // Retorna TRUE se o horário de término do evento for AGORA ou FUTURO.
-                                        return eventEnd.isSameOrAfter(now);
+                                            // Retorna TRUE se o horário de TÉRMINO do evento for AGORA ou FUTURO.
+                                            // Se o horário de término já passou, ele é ignorado.
+                                            return eventEnd.isSameOrAfter(now);
+                                        }
+
+                                        // 3. Se for dia futuro (eventDate > todayDate), sempre exibe.
+                                        return true;
                                     });
 
-                                    // 3. Retorna a lista filtrada para o FullCalendar
+                                    // 4. Retorna a lista filtrada para o FullCalendar
                                     successCallback(filteredEvents);
                                 })
                                 .catch(error => {
@@ -1077,6 +1091,12 @@
                     if (isAvailable) {
                         const startDate = moment(event.start);
                         const endDate = moment(event.end);
+
+                        // Se o slot disponível clicado for passado, ignora o clique
+                        if (endDate.isBefore(moment())) {
+                            console.log("Slot passado, clique ignorado.");
+                            return;
+                        }
 
                         const dateString = startDate.format('YYYY-MM-DD');
                         const dateDisplay = startDate.format('DD/MM/YYYY');

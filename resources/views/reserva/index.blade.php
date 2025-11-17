@@ -6,7 +6,6 @@
     <title>{{ config('app.name', 'Laravel') }} | Agendamento Online</title>
 
     {{-- Tailwind CSS & JS (assumindo que o vite as carrega) --}}
-    {{-- ATENÇÃO: Estou assumindo que Tailwind está carregado globalmente no ambiente de demonstração. --}}
     <script src="https://cdn.tailwindcss.com"></script>
 
     {{-- FullCalendar Imports --}}
@@ -106,7 +105,6 @@
 <body class="font-sans antialiased arena-bg">
 
 {{-- 🛑 BARRA DE NAVEGAÇÃO SUPERIOR PARA CLIENTES LOGADOS (Incluindo Sair) --}}
-{{-- ATENÇÃO: Os blocos @auth e @guest dependem do seu ambiente Laravel real. --}}
 @auth
     @if (Auth::user()->isClient())
         <nav class="bg-indigo-700/80 backdrop-blur-sm shadow-lg p-3">
@@ -152,15 +150,7 @@
         </nav>
     @endif
 @else
-    {{-- Se NÃO estiver logado, mostra o botão de Fazer Login (Opção para quem quer ter conta) --}}
-    <nav class="bg-gray-800/80 backdrop-blur-sm shadow-lg p-3">
-        <div class="max-w-7xl mx-auto flex justify-end items-center">
-            <a href="{{ route('customer.login') }}"
-               class="px-3 py-1 bg-indigo-600 text-white font-bold rounded-full shadow-md hover:bg-indigo-700 transition text-sm">
-                Fazer Login / Cadastrar
-            </a>
-        </div>
-    </nav>
+
 @endauth
 {{-- FIM DA BARRA DE NAVEGAÇÃO --}}
 
@@ -318,7 +308,7 @@
 
                         {{-- WhatsApp (Contato) --}}
                         <div>
-                            <label for="guest-contact" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">WhatsApp (Apenas números) <span class="text-red-500">*</span></label>
+                            <label for="guest-contact" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">WhatsApp (Apenas números, com DDD) <span class="text-red-500">*</span></label>
                             <input type="tel" name="contato_cliente" id="guest-contact" required value="{{ old('contato_cliente') }}"
                                 class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 rounded-xl shadow-md p-3 @error('contato_cliente') border-red-500 ring-1 ring-red-500 @enderror">
                             @error('contato_cliente')
@@ -480,8 +470,8 @@
         // Garante que o modal esteja visível se o alerta for acionado por clique no calendário
         const modal = document.getElementById('booking-modal');
         if (modal.classList.contains('hidden')) {
-             modal.classList.remove('hidden');
-             modal.classList.add('flex');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
         }
 
         setTimeout(() => {
@@ -489,6 +479,15 @@
         }, 5000); // 5 segundos
 
         console.error(message);
+    }
+
+    /**
+     * 🛑 NOVO: Limpa a string de telefone, removendo tudo exceto dígitos (0-9).
+     * @param {string} value
+     * @returns {string} A string contendo apenas dígitos.
+     */
+    function cleanPhoneNumber(value) {
+        return value.replace(/\D/g, '');
     }
 
 
@@ -504,6 +503,16 @@
         const oldEnd = @json(old('hora_fim'));
         const oldPrice = @json(old('price'));
         const oldScheduleId = @json(old('schedule_id'));
+
+        // 🛑 NOVO: Adiciona o listener para limpar a entrada de telefone no formulário
+        const guestContactInput = document.getElementById('guest-contact');
+        if (guestContactInput) {
+            guestContactInput.addEventListener('input', function() {
+                // Aplica a limpeza a cada input (ex: (91) 99999-8888 -> 91999998888)
+                this.value = cleanPhoneNumber(this.value);
+            });
+        }
+
 
         // --- FUNÇÃO CRÍTICA: LÓGICA DE MARCADORES RESUMO ---
         function updateDayMarkers(calendar) {

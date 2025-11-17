@@ -75,11 +75,6 @@
                         </form>
                     </div>
 
-                    <a href="{{ route('admin.reservas.create') }}"
-                       class="bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-xl shadow-green-400/50 transition duration-150 ease-in-out flex items-center justify-center space-x-1 tracking-wider">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" /></svg>
-                        <span class="text-sm">Nova Manual</span>
-                    </a>
                 </div>
 
                 <div class="overflow-x-auto border border-gray-200 rounded-xl shadow-lg">

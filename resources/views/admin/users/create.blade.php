@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            {{ __('Criar Novo Usuário (Gestor/Cliente)') }}
+            {{ __('Criar Novo Usuário (Gestor)') }}
         </h2>
     </x-slot>
 
@@ -13,9 +13,6 @@
                     <h3 class="text-2xl font-bold mb-6 border-b pb-3 text-gray-700 dark:text-gray-200">
                         Cadastro de Novo Usuário
                     </h3>
-                    <p class="mb-6 text-sm text-gray-500 dark:text-gray-400">
-                        Preencha os dados abaixo. O campo "Função" define as permissões: 'Gestor' terá acesso ao painel de administração e 'Cliente' apenas fará reservas.
-                    </p>
 
                     <!-- O formulário aponta para o método 'store' do AdminUserController -->
                     <form method="POST" action="{{ route('admin.users.store') }}">
