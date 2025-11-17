@@ -22,13 +22,13 @@ return new class extends Migration
 
             // 2. Coluna 'whatsapp_contact'
             if (!Schema::hasColumn('users', 'whatsapp_contact')) {
-                $table->string('whatsapp_contact', 15)->nullable()->unique()->after('name');
+                $table->string('whatsapp_contact', 11)->nullable()->unique()->after('name');
             }
 
             // 3. Coluna 'data_nascimento'
-            if (!Schema::hasColumn('users', 'data_nascimento')) {
-                $table->date('data_nascimento')->nullable()->after('whatsapp_contact');
-            }
+            //if (!Schema::hasColumn('users', 'data_nascimento')) {
+            //    $table->date('data_nascimento')->nullable()->after('whatsapp_contact');
+            //}
         });
 
         // Garante que usuários existentes sem role sejam marcados como 'gestor'
@@ -41,9 +41,9 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (Schema::hasColumn('users', 'data_nascimento')) {
-                $table->dropColumn('data_nascimento');
-            }
+           // if (Schema::hasColumn('users', 'data_nascimento')) {
+            //    $table->dropColumn('data_nascimento');
+            //}
             if (Schema::hasColumn('users', 'whatsapp_contact')) {
                 $table->dropUnique(['whatsapp_contact']);
                 $table->dropColumn('whatsapp_contact');

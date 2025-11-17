@@ -288,8 +288,7 @@
                 {{-- ========================================================= --}}
                 {{-- 🛑 LÓGICA CONDICIONAL: DADOS DO CLIENTE (MANTIDA) 🛑 --}}
                 {{-- ========================================================= --}}
-
-                @guest
+                
                     <p class="text-gray-700 dark:text-gray-300 mb-6 text-sm">
                         Preencha seus dados para registrar sua pré-reserva. Seus dados serão usados para **criar ou identificar sua conta**.
                     </p>
@@ -308,23 +307,13 @@
 
                         {{-- WhatsApp (Contato) --}}
                         <div>
-                            <label for="guest-contact" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">WhatsApp (Apenas números, com DDD) <span class="text-red-500">*</span></label>
+                            <label for="guest-contact" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">WhatsApp (Apenas números, DDD+numero) <span class="text-red-500">*</span></label>
                             <input type="tel" name="contato_cliente" id="guest-contact" required value="{{ old('contato_cliente') }}"
-                                class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 rounded-xl shadow-md p-3 @error('contato_cliente') border-red-500 ring-1 ring-red-500 @enderror">
+                                class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 rounded-xl shadow-md p-3 @error('contato_cliente') border-red-500 ring-1 ring-red-500 @enderror" minlength="10" maxlength="11">
                             @error('contato_cliente')
                                 <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
                             @enderror
-                        </div>
-
-                        {{-- Data de Nascimento --}}
-                        <div>
-                            <label for="guest-dob" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data de Nascimento <span class="text-red-500">*</span></label>
-                            <input type="date" name="data_nascimento" id="guest-dob" required value="{{ old('data_nascimento') }}"
-                                class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 rounded-xl shadow-md p-3 @error('data_nascimento') border-red-500 ring-1 ring-red-500 @enderror">
-                            @error('data_nascimento')
-                                <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
-                            @enderror
-                        </div>
+                        </div>  
 
                         {{-- Email (Opcional) --}}
                         <div>
@@ -336,30 +325,7 @@
                             @enderror
                         </div>
                     </div>
-                @else
-                    {{-- Cliente Logado: Campos ocultos e Bloco informativo --}}
-                    <input type="hidden" name="user_id" id="client_user_id" value="{{ Auth::user()->id }}">
-                    <input type="hidden" name="nome_cliente" id="client_name" value="{{ Auth::user()->name }}">
-                    <input type="hidden" name="contato_cliente" id="client_contact" value="{{ Auth::user()->whatsapp_contact }}">
-                    <input type="hidden" name="email_cliente" id="client_email" value="{{ Auth::user()->email }}">
-                    <input type="hidden" name="data_nascimento" id="client_dob" value="{{ Auth::user()->data_nascimento }}">
-
-                    <div class="mb-8 p-6 bg-green-50 dark:bg-green-900/30 rounded-2xl border border-green-300 dark:border-green-700 shadow-xl">
-                        <p class="text-lg font-extrabold text-green-700 dark:text-green-300">
-                            Você está logado!
-                        </p>
-                        <p class="text-sm font-semibold text-gray-700 dark:text-gray-300 mt-1">
-                            A reserva será feita com os dados da sua conta:
-                            <span class="font-extrabold">{{ Auth::user()->name }}</span>
-                            ({{ Auth::user()->whatsapp_contact }})
-                        </p>
-                        <form method="POST" action="{{ route('customer.logout') }}" class="mt-1">
-                            @csrf
-                            <button type="submit" class="text-xs text-indigo-600 underline hover:text-indigo-800">Sair da conta de Cliente</button>
-                        </form>
-                    </div>
-
-                @endguest
+                
 
                 {{-- ========================================================= --}}
                 {{-- DETALHES DA RESERVA (VISUAL) --}}

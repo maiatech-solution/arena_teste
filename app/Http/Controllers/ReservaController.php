@@ -713,7 +713,7 @@ class ReservaController extends Controller
     public function storePublic(Request $request)
     {
         // Mínimo 10 anos de idade para agendar (regra de negócio implícita)
-        $minAgeDate = Carbon::now()->subYears(10)->toDateString();
+        //$minAgeDate = Carbon::now()->subYears(10)->toDateString();
 
         $rules = [
             'data_reserva' => ['required', 'date', "after_or_equal:" . Carbon::today()->format('Y-m-d')],
@@ -725,8 +725,7 @@ class ReservaController extends Controller
 
             // 🛑 NOVOS CAMPOS DO CLIENTE (Obrigatórios no front-end)
             'nome_cliente' => 'required|string|max:255',
-            'contato_cliente' => 'required|string|min:8|max:15|regex:/^\d+$/', // Apenas números, 8-15 dígitos
-            'data_nascimento' => 'required|date|before_or_equal:' . $minAgeDate,
+            'contato_cliente' => 'required|string|size:11|regex:/^\d+$/', // Aceita apenas 11 dígitos            
             'email_cliente' => 'nullable|email|max:255',
             'notes' => 'nullable|string|max:500',
         ];
@@ -734,8 +733,7 @@ class ReservaController extends Controller
         $validator = Validator::make($request->all(), $rules, [
             'schedule_id.exists' => 'O slot de horário selecionado não está mais disponível ou não é um horário válido.',
             'schedule_id.required' => 'O horário não foi selecionado corretamente. Tente selecionar o slot novamente no calendário.',
-            'contato_cliente.regex' => 'O WhatsApp deve conter apenas números (Ex: 5511999998888).',
-            'data_nascimento.before_or_equal' => 'A data de nascimento indica uma idade inferior ao mínimo permitido (10 anos).',
+            'contato_cliente.regex' => 'O WhatsApp deve conter apenas DDD+ número (Ex: 91900000000).',
         ]);
 
         if ($validator->fails()) {
@@ -754,7 +752,6 @@ class ReservaController extends Controller
         $nomeCliente = $validated['nome_cliente'];
         $contatoCliente = $validated['contato_cliente'];
         $emailCliente = $validated['email_cliente'];
-        $dataNascimento = $validated['data_nascimento'];
 
 
         $startTimeNormalized = Carbon::createFromFormat('G:i', $startTime)->format('H:i:s');
@@ -780,7 +777,6 @@ class ReservaController extends Controller
                     'name' => $nomeCliente,
                     'email' => $uniqueEmail,
                     'whatsapp_contact' => $contatoCliente,
-                    'data_nascimento' => $dataNascimento,
                     'password' => Hash::make($tempPassword),
                     'role' => 'cliente',
                     'email_verified_at' => Carbon::now(),

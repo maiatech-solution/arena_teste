@@ -149,10 +149,15 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             ->name('reservas.renew_serie');
 
 
-        // --- ROTAS DE GERENCIAMENTO DE USUÁRIOS ---
+        // --- ROTAS DE GERENCIAMENTO DE USUÁRIOS (User Resource) ---
         Route::get('users', [AdminController::class, 'indexUsers'])->name('users.index');
         Route::get('users/create', [AdminController::class, 'createUser'])->name('users.create');
         Route::post('users', [AdminController::class, 'storeUser'])->name('users.store');
+
+        // ✅ NOVAS ROTAS PARA EDIÇÃO, ATUALIZAÇÃO E EXCLUSÃO
+        Route::get('users/{user}/edit', [AdminController::class, 'editUser'])->name('users.edit');
+        Route::put('users/{user}', [AdminController::class, 'updateUser'])->name('users.update');
+        Route::delete('users/{user}', [AdminController::class, 'destroyUser'])->name('users.destroy');
 
     });
     // FIM DO GRUPO DE ROTAS 'admin.'

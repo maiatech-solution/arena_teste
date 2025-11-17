@@ -39,13 +39,16 @@
                             {{ __('Pendentes') }}
                         </x-nav-link>
 
-                        <!-- 4. Novo Usuário -->
-                        <x-nav-link :href="route('admin.users.create')" :active="request()->routeIs('admin.users.create')" class="
+                        <!-- 4. Gerenciar Usuários (Corrigido para Lista/Index de Usuários) -->
+                        <x-nav-link
+                            :href="route('admin.users.index')"
+                            :active="request()->routeIs('admin.users.index') || request()->routeIs('admin.users.create') || request()->routeIs('admin.users.edit')"
+                            class="
                             px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
                             hover:bg-gray-50 hover:text-gray-700
                             focus:outline-none focus:bg-gray-50 focus:text-gray-700
                         ">
-                            {{ __('Novo Usuário') }}
+                            {{ __('Gerenciar Usuários') }}
                         </x-nav-link>
 
                         <!-- 5. Configuração de Horários (ÚLTIMA POSIÇÃO) -->
@@ -72,7 +75,7 @@
                 </div>
             </div>
 
-            <!-- Settings Dropdown (Sem alterações) -->
+            <!-- Settings Dropdown -->
             <div class="hidden sm:flex sm:items-center sm:ms-6">
                 @if (Auth::check()) {{-- Verifica se o usuário está logado --}}
                 <x-dropdown align="right" width="48">
@@ -97,9 +100,9 @@
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
 
+                            {{-- CORREÇÃO: O onclick foi colocado em uma única linha para evitar ParseError no Blade. --}}
                             <x-dropdown-link :href="route('logout')"
-                                                 onclick="event.preventDefault();
-                                                                this.closest('form').submit();">
+                                onclick="event.preventDefault(); this.closest('form').submit();">
                                 {{ __('Log Out') }}
                             </x-dropdown-link>
                         </form>
@@ -133,12 +136,12 @@
             @if (Auth::check() && Auth::user()->is_gestor)
                 <!-- 1. Dashboard -->
                 <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
-                    {{ __('Dashboard') }}
+                    {{ __('Home') }}
                 </x-responsive-nav-link>
 
                 <!-- 2. Reservas Confirmadas -->
                 <x-responsive-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="border-l-4 border-gray-500 text-gray-600">
-                     {{ __('Confirmadas') }}
+                   {{ __('Confirmadas') }}
                  </x-responsive-nav-link>
 
                 <!-- 3. Reservas Pendentes -->
@@ -146,9 +149,12 @@
                     {{ __('Pendentes') }}
                 </x-responsive-nav-link>
 
-                <!-- 4. Novo Usuário -->
-                <x-responsive-nav-link :href="route('admin.users.create')" :active="request()->routeIs('admin.users.create')" class="border-l-4 border-gray-500 text-gray-600">
-                    {{ __('Novo Usuário') }}
+                <!-- 4. Gerenciar Usuários (Corrigido para Lista/Index de Usuários) -->
+                <x-responsive-nav-link
+                    :href="route('admin.users.index')"
+                    :active="request()->routeIs('admin.users.index') || request()->routeIs('admin.users.create') || request()->routeIs('admin.users.edit')"
+                    class="border-l-4 border-gray-500 text-gray-600">
+                    {{ __('Gerenciar Usuários') }}
                 </x-responsive-nav-link>
 
                 <!-- 5. Configuração de Horários (ÚLTIMA POSIÇÃO) -->
@@ -183,9 +189,9 @@
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
 
+                        {{-- CORREÇÃO: O onclick foi colocado em uma única linha para evitar ParseError no Blade. --}}
                         <x-responsive-nav-link :href="route('logout')"
-                                                     onclick="event.preventDefault();
-                                                                    this.closest('form').submit();">
+                            onclick="event.preventDefault(); this.closest('form').submit();">
                             {{ __('Log Out') }}
                         </x-responsive-nav-link>
                     </form>

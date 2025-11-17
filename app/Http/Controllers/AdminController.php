@@ -1,5 +1,4 @@
 <?php
-// [START OF FILE]
 
 namespace App\Http\Controllers;
 
@@ -10,8 +9,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Carbon;
-
-// --- IMPORTS ---
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -26,21 +23,25 @@ class AdminController extends Controller
      */
     public function dashboard()
     {
-        // Esta linha continua calculando a contagem de pendências
         $reservasPendentesCount = Reserva::where('status', Reserva::STATUS_PENDENTE)->count();
 
-        // ✅ CRÍTICO: Pega as séries recorrentes que estão terminando (usando a lógica do ReservaController)
-        // Isso assume que o método 'getEndingRecurrentSeries' existe no ReservaController
-        $reservaController = app(\App\Http\Controllers\ReservaController::class);
-        $expiringSeries = $reservaController->getEndingRecurrentSeries();
-        $expiringSeriesCount = count($expiringSeries);
+        // Pega as séries recorrentes que estão terminando (usando a lógica do ReservaController)
+        try {
+            $reservaController = app(\App\Http\Controllers\ReservaController::class);
+            $expiringSeries = $reservaController->getEndingRecurrentSeries();
+            $expiringSeriesCount = count($expiringSeries);
+        } catch (\Exception $e) {
+            // Caso o ReservaController não esteja disponível ou o método falhe
+            Log::warning("Não foi possível carregar séries recorrentes expirando: " . $e->getMessage());
+            $expiringSeries = collect();
+            $expiringSeriesCount = 0;
+        }
 
-        // O método retorna APENAS a contagem de pendências. O calendário carrega os eventos via API.
         return view('dashboard', compact('reservasPendentesCount', 'expiringSeries', 'expiringSeriesCount'));
     }
 
     // =========================================================================
-    // ✅ NOVO MÉTODO: Pesquisa de Clientes Registrados (Para Agendamento Rápido)
+    // Pesquisa de Clientes Registrados (Para Agendamento Rápido)
     // =========================================================================
     public function searchClients(Request $request)
     {
@@ -54,8 +55,8 @@ class AdminController extends Controller
         $clients = User::where('role', 'cliente')
             ->where(function ($q) use ($query) {
                 $q->where('name', 'like', '%' . $query . '%')
-                  ->orWhere('email', 'like', '%' . $query . '%')
-                  ->orWhere('whatsapp_contact', 'like', '%' . $query . '%');
+                    ->orWhere('email', 'like', '%' . $query . '%')
+                    ->orWhere('whatsapp_contact', 'like', '%' . $query . '%');
             })
             // Limita a 10 resultados para otimizar a pesquisa
             ->limit(10)
@@ -63,13 +64,19 @@ class AdminController extends Controller
 
         // Formata a saída para o JS
         $formattedClients = $clients->map(function ($client) {
+             // Formatação simples do WhatsApp para exibição no frontend (exemplo)
+             $formattedContact = $client->whatsapp_contact;
+             if ($formattedContact && strlen($formattedContact) >= 11) {
+                 // Ex: 5541999998888 -> (41) 99999-8888
+                 $formattedContact = '('.substr($formattedContact, 2, 2) . ') ' . substr($formattedContact, 4, 5) . '-' . substr($formattedContact, 9);
+             }
+
              return [
                  'id' => $client->id,
                  'name' => $client->name,
                  'email' => $client->email,
-                 // Retorna o contato com formatação leve para exibição
-                 'whatsapp_contact' => $client->whatsapp_contact ? '('.substr($client->whatsapp_contact, 0, 2) . ') ' . substr($client->whatsapp_contact, 2, 5) . '-' . substr($client->whatsapp_contact, 7) : null,
-                 'contact' => $client->whatsapp_contact, // Retorna o contato cru para uso no DB, se necessário
+                 'whatsapp_contact' => $formattedContact,
+                 'contact' => $client->whatsapp_contact, // Retorna o contato cru (sem formatação) para uso interno
              ];
         });
 
@@ -78,24 +85,21 @@ class AdminController extends Controller
     // =========================================================================
 
     // =========================================================================
-    // 🗓️ MÉTODO API: RESERVAS CONFIRMADAS PARA FULLCALENDAR (ADAPTADO)
+    // MÉTODO API: RESERVAS CONFIRMADAS/PENDENTES PARA FULLCALENDAR
     // =========================================================================
-    /**
-     * Retorna as reservas CONFIRMADAS/PENDENTES REAIS (is_fixed = false) em formato JSON para o FullCalendar.
-     */
     public function getConfirmedReservasApi(Request $request)
     {
         // O FullCalendar envia os parâmetros 'start' e 'end' para filtrar o período
         $start = $request->input('start') ? Carbon::parse($request->input('start')) : Carbon::now()->startOfMonth();
         $end = $request->input('end') ? Carbon::parse($request->input('end')) : Carbon::now()->endOfMonth();
 
-        // 🛑 CRÍTICO: Busca reservas reais de clientes (is_fixed = false)
+        // Busca reservas reais de clientes (is_fixed = false)
         $reservas = Reserva::where('is_fixed', false)
-                            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
-                            ->whereDate('date', '>=', $start->toDateString())
-                            ->whereDate('date', '<=', $end->toDateString())
-                            ->with('user')
-                            ->get();
+                             ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+                             ->whereDate('date', '>=', $start->toDateString())
+                             ->whereDate('date', '<=', $end->toDateString())
+                             ->with('user')
+                             ->get();
 
         $events = $reservas->map(function ($reserva) {
             $bookingDate = $reserva->date->toDateString();
@@ -107,19 +111,18 @@ class AdminController extends Controller
             $userName = optional($reserva->user)->name;
             $clientName = $userName ?? $reserva->client_name ?? 'Cliente Desconhecido';
 
-            // 🛑 LÓGICA DE COR E CLASSE DIFERENCIADA PARA RECORRENTES
             $isRecurrent = (bool)$reserva->is_recurrent;
 
             if ($reserva->status === Reserva::STATUS_PENDENTE) {
-                $statusColor = '#ff9800'; // Laranja (Orange 500)
+                $statusColor = '#ff9800'; // Laranja
                 $statusText = 'PENDENTE: ';
                 $className = 'fc-event-pending';
             } elseif ($isRecurrent) {
-                $statusColor = '#C026D3'; // Fuchsia 700 - Cor para Recorrente Confirmada
+                $statusColor = '#C026D3'; // Fuchsia
                 $statusText = 'RECORRENTE: ';
                 $className = 'fc-event-recurrent';
             } else {
-                $statusColor = '#4f46e5'; // Indigo 600 - Cor para Avulsa Confirmada
+                $statusColor = '#4f46e5'; // Indigo
                 $statusText = 'RESERVADO: ';
                 $className = 'fc-event-quick';
             }
@@ -136,13 +139,11 @@ class AdminController extends Controller
                 'start' => $start->format('Y-m-d\TH:i:s'),
                 'end' => $end->format('Y-m-d\TH:i:s'),
                 'color' => $statusColor,
-                'className' => $className, // Usa a classe dinâmica
+                'className' => $className,
                 'extendedProps' => [
                     'status' => $reserva->status,
                     'client_contact' => $reserva->client_contact,
-                    // ✅ NOVO: Passa a flag de recorrência para o JS
                     'is_recurrent' => (bool)$reserva->is_recurrent,
-                    // ✅ NOVO: Passa o ID da série, se houver
                     'recurrent_series_id' => $reserva->recurrent_series_id,
                 ]
             ];
@@ -182,13 +183,13 @@ class AdminController extends Controller
         // Aplica filtro de pesquisa
         if ($search) {
              $query->where(function($q) use ($search) {
-                $q->where('client_name', 'like', '%' . $search . '%')
-                  ->orWhere('client_contact', 'like', '%'.$search.'%');
-                // Se estiver usando user_id, pesquisa pelo nome/email do usuário relacionado
-                $q->orWhereHas('user', function ($userQuery) use ($search) {
-                    $userQuery->where('name', 'like', '%' . $search . '%')
-                              ->orWhere('email', 'like', '%' . $search . '%');
-                });
+                 $q->where('client_name', 'like', '%' . $search . '%')
+                     ->orWhere('client_contact', 'like', '%'.$search.'%');
+                 // Se estiver usando user_id, pesquisa pelo nome/email do usuário relacionado
+                 $q->orWhereHas('user', function ($userQuery) use ($search) {
+                     $userQuery->where('name', 'like', '%' . $search . '%')
+                                     ->orWhere('email', 'like', '%' . $search . '%');
+                 });
              });
         }
 
@@ -216,8 +217,7 @@ class AdminController extends Controller
     }
 
     /**
-     * Redireciona a rota de criação manual para o Dashboard,
-     * incentivando o uso do agendamento rápido via calendário.
+     * Redireciona a rota de criação manual para o Dashboard.
      */
     public function createReserva()
     {
@@ -257,9 +257,7 @@ class AdminController extends Controller
     }
 
     /**
-     * ✅ CORRIGIDO: Recria o slot fixo após a rejeição da pré-reserva.
-     * ADICIONADO: Camada de defesa para recarregar o usuário após a transação.
-     * Rota: admin.reservas.rejeitar
+     * Recria o slot fixo após a rejeição da pré-reserva.
      */
     public final function rejeitarReserva(Reserva $reserva)
     {
@@ -268,11 +266,11 @@ class AdminController extends Controller
             // 1. Captura as informações do slot original (data, hora, preço)
             $originalData = $reserva->only(['date', 'day_of_week', 'start_time', 'end_time', 'price']);
 
-            // 2. Marca o status como REJEITADA e o gestor responsável (para fins de auditoria/histórico, se necessário)
+            // 2. Marca o status como REJEITADA e o gestor responsável
             $reserva->update([
                 'status' => Reserva::STATUS_REJEITADA,
                 'manager_id' => Auth::id(),
-                'cancellation_reason' => 'Pré-reserva rejeitada pelo gestor.' // Adiciona um motivo padrão
+                'cancellation_reason' => 'Pré-reserva rejeitada pelo gestor.'
             ]);
 
             // 3. Recria o slot fixo de disponibilidade (o evento verde)
@@ -294,14 +292,13 @@ class AdminController extends Controller
 
             DB::commit();
 
-            // 🛑 NOVO: Força a recarga do objeto do usuário autenticado no Laravel
-            // Isso previne que a sessão perca temporariamente a informação do 'role'
+            // Força a recarga do objeto do usuário autenticado no Laravel
             if (Auth::check()) {
                 Auth::user()->fresh();
             }
 
             return redirect()->route('admin.reservas.index')
-                                 ->with('success', 'Pré-reserva rejeitada e horário liberado com sucesso.');
+                             ->with('success', 'Pré-reserva rejeitada e horário liberado com sucesso.');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -313,7 +310,7 @@ class AdminController extends Controller
     // ✅ MÉTODO: Cancelamento Pontual de Reserva Padrão (Avulso)
     public function cancelarReserva(Request $request, Reserva $reserva)
     {
-        // 🛑 Validação do Motivo do Cancelamento
+        // Validação do Motivo do Cancelamento
         $request->validate([
             'cancellation_reason' => 'required|string|min:5',
         ]);
@@ -331,7 +328,7 @@ class AdminController extends Controller
                 'cancellation_reason' => $request->input('cancellation_reason'),
             ]);
 
-            // 🛑 Dispara o Evento de Notificação (se necessário)
+            // Dispara o Evento de Notificação (se necessário)
             if (class_exists(\App\Events\ReservaCancelada::class)) {
                 event(new \App\Events\ReservaCancelada($reserva));
             }
@@ -352,12 +349,12 @@ class AdminController extends Controller
                 'manager_id' => Auth::id(),
             ]);
 
-            // 3. Deleta a reserva cancelada
+            // 3. Deleta a reserva cancelada (para histórico, você pode mover para uma tabela de arquivamento em vez de deletar)
             $reserva->delete();
 
             DB::commit();
 
-            // ✅ DEFESA: Força a recarga do usuário autenticado após a transação
+            // DEFESA: Força a recarga do objeto do usuário autenticado após a transação
             if (Auth::check()) {
                 Auth::user()->fresh();
             }
@@ -366,14 +363,14 @@ class AdminController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Erro ao cancelar a reserva ID {$reserva->id}: " . $e->getMessage());
+            Log::error("Erro ao processar cancelamento de reserva ID {$reserva->id}: " . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Erro ao processar o cancelamento: ' . $e->getMessage()], 500);
         }
     }
 
 
     // =========================================================================
-    // ✅ NOVO MÉTODO: Cancelamento Pontual de Reserva Recorrente (Exceção)
+    // Cancelamento Pontual de Reserva Recorrente (Exceção)
     // =========================================================================
     public function cancelarReservaRecorrente(Request $request, Reserva $reserva)
     {
@@ -398,7 +395,7 @@ class AdminController extends Controller
             $reserva->status = Reserva::STATUS_CANCELADA;
             $reserva->save();
 
-            // 🛑 Dispara o Evento de Notificação (se necessário)
+            // Dispara o Evento de Notificação (se necessário)
             if (class_exists(\App\Events\ReservaCancelada::class)) {
                 event(new \App\Events\ReservaCancelada($reserva));
             }
@@ -422,7 +419,7 @@ class AdminController extends Controller
 
             DB::commit();
 
-            // ✅ DEFESA: Força a recarga do usuário autenticado após a transação
+            // DEFESA: Força a recarga do usuário autenticado após a transação
             if (Auth::check()) {
                 Auth::user()->fresh();
             }
@@ -440,7 +437,7 @@ class AdminController extends Controller
     }
 
     // =========================================================================
-    // ✅ NOVO MÉTODO: Cancelamento de SÉRIE Recorrente
+    // Cancelamento de SÉRIE Recorrente
     // =========================================================================
     public function cancelarSerieRecorrente(Request $request, Reserva $reserva)
     {
@@ -460,10 +457,10 @@ class AdminController extends Controller
 
         // 2. Busca o slot mestre e todos os membros futuros
         $reservasToCancel = Reserva::where(function($query) use ($masterId) {
-                 // Inclui o mestre (se a reserva atual for o mestre)
-                 $query->where('id', $masterId)
-                       // Inclui todos os membros vinculados
-                       ->orWhere('recurrent_series_id', $masterId);
+             // Inclui o mestre (se a reserva atual for o mestre)
+             $query->where('id', $masterId)
+                 // Inclui todos os membros vinculados
+                 ->orWhere('recurrent_series_id', $masterId);
              })
              // Apenas reservas futuras (a partir da data da reserva atual ou depois)
              ->whereDate('date', '>=', $reserva->date->toDateString())
@@ -488,15 +485,15 @@ class AdminController extends Controller
 
             // Marca o motivo em cada reserva antes de deletar
             $reservasToCancel->each(function($r) use ($cancellationReason, $dayOfWeek) {
-                $r->cancellation_reason = $cancellationReason . " (Série Recorrente - Dia da Semana: " . $dayOfWeek . ")";
-                $r->manager_id = Auth::id();
-                $r->status = Reserva::STATUS_CANCELADA;
-                $r->save();
+                 $r->cancellation_reason = $cancellationReason . " (Série Recorrente - Dia da Semana: " . $dayOfWeek . ")";
+                 $r->manager_id = Auth::id();
+                 $r->status = Reserva::STATUS_CANCELADA;
+                 $r->save();
 
-                // 🛑 Dispara o Evento de Notificação (se necessário)
-                if (class_exists(\App\Events\ReservaCancelada::class)) {
-                    event(new \App\Events\ReservaCancelada($r));
-                }
+                 // Dispara o Evento de Notificação (se necessário)
+                 if (class_exists(\App\Events\ReservaCancelada::class)) {
+                     event(new \App\Events\ReservaCancelada($r));
+                 }
             });
 
             // Apaga todas as reservas reais da série futuras
@@ -505,23 +502,23 @@ class AdminController extends Controller
             // 4. Recria a série de slots fixos genéricos para o mesmo período
             $dates = $reservasToCancel->pluck('date');
             $dates->each(function($date) use ($dayOfWeek, $start, $end, $price) {
-                Reserva::create([
-                    'date' => $date->toDateString(),
-                    'day_of_week' => $dayOfWeek,
-                    'start_time' => $start,
-                    'end_time' => $end,
-                    'price' => $price,
-                    'client_name' => 'Slot Fixo de 1h',
-                    'client_contact' => 'N/A',
-                    'status' => Reserva::STATUS_CONFIRMADA, // Volta a ser Disponível
-                    'is_fixed' => true,
-                    'manager_id' => Auth::id(), // Registra o gestor que liberou o slot
-                ]);
+                 Reserva::create([
+                     'date' => $date->toDateString(),
+                     'day_of_week' => $dayOfWeek,
+                     'start_time' => $start,
+                     'end_time' => $end,
+                     'price' => $price,
+                     'client_name' => 'Slot Fixo de 1h',
+                     'client_contact' => 'N/A',
+                     'status' => Reserva::STATUS_CONFIRMADA, // Volta a ser Disponível
+                     'is_fixed' => true,
+                     'manager_id' => Auth::id(), // Registra o gestor que liberou o slot
+                 ]);
             });
 
             DB::commit();
 
-            // ✅ DEFESA: Força a recarga do usuário autenticado após a transação
+            // DEFESA: Força a recarga do usuário autenticado após a transação
             if (Auth::check()) {
                 Auth::user()->fresh();
             }
@@ -580,20 +577,20 @@ class AdminController extends Controller
             $request->validate(['cancellation_reason' => 'nullable|string|min:5']);
             $updateData['cancellation_reason'] = $request->input('cancellation_reason') ?? 'Cancelado via tela de status (Motivo não fornecido).';
 
-            // 🛑 AÇÃO CRÍTICA: Se for CANCELADA via esta rota, redireciona para o Dashboard (o fluxo ideal é pelo modal)
+            // AÇÃO CRÍTICA: Se for CANCELADA via esta rota, redireciona para o Dashboard (o fluxo ideal é pelo modal)
             return redirect()->route('dashboard')->with('warning', 'Reserva marcada como cancelada. Use o modal de cancelamento na lista/calendário para liberar o slot.');
         }
 
         try {
             $reserva->update($updateData);
 
-            // ✅ DEFESA: Força a recarga do usuário autenticado após o update
+            // DEFESA: Força a recarga do usuário autenticado após o update
             if (Auth::check()) {
                 Auth::user()->fresh();
             }
 
             return redirect()->route('admin.reservas.show', $reserva)
-                                 ->with('success', "Status da reserva alterado para '{$newStatus}' com sucesso.");
+                             ->with('success', "Status da reserva alterado para '{$newStatus}' com sucesso.");
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao atualizar o status da reserva: ' . $e->getMessage());
         }
@@ -607,15 +604,16 @@ class AdminController extends Controller
         }
 
         try {
+            $name = $reserva->client_name;
             $reserva->delete();
 
-            // ✅ DEFESA: Força a recarga do usuário autenticado após a transação
+            // DEFESA: Força a recarga do usuário autenticado após a transação
             if (Auth::check()) {
                 Auth::user()->fresh();
             }
 
             return redirect()->route('admin.reservas.index')
-                                 ->with('success', 'Reserva excluída permanentemente com sucesso.');
+                             ->with('success', "Reserva de $name excluída permanentemente com sucesso.");
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao excluir a reserva: ' . $e->getMessage());
         }
@@ -623,10 +621,47 @@ class AdminController extends Controller
 
     // --- Métodos de CRUD de Usuários ---
 
-    public function indexUsers()
+    /**
+     * Lista usuários com filtro por 'role'.
+     *
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\View\View
+     */
+    public function indexUsers(Request $request)
     {
-        $users = User::orderBy('name', 'asc')->get();
-        return view('admin.users.index', compact('users'));
+        // 1. Define o filtro e a query base
+        $roleFilter = $request->get('role_filter');
+        $query = User::orderBy('name', 'asc');
+
+        $activeFilter = null;
+        $pageTitle = 'Usuários Cadastrados';
+
+        // 2. Aplica a lógica de filtro de forma condicional
+        if ($roleFilter === 'cliente') {
+            $query->where('role', 'cliente');
+            $pageTitle = 'Clientes Cadastrados';
+            $activeFilter = 'cliente';
+        } elseif ($roleFilter === 'gestor') {
+            // Inclui Gestores e Administradores
+            $query->whereIn('role', ['gestor', 'admin']);
+            $pageTitle = 'Gestores e Administradores';
+            $activeFilter = 'gestor';
+        } else {
+            // Caso 'TODOS' ou parâmetro ausente. Não aplica WHERE para listar todos.
+            // A query base ($query) já retorna todos os usuários.
+            $pageTitle = 'Todos os Usuários Cadastrados';
+            $activeFilter = 'all'; // Define um valor para o botão 'Todos' ficar ativo no Blade
+        }
+
+        // 3. Executa a query com paginação
+        $users = $query->paginate(20);
+
+        // 4. Retorna a view com os dados
+        return view('admin.users.index', [
+            'users' => $users,
+            'pageTitle' => $pageTitle,
+            'roleFilter' => $activeFilter, // Passa o filtro ativo para o Blade
+        ]);
     }
 
     public function createUser()
@@ -634,20 +669,186 @@ class AdminController extends Controller
         return view('admin.users.create');
     }
 
+    /**
+     * Lida com a submissão do formulário para criar um novo Gestor/Admin ou Cliente.
+     * FIX CRÍTICO: Agora gera senha aleatória se 'password' for nulo para clientes.
+     */
     public function storeUser(Request $request)
     {
-        $request->validate([
+        // 1. Log para diagnóstico
+        Log::info('Tentativa de cadastro de usuário. Dados recebidos: ', $request->all());
+
+        // Define se é Gestor/Admin ou Cliente
+        $role = $request->input('role', 'cliente');
+        $isGestorOrAdmin = in_array($role, ['gestor', 'admin']);
+
+        // 1. Definição das Regras de Validação CONDICIONAL
+        $rules = [
             'name' => 'required|string|max:255',
+            // O email precisa ser único para a criação
             'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|confirmed|min:8',
-            'role' => ['required', 'string', Rule::in(['cliente', 'gestor'])],
-        ]);
-        User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'role' => $request->role,
-        ]);
-        return redirect()->route('admin.users.index')->with('success', 'Usuário criado com sucesso!');
+            // Permite 'admin' pois é uma rota de gestão
+            'role' => ['required', 'string', Rule::in(['cliente', 'gestor', 'admin'])],
+            // **CORREÇÃO:** Adicionado 'unique:users' para o contato do WhatsApp.
+            'whatsapp_contact' => 'nullable|string|max:20|unique:users',
+            'data_nascimento' => 'nullable|date',
+        ];
+
+        if ($isGestorOrAdmin) {
+            // Senha OBRIGATÓRIA apenas para Gestor/Admin
+            $rules['password'] = 'required|string|confirmed|min:8';
+            $rules['password_confirmation'] = 'required'; // Garante que a confirmação foi enviada
+        } else {
+            // Senha e confirmação são opcionais/não necessárias para Cliente
+            $rules['password'] = 'nullable';
+            $rules['password_confirmation'] = 'nullable';
+        }
+
+        // Validação - Se falhar, redireciona de volta automaticamente.
+        // O Laravel agora exibirá um erro de validação se o email ou o whatsapp já existirem.
+        $validatedData = $request->validate($rules);
+
+        try {
+            // Define a senha a ser salva
+            $passwordToSave = null;
+            if ($request->filled('password')) {
+                // Se o campo password foi preenchido, usa o valor fornecido (hash)
+                $passwordToSave = Hash::make($validatedData['password']);
+            } elseif ($role === 'cliente') {
+                // SE o usuário é cliente E não forneceu senha (o que é esperado),
+                // geramos uma senha aleatória e segura para satisfazer a restrição NOT NULL do DB.
+                $passwordToSave = Hash::make(Str::random(16));
+                Log::info('Gerando senha aleatória para cliente: ' . $validatedData['email']);
+            }
+
+            // 2. Criação
+            $user = User::create([
+                'name' => $validatedData['name'],
+                'email' => $validatedData['email'],
+                'whatsapp_contact' => $validatedData['whatsapp_contact'] ?? null,
+                'data_nascimento' => $validatedData['data_nascimento'] ?? null,
+                // Usa o valor tratado acima
+                'password' => $passwordToSave,
+                'role' => $role,
+            ]);
+
+            // 3. Sucesso e Redirecionamento
+            return redirect()->route('admin.users.index')->with('success', 'O usuário ' . $user->name . ' ('.$role.') foi criado com sucesso!');
+
+        } catch (\Exception $e) {
+            // 4. Captura de Erros e Log
+            Log::error('Erro ao criar usuário via Admin: ' . $e->getMessage());
+            // **Se o erro persistir, o problema pode ser que a sua view não está exibindo os erros de validação.**
+            return redirect()->back()->withInput()->with('error', 'Erro inesperado ao criar o usuário. Verifique o log do sistema.');
+        }
+    }
+
+// -------------------------------------------------------------------------
+// 🛠️ MÉTODOS DE EDIÇÃO E EXCLUSÃO DE USUÁRIOS
+// -------------------------------------------------------------------------
+
+    /**
+     * Exibe o formulário para edição de um usuário específico.
+     * @param User $user O modelo de usuário a ser editado (Route Model Binding).
+     */
+    public function editUser(User $user)
+    {
+        // Regra de segurança: Gestores não podem editar o próprio 'admin'
+        if ($user->role === 'admin' && Auth::user()->role !== 'admin') {
+            return redirect()->route('admin.users.index')
+                ->with('error', 'Você não tem permissão para editar usuários Administradores.');
+        }
+
+        return view('admin.users.edit', compact('user'));
+    }
+
+    /**
+     * Processa a atualização de um usuário.
+     * @param Request $request
+     * @param User $user O modelo de usuário a ser atualizado.
+     */
+    public function updateUser(Request $request, User $user)
+    {
+        // 1. Regras de Validação
+        $rules = [
+            'name' => 'required|string|max:255',
+            // O email deve ser único, exceto para o usuário atual
+            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
+            'role' => ['required', 'string', Rule::in(['cliente', 'gestor', 'admin'])],
+
+            // Campos Adicionais
+            'whatsapp_contact' => ['nullable', 'string', 'max:20', Rule::unique('users')->ignore($user->id, 'whatsapp_contact')], // UNIQUE com IGNORE ID
+            'data_nascimento' => 'nullable|date|before:today',
+
+            // Senha é opcional, mas se preenchida, deve ter pelo menos 8 caracteres e ser confirmada
+            'password' => 'nullable|string|min:8|confirmed',
+        ];
+
+        $request->validate($rules);
+
+        // 2. Garante Permissão para Alterar Role 'admin'
+        // Se o usuário logado não for admin, ele não pode definir a role como 'admin'
+        if (Auth::user()->role !== 'admin' && $request->role === 'admin') {
+             return back()->withInput()->withErrors(['role' => 'Apenas Administradores podem definir um usuário como Administrador.']);
+        }
+
+        // Impede que um gestor altere um admin para outra função
+        if (Auth::user()->role !== 'admin' && $user->role === 'admin' && $request->role !== 'admin') {
+             return back()->withInput()->withErrors(['role' => 'Você não tem permissão para rebaixar um Administrador.']);
+        }
+
+
+        // 3. Atualização dos Dados
+        $data = $request->only('name', 'email', 'role', 'whatsapp_contact', 'data_nascimento');
+
+        // Se uma nova senha foi fornecida, hash e adicione aos dados
+        if ($request->filled('password')) {
+            $data['password'] = Hash::make($request->password);
+        }
+
+        $user->update($data);
+
+        // DEFESA: Força a recarga do usuário autenticado caso ele tenha alterado a própria role
+        if (Auth::check()) {
+            Auth::user()->fresh();
+        }
+
+        return redirect()->route('admin.users.edit', $user)
+            ->with('success', 'Usuário atualizado com sucesso!');
+    }
+
+    /**
+     * Remove um usuário do sistema.
+     * @param User $user O modelo de usuário a ser excluído.
+     */
+    public function destroyUser(User $user)
+    {
+        // Regra de segurança 1: O usuário não pode excluir a si mesmo
+        if (Auth::user()->id === $user->id) {
+            return redirect()->route('admin.users.index')
+                ->with('error', 'Você não pode excluir a si mesmo.');
+        }
+
+        // Regra de segurança 2: Apenas administradores podem excluir outros administradores
+        if ($user->role === 'admin' && Auth::user()->role !== 'admin') {
+             return redirect()->route('admin.users.index')
+                 ->with('error', 'Você não tem permissão para excluir um usuário Administrador.');
+        }
+
+        try {
+            $name = $user->name;
+            $user->delete();
+
+            // DEFESA: Força a recarga do usuário autenticado após a transação
+            if (Auth::check()) {
+                Auth::user()->fresh();
+            }
+
+            return redirect()->route('admin.users.index')
+                ->with('success', "Usuário '$name' excluído com sucesso.");
+        } catch (\Exception $e) {
+            Log::error("Erro ao excluir o usuário {$user->id}: " . $e->getMessage());
+            return back()->with('error', 'Erro ao excluir o usuário: ' . $e->getMessage());
+        }
     }
 }
