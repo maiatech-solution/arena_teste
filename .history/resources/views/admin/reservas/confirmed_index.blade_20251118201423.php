@@ -43,10 +43,21 @@
 
                     {{-- GRUPO DE FILTROS E PESQUISA --}}
                     {{-- Usando um layout mais espaçado (gap-4) e flexível --}}
-                    <div class="flex flex-col md:flex-row items-center md:items-center space-y-4 md:space-y-0 md:space-x-6 w-full">
+                    <div class="flex flex-col md:flex-row items-end md:items-center space-y-4 md:space-y-0 md:space-x-6 w-full">
 
                         {{-- Botão de Filtro Rápido --}}
-
+                        <div class="flex space-x-3 p-1 bg-gray-100 rounded-xl shadow-inner flex-shrink-0">
+                            {{-- Mantemos apenas o botão "Todas Confirmadas" --}}
+                            <a href="{{ route('admin.reservas.confirmadas') }}"
+                                class="px-4 py-2 text-sm font-semibold rounded-lg shadow-md transition duration-150
+                                    @if (!isset($search) && !$isOnlyMine && !$startDate && !$endDate)
+                                        bg-indigo-600 text-white hover:bg-indigo-700
+                                    @else
+                                        text-indigo-600 hover:bg-white
+                                    @endif">
+                                Todas Confirmadas
+                            </a>
+                        </div>
 
                         {{-- Formulário de Pesquisa e Datas --}}
                         {{-- O formulário é a peça central dos filtros --}}

@@ -357,28 +357,13 @@ class AdminController extends Controller
     public function confirmed_index(Request $request)
     {
         $search = $request->get('search');
-        // ✅ NOVO: Pega os filtros de data
-        $startDate = $request->get('start_date');
-        $endDate = $request->get('end_date');
 
         $query = Reserva::where('status', Reserva::STATUS_CONFIRMADA)
             // Filtra slots fixos (is_fixed = true)
             ->where('is_fixed', false)
+            // Apenas reservas futuras ou de hoje
+            ->whereDate('date', '>=', Carbon::today()->toDateString())
             ->with('user');
-
-        // ✅ NOVO: Aplica filtros de data
-        if ($startDate) {
-            $query->whereDate('date', '>=', $startDate);
-        }
-        if ($endDate) {
-            $query->whereDate('date', '<=', $endDate);
-        }
-
-        // Se não houver filtro de data, usa o padrão: de hoje em diante
-        if (!$startDate && !$endDate) {
-            $query->whereDate('date', '>=', Carbon::today()->toDateString());
-        }
-
 
         // Aplica filtro de pesquisa
         if ($search) {
@@ -405,8 +390,8 @@ class AdminController extends Controller
             ->orderBy('start_time', 'asc')
             ->paginate(15);
 
-        // ✅ NOVO: Passa as variáveis de data para a view
-        return view('admin.reservas.confirmed_index', compact('reservas', 'pageTitle', 'isOnlyMine', 'search', 'startDate', 'endDate'));
+        // 🛑 CORREÇÃO APLICADA: Mudei para confirmed_index para corresponder ao seu nome de arquivo (confirmed_index.blade.php)
+        return view('admin.reservas.confirmed_index', compact('reservas', 'pageTitle', 'isOnlyMine', 'search'));
     }
 
     // =========================================================================
@@ -418,23 +403,11 @@ class AdminController extends Controller
     public function canceled_index(Request $request)
     {
         $search = $request->get('search');
-        // ✅ ADICIONADO: Pega os filtros de data
-        $startDate = $request->get('start_date');
-        $endDate = $request->get('end_date');
-
 
         $query = Reserva::whereIn('status', [Reserva::STATUS_CANCELADA, Reserva::STATUS_REJEITADA])
             // Filtra slots fixos que foram recriados (is_fixed = true)
             ->where('is_fixed', false)
             ->with('user', 'manager'); // Carrega quem cancelou/rejeitou
-
-        // ✅ ADICIONADO: Aplica filtros de data
-        if ($startDate) {
-            $query->whereDate('date', '>=', $startDate);
-        }
-        if ($endDate) {
-            $query->whereDate('date', '<=', $endDate);
-        }
 
         // Aplica filtro de pesquisa
         if ($search) {
@@ -454,8 +427,7 @@ class AdminController extends Controller
 
         $pageTitle = 'Histórico de Reservas Canceladas/Rejeitadas';
 
-        // ✅ ADICIONADO: Passa as variáveis de data para a view
-        return view('admin.reservas.canceled-index', compact('reservas', 'pageTitle', 'search', 'startDate', 'endDate'));
+        return view('admin.reservas.canceled-index', compact('reservas', 'pageTitle', 'search'));
     }
     // =========================================================================
 
@@ -976,7 +948,7 @@ class AdminController extends Controller
             // Permite 'admin' pois é uma rota de gestão
             'role' => ['required', 'string', Rule::in(['cliente', 'gestor', 'admin'])],
             // **CORREÇÃO:** Mantido 'unique:users' para o contato do WhatsApp (Para criar novo usuário).
-            'whatsapp_contact' => ['nullable', 'string', 'max:20', Rule::unique('users')],
+            'whatsapp_contact' => 'nullable|string|max:20|unique:users',
             'data_nascimento' => 'nullable|date',
         ];
 

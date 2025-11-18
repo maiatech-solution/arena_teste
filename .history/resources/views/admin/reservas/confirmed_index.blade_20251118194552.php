@@ -39,36 +39,46 @@
                 </div>
 
 
-                <div class="flex flex-col mb-8 space-y-4">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 space-y-4 md:space-y-0">
 
                     {{-- GRUPO DE FILTROS E PESQUISA --}}
-                    {{-- Usando um layout mais espaçado (gap-4) e flexível --}}
-                    <div class="flex flex-col md:flex-row items-center md:items-center space-y-4 md:space-y-0 md:space-x-6 w-full">
+                    <div class="flex flex-col md:flex-row items-start space-y-4 md:space-y-0 md:space-x-4 w-full">
 
                         {{-- Botão de Filtro Rápido --}}
-
+                        <div class="flex space-x-3 p-1 bg-gray-100 rounded-xl shadow-inner flex-shrink-0">
+                            {{-- Mantemos apenas o botão "Todas Confirmadas" --}}
+                            <a href="{{ route('admin.reservas.confirmadas') }}"
+                                class="px-4 py-2 text-sm font-semibold rounded-lg shadow-md transition duration-150
+                                    @if (!isset($search) && !$isOnlyMine && !$startDate && !$endDate)
+                                        bg-indigo-600 text-white hover:bg-indigo-700
+                                    @else
+                                        text-indigo-600 hover:bg-white
+                                    @endif">
+                                Todas Confirmadas
+                            </a>
+                        </div>
 
                         {{-- Formulário de Pesquisa e Datas --}}
-                        {{-- O formulário é a peça central dos filtros --}}
-                        <form method="GET" action="{{ route('admin.reservas.confirmadas') }}" class="flex flex-col md:flex-row items-end md:items-center space-y-4 md:space-y-0 md:space-x-4 w-full">
+                        {{-- Formulário centralizado para submissão de todos os filtros --}}
+                        <form method="GET" action="{{ route('admin.reservas.confirmadas') }}" class="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-2 w-full md:w-auto ml-0 md:ml-auto">
                             <input type="hidden" name="only_mine" value="{{ $isOnlyMine ? 'true' : 'false' }}">
 
-                            {{-- ✅ FILTROS DE DATA (Agrupados e com bom espaçamento) --}}
-                            <div class="flex space-x-3 w-full md:w-auto flex-shrink-0">
-                                <div class="w-1/2 md:w-32">
+                            {{-- ✅ FILTROS DE DATA --}}
+                            <div class="flex space-x-2 w-full md:w-auto">
+                                <div>
                                     <label for="start_date" class="block text-xs font-semibold text-gray-500 mb-1">De:</label>
                                     <input type="date" name="start_date" id="start_date" value="{{ $startDate ?? '' }}"
                                         class="px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 w-full">
                                 </div>
-                                <div class="w-1/2 md:w-32">
+                                <div>
                                     <label for="end_date" class="block text-xs font-semibold text-gray-500 mb-1">Até:</label>
                                     <input type="date" name="end_date" id="end_date" value="{{ $endDate ?? '' }}"
                                         class="px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 w-full">
                                 </div>
                             </div>
 
-                            {{-- Pesquisa de Texto e Botões de Ação (Agrupados) --}}
-                            <div class="flex space-x-2 w-full md:w-auto items-end flex-grow md:flex-grow-0">
+                            {{-- Pesquisa de Texto e Botões --}}
+                            <div class="flex space-x-2 w-full md:w-auto items-end">
                                 <div class="flex-grow">
                                     <label for="search" class="block text-xs font-semibold text-gray-500 mb-1">Pesquisar:</label>
                                     <input type="text" name="search" id="search" value="{{ $search ?? '' }}"
@@ -76,9 +86,9 @@
                                         class="px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150 w-full">
                                 </div>
 
-                                <div class="flex items-end space-x-1 h-[42px]">
+                                <div class="flex items-end space-x-1 h-full">
                                     <button type="submit"
-                                            class="bg-indigo-600 hover:bg-indigo-700 text-white h-full p-2 rounded-lg shadow-md transition duration-150 flex-shrink-0 flex items-center justify-center"
+                                            class="bg-indigo-600 hover:bg-indigo-700 text-white h-[42px] p-2 rounded-lg shadow-md transition duration-150 flex-shrink-0 flex items-center justify-center"
                                             title="Buscar">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg>
                                     </button>
@@ -86,7 +96,7 @@
                                     @if (isset($search) && $search || $startDate || $endDate)
                                         {{-- Botão Limpar Filtros/Busca (mantém o only_mine) --}}
                                         <a href="{{ route('admin.reservas.confirmadas', ['only_mine' => $isOnlyMine ? 'true' : 'false']) }}"
-                                            class="text-red-500 hover:text-red-700 h-full p-2 transition duration-150 flex-shrink-0 flex items-center justify-center rounded-lg border border-red-200"
+                                            class="text-red-500 hover:text-red-700 h-[42px] p-2 transition duration-150 flex-shrink-0 flex items-center justify-center rounded-lg border border-red-200"
                                             title="Limpar Busca e Filtros de Data">
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>
                                         </a>

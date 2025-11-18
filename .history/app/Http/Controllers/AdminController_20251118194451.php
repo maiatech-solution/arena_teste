@@ -418,23 +418,11 @@ class AdminController extends Controller
     public function canceled_index(Request $request)
     {
         $search = $request->get('search');
-        // ✅ ADICIONADO: Pega os filtros de data
-        $startDate = $request->get('start_date');
-        $endDate = $request->get('end_date');
-
 
         $query = Reserva::whereIn('status', [Reserva::STATUS_CANCELADA, Reserva::STATUS_REJEITADA])
             // Filtra slots fixos que foram recriados (is_fixed = true)
             ->where('is_fixed', false)
             ->with('user', 'manager'); // Carrega quem cancelou/rejeitou
-
-        // ✅ ADICIONADO: Aplica filtros de data
-        if ($startDate) {
-            $query->whereDate('date', '>=', $startDate);
-        }
-        if ($endDate) {
-            $query->whereDate('date', '<=', $endDate);
-        }
 
         // Aplica filtro de pesquisa
         if ($search) {
@@ -454,8 +442,7 @@ class AdminController extends Controller
 
         $pageTitle = 'Histórico de Reservas Canceladas/Rejeitadas';
 
-        // ✅ ADICIONADO: Passa as variáveis de data para a view
-        return view('admin.reservas.canceled-index', compact('reservas', 'pageTitle', 'search', 'startDate', 'endDate'));
+        return view('admin.reservas.canceled-index', compact('reservas', 'pageTitle', 'search'));
     }
     // =========================================================================
 

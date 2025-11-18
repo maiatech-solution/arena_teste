@@ -9,7 +9,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\UserController;
-use App\Http\Controllers\ApiReservaController;
+use App\Http\Controllers\ApiReservaController; // CRÍTICO: Garantir que esta importação exista
 
 // -----------------------------------------------------------------------------------
 // 🏠 ROTA RAIZ (PÚBLICA) - Bem-vindo à Arena
@@ -28,7 +28,7 @@ Route::post('/agendamento', [ReservaController::class, 'storePublic'])->name('re
 
 
 // =========================================================================
-// ROTA API PARA BUSCA DE HORÁRIOS
+// ROTA API PARA BUSCA DE HORÁRIOS (Corrigido para usar ApiReservaController)
 // =========================================================================
 
 // 1. Horários disponíveis (Slots Verdes)
@@ -36,6 +36,8 @@ Route::get('/api/horarios/disponiveis', [ApiReservaController::class, 'getAvaila
     ->name('api.horarios.disponiveis');
 
 // 2. Reservas confirmadas/pendentes (Ocupados)
+// 🛑 CORREÇÃO CRÍTICA: Apontando para o método getConfirmedReservas do ApiReservaController,
+// que agora contém o filtro is_fixed=false no Backend.
 Route::get('/api/reservas/confirmadas', [ApiReservaController::class, 'getConfirmedReservas'])
     ->name('api.reservas.confirmadas');
 // =========================================================================
@@ -72,16 +74,18 @@ Route::name('customer.')->group(function () {
 // ===============================================
 // 🛡️ GRUPO DE ROTAS DE ADMIN/GESTOR (PROTEGIDO)
 // ===============================================
+// Nota: O middleware 'gestor' é responsável por checar se a role é 'admin' ou 'gestor'.
 Route::middleware(['auth', 'gestor'])->group(function () {
 
     // 🎯 1. DASHBOARD: Rota principal do painel
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
 
     // ✅ ROTA API INTERNA PARA O DASHBOARD (Contagem de Pendências)
+    // 🛑 CORRIGIDO: O nome da rota deve ser 'api.reservas.pendentes.count'
     Route::get('/api/reservas/pendentes', [ReservaController::class, 'countPending'])
         ->name('api.reservas.pendentes.count');
 
-    // ✅ ROTA API PARA PESQUISA DE CLIENTES
+    // ✅ CORRIGIDO: ROTA API PARA PESQUISA DE CLIENTES (AGORA APONTA PARA USERCONTROLLER)
     Route::get('/api/clientes/search', [UserController::class, 'searchClients'])
         ->name('admin.api.search-clients');
 
@@ -112,20 +116,9 @@ Route::middleware(['auth', 'gestor'])->group(function () {
         Route::post('/config/delete-slot-config', [ConfigurationController::class, 'deleteSlotConfig'])->name('config.delete_slot_config');
         Route::post('/config/delete-day-config', [ConfigurationController::class, 'deleteDayConfig'])->name('config.delete_day_config');
 
-        // =========================================================================
-        // 🚀 MÓDULO: GERENCIAMENTO DE RESERVAS (Centralizado)
-        // =========================================================================
-        Route::prefix('reservas')->name('reservas.')->group(function () {
-            // Rota principal para o dashboard de botões: /admin/reservas
-            Route::get('/', [AdminController::class, 'indexReservasDashboard'])->name('index'); // Painel de botões
-
-            // Rotas de Listagem de Status
-            Route::get('pendentes', [AdminController::class, 'indexReservas'])->name('pendentes'); // Lista de Pendentes (Era index)
-            Route::get('confirmadas', [AdminController::class, 'confirmed_index'])->name('confirmadas'); // Lista de Confirmadas
-            Route::get('canceladas', [AdminController::class, 'canceled_index'])->name('canceladas'); // NOVO: Lista de Canceladas
-        });
-
-        // --- ROTAS DE AÇÕES E CRIAÇÃO (Permanecem fora do prefixo 'reservas' para evitar duplicação no nome da rota) ---
+        // --- ROTAS DE GERENCIAMENTO DE RESERVAS ---
+        Route::get('reservas', [AdminController::class, 'indexReservas'])->name('reservas.index');
+        Route::get('reservas/confirmadas', [AdminController::class, 'confirmed_index'])->name('reservas.confirmed_index');
         Route::get('reservas/{reserva}/show', [AdminController::class, 'showReserva'])->name('reservas.show');
         Route::get('reservas/create', [AdminController::class, 'createReserva'])->name('reservas.create');
         Route::post('reservas', [AdminController::class, 'storeReserva'])->name('reservas.store');
@@ -134,12 +127,20 @@ Route::middleware(['auth', 'gestor'])->group(function () {
         // AÇÕES (STATUS E EXCLUSÃO)
         Route::patch('reservas/{reserva}/update-status', [AdminController::class, 'updateStatusReserva'])->name('reservas.updateStatus');
         Route::patch('reservas/{reserva}/confirmar', [AdminController::class, 'confirmarReserva'])->name('reservas.confirmar');
+        // Usamos PATCH para rejeitar (atualiza status/deleta a reserva pendente)
         Route::patch('reservas/{reserva}/rejeitar', [AdminController::class, 'rejeitarReserva'])->name('reservas.rejeitar');
 
-        // ROTAS DE CANCELAMENTO AJAX (RESTful)
+
+        // 🛑 ROTAS DE CANCELAMENTO AJAX (RESTful)
+        // 1. Cancelamento Pontual Padrão (Avulso ou Exceção de Pré-reserva)
         Route::patch('reservas/{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('reservas.cancelar');
+
+        // 2. Cancelamento Pontual de Série (Exceção)
         Route::patch('reservas/{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('reservas.cancelar_pontual');
+
+        // 3. Cancelamento de Série Completa
         Route::delete('reservas/{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('reservas.cancelar_serie');
+
 
         Route::delete('reservas/{reserva}', [AdminController::class, 'destroyReserva'])->name('reservas.destroy');
 

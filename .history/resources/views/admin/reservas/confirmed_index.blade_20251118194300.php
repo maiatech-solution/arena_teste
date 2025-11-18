@@ -39,60 +39,61 @@
                 </div>
 
 
-                <div class="flex flex-col mb-8 space-y-4">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 space-y-4 md:space-y-0">
 
                     {{-- GRUPO DE FILTROS E PESQUISA --}}
-                    {{-- Usando um layout mais espaçado (gap-4) e flexível --}}
-                    <div class="flex flex-col md:flex-row items-center md:items-center space-y-4 md:space-y-0 md:space-x-6 w-full">
+                    <div class="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4 w-full md:w-auto">
 
-                        {{-- Botão de Filtro Rápido --}}
+                        {{-- Botões de Filtro Rápido --}}
+                        <div class="flex space-x-3 p-1 bg-gray-100 rounded-xl shadow-inner flex-shrink-0">
+                            {{-- CORREÇÃO APLICADA: admin.reservas.confirmed_index -> admin.reservas.confirmadas --}}
+                            <a href="{{ route('admin.reservas.confirmadas') }}"
+                                class="px-4 py-2 text-sm font-semibold rounded-lg shadow-md transition duration-150
+                                    @if (!isset($search) && !$isOnlyMine)
+                                        bg-indigo-600 text-white hover:bg-indigo-700
+                                    @else
+                                        text-indigo-600 hover:bg-white
+                                    @endif">
+                                Todas Confirmadas
+                            </a>
 
+                            {{-- Filtro: Minhas Reservas Manuais --}}
+                            <a href="{{ route('admin.reservas.confirmadas', ['only_mine' => 'true']) }}"
+                                class="px-4 py-2 text-sm font-semibold rounded-lg shadow-md transition duration-150
+                                    @if ($isOnlyMine)
+                                        bg-indigo-600 text-white hover:bg-indigo-700
+                                    @else
+                                        text-indigo-600 hover:bg-white
+                                    @endif">
+                                Minhas Reservas Manuais
+                            </a>
+                        </div>
 
-                        {{-- Formulário de Pesquisa e Datas --}}
-                        {{-- O formulário é a peça central dos filtros --}}
-                        <form method="GET" action="{{ route('admin.reservas.confirmadas') }}" class="flex flex-col md:flex-row items-end md:items-center space-y-4 md:space-y-0 md:space-x-4 w-full">
+                        {{-- Formulário de Pesquisa --}}
+                        {{-- CORREÇÃO APLICADA: action aponta para admin.reservas.confirmadas --}}
+                        <form method="GET" action="{{ route('admin.reservas.confirmadas') }}" class="flex items-center space-x-2 w-full md:w-auto">
                             <input type="hidden" name="only_mine" value="{{ $isOnlyMine ? 'true' : 'false' }}">
 
-                            {{-- ✅ FILTROS DE DATA (Agrupados e com bom espaçamento) --}}
-                            <div class="flex space-x-3 w-full md:w-auto flex-shrink-0">
-                                <div class="w-1/2 md:w-32">
-                                    <label for="start_date" class="block text-xs font-semibold text-gray-500 mb-1">De:</label>
-                                    <input type="date" name="start_date" id="start_date" value="{{ $startDate ?? '' }}"
-                                        class="px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 w-full">
-                                </div>
-                                <div class="w-1/2 md:w-32">
-                                    <label for="end_date" class="block text-xs font-semibold text-gray-500 mb-1">Até:</label>
-                                    <input type="date" name="end_date" id="end_date" value="{{ $endDate ?? '' }}"
-                                        class="px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 w-full">
-                                </div>
-                            </div>
+                            <input type="text"
+                                name="search"
+                                value="{{ $search ?? '' }}"
+                                placeholder="Pesquisar por cliente, contato..."
+                                class="px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150 w-full md:w-64">
 
-                            {{-- Pesquisa de Texto e Botões de Ação (Agrupados) --}}
-                            <div class="flex space-x-2 w-full md:w-auto items-end flex-grow md:flex-grow-0">
-                                <div class="flex-grow">
-                                    <label for="search" class="block text-xs font-semibold text-gray-500 mb-1">Pesquisar:</label>
-                                    <input type="text" name="search" id="search" value="{{ $search ?? '' }}"
-                                        placeholder="Nome, contato..."
-                                        class="px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150 w-full">
-                                </div>
+                            <button type="submit"
+                                    class="bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded-lg shadow-md transition duration-150 flex-shrink-0"
+                                    title="Buscar">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg>
+                            </button>
 
-                                <div class="flex items-end space-x-1 h-[42px]">
-                                    <button type="submit"
-                                            class="bg-indigo-600 hover:bg-indigo-700 text-white h-full p-2 rounded-lg shadow-md transition duration-150 flex-shrink-0 flex items-center justify-center"
-                                            title="Buscar">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg>
-                                    </button>
-
-                                    @if (isset($search) && $search || $startDate || $endDate)
-                                        {{-- Botão Limpar Filtros/Busca (mantém o only_mine) --}}
-                                        <a href="{{ route('admin.reservas.confirmadas', ['only_mine' => $isOnlyMine ? 'true' : 'false']) }}"
-                                            class="text-red-500 hover:text-red-700 h-full p-2 transition duration-150 flex-shrink-0 flex items-center justify-center rounded-lg border border-red-200"
-                                            title="Limpar Busca e Filtros de Data">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>
-                                        </a>
-                                    @endif
-                                </div>
-                            </div>
+                            @if (isset($search) && $search)
+                                {{-- CORREÇÃO APLICADA: href aponta para admin.reservas.confirmadas --}}
+                                <a href="{{ route('admin.reservas.confirmadas', ['only_mine' => $isOnlyMine ? 'true' : 'false']) }}"
+                                   class="text-red-500 hover:text-red-700 p-2 transition duration-150 flex-shrink-0"
+                                   title="Limpar Busca">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>
+                                </a>
+                            @endif
                         </form>
                     </div>
 
@@ -200,8 +201,7 @@
                 </div>
 
                 <div class="mt-8">
-                    {{-- ✅ ATUALIZADO: Inclui filtros de data, busca e only_mine na paginação --}}
-                    {{ $reservas->appends(['search' => $search, 'only_mine' => $isOnlyMine ? 'true' : 'false', 'start_date' => $startDate ?? '', 'end_date' => $endDate ?? ''])->links() }}
+                    {{ $reservas->appends(['search' => $search, 'only_mine' => $isOnlyMine ? 'true' : 'false'])->links() }}
                 </div>
 
             </div>
@@ -210,7 +210,7 @@
 
     {{-- MODAL DE CANCELAMENTO (Escondido por padrão) --}}
     <div id="cancellation-modal" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden items-center justify-center z-50 transition-opacity duration-300">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 m-4 transform transition-transform duration-300 scale-95 opacity-0" id="cancellation-modal-content" onclick="event.stopPropagation()">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 m-4 transform transition-transform duration-300 scale-95 opacity-0" id="cancellation-modal-content">
             <h3 id="modal-title" class="text-xl font-bold text-red-700 mb-4 border-b pb-2">Confirmação de Cancelamento</h3>
 
             <p id="modal-message" class="text-gray-700 mb-4"></p>
@@ -239,6 +239,8 @@
         // Variáveis de Rota e Token
         const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         // Usamos as rotas do web.php.
+        // NOTA: As rotas CANCELAR_PONTUAL e CANCELAR_SERIE esperam POST, mas a ação LÓGICA é PATCH/DELETE.
+        // O Laravel lida com isso se a URL de rota for a correta.
         const CANCEL_PONTUAL_URL = '{{ route("admin.reservas.cancelar_pontual", ":id") }}';
         const CANCEL_SERIE_URL = '{{ route("admin.reservas.cancelar_serie", ":id") }}';
         const CANCEL_PADRAO_URL = '{{ route("admin.reservas.cancelar", ":id") }}';
@@ -336,7 +338,7 @@
 
                 } else if (response.status === 422 && result.errors) {
                      // Lidar com erro de validação (Motivo muito curto)
-                     const reasonError = result.errors.cancellation_reason ? result.errors.cancellation_reason.join(', ') : 'Erro de validação desconhecida.';
+                     const reasonError = result.errors.cancellation_reason ? result.errors.cancellation_reason.join(', ') : 'Erro de validação desconhecido.';
                      alert(`ERRO DE VALIDAÇÃO: ${reasonError}`);
                 } else {
                     alert(result.error || result.message || `Erro desconhecido ao processar a ação. Status: ${response.status}.`);

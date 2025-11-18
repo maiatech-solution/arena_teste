@@ -21,33 +21,37 @@
                             {{ __('Home') }}
                         </x-nav-link>
 
-                        <!-- 🚀 2. NOVO LINK CENTRALIZADO: RESERVAS -->
-                        <!-- Ativo se a rota for 'admin.reservas.index' ou qualquer sub-rota de 'admin.reservas.*' -->
-                        <x-nav-link :href="route('admin.reservas.index')"
-                                    :active="request()->routeIs('admin.reservas.*')"
-                                    class="
-                                        px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
-                                        hover:bg-gray-50 hover:text-gray-700
-                                        focus:outline-none focus:bg-gray-50 focus:text-gray-700
-                                    ">
-                            {{ __('Reservas') }}
+                        <!-- 2. Reservas Confirmadas -->
+                        <x-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="
+                            px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
+                            hover:bg-gray-50 hover:text-gray-700
+                            focus:outline-none focus:bg-gray-50 focus:text-gray-700
+                        ">
+                            {{ __('Confirmadas') }}
                         </x-nav-link>
 
-                        {{-- Links antigos 'Confirmadas' e 'Pendentes' removidos daqui --}}
+                        <!-- 3. Reservas Pendentes WEB -->
+                        <x-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.index')" class="
+                            px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
+                            hover:bg-gray-50 hover:text-gray-700
+                            focus:outline-none focus:bg-gray-50 focus:text-gray-700
+                        ">
+                            {{ __('Pendentes') }}
+                        </x-nav-link>
 
-                        <!-- 3. Gerenciar Usuários (Corrigido para Lista/Index de Usuários) -->
+                        <!-- 4. Gerenciar Usuários (Corrigido para Lista/Index de Usuários) -->
                         <x-nav-link
                             :href="route('admin.users.index')"
                             :active="request()->routeIs('admin.users.index') || request()->routeIs('admin.users.create') || request()->routeIs('admin.users.edit')"
                             class="
-                                px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
-                                hover:bg-gray-50 hover:text-gray-700
-                                focus:outline-none focus:bg-gray-50 focus:text-gray-700
-                            ">
+                            px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
+                            hover:bg-gray-50 hover:text-gray-700
+                            focus:outline-none focus:bg-gray-50 focus:text-gray-700
+                        ">
                             {{ __('Gerenciar Usuários') }}
                         </x-nav-link>
 
-                        <!-- 4. Configuração de Horários (ÚLTIMA POSIÇÃO) -->
+                        <!-- 5. Configuração de Horários (ÚLTIMA POSIÇÃO) -->
                         <x-nav-link :href="route('admin.config.index')" :active="request()->routeIs('admin.config.index')" class="
                             px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
                             hover:bg-gray-50 hover:text-gray-700
@@ -135,21 +139,17 @@
                     {{ __('Home') }}
                 </x-responsive-nav-link>
 
-                <!-- 🚀 2. NOVO LINK CENTRALIZADO: RESERVAS -->
-                <x-responsive-nav-link :href="route('admin.reservas.index')"
-                                       :active="request()->routeIs('admin.reservas.*')"
-                                       class="border-l-4 border-gray-500 text-gray-600">
-                    {{ __('Reservas') }}
+                <!-- 2. Reservas Confirmadas -->
+                <x-responsive-nav-link :href="route('admin.reservas.confirmed_index')" :active="request()->routeIs('admin.reservas.confirmed_index')" class="border-l-4 border-gray-500 text-gray-600">
+                   {{ __('Confirmadas') }}
+                 </x-responsive-nav-link>
+
+                <!-- 3. Reservas Pendentes -->
+                <x-responsive-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.index')" class="border-l-4 border-gray-500 text-gray-600">
+                    {{ __('Pendentes') }}
                 </x-responsive-nav-link>
 
-                {{-- Links antigos 'Confirmadas' e 'Pendentes' removidos daqui --}}
-                {{--
-                <x-responsive-nav-link :href="route('admin.reservas.confirmed_index')" ...>
-                <x-responsive-nav-link :href="route('admin.reservas.index')" ...>
-                --}}
-
-
-                <!-- 3. Gerenciar Usuários (Corrigido para Lista/Index de Usuários) -->
+                <!-- 4. Gerenciar Usuários (Corrigido para Lista/Index de Usuários) -->
                 <x-responsive-nav-link
                     :href="route('admin.users.index')"
                     :active="request()->routeIs('admin.users.index') || request()->routeIs('admin.users.create') || request()->routeIs('admin.users.edit')"
@@ -157,7 +157,7 @@
                     {{ __('Gerenciar Usuários') }}
                 </x-responsive-nav-link>
 
-                <!-- 4. Configuração de Horários (ÚLTIMA POSIÇÃO) -->
+                <!-- 5. Configuração de Horários (ÚLTIMA POSIÇÃO) -->
                 <x-responsive-nav-link :href="route('admin.config.index')" :active="request()->routeIs('admin.config.index')" class="border-l-4 border-indigo-500 text-indigo-600">
                     {{ __('Funcionamento') }}
                 </x-responsive-nav-link>
