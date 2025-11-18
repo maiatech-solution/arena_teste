@@ -1202,16 +1202,7 @@
                         failure: function() {
                             console.error('Falha ao carregar reservas confirmadas via API.');
                         },
-                        textColor: 'white',
-                        // CRÍTICO: Filtra eventos que são na verdade 'slots disponíveis' (status: available)
-                        // para garantir que apenas o segundo source (AVAILABLE_API_URL) os renderize.
-                        eventDataTransform: function(eventData) {
-                            if (eventData.extendedProps && eventData.extendedProps.status === 'available') {
-                                // Retorna null para ignorar este evento
-                                return null;
-                            }
-                            return eventData;
-                        }
+                        textColor: 'white'
                     },
                     // 2. Fonte de Horários Disponíveis (Eventos Verdes) - AGORA COM FILTRAGEM DE TEMPO
                     {

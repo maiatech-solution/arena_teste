@@ -9,7 +9,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\UserController;
-use App\Http\Controllers\ApiReservaController; // CRÍTICO: Garantir que esta importação exista
+use App\Http\Controllers\ApiReservaController;
 
 // -----------------------------------------------------------------------------------
 // 🏠 ROTA RAIZ (PÚBLICA) - Bem-vindo à Arena
@@ -28,7 +28,7 @@ Route::post('/agendamento', [ReservaController::class, 'storePublic'])->name('re
 
 
 // =========================================================================
-// ROTA API PARA BUSCA DE HORÁRIOS (Corrigido para usar ApiReservaController)
+// ROTA API PARA BUSCA DE HORÁRIOS DISPONÍVEIS (USADA PELO JS NO ADMIN E CLIENTE)
 // =========================================================================
 
 // 1. Horários disponíveis (Slots Verdes)
@@ -36,9 +36,7 @@ Route::get('/api/horarios/disponiveis', [ApiReservaController::class, 'getAvaila
     ->name('api.horarios.disponiveis');
 
 // 2. Reservas confirmadas/pendentes (Ocupados)
-// 🛑 CORREÇÃO CRÍTICA: Apontando para o método getConfirmedReservas do ApiReservaController,
-// que agora contém o filtro is_fixed=false no Backend.
-Route::get('/api/reservas/confirmadas', [ApiReservaController::class, 'getConfirmedReservas'])
+Route::get('/api/reservas/confirmadas', [AdminController::class, 'getConfirmedReservasApi'])
     ->name('api.reservas.confirmadas');
 // =========================================================================
 
@@ -131,7 +129,9 @@ Route::middleware(['auth', 'gestor'])->group(function () {
         Route::patch('reservas/{reserva}/rejeitar', [AdminController::class, 'rejeitarReserva'])->name('reservas.rejeitar');
 
 
-        // 🛑 ROTAS DE CANCELAMENTO AJAX (RESTful)
+        // 🛑 CORREÇÃO CRÍTICA DO PROBLEMA PATCH METHOD NOT SUPPORTED:
+        // Rotas de Cancelamento AJAX devem ser PATCH ou DELETE para ser RESTful.
+
         // 1. Cancelamento Pontual Padrão (Avulso ou Exceção de Pré-reserva)
         Route::patch('reservas/{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('reservas.cancelar');
 

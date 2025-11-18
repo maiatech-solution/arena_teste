@@ -47,7 +47,7 @@ class ApiReservaController extends Controller
 
                 $clientName = $reserva->user ? $reserva->user->name : ($reserva->client_name ?? 'Cliente');
 
-                // ATUALIZAÇÃO DE FORMATO: Mostrar apenas o nome do Cliente (e Recorrente/Pendente se aplicável)
+                // 🛑 ATUALIZAÇÃO DE FORMATO: Mostrar apenas o nome do Cliente (e Recorrente/Pendente se aplicável)
                 $titlePrefix = '';
                 if ($reserva->status === Reserva::STATUS_PENDENTE) {
                     $titlePrefix = 'PENDENTE: ';
@@ -62,6 +62,7 @@ class ApiReservaController extends Controller
 
                 return [
                     'id' => $reserva->id,
+                    // Usando o novo título simplificado: PENDENTE: Nome Cliente / RECOR.: Nome Cliente
                     'title' => $eventTitle,
                     'start' => $startOutput,
                     'end' => $endOutput,
@@ -135,8 +136,9 @@ class ApiReservaController extends Controller
 
                 if (!$isOccupied) {
 
-                    // 🛑 CORREÇÃO FINAL: Título apenas "Disponível" para evitar a duplicação do horário pelo FC.
-                    $eventTitle = 'Disponível';
+                    // 🛑 ATUALIZAÇÃO DE FORMATO: Mostrar apenas o horário de início e "horário disponível"
+                    $startTimeDisplay = $startDateTime->format('H:i');
+                    $eventTitle = $startTimeDisplay . ' horário disponível';
 
                     $events[] = [
                         'id' => $slot->id,

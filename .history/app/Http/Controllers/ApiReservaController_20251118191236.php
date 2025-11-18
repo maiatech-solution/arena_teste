@@ -135,8 +135,9 @@ class ApiReservaController extends Controller
 
                 if (!$isOccupied) {
 
-                    // 🛑 CORREÇÃO FINAL: Título apenas "Disponível" para evitar a duplicação do horário pelo FC.
-                    $eventTitle = 'Disponível';
+                    // 🛑 ATUALIZAÇÃO DE FORMATO: Usar HH:mm e apenas " Disponível"
+                    $startTimeDisplay = $startDateTime->format('H:i');
+                    $eventTitle = $startTimeDisplay . ' Disponível'; // AGORA É HH:mm Disponível
 
                     $events[] = [
                         'id' => $slot->id,

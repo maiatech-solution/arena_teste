@@ -10,99 +10,24 @@ use Illuminate\Support\Facades\Log;
 class ApiReservaController extends Controller
 {
     // =========================================================================
-    // ✅ MÉTODO 1: Reservas REAIS (Confirmadas/Pendentes) - FILTRA is_fixed=false
+    // ✅ MÉTODO: Horários Disponíveis p/ Calendário (API) - ISOLADO E ROBUSTO
     // =========================================================================
     /**
-     * Retorna apenas as reservas feitas por clientes (Pontuais ou Recorrentes).
-     * FILTRA: is_fixed = false (Remove os slots técnicos da grade, que causavam duplicidade)
-     *
-     * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function getConfirmedReservas(Request $request)
-    {
-        try {
-            $start = Carbon::parse($request->input('start', Carbon::today()->toDateString()));
-            $end = Carbon::parse($request->input('end', Carbon::today()->addWeeks(6)->toDateString()));
-
-            // 🛑 CORREÇÃO CRÍTICA (Filtro Anti-Duplicação):
-            $reservas = Reserva::where('is_fixed', false)
-                               ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
-                               ->whereDate('date', '>=', $start)
-                               ->whereDate('date', '<=', $end)
-                               ->get();
-
-            $events = $reservas->map(function ($reserva) {
-                // Configuração visual do evento
-                $color = '#4f46e5';
-                $className = 'fc-event-quick';
-
-                if ($reserva->status === Reserva::STATUS_PENDENTE) {
-                    $color = '#ff9800';
-                    $className = 'fc-event-pending';
-                } elseif ((bool)$reserva->is_recurrent) {
-                    $color = '#c026d3';
-                    $className = 'fc-event-recurrent';
-                }
-
-                $clientName = $reserva->user ? $reserva->user->name : ($reserva->client_name ?? 'Cliente');
-
-                // ATUALIZAÇÃO DE FORMATO: Mostrar apenas o nome do Cliente (e Recorrente/Pendente se aplicável)
-                $titlePrefix = '';
-                if ($reserva->status === Reserva::STATUS_PENDENTE) {
-                    $titlePrefix = 'PENDENTE: ';
-                } elseif ((bool)$reserva->is_recurrent) {
-                    $titlePrefix = 'RECORR.: ';
-                }
-
-                $eventTitle = $titlePrefix . $clientName;
-
-                $startOutput = $reserva->date->format('Y-m-d') . 'T' . $reserva->start_time;
-                $endOutput = $reserva->date->format('Y-m-d') . 'T' . $reserva->end_time;
-
-                return [
-                    'id' => $reserva->id,
-                    'title' => $eventTitle,
-                    'start' => $startOutput,
-                    'end' => $endOutput,
-                    'color' => $color,
-                    'className' => $className,
-                    'extendedProps' => [
-                        'status' => $reserva->status,
-                        'price' => $reserva->price,
-                        'is_recurrent' => (bool)$reserva->is_recurrent,
-                        'is_fixed' => false
-                    ]
-                ];
-            });
-
-            return response()->json($events);
-
-        } catch (\Exception $e) {
-            Log::error("Erro ao buscar reservas confirmadas: " . $e->getMessage());
-            return response()->json(['error' => 'Erro interno ao carregar reservas. Detalhes: ' . $e->getMessage()], 500);
-        }
-    }
-
-    // =========================================================================
-    // ✅ MÉTODO 2: Horários Disponíveis p/ Calendário (API)
-    // =========================================================================
-    /**
-     * Retorna os slots da GRADE (is_fixed=true) que estão livres.
-     *
-     * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * Retorna os slots gerados pelas Reservas Fixas (is_fixed=true) que estão disponíveis (GREEN).
      */
     public function getAvailableSlotsApi(Request $request)
     {
         try {
+            // O FullCalendar envia 'start' e 'end' para delimitar o período
             $startDate = Carbon::parse($request->input('start', Carbon::today()->toDateString()));
             $endDate = Carbon::parse($request->input('end', Carbon::today()->addWeeks(6)->toDateString()));
 
+            // 1. Busca todos os slots de horário fixo (GRADE DE DISPONIBILIDADE)
+            // 🛑 CRÍTICO: Filtra APENAS slots com status CONFIRMADA. Se o status for CANCELADA, é ignorado!
             $allFixedSlots = Reserva::where('is_fixed', true)
                                            ->whereDate('date', '>=', $startDate->toDateString())
                                            ->whereDate('date', '<=', $endDate->toDateString())
-                                           ->where('status', Reserva::STATUS_CONFIRMADA)
+                                           ->where('status', Reserva::STATUS_CONFIRMADA) // Slots que definem a grade
                                            ->get();
 
             $events = [];
@@ -111,39 +36,55 @@ class ApiReservaController extends Controller
                 $slotStartTime = $slot->start_time;
                 $slotEndTime = $slot->end_time;
 
-                if (empty($slotStartTime) || empty($slotEndTime)) continue;
-
-                $slotDateString = $slot->date->toDateString();
-                $startDateTime = Carbon::parse($slotDateString . ' ' . $slotStartTime);
-                $endDateTime = Carbon::parse($slotDateString . ' ' . $slotEndTime);
-
-                if ($endDateTime->lte($startDateTime)) {
-                    $endDateTime->addDay();
+                // 🛑 CRÍTICO: Ignora o slot se o tempo for inválido (NULL/Empty)
+                if (empty($slotStartTime) || empty($slotEndTime)) {
+                    Log::warning("Slot fixo ID {$slot->id} pulado devido a start_time/end_time inválido.");
+                    continue;
                 }
 
+                $slotDateString = $slot->date->toDateString();
+
+                // 1. Cria o objeto Carbon para o início
+                $startDateTime = Carbon::parse($slotDateString . ' ' . $slotStartTime);
+
+                // 2. Cria o objeto Carbon para o fim (inicialmente no mesmo dia)
+                $endDateTime = Carbon::parse($slotDateString . ' ' . $slotEndTime);
+
+                // 🛑 CORREÇÃO CRÍTICA PARA SLOTS QUE CRUZAM A MEIA-NOITE (Ex: 23:00 -> 00:00) 🛑
+                // Se a hora de fim for menor ou igual à hora de início (como 00:00:00 é menor que 23:00:00),
+                // significa que o slot termina no dia seguinte.
+                if ($endDateTime->lte($startDateTime)) {
+                    $endDateTime->addDay();
+                    Log::info("Slot ID {$slot->id}: Ajuste de data final para o dia seguinte (De {$slotDateString} para {$endDateTime->toDateString()}).");
+                }
+
+                // 🛑 CORREÇÃO DE REGRESSÃO: Usar format('Y-m-d\TH:i:s') em vez de toIso8601String()
+                // para evitar problemas de fuso horário no frontend.
                 $startOutput = $startDateTime->format('Y-m-d\TH:i:s');
                 $endOutput = $endDateTime->format('Y-m-d\TH:i:s');
 
-                $isOccupied = Reserva::where('is_fixed', false)
+                // 2. Checa se o slot FIXO está ocupado por uma RESERVA PONTUAL (real cliente)
+                $isOccupiedByPunctual = Reserva::where('is_fixed', false)
                     ->whereDate('date', $slotDateString)
                     ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+                    // Compara as strings de tempo no DB
                     ->where(function ($query) use ($slotStartTime, $slotEndTime) {
                         $query->where('start_time', '<', $slotEndTime)
                               ->where('end_time', '>', $slotStartTime);
                     })
                     ->exists();
 
-                if (!$isOccupied) {
+                // 3. Se o slot NÃO estiver ocupado por um pontual, ele está DISPONÍVEL (GREEN).
+                if (!$isOccupiedByPunctual) {
 
-                    // 🛑 CORREÇÃO FINAL: Título apenas "Disponível" para evitar a duplicação do horário pelo FC.
-                    $eventTitle = 'Disponível';
+                    $title = "Slot Livre: R$ " . number_format($slot->price, 2, ',', '.');
 
                     $events[] = [
                         'id' => $slot->id,
-                        'title' => $eventTitle,
+                        'title' => $title,
                         'start' => $startOutput,
                         'end' => $endOutput,
-                        'color' => '#10b981', // Verde (Available)
+                        'color' => '#10b981', // Verde para Disponível (Emerald)
                         'className' => 'fc-event-available',
                         'extendedProps' => [
                             'status' => 'available',
@@ -157,19 +98,22 @@ class ApiReservaController extends Controller
             return response()->json($events);
 
         } catch (\Exception $e) {
-            Log::error("Erro no getAvailableSlotsApi: " . $e->getMessage());
-            return response()->json(['error' => 'Erro interno ao carregar horários disponíveis. Detalhes: ' . $e->getMessage()], 500);
+            // Loga o erro detalhadamente no servidor
+            Log::error("Erro fatal ao gerar slots disponíveis para o calendário público (ApiReservaController): " . $e->getMessage(), ['exception' => $e]);
+
+            // Retorna uma resposta de erro JSON com status 500
+            return response()->json([
+                'error' => 'Erro interno do servidor ao buscar horários. Detalhes: ' . $e->getMessage(),
+                'details' => $e->getMessage()
+            ], 500);
         }
     }
 
     // =========================================================================
-    // ✅ MÉTODO 3: Horários Disponíveis p/ FORMULÁRIO PÚBLICO (HTML) - ROBUSTO
+    // ✅ MÉTODO: Horários Disponíveis p/ FORMULÁRIO PÚBLICO (HTML) - ROBUSTO
     // =========================================================================
     /**
      * Calcula e retorna os horários disponíveis para uma data específica (página pública e /admin/reservas/create).
-     *
-     * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
      */
     public function getAvailableTimes(Request $request)
     {
@@ -179,11 +123,14 @@ class ApiReservaController extends Controller
         $isToday = $selectedDate->isToday();
         $now = Carbon::now();
 
+        // 1. Busca todos os slots de horário fixo (GRADE DE DISPONIBILIDADE) para esta data
+        // 🛑 CRÍTICO: Não busca slots com status CANCELADA
         $allFixedSlots = Reserva::where('is_fixed', true)
                                      ->whereDate('date', $dateString)
-                                     ->where('status', Reserva::STATUS_CONFIRMADA)
+                                     ->where('status', Reserva::STATUS_CONFIRMADA) // Filtro para ignorar CANCELADA
                                      ->get();
 
+        // 2. Busca todas as RESERVAS PONTUAIS (ocupações)
         $occupiedReservas = Reserva::where('is_fixed', false)
                                            ->whereDate('date', $dateString)
                                            ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
@@ -191,40 +138,51 @@ class ApiReservaController extends Controller
 
         $availableTimes = [];
 
+        // 3. Itera sobre a grade de slots fixos
         foreach ($allFixedSlots as $slot) {
-            if (empty($slot->start_time) || empty($slot->end_time)) continue;
+
+            // 🛑 CORREÇÃO CRÍTICA: Ignora o slot se o tempo for inválido (NULL/Empty)
+            if (empty($slot->start_time) || empty($slot->end_time)) {
+                Log::warning("Slot fixo ID {$slot->id} pulado devido a start_time/end_time inválido no getAvailableTimes.");
+                continue;
+            }
 
             $slotStart = Carbon::parse($slot->start_time);
             $slotEnd = Carbon::parse($slot->end_time);
 
+            // 🛑 AQUI A HORA DE FIM ESTÁ DENTRO DO DIA ATUAL
             $slotEndDateTime = $selectedDate->copy()->setTime($slotEnd->hour, $slotEnd->minute);
 
+            // 🛑 CORREÇÃO PONTUAL: Se a hora de fim for menor que a de início, avançar para o próximo dia
             if ($slotEnd->lt($slotStart)) {
                 $slotEndDateTime->addDay();
             }
 
+            // Verifica se o slot já passou hoje
             if ($isToday && $slotEndDateTime->lt($now)) {
                 continue;
             }
 
-            $isOccupied = $occupiedReservas->contains(function ($reservation) use ($slotStart, $slotEnd) {
+            // Checagem de Conflito: O slot fixo é considerado indisponível se houver uma reserva PONTUAL por cima.
+            $isOccupiedByPunctual = $occupiedReservas->contains(function ($reservation) use ($slotStart, $slotEnd) {
                 return $reservation->start_time < $slotEnd->format('H:i:s') && $reservation->end_time > $slotStart->format('H:i:s');
             });
 
-            if (!$isOccupied) {
+            if (!$isOccupiedByPunctual) {
                 // Slot disponível
                 $availableTimes[] = [
-                    'id' => $slot->id,
+                    'id' => $slot->id, // Usando ID da Reserva Fixa
                     'time_slot' => $slotStart->format('H:i') . ' - ' . $slotEnd->format('H:i'),
                     'price' => number_format($slot->price, 2, ',', '.'),
                     'raw_price' => $slot->price,
                     'start_time' => $slotStart->format('H:i'),
                     'end_time' => $slotEnd->format('H:i'),
-                    'schedule_id' => $slot->id,
+                    'schedule_id' => $slot->id, // O ID do slot disponível é o ID da Reserva Fixa
                 ];
             }
         }
 
+        // Ordena por hora de início
         $finalAvailableTimes = collect($availableTimes)->sortBy('start_time')->values();
 
         return response()->json($finalAvailableTimes);

@@ -191,10 +191,10 @@
         </div>
     </div>
 
-    {{-- Modal de Detalhes de Reserva (RESERVAS EXISTENTES CONFIRMADAS/RECORRENTES) --}}
+    {{-- Modal de Detalhes de Reserva (RESERVAS EXISTENTES) --}}
     <div id="event-modal" class="modal-overlay hidden" onclick="closeEventModal()">
         <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full transition-all duration-300 transform scale-100" onclick="event.stopPropagation()">
-            <h3 class="text-xl font-bold text-indigo-700 mb-4 border-b pb-2">Detalhes da Reserva Confirmada</h3>
+            <h3 class="text-xl font-bold text-indigo-700 mb-4 border-b pb-2">Detalhes da Reserva</h3>
             <div class="space-y-3 text-gray-700" id="modal-content">
             </div>
             <div class="mt-6 w-full space-y-2" id="modal-actions">
@@ -205,52 +205,6 @@
             </div>
         </div>
     </div>
-
-    {{-- NOVO: Modal de Ação Pendente (Abre ao clicar no slot Laranja) --}}
-    <div id="pending-action-modal" class="modal-overlay hidden" onclick="closePendingActionModal()">
-        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-lg w-full transition-all duration-300 transform scale-100" onclick="event.stopPropagation()">
-            <h3 class="text-xl font-bold text-orange-600 mb-4 border-b pb-2 flex items-center">
-                <svg class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                Ação Requerida: Pré-Reserva Pendente
-            </h3>
-
-            <div class="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                <div class="space-y-2 text-gray-700" id="pending-modal-content">
-                    {{-- Conteúdo Injetado via JS --}}
-                </div>
-            </div>
-
-            <form id="pending-action-form" onsubmit="return false;">
-                @csrf
-                @method('PATCH')
-                <input type="hidden" name="reserva_id" id="pending-reserva-id">
-
-                <div id="rejection-reason-area" class="mb-4 hidden">
-                    <label for="rejection-reason" class="block text-sm font-medium text-gray-700 mb-1">Motivo da Rejeição (Opcional):</label>
-                    <textarea name="rejection_reason" id="rejection-reason" rows="2" placeholder="Descreva o motivo para liberar o horário." class="w-full p-2 border border-gray-300 rounded-lg"></textarea>
-                </div>
-
-                <div id="confirmation-value-area" class="mb-4">
-                    <label for="confirmation-value" class="block text-sm font-medium text-gray-700 mb-1">Valor do Sinal/Confirmação (R$):</label>
-                    <input type="number" step="0.01" name="confirmation_value" id="confirmation-value" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500">
-                    <p class="text-xs text-gray-500 mt-1">Este valor é opcional, mas define a confirmação da reserva.</p>
-                </div>
-
-                <div class="flex justify-end space-x-3 mt-6">
-                    <button type="button" onclick="closePendingActionModal()" class="px-4 py-2 bg-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-400 transition duration-150">
-                        Voltar
-                    </button>
-                    <button type="button" id="reject-pending-btn" class="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150">
-                        Rejeitar
-                    </button>
-                    <button type="submit" id="confirm-pending-btn" class="px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150">
-                        Confirmar Reserva
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
 
     {{-- MODAL DE CANCELAMENTO (para o Motivo do Cancelamento) --}}
     <div id="cancellation-modal" class="modal-overlay hidden">
@@ -400,10 +354,6 @@
         const SEARCH_CLIENTS_API_URL = '{{ route("admin.api.search-clients") }}';
         const RENEW_SERIE_URL = '{{ route("admin.reservas.renew_serie", ":masterReserva") }}';
 
-        // ROTAS DE AÇÕES PENDENTES (Novas)
-        const CONFIRM_PENDING_URL = '{{ route("admin.reservas.confirmar", ":id") }}';
-        const REJECT_PENDING_URL = '{{ route("admin.reservas.rejeitar", ":id") }}';
-
         // ROTAS DE CANCELAMENTO
         const CANCEL_PONTUAL_URL = '{{ route("admin.reservas.cancelar_pontual", ":id") }}';
         const CANCEL_SERIE_URL = '{{ route("admin.reservas.cancelar_serie", ":id") }}';
@@ -540,10 +490,10 @@
             });
 
             clientSearchInput().addEventListener('focus', function() {
-                   // Show results if there is a query and results
-                   if (this.value.length >= 2 && clientResultsDiv().innerHTML.trim() !== '') {
-                        clientResultsDiv().classList.remove('hidden');
-                   }
+                 // Show results if there is a query and results
+                 if (this.value.length >= 2 && clientResultsDiv().innerHTML.trim() !== '') {
+                    clientResultsDiv().classList.remove('hidden');
+                 }
             });
         }
 
@@ -704,149 +654,6 @@
                 submitBtn.textContent = 'Confirmar Agendamento';
             }
         }
-
-        // =========================================================
-        // FLUXO DE AÇÕES PENDENTES (NOVO)
-        // =========================================================
-
-        function openPendingActionModal(event) {
-            const extendedProps = event.extendedProps || {};
-            const reservaId = event.id;
-            const dateDisplay = moment(event.start).format('DD/MM/YYYY');
-            const timeDisplay = moment(event.start).format('HH:mm') + ' - ' + moment(event.end).format('HH:mm');
-            const priceDisplay = parseFloat(extendedProps.price || 0).toFixed(2).replace('.', ',');
-            const clientName = event.title.split(' - R$ ')[0];
-
-            // 1. Popula o modal
-            document.getElementById('pending-reserva-id').value = reservaId;
-            document.getElementById('confirmation-value').value = extendedProps.price || ''; // Preenche com o valor sugerido
-
-            document.getElementById('pending-modal-content').innerHTML = `
-                <p>O cliente **${clientName}** realizou uma pré-reserva.</p>
-                <p><strong>Data:</strong> ${dateDisplay}</p>
-                <p><strong>Horário:</strong> ${timeDisplay}</p>
-                <p><strong>Valor Proposto:</strong> R$ ${priceDisplay}</p>
-                <p class="text-xs italic mt-2 text-orange-700">A confirmação remove o slot fixo e a rejeição recria o slot fixo.</p>
-            `;
-
-            // 2. Reseta a área de rejeição
-            document.getElementById('rejection-reason-area').classList.add('hidden');
-            document.getElementById('rejection-reason').value = '';
-
-            // 3. Exibe o modal
-            document.getElementById('pending-action-modal').classList.remove('hidden');
-        }
-
-        function closePendingActionModal() {
-            document.getElementById('pending-action-modal').classList.add('hidden');
-        }
-
-        // --- Lógica de submissão do formulário de Ação Pendente ---
-        document.getElementById('confirm-pending-btn').addEventListener('click', function() {
-            const form = document.getElementById('pending-action-form');
-            const reservaId = document.getElementById('pending-reserva-id').value;
-            const confirmationValue = document.getElementById('confirmation-value').value;
-
-            if (form.reportValidity()) {
-                const url = CONFIRM_PENDING_URL.replace(':id', reservaId);
-                const data = {
-                    confirmation_value: confirmationValue,
-                    _token: csrfToken,
-                    _method: 'PATCH',
-                };
-                sendPendingAction(url, data, 'Confirmando...');
-            }
-        });
-
-        document.getElementById('reject-pending-btn').addEventListener('click', function() {
-            const reasonArea = document.getElementById('rejection-reason-area');
-            const reasonInput = document.getElementById('rejection-reason');
-
-            // Alterna a exibição da área de motivo de rejeição
-            if (reasonArea.classList.contains('hidden')) {
-                reasonArea.classList.remove('hidden');
-                // Altera o botão de rejeitar para submeter
-                this.textContent = 'Confirmar Rejeição';
-                this.classList.replace('bg-red-600', 'bg-red-800');
-            } else {
-                const reservaId = document.getElementById('pending-reserva-id').value;
-                const reason = reasonInput.value.trim();
-
-                // Validação mínima para rejeição
-                if (reason.length < 5) {
-                    alert("Por favor, forneça um motivo de rejeição com pelo menos 5 caracteres.");
-                    return;
-                }
-
-                const url = REJECT_PENDING_URL.replace(':id', reservaId);
-                const data = {
-                    rejection_reason: reason,
-                    _token: csrfToken,
-                    _method: 'PATCH',
-                };
-                sendPendingAction(url, data, 'Rejeitando...');
-            }
-        });
-
-        async function sendPendingAction(url, data, buttonText) {
-            const submitBtn = document.getElementById('confirm-pending-btn');
-            const rejectBtn = document.getElementById('reject-pending-btn');
-
-            // Temporariamente desabilita os botões
-            submitBtn.disabled = true;
-            rejectBtn.disabled = true;
-            submitBtn.textContent = buttonText;
-            rejectBtn.textContent = buttonText;
-
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': csrfToken,
-                        'Accept': 'application/json',
-                    },
-                    body: JSON.stringify(data)
-                });
-
-                let result = {};
-                try {
-                    result = await response.json();
-                } catch (e) {
-                    const errorText = await response.text();
-                    console.error("Falha ao ler JSON de resposta.", errorText);
-                    alert(`Erro do Servidor (${response.status}). Verifique o console.`);
-                    return;
-                }
-
-                if (response.ok && result.success) {
-                    alert(result.message);
-                    closePendingActionModal();
-                    // Recarrega a página para atualizar o calendário
-                    setTimeout(() => window.location.reload(), 50);
-
-                } else if (response.status === 422 && result.errors) {
-                    const errors = Object.values(result.errors).flat().join('\n');
-                    alert(`ERRO DE VALIDAÇÃO:\n${errors}`);
-                } else {
-                    alert(result.message || `Erro desconhecido. Status: ${response.status}.`);
-                }
-
-            } catch (error) {
-                console.error('Erro de Rede:', error);
-                alert("Erro de Rede. Tente novamente.");
-            } finally {
-                // Restaura o estado dos botões em caso de falha
-                submitBtn.disabled = false;
-                rejectBtn.disabled = false;
-                submitBtn.textContent = 'Confirmar Reserva';
-                rejectBtn.textContent = 'Rejeitar';
-                // Garante que o estado visual de Rejeitar seja resetado se a rejeição falhar
-                document.getElementById('rejection-reason-area').classList.add('hidden');
-                rejectBtn.classList.replace('bg-red-800', 'bg-red-600');
-            }
-        }
-
 
         // =========================================================
         // FLUXO DE CANCELAMENTO E RENOVAÇÃO (JS) - MANTIDO
@@ -1130,8 +937,8 @@
 
                     // Se a lista estiver vazia, atualiza o modal e fecha
                     if (document.getElementById('renewal-list').children.length === 0) {
-                           document.getElementById('renewal-list').innerHTML = '<p class="text-gray-500 italic text-center p-4">Nenhuma série a ser renovada no momento. Bom trabalho!</p>';
-                           setTimeout(() => closeRenewalModal(), 3000); // Fecha após 3s
+                         document.getElementById('renewal-list').innerHTML = '<p class="text-gray-500 italic text-center p-4">Nenhuma série a ser renovada no momento. Bom trabalho!</p>';
+                         setTimeout(() => closeRenewalModal(), 3000); // Fecha após 3s
                     }
 
                     // Recarrega o calendário após sucesso para mostrar os novos slots
@@ -1202,16 +1009,7 @@
                         failure: function() {
                             console.error('Falha ao carregar reservas confirmadas via API.');
                         },
-                        textColor: 'white',
-                        // CRÍTICO: Filtra eventos que são na verdade 'slots disponíveis' (status: available)
-                        // para garantir que apenas o segundo source (AVAILABLE_API_URL) os renderize.
-                        eventDataTransform: function(eventData) {
-                            if (eventData.extendedProps && eventData.extendedProps.status === 'available') {
-                                // Retorna null para ignorar este evento
-                                return null;
-                            }
-                            return eventData;
-                        }
+                        textColor: 'white'
                     },
                     // 2. Fonte de Horários Disponíveis (Eventos Verdes) - AGORA COM FILTRAGEM DE TEMPO
                     {
@@ -1288,15 +1086,6 @@
                 eventClick: function(info) {
                     const event = info.event;
                     const isAvailable = event.classNames.includes('fc-event-available');
-                    const extendedProps = event.extendedProps || {};
-                    const status = extendedProps.status;
-
-                    // --- NOVO: LÓGICA DE SLOT PENDENTE (ABRE O MODAL DE AÇÃO) ---
-                    if (status === 'pending') {
-                        openPendingActionModal(event);
-                        return; // CRÍTICO: Para o fluxo aqui!
-                    }
-
 
                     // --- LÓGICA DE SLOT DISPONÍVEL (Agendamento Rápido) ---
                     if (isAvailable) {
@@ -1318,6 +1107,7 @@
 
                         const timeSlotDisplay = startDate.format('HH:mm') + ' - ' + endDate.format('HH:mm'); // Display no modal
 
+                        const extendedProps = event.extendedProps || {};
                         const price = extendedProps.price || 0;
 
                         const reservaIdToUpdate = event.id;
@@ -1355,9 +1145,9 @@
                         const endTime = event.end;
                         const reservaId = event.id;
 
+                        const extendedProps = event.extendedProps || {};
                         const isRecurrent = extendedProps.is_recurrent;
-
-                        // NOTA: O status 'pending' é tratado acima, este else if cobre 'confirmed'
+                        const status = extendedProps.status;
 
                         const dateDisplay = moment(startTime).format('DD/MM/YYYY');
 
@@ -1372,7 +1162,9 @@
                         const priceDisplay = titleParts.length > 1 ? `R$ ${titleParts[1]}` : 'N/A';
 
                         // Determinar o status textual
-                        let statusText = 'Confirmada';
+                        let statusText = status;
+                        if (status === 'pending') { statusText = 'Pendente'; }
+                        else if (status === 'confirmed') { statusText = 'Confirmada'; }
 
 
                         const showUrl = SHOW_RESERVA_URL.replace(':id', reservaId);
@@ -1385,7 +1177,7 @@
 
                         modalContent.innerHTML = `
                             <p class="font-semibold text-gray-900">${title}</p>
-                            <p><strong>Status:</strong> <span class="uppercase font-bold text-sm text-indigo-600">${statusText}</span></p>
+                            <p><strong>Status:</strong> <span class="uppercase font-bold text-sm text-${status === 'pending' ? 'orange' : 'indigo'}-600">${statusText}</span></p>
                             <p><strong>Data:</strong> ${dateDisplay}</p>
                             <p><strong>Horário:</strong> ${timeDisplay}</p>
                             <p><strong>Valor:</strong> <span class="text-green-600 font-bold">${priceDisplay}</span></p>
@@ -1400,25 +1192,25 @@
                         `;
 
                         // ADICIONA BOTÕES DE CANCELAMENTO QUE CHAMAM O MODAL DE MOTIVO
-
-                        if (isRecurrent) {
-                            actionButtons += `
-                                <button onclick="cancelarPontual(${reservaId}, true)" class="w-full mb-2 px-4 py-2 bg-yellow-500 text-white font-medium rounded-lg hover:bg-yellow-600 transition duration-150 text-sm">
-                                    Cancelar APENAS ESTE DIA
-                                </button>
-                                <button onclick="cancelarSerie(${reservaId})" class="w-full mb-2 px-4 py-2 bg-red-800 text-white font-medium rounded-lg hover:bg-red-900 transition duration-150 text-sm">
-                                    Cancelar SÉRIE INTEIRA (Futuros)
-                                </button>
-                            `;
-                        } else {
-                            // Reserva Pontual
-                            actionButtons += `
-                                <button onclick="cancelarPontual(${reservaId}, false)" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition duration-150 text-sm">
-                                    Cancelar Reserva Pontual
-                                </button>
-                            `;
+                        if (status === 'confirmed' || status === 'pending') {
+                            if (isRecurrent) {
+                                actionButtons += `
+                                    <button onclick="cancelarPontual(${reservaId}, true)" class="w-full mb-2 px-4 py-2 bg-yellow-500 text-white font-medium rounded-lg hover:bg-yellow-600 transition duration-150 text-sm">
+                                        Cancelar APENAS ESTE DIA
+                                    </button>
+                                    <button onclick="cancelarSerie(${reservaId})" class="w-full mb-2 px-4 py-2 bg-red-800 text-white font-medium rounded-lg hover:bg-red-900 transition duration-150 text-sm">
+                                        Cancelar SÉRIE INTEIRA (Futuros)
+                                    </button>
+                                `;
+                            } else {
+                                // Reserva Pontual
+                                actionButtons += `
+                                    <button onclick="cancelarPontual(${reservaId}, false)" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition duration-150 text-sm">
+                                        Cancelar Reserva Pontual
+                                    </button>
+                                `;
+                            }
                         }
-
 
                         actionButtons += `
                             <button onclick="closeEventModal()" class="w-full px-4 py-2 bg-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-400 transition duration-150 text-sm">
@@ -1451,7 +1243,5 @@
         window.openRenewalModal = openRenewalModal;
         window.handleRenewal = handleRenewal;
         window.clearSelectedClient = clearSelectedClient;
-        window.openPendingActionModal = openPendingActionModal; // Novo
-        window.closePendingActionModal = closePendingActionModal; // Novo
     </script>
 </x-app-layout>

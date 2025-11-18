@@ -26,6 +26,7 @@ class ApiReservaController extends Controller
             $end = Carbon::parse($request->input('end', Carbon::today()->addWeeks(6)->toDateString()));
 
             // 🛑 CORREÇÃO CRÍTICA (Filtro Anti-Duplicação):
+            // Busca APENAS reservas de clientes (is_fixed = false).
             $reservas = Reserva::where('is_fixed', false)
                                ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
                                ->whereDate('date', '>=', $start)
@@ -34,35 +35,26 @@ class ApiReservaController extends Controller
 
             $events = $reservas->map(function ($reserva) {
                 // Configuração visual do evento
-                $color = '#4f46e5';
-                $className = 'fc-event-quick';
+                $color = '#4f46e5'; // Indigo (Confirmada Padrão)
+                $className = 'fc-event-quick'; // Padrão avulso
 
                 if ($reserva->status === Reserva::STATUS_PENDENTE) {
-                    $color = '#ff9800';
+                    $color = '#ff9800'; // Laranja (Pendente)
                     $className = 'fc-event-pending';
                 } elseif ((bool)$reserva->is_recurrent) {
-                    $color = '#c026d3';
+                    $color = '#c026d3'; // Fuchsia (Recorrente)
                     $className = 'fc-event-recurrent';
                 }
 
                 $clientName = $reserva->user ? $reserva->user->name : ($reserva->client_name ?? 'Cliente');
 
-                // ATUALIZAÇÃO DE FORMATO: Mostrar apenas o nome do Cliente (e Recorrente/Pendente se aplicável)
-                $titlePrefix = '';
-                if ($reserva->status === Reserva::STATUS_PENDENTE) {
-                    $titlePrefix = 'PENDENTE: ';
-                } elseif ((bool)$reserva->is_recurrent) {
-                    $titlePrefix = 'RECORR.: ';
-                }
-
-                $eventTitle = $titlePrefix . $clientName;
-
+                // Formatação da data/hora no formato compatível com FullCalendar (Y-m-d\TH:i:s)
                 $startOutput = $reserva->date->format('Y-m-d') . 'T' . $reserva->start_time;
                 $endOutput = $reserva->date->format('Y-m-d') . 'T' . $reserva->end_time;
 
                 return [
                     'id' => $reserva->id,
-                    'title' => $eventTitle,
+                    'title' => $clientName . ' - R$ ' . number_format($reserva->price, 2, ',', '.'),
                     'start' => $startOutput,
                     'end' => $endOutput,
                     'color' => $color,
@@ -71,7 +63,7 @@ class ApiReservaController extends Controller
                         'status' => $reserva->status,
                         'price' => $reserva->price,
                         'is_recurrent' => (bool)$reserva->is_recurrent,
-                        'is_fixed' => false
+                        'is_fixed' => false // Sempre falso para esta lista de reservas reais
                     ]
                 ];
             });
@@ -85,10 +77,11 @@ class ApiReservaController extends Controller
     }
 
     // =========================================================================
-    // ✅ MÉTODO 2: Horários Disponíveis p/ Calendário (API)
+    // ✅ MÉTODO 2: Horários Disponíveis p/ Calendário (API) - ISOLADO E ROBUSTO
     // =========================================================================
     /**
      * Retorna os slots da GRADE (is_fixed=true) que estão livres.
+     * Inclui a correção para slots que cruzam a meia-noite (23:00 -> 00:00).
      *
      * @param \Illuminate\Http\Request $request
      * @return \Illuminate\Http\JsonResponse
@@ -99,6 +92,7 @@ class ApiReservaController extends Controller
             $startDate = Carbon::parse($request->input('start', Carbon::today()->toDateString()));
             $endDate = Carbon::parse($request->input('end', Carbon::today()->addWeeks(6)->toDateString()));
 
+            // 1. Busca GRADE (is_fixed = true, status CONFIRMADA)
             $allFixedSlots = Reserva::where('is_fixed', true)
                                            ->whereDate('date', '>=', $startDate->toDateString())
                                            ->whereDate('date', '<=', $endDate->toDateString())
@@ -117,6 +111,7 @@ class ApiReservaController extends Controller
                 $startDateTime = Carbon::parse($slotDateString . ' ' . $slotStartTime);
                 $endDateTime = Carbon::parse($slotDateString . ' ' . $slotEndTime);
 
+                // 🛑 CORREÇÃO DE MEIA-NOITE: Se o horário de fim for igual ou anterior ao de início, adiciona 1 dia.
                 if ($endDateTime->lte($startDateTime)) {
                     $endDateTime->addDay();
                 }
@@ -124,23 +119,22 @@ class ApiReservaController extends Controller
                 $startOutput = $startDateTime->format('Y-m-d\TH:i:s');
                 $endOutput = $endDateTime->format('Y-m-d\TH:i:s');
 
+                // 2. Checa colisão com Reserva Real (is_fixed = false)
                 $isOccupied = Reserva::where('is_fixed', false)
                     ->whereDate('date', $slotDateString)
                     ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+                    // Lógica de sobreposição: A reserva começa antes do fim do slot E termina depois do início do slot.
                     ->where(function ($query) use ($slotStartTime, $slotEndTime) {
                         $query->where('start_time', '<', $slotEndTime)
                               ->where('end_time', '>', $slotStartTime);
                     })
                     ->exists();
 
+                // 3. Se não estiver ocupado por uma reserva real, está DISPONÍVEL (verde)
                 if (!$isOccupied) {
-
-                    // 🛑 CORREÇÃO FINAL: Título apenas "Disponível" para evitar a duplicação do horário pelo FC.
-                    $eventTitle = 'Disponível';
-
                     $events[] = [
                         'id' => $slot->id,
-                        'title' => $eventTitle,
+                        'title' => "Slot Livre: R$ " . number_format($slot->price, 2, ',', '.'),
                         'start' => $startOutput,
                         'end' => $endOutput,
                         'color' => '#10b981', // Verde (Available)
@@ -148,7 +142,7 @@ class ApiReservaController extends Controller
                         'extendedProps' => [
                             'status' => 'available',
                             'price' => $slot->price,
-                            'is_fixed' => true,
+                            'is_fixed' => true, // Este é um slot da grade
                         ]
                     ];
                 }
@@ -179,11 +173,13 @@ class ApiReservaController extends Controller
         $isToday = $selectedDate->isToday();
         $now = Carbon::now();
 
+        // 1. Busca a grade de slots fixos para esta data
         $allFixedSlots = Reserva::where('is_fixed', true)
                                      ->whereDate('date', $dateString)
                                      ->where('status', Reserva::STATUS_CONFIRMADA)
                                      ->get();
 
+        // 2. Busca todas as RESERVAS REAIS (ocupações)
         $occupiedReservas = Reserva::where('is_fixed', false)
                                            ->whereDate('date', $dateString)
                                            ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
@@ -191,22 +187,27 @@ class ApiReservaController extends Controller
 
         $availableTimes = [];
 
+        // 3. Itera sobre a grade
         foreach ($allFixedSlots as $slot) {
             if (empty($slot->start_time) || empty($slot->end_time)) continue;
 
             $slotStart = Carbon::parse($slot->start_time);
             $slotEnd = Carbon::parse($slot->end_time);
 
+            // Cria o DateTime para comparação de slot passado hoje
             $slotEndDateTime = $selectedDate->copy()->setTime($slotEnd->hour, $slotEnd->minute);
 
+            // Ajuste de meia-noite
             if ($slotEnd->lt($slotStart)) {
                 $slotEndDateTime->addDay();
             }
 
+            // Filtro: Se o slot já terminou (Hoje) ou está no passado, pula.
             if ($isToday && $slotEndDateTime->lt($now)) {
                 continue;
             }
 
+            // Checagem de Conflito
             $isOccupied = $occupiedReservas->contains(function ($reservation) use ($slotStart, $slotEnd) {
                 return $reservation->start_time < $slotEnd->format('H:i:s') && $reservation->end_time > $slotStart->format('H:i:s');
             });
