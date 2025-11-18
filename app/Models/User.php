@@ -9,7 +9,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Casts\Attribute; // Para o Accessor de Status
+use Illuminate\Database\Eloquent\Casts\Attribute; // Para o Accessor
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -24,7 +24,6 @@ class User extends Authenticatable implements MustVerifyEmail
         'name',
         'email',
         'whatsapp_contact',
-        'data_nascimento',
         'password',
         'role', // 'admin', 'gestor', 'cliente'
     ];
@@ -47,7 +46,7 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
-        'data_nascimento' => 'date', // Cast para objeto Carbon
+        // 'data_nascimento' foi removido daqui
     ];
 
     // =========================================================================
@@ -56,22 +55,19 @@ class User extends Authenticatable implements MustVerifyEmail
 
     /**
      * Obtém todas as reservas associadas a este usuário.
-     * ⚠️ Nota: Reserva é o nome do seu modelo de agendamento (Reserva.php).
      */
     public function reservas(): HasMany
     {
+        // Supondo que você tenha um modelo 'Reserva'
         return $this->hasMany(Reserva::class, 'user_id');
     }
 
     // =========================================================================
-    // ✅ ACCESSORS PARA AUTORIZAÇÃO (CRÍTICO PARA O BLADE)
+    // ✅ ACCESSORS PARA AUTORIZAÇÃO
     // =========================================================================
 
     /**
      * Verifica se o usuário tem a role 'gestor' ou 'admin'.
-     *
-     * 🛑 CORREÇÃO: Accessor permite que a propriedade $user->is_gestor
-     * seja usada no Blade.
      */
     protected function isGestor(): Attribute
     {
@@ -82,7 +78,6 @@ class User extends Authenticatable implements MustVerifyEmail
 
     /**
      * Verifica se o usuário tem a role 'cliente'.
-     * Accessor permite que a propriedade $user->is_client seja usada no Blade.
      */
     protected function isClient(): Attribute
     {
@@ -92,11 +87,11 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     // =========================================================================
-    // ✅ ACCESSOR (Novo: Para formatar o contato com máscara)
+    // ✅ ACCESSOR PARA FORMATAR CONTATO
     // =========================================================================
     /**
      * Formata o contato de WhatsApp (adiciona a máscara).
-     * Ex: 11988887777 -> (11) 9 8888-7777 (Exemplo de SP)
+     * Ex: 11988887777 -> (11) 9 8888-7777
      */
     protected function formattedWhatsappContact(): Attribute
     {
@@ -105,9 +100,9 @@ class User extends Authenticatable implements MustVerifyEmail
                 $contact = preg_replace('/\D/', '', $attributes['whatsapp_contact']);
                 $length = strlen($contact);
 
-                if ($length === 11) { // Ex: (DD) 9 XXXX-XXXX
+                if ($length === 11) {
                     return '('.substr($contact, 0, 2).') '.substr($contact, 2, 1).' '.substr($contact, 3, 4).'-'.substr($contact, 7, 4);
-                } elseif ($length === 10) { // Ex: (DD) XXXX-XXXX (sem o 9)
+                } elseif ($length === 10) {
                     return '('.substr($contact, 0, 2).') '.substr($contact, 2, 4).'-'.substr($contact, 6, 4);
                 }
 

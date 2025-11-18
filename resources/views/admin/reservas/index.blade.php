@@ -66,6 +66,7 @@
                                             <form action="{{ route('admin.reservas.confirmar', $reserva) }}" method="POST" class="inline">
                                                 @csrf
                                                 @method('PATCH')
+                                                <input type="number" id="quantity" name="quantity" placeholder="Valor do sinal" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-500 dark:text-white price-input-config">
                                                 <button type="submit" class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-600">
                                                     Confirmar
                                                 </button>

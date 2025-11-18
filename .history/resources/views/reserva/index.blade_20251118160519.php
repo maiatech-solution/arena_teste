@@ -320,6 +320,16 @@
                         <input type="hidden" name="email_cliente" value="{{ Auth::user()->email }}">
                     </div> {{-- Fim do Bloco CLIENTE LOGADO --}}
                 @else
+                    {{-- GUEST: Exibe os inputs para cadastro/identificação --}}
+                    <div class="mb-8 p-4 bg-yellow-50 dark:bg-yellow-900/30 rounded-xl border border-yellow-300 dark:border-yellow-700 shadow-inner">
+                        <p class="text-yellow-800 dark:text-yellow-300 text-sm font-semibold flex items-center">
+                            <svg class="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                            Já tem conta? Seus dados de contato já existem! Por favor, **faça login** para vincular a reserva à sua conta existente ou use outro contato.
+                        </p>
+                        <a href="{{ route('customer.login') }}" class="mt-2 inline-block text-sm text-yellow-700 dark:text-yellow-400 font-bold underline hover:text-yellow-900 transition">
+                            Clique aqui para fazer login.
+                        </a>
+                    </div>
 
                     <p class="text-gray-700 dark:text-gray-300 mb-6 text-sm">
                         Preencha seus dados para registrar sua pré-reserva. Seus dados serão usados para **criar ou identificar sua conta**.

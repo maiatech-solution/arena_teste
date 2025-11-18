@@ -19,19 +19,156 @@ use App\Events\ReservaCancelada;
 class AdminController extends Controller
 {
     /**
+     * Retorna a lógica de checagem de sobreposição.
+     * [Imagens de Diagrama de Sobreposição de Intervalos]
+     */
+    protected function checkOverlap(string $dateString, string $startTime, ?string $endTime, bool $isFixed, ?int $ignoreId = null): bool
+    {
+        // Se o end_time não foi fornecido (ex: erro no agendamento), assume 1h
+        $endTime = $endTime ?: Carbon::parse($startTime)->addHour()->format('H:i:s');
+
+        $query = Reserva::whereDate('date', $dateString)
+            // Não deve haver sobreposição com reservas CONFIRMADAS ou PENDENTES (reais ou slots fixos)
+            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+            ->where(function ($q) use ($startTime, $endTime) {
+                // A reserva existente começa DEPOIS que a nova começa E ANTES que a nova termina
+                $q->where('start_time', '>=', $startTime)
+                    ->where('start_time', '<', $endTime);
+            })
+            ->orWhere(function ($q) use ($startTime, $endTime) {
+                // A reserva existente começa ANTES que a nova comece E termina DEPOIS que a nova começa
+                $q->where('start_time', '<', $startTime)
+                    ->where('end_time', '>', $startTime);
+            });
+
+        // Ignora a própria reserva se estivermos editando/confirmando uma existente
+        if ($ignoreId) {
+            $query->where('id', '!=', $ignoreId);
+        }
+
+        return $query->exists();
+    }
+
+    /**
+     * Encontra um cliente pelo contato do WhatsApp ou e-mail, ou cria um novo se não existir.
+     * Este método é ideal para ser chamado por outros controllers (públicos ou admin).
+     *
+     * @param array $data Contém 'name', 'email', 'whatsapp_contact', 'data_nascimento'
+     * @return User O objeto User encontrado ou recém-criado.
+     */
+    public function findOrCreateClient(array $data): User
+    {
+        // 1. Tenta encontrar o usuário pelo WhatsApp ou Email
+        $user = User::where('whatsapp_contact', $data['whatsapp_contact'])
+                    ->orWhere('email', $data['email'])
+                    ->first();
+
+        // Dados a serem atualizados/criados
+        $updateData = [
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'whatsapp_contact' => $data['whatsapp_contact'],
+            'data_nascimento' => $data['data_nascimento'] ?? null,
+            'role' => 'cliente',
+        ];
+
+        if ($user) {
+            // 2. Cliente Encontrado: Atualiza dados.
+            $user->update($updateData);
+            Log::info("Cliente existente atualizado para reserva: {$user->email}");
+            return $user;
+
+        } else {
+            // 3. Cliente Não Encontrado: Cria um novo usuário
+            $updateData['password'] = Hash::make(Str::random(16));
+            $user = User::create($updateData);
+            Log::info("Novo cliente criado automaticamente para reserva: {$user->email}");
+            return $user;
+        }
+    }
+
+    // =========================================================================
+    // 💡 NOVO MÉTODO: CRIAÇÃO MANUAL DE RESERVA PELO ADMIN
+    // Este método demonstra a utilização de findOrCreateClient para agendamento manual.
+    // =========================================================================
+    public function storeManualReserva(Request $request)
+    {
+        $validatedData = $request->validate([
+            'client_name' => 'required|string|max:255',
+            // Aqui, a unicidade do email e whatsapp NÃO é checada,
+            // pois findOrCreateClient vai lidar com a existência.
+            'client_email' => 'required|email|max:255',
+            'client_contact' => 'required|string|max:20',
+            'date' => 'required|date_format:Y-m-d|after_or_equal:today',
+            'start_time' => 'required|date_format:H:i:s',
+            'end_time' => 'nullable|date_format:H:i:s|after:start_time',
+            'price' => 'nullable|numeric|min:0',
+            // ... outros campos de reserva
+        ]);
+
+        DB::beginTransaction();
+        try {
+            // 1. ENCONTRA/CRIA o Usuário (o coração da sua lógica)
+            $client = $this->findOrCreateClient([
+                'name' => $validatedData['client_name'],
+                'email' => $validatedData['client_email'],
+                'whatsapp_contact' => $validatedData['client_contact'],
+                'data_nascimento' => $request->input('data_nascimento'), // Assumindo que este campo está no form
+            ]);
+
+            $dateString = $validatedData['date'];
+            $startTime = $validatedData['start_time'];
+            $endTime = $validatedData['end_time'];
+
+            // 2. Checagem de Conflito
+            if ($this->checkOverlap($dateString, $startTime, $endTime, false, null)) {
+                DB::rollBack();
+                return back()->with('error', 'Conflito detectado: Já existe outra reserva no mesmo horário.');
+            }
+
+            // 3. Cria a Reserva e a associa ao Usuário
+            $reserva = Reserva::create([
+                'user_id' => $client->id,
+                'date' => $dateString,
+                'day_of_week' => Carbon::parse($dateString)->dayOfWeek,
+                'start_time' => $startTime,
+                'end_time' => $endTime,
+                'price' => $validatedData['price'],
+                'client_name' => $client->name,
+                'client_contact' => $client->whatsapp_contact,
+                'status' => Reserva::STATUS_CONFIRMADA, // Admin confirma imediatamente
+                'is_fixed' => false,
+                'is_recurrent' => false,
+                'manager_id' => Auth::id(),
+            ]);
+
+            DB::commit();
+            return redirect()->route('dashboard')->with('success', 'Reserva manual para ' . $client->name . ' criada e confirmada com sucesso!');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Erro ao criar reserva manual: " . $e->getMessage());
+            return back()->withInput()->with('error', 'Erro inesperado ao criar a reserva: ' . $e->getMessage());
+        }
+    }
+    // =========================================================================
+
+    /**
      * Exibe o dashboard principal do gestor.
      */
     public function dashboard()
     {
         $reservasPendentesCount = Reserva::where('status', Reserva::STATUS_PENDENTE)->count();
 
-        // Pega as séries recorrentes que estão terminando (usando a lógica do ReservaController)
+        // Código de contagem de séries expirando
         try {
-            $reservaController = app(\App\Http\Controllers\ReservaController::class);
-            $expiringSeries = $reservaController->getEndingRecurrentSeries();
-            $expiringSeriesCount = count($expiringSeries);
+            $expiringSeriesCount = Reserva::where('is_recurrent', true)
+                ->whereDate('recurrent_end_date', '<=', Carbon::now()->addDays(30))
+                ->whereDate('date', '>=', Carbon::now())
+                ->distinct('recurrent_series_id')
+                ->count();
+            $expiringSeries = collect();
         } catch (\Exception $e) {
-            // Caso o ReservaController não esteja disponível ou o método falhe
             Log::warning("Não foi possível carregar séries recorrentes expirando: " . $e->getMessage());
             $expiringSeries = collect();
             $expiringSeriesCount = 0;
@@ -40,9 +177,9 @@ class AdminController extends Controller
         return view('dashboard', compact('reservasPendentesCount', 'expiringSeries', 'expiringSeriesCount'));
     }
 
-    // =========================================================================
-    // Pesquisa de Clientes Registrados (Para Agendamento Rápido)
-    // =========================================================================
+    // O restante dos métodos (searchClients, getConfirmedReservasApi, indexReservas, etc.)
+    // permanece exatamente como você forneceu (ou com as correções anteriores).
+
     public function searchClients(Request $request)
     {
         $query = $request->input('query');
@@ -64,20 +201,16 @@ class AdminController extends Controller
 
         // Formata a saída para o JS
         $formattedClients = $clients->map(function ($client) {
-             // Formatação simples do WhatsApp para exibição no frontend (exemplo)
-             $formattedContact = $client->whatsapp_contact;
-             if ($formattedContact && strlen($formattedContact) >= 11) {
-                 // Ex: 5541999998888 -> (41) 99999-8888
-                 $formattedContact = '('.substr($formattedContact, 2, 2) . ') ' . substr($formattedContact, 4, 5) . '-' . substr($formattedContact, 9);
-             }
+            // O ideal é usar o Accessor 'formatted_whatsapp_contact' se ele estiver definido no User Model
+            $formattedContact = $client->formatted_whatsapp_contact ?? $client->whatsapp_contact;
 
-             return [
-                 'id' => $client->id,
-                 'name' => $client->name,
-                 'email' => $client->email,
-                 'whatsapp_contact' => $formattedContact,
-                 'contact' => $client->whatsapp_contact, // Retorna o contato cru (sem formatação) para uso interno
-             ];
+            return [
+                'id' => $client->id,
+                'name' => $client->name,
+                'email' => $client->email,
+                'whatsapp_contact' => $formattedContact,
+                'contact' => $client->whatsapp_contact, // Retorna o contato cru (sem formatação)
+            ];
         });
 
         return response()->json($formattedClients);
@@ -93,13 +226,12 @@ class AdminController extends Controller
         $start = $request->input('start') ? Carbon::parse($request->input('start')) : Carbon::now()->startOfMonth();
         $end = $request->input('end') ? Carbon::parse($request->input('end')) : Carbon::now()->endOfMonth();
 
-        // Busca reservas reais de clientes (is_fixed = false)
-        $reservas = Reserva::where('is_fixed', false)
-                             ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
-                             ->whereDate('date', '>=', $start->toDateString())
-                             ->whereDate('date', '<=', $end->toDateString())
-                             ->with('user')
-                             ->get();
+        // Busca reservas reais de clientes (is_fixed = false) e slots fixos (is_fixed = true)
+        $reservas = Reserva::whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+            ->whereDate('date', '>=', $start->toDateString())
+            ->whereDate('date', '<=', $end->toDateString())
+            ->with('user')
+            ->get();
 
         $events = $reservas->map(function ($reserva) {
             $bookingDate = $reserva->date->toDateString();
@@ -112,16 +244,25 @@ class AdminController extends Controller
             $clientName = $userName ?? $reserva->client_name ?? 'Cliente Desconhecido';
 
             $isRecurrent = (bool)$reserva->is_recurrent;
+            $isFixed = (bool)$reserva->is_fixed;
 
-            if ($reserva->status === Reserva::STATUS_PENDENTE) {
-                $statusColor = '#ff9800'; // Laranja
+            if ($isFixed) {
+                // SLOTS FIXOS (Disponíveis)
+                $statusColor = '#10B981'; // Green (Emerald)
+                $statusText = 'DISPONÍVEL: ';
+                $className = 'fc-event-available';
+            } elseif ($reserva->status === Reserva::STATUS_PENDENTE) {
+                // PRÉ-RESERVAS (Aguardando Confirmação)
+                $statusColor = '#ff9800'; // Orange
                 $statusText = 'PENDENTE: ';
                 $className = 'fc-event-pending';
             } elseif ($isRecurrent) {
+                // RESERVAS RECORRENTES
                 $statusColor = '#C026D3'; // Fuchsia
                 $statusText = 'RECORRENTE: ';
                 $className = 'fc-event-recurrent';
             } else {
+                // RESERVAS PONTUAIS CONFIRMADAS
                 $statusColor = '#4f46e5'; // Indigo
                 $statusText = 'RESERVADO: ';
                 $className = 'fc-event-quick';
@@ -143,7 +284,8 @@ class AdminController extends Controller
                 'extendedProps' => [
                     'status' => $reserva->status,
                     'client_contact' => $reserva->client_contact,
-                    'is_recurrent' => (bool)$reserva->is_recurrent,
+                    'is_recurrent' => $isRecurrent,
+                    'is_fixed' => $isFixed,
                     'recurrent_series_id' => $reserva->recurrent_series_id,
                 ]
             ];
@@ -158,9 +300,9 @@ class AdminController extends Controller
     public function indexReservas()
     {
         $reservas = Reserva::where('status', Reserva::STATUS_PENDENTE)
-                            ->with('user')
-                            ->orderBy('created_at', 'desc')
-                            ->paginate(10);
+            ->with('user')
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
         $pageTitle = 'Pré-Reservas Pendentes';
         return view('admin.reservas.index', compact('reservas', 'pageTitle'));
     }
@@ -174,23 +316,21 @@ class AdminController extends Controller
         $search = $request->get('search');
 
         $query = Reserva::where('status', Reserva::STATUS_CONFIRMADA)
-                            // Apenas reservas reais de clientes
-                            ->where('is_fixed', false)
-                            // Apenas reservas futuras ou de hoje
-                            ->whereDate('date', '>=', Carbon::today()->toDateString())
-                            ->with('user');
+            // Apenas reservas futuras ou de hoje
+            ->whereDate('date', '>=', Carbon::today()->toDateString())
+            ->with('user');
 
         // Aplica filtro de pesquisa
         if ($search) {
-             $query->where(function($q) use ($search) {
-                 $q->where('client_name', 'like', '%' . $search . '%')
-                     ->orWhere('client_contact', 'like', '%'.$search.'%');
-                 // Se estiver usando user_id, pesquisa pelo nome/email do usuário relacionado
-                 $q->orWhereHas('user', function ($userQuery) use ($search) {
-                     $userQuery->where('name', 'like', '%' . $search . '%')
-                                     ->orWhere('email', 'like', '%' . $search . '%');
-                 });
-             });
+            $query->where(function ($q) use ($search) {
+                $q->where('client_name', 'like', '%' . $search . '%')
+                    ->orWhere('client_contact', 'like', '%' . $search . '%');
+                // Se estiver usando user_id, pesquisa pelo nome/email do usuário relacionado
+                $q->orWhereHas('user', function ($userQuery) use ($search) {
+                    $userQuery->where('name', 'like', '%' . $search . '%')
+                        ->orWhere('email', 'like', '%' . $search . '%');
+                });
+            });
         }
 
 
@@ -204,8 +344,8 @@ class AdminController extends Controller
         }
 
         $reservas = $query->orderBy('date', 'asc')
-                            ->orderBy('start_time', 'asc')
-                            ->paginate(15);
+            ->orderBy('start_time', 'asc')
+            ->paginate(15);
 
         return view('admin.reservas.confirmed_index', compact('reservas', 'pageTitle', 'isOnlyMine', 'search'));
     }
@@ -229,17 +369,16 @@ class AdminController extends Controller
 
     public function confirmarReserva(Reserva $reserva)
     {
-        // Garante que o método checkOverlap é chamado a partir do ReservaController (agora público)
-        $reservaController = app(\App\Http\Controllers\ReservaController::class);
-
+        DB::beginTransaction();
         try {
             $dateString = $reserva->date->toDateString();
             $isFixed = $reserva->is_fixed;
             $ignoreId = $reserva->id;
 
-            // 1. Checagem de Conflito (Usando ReservaController)
-            if ($reservaController->checkOverlap($dateString, $reserva->start_time, $reserva->end_time, $isFixed, $ignoreId)) {
-                 return back()->with('error', 'Conflito detectado: Esta reserva não pode ser confirmada pois já existe outro agendamento (Pendente ou Confirmado) no mesmo horário.');
+            // 1. Checagem de Conflito (Usando o método local)
+            if ($this->checkOverlap($dateString, $reserva->start_time, $reserva->end_time, $isFixed, $ignoreId)) {
+                DB::rollBack();
+                return back()->with('error', 'Conflito detectado: Esta reserva não pode ser confirmada pois já existe outro agendamento (Pendente ou Confirmado) no mesmo horário.');
             }
 
             // 2. Atualiza Status e atribui o Gestor
@@ -248,9 +387,17 @@ class AdminController extends Controller
                 'manager_id' => Auth::id(), // O gestor que confirma
             ]);
 
+            DB::commit();
+
+            // DEFESA: Força a recarga do objeto do usuário autenticado no Laravel
+            if (Auth::check()) {
+                Auth::user()->fresh();
+            }
+
             return redirect()->route('dashboard')
-                             ->with('success', 'Reserva confirmada com sucesso! O horário está agora visível no calendário.');
+                ->with('success', 'Reserva confirmada com sucesso! O horário está agora visível no calendário.');
         } catch (\Exception $e) {
+            DB::rollBack();
             Log::error("Erro ao confirmar a reserva ID {$reserva->id}: " . $e->getMessage());
             return back()->with('error', 'Erro ao confirmar a reserva: ' . $e->getMessage());
         }
@@ -273,21 +420,30 @@ class AdminController extends Controller
                 'cancellation_reason' => 'Pré-reserva rejeitada pelo gestor.'
             ]);
 
-            // 3. Recria o slot fixo de disponibilidade (o evento verde)
-            Reserva::create([
-                'date' => $originalData['date']->toDateString(),
-                'day_of_week' => $originalData['day_of_week'],
-                'start_time' => $originalData['start_time'],
-                'end_time' => $originalData['end_time'],
-                'price' => $originalData['price'],
-                'client_name' => 'Slot Fixo de 1h',
-                'client_contact' => 'N/A',
-                'status' => Reserva::STATUS_CONFIRMADA, // Torna o slot DISPONÍVEL (verde)
-                'is_fixed' => true,
-                'manager_id' => Auth::id(),
-            ]);
+            // Lógica para recriar o slot (impedindo duplicação)
+            $reservaRecreated = Reserva::where('date', $originalData['date']->toDateString())
+                ->where('start_time', $originalData['start_time'])
+                ->where('end_time', $originalData['end_time'])
+                ->where('is_fixed', true)
+                ->exists();
 
-            // 4. Deleta a reserva rejeitada do histórico ativo
+            if (!$reservaRecreated) {
+                // 3. Recria o slot fixo de disponibilidade (o evento verde)
+                Reserva::create([
+                    'date' => $originalData['date']->toDateString(),
+                    'day_of_week' => $originalData['day_of_week'],
+                    'start_time' => $originalData['start_time'],
+                    'end_time' => $originalData['end_time'],
+                    'price' => $originalData['price'],
+                    'client_name' => 'Slot Fixo de 1h',
+                    'client_contact' => 'N/A',
+                    'status' => Reserva::STATUS_CONFIRMADA, // Torna o slot DISPONÍVEL (verde)
+                    'is_fixed' => true,
+                    'manager_id' => Auth::id(),
+                ]);
+            }
+
+            // 4. Deleta a reserva rejeitada (se necessário, para histórico, considere um Soft Delete ou mover a linha 2)
             $reserva->delete();
 
             DB::commit();
@@ -298,7 +454,7 @@ class AdminController extends Controller
             }
 
             return redirect()->route('admin.reservas.index')
-                             ->with('success', 'Pré-reserva rejeitada e horário liberado com sucesso.');
+                ->with('success', 'Pré-reserva rejeitada e horário liberado com sucesso.');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -316,7 +472,7 @@ class AdminController extends Controller
         ]);
 
         if ($reserva->is_recurrent) {
-             return response()->json(['success' => false, 'message' => 'Esta reserva é recorrente. Use o botão "Cancelar ESTE DIA" ou "Cancelar SÉRIE" para gerenciar.'], 422);
+            return response()->json(['success' => false, 'message' => 'Esta reserva é recorrente. Use o botão "Cancelar ESTE DIA" ou "Cancelar SÉRIE" para gerenciar.'], 422);
         }
 
         DB::beginTransaction();
@@ -336,18 +492,27 @@ class AdminController extends Controller
             // 2. Recria o slot fixo de disponibilidade
             $originalData = $reserva->only(['date', 'day_of_week', 'start_time', 'end_time', 'price']);
 
-             Reserva::create([
-                'date' => $originalData['date']->toDateString(),
-                'day_of_week' => $originalData['day_of_week'],
-                'start_time' => $originalData['start_time'],
-                'end_time' => $originalData['end_time'],
-                'price' => $originalData['price'],
-                'client_name' => 'Slot Fixo de 1h',
-                'client_contact' => 'N/A',
-                'status' => Reserva::STATUS_CONFIRMADA,
-                'is_fixed' => true,
-                'manager_id' => Auth::id(),
-            ]);
+            // Lógica para recriar o slot (impedindo duplicação)
+            $reservaRecreated = Reserva::where('date', $originalData['date']->toDateString())
+                ->where('start_time', $originalData['start_time'])
+                ->where('end_time', $originalData['end_time'])
+                ->where('is_fixed', true)
+                ->exists();
+
+            if (!$reservaRecreated) {
+                Reserva::create([
+                    'date' => $originalData['date']->toDateString(),
+                    'day_of_week' => $originalData['day_of_week'],
+                    'start_time' => $originalData['start_time'],
+                    'end_time' => $originalData['end_time'],
+                    'price' => $originalData['price'],
+                    'client_name' => 'Slot Fixo de 1h',
+                    'client_contact' => 'N/A',
+                    'status' => Reserva::STATUS_CONFIRMADA,
+                    'is_fixed' => true,
+                    'manager_id' => Auth::id(),
+                ]);
+            }
 
             // 3. Deleta a reserva cancelada (para histórico, você pode mover para uma tabela de arquivamento em vez de deletar)
             $reserva->delete();
@@ -403,19 +568,28 @@ class AdminController extends Controller
             // 2. Apaga a reserva real do cliente (A reserva recorrente)
             $reserva->delete();
 
-            // 3. Recria o slot fixo de disponibilidade (o evento verde)
-            Reserva::create([
-                'date' => $originalData['date']->toDateString(),
-                'day_of_week' => $originalData['day_of_week'],
-                'start_time' => $originalData['start_time'],
-                'end_time' => $originalData['end_time'],
-                'price' => $originalData['price'],
-                'client_name' => 'Slot Fixo de 1h', // Nome padrão
-                'client_contact' => 'N/A',
-                'status' => Reserva::STATUS_CONFIRMADA, // Torna o slot DISPONÍVEL (verde)
-                'is_fixed' => true, // Volta a ser um slot fixo, mas apenas para esta data!
-                'manager_id' => Auth::id(), // Registra o gestor que liberou o slot
-            ]);
+            // Lógica para recriar o slot (impedindo duplicação)
+            $reservaRecreated = Reserva::where('date', $originalData['date']->toDateString())
+                ->where('start_time', $originalData['start_time'])
+                ->where('end_time', $originalData['end_time'])
+                ->where('is_fixed', true)
+                ->exists();
+
+            if (!$reservaRecreated) {
+                // 3. Recria o slot fixo de disponibilidade (o evento verde)
+                Reserva::create([
+                    'date' => $originalData['date']->toDateString(),
+                    'day_of_week' => $originalData['day_of_week'],
+                    'start_time' => $originalData['start_time'],
+                    'end_time' => $originalData['end_time'],
+                    'price' => $originalData['price'],
+                    'client_name' => 'Slot Fixo de 1h', // Nome padrão
+                    'client_contact' => 'N/A',
+                    'status' => Reserva::STATUS_CONFIRMADA, // Torna o slot DISPONÍVEL (verde)
+                    'is_fixed' => true, // Volta a ser um slot fixo, mas apenas para esta data!
+                    'manager_id' => Auth::id(), // Registra o gestor que liberou o slot
+                ]);
+            }
 
             DB::commit();
 
@@ -447,7 +621,7 @@ class AdminController extends Controller
         ]);
 
         if (!$reserva->is_recurrent) {
-             return response()->json(['success' => false, 'message' => 'Esta reserva não faz parte de uma série recorrente e não pode ser cancelada em série.'], 422);
+            return response()->json(['success' => false, 'message' => 'Esta reserva não faz parte de uma série recorrente e não pode ser cancelada em série.'], 422);
         }
 
         // 1. Identifica a série (mestra ou membro)
@@ -456,16 +630,16 @@ class AdminController extends Controller
         $cancellationReason = $request->input('cancellation_reason');
 
         // 2. Busca o slot mestre e todos os membros futuros
-        $reservasToCancel = Reserva::where(function($query) use ($masterId) {
-             // Inclui o mestre (se a reserva atual for o mestre)
-             $query->where('id', $masterId)
-                 // Inclui todos os membros vinculados
-                 ->orWhere('recurrent_series_id', $masterId);
-             })
-             // Apenas reservas futuras (a partir da data da reserva atual ou depois)
-             ->whereDate('date', '>=', $reserva->date->toDateString())
-             ->where('is_fixed', false) // Apenas reservas reais de cliente
-             ->get();
+        $reservasToCancel = Reserva::where(function ($query) use ($masterId) {
+            // Inclui o mestre (se a reserva atual for o mestre)
+            $query->where('id', $masterId)
+                // Inclui todos os membros vinculados
+                ->orWhere('recurrent_series_id', $masterId);
+        })
+            // Apenas reservas futuras (a partir da data da reserva atual ou depois)
+            ->whereDate('date', '>=', $reserva->date->toDateString())
+            ->where('is_fixed', false) // Apenas reservas reais de cliente
+            ->get();
 
         $count = $reservasToCancel->count();
 
@@ -483,17 +657,17 @@ class AdminController extends Controller
             $dayOfWeek = $firstReserva->day_of_week;
             $price = $firstReserva->price;
 
-            // Marca o motivo em cada reserva antes de deletar
-            $reservasToCancel->each(function($r) use ($cancellationReason, $dayOfWeek) {
-                 $r->cancellation_reason = $cancellationReason . " (Série Recorrente - Dia da Semana: " . $dayOfWeek . ")";
-                 $r->manager_id = Auth::id();
-                 $r->status = Reserva::STATUS_CANCELADA;
-                 $r->save();
+            // Itera e marca o motivo em cada reserva antes de deletar
+            $reservasToCancel->each(function ($r) use ($cancellationReason, $dayOfWeek) {
+                $r->cancellation_reason = $cancellationReason . " (Série Recorrente - Dia da Semana: " . $dayOfWeek . ")";
+                $r->manager_id = Auth::id();
+                $r->status = Reserva::STATUS_CANCELADA;
+                $r->save();
 
-                 // Dispara o Evento de Notificação (se necessário)
-                 if (class_exists(\App\Events\ReservaCancelada::class)) {
-                     event(new \App\Events\ReservaCancelada($r));
-                 }
+                // Dispara o Evento de Notificação (se necessário)
+                if (class_exists(\App\Events\ReservaCancelada::class)) {
+                    event(new \App\Events\ReservaCancelada($r));
+                }
             });
 
             // Apaga todas as reservas reais da série futuras
@@ -501,19 +675,28 @@ class AdminController extends Controller
 
             // 4. Recria a série de slots fixos genéricos para o mesmo período
             $dates = $reservasToCancel->pluck('date');
-            $dates->each(function($date) use ($dayOfWeek, $start, $end, $price) {
-                 Reserva::create([
-                     'date' => $date->toDateString(),
-                     'day_of_week' => $dayOfWeek,
-                     'start_time' => $start,
-                     'end_time' => $end,
-                     'price' => $price,
-                     'client_name' => 'Slot Fixo de 1h',
-                     'client_contact' => 'N/A',
-                     'status' => Reserva::STATUS_CONFIRMADA, // Volta a ser Disponível
-                     'is_fixed' => true,
-                     'manager_id' => Auth::id(), // Registra o gestor que liberou o slot
-                 ]);
+            $dates->each(function ($date) use ($dayOfWeek, $start, $end, $price) {
+
+                $reservaRecreated = Reserva::where('date', $date->toDateString())
+                    ->where('start_time', $start)
+                    ->where('end_time', $end)
+                    ->where('is_fixed', true)
+                    ->exists();
+
+                if (!$reservaRecreated) {
+                    Reserva::create([
+                        'date' => $date->toDateString(),
+                        'day_of_week' => $dayOfWeek,
+                        'start_time' => $start,
+                        'end_time' => $end,
+                        'price' => $price,
+                        'client_name' => 'Slot Fixo de 1h',
+                        'client_contact' => 'N/A',
+                        'status' => Reserva::STATUS_CONFIRMADA, // Volta a ser Disponível
+                        'is_fixed' => true,
+                        'manager_id' => Auth::id(), // Registra o gestor que liberou o slot
+                    ]);
+                }
             });
 
             DB::commit();
@@ -550,8 +733,6 @@ class AdminController extends Controller
         $newStatus = $validated['status'];
         $updateData = ['status' => $newStatus];
 
-        $reservaController = app(\App\Http\Controllers\ReservaController::class);
-
         // Lógica de Confirmação (com checagem de conflito)
         if ($newStatus === Reserva::STATUS_CONFIRMADA) {
             try {
@@ -559,12 +740,12 @@ class AdminController extends Controller
                 $isFixed = $reserva->is_fixed;
                 $ignoreId = $reserva->id;
 
-                if ($reservaController->checkOverlap($dateString, $reserva->start_time, $reserva->end_time, $isFixed, $ignoreId)) {
-                     return back()->with('error', 'Conflito detectado: Não é possível confirmar, pois já existe outro agendamento neste horário.');
+                if ($this->checkOverlap($dateString, $reserva->start_time, $reserva->end_time, $isFixed, $ignoreId)) {
+                    return back()->with('error', 'Conflito detectado: Não é possível confirmar, pois já existe outro agendamento neste horário.');
                 }
                 $updateData['manager_id'] = Auth::id();
             } catch (\Exception $e) {
-                 return back()->with('error', 'Erro na verificação de conflito: ' . $e->getMessage());
+                return back()->with('error', 'Erro na verificação de conflito: ' . $e->getMessage());
             }
         }
 
@@ -572,13 +753,10 @@ class AdminController extends Controller
             $updateData['manager_id'] = Auth::id();
         }
 
-        // Se for CANCELAMENTO, precisa de motivo (embora a rota /cancelar seja a principal)
-        if ($newStatus === Reserva::STATUS_CANCELADA) {
-            $request->validate(['cancellation_reason' => 'nullable|string|min:5']);
-            $updateData['cancellation_reason'] = $request->input('cancellation_reason') ?? 'Cancelado via tela de status (Motivo não fornecido).';
-
-            // AÇÃO CRÍTICA: Se for CANCELADA via esta rota, redireciona para o Dashboard (o fluxo ideal é pelo modal)
-            return redirect()->route('dashboard')->with('warning', 'Reserva marcada como cancelada. Use o modal de cancelamento na lista/calendário para liberar o slot.');
+        // AÇÃO CRÍTICA: Se for CANCELADA ou REJEITADA via esta rota, redireciona para o Dashboard/Lista
+        // para forçar o uso dos métodos dedicados que recriam o slot fixo.
+        if (in_array($newStatus, [Reserva::STATUS_CANCELADA, Reserva::STATUS_REJEITADA])) {
+            return redirect()->route('dashboard')->with('warning', 'Reserva marcada como ' . $newStatus . '. Use o modal de cancelamento/rejeição na lista/calendário para liberar o slot.');
         }
 
         try {
@@ -590,7 +768,7 @@ class AdminController extends Controller
             }
 
             return redirect()->route('admin.reservas.show', $reserva)
-                             ->with('success', "Status da reserva alterado para '{$newStatus}' com sucesso.");
+                ->with('success', "Status da reserva alterado para '{$newStatus}' com sucesso.");
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao atualizar o status da reserva: ' . $e->getMessage());
         }
@@ -613,7 +791,7 @@ class AdminController extends Controller
             }
 
             return redirect()->route('admin.reservas.index')
-                             ->with('success', "Reserva de $name excluída permanentemente com sucesso.");
+                ->with('success', "Reserva de $name excluída permanentemente com sucesso.");
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao excluir a reserva: ' . $e->getMessage());
         }
@@ -648,7 +826,6 @@ class AdminController extends Controller
             $activeFilter = 'gestor';
         } else {
             // Caso 'TODOS' ou parâmetro ausente. Não aplica WHERE para listar todos.
-            // A query base ($query) já retorna todos os usuários.
             $pageTitle = 'Todos os Usuários Cadastrados';
             $activeFilter = 'all'; // Define um valor para o botão 'Todos' ficar ativo no Blade
         }
@@ -671,7 +848,6 @@ class AdminController extends Controller
 
     /**
      * Lida com a submissão do formulário para criar um novo Gestor/Admin ou Cliente.
-     * FIX CRÍTICO: Agora gera senha aleatória se 'password' for nulo para clientes.
      */
     public function storeUser(Request $request)
     {
@@ -689,7 +865,7 @@ class AdminController extends Controller
             'email' => 'required|string|email|max:255|unique:users',
             // Permite 'admin' pois é uma rota de gestão
             'role' => ['required', 'string', Rule::in(['cliente', 'gestor', 'admin'])],
-            // **CORREÇÃO:** Adicionado 'unique:users' para o contato do WhatsApp.
+            // **CORREÇÃO:** Mantido 'unique:users' para o contato do WhatsApp (Para criar novo usuário).
             'whatsapp_contact' => 'nullable|string|max:20|unique:users',
             'data_nascimento' => 'nullable|date',
         ];
@@ -705,7 +881,6 @@ class AdminController extends Controller
         }
 
         // Validação - Se falhar, redireciona de volta automaticamente.
-        // O Laravel agora exibirá um erro de validação se o email ou o whatsapp já existirem.
         $validatedData = $request->validate($rules);
 
         try {
@@ -738,7 +913,6 @@ class AdminController extends Controller
         } catch (\Exception $e) {
             // 4. Captura de Erros e Log
             Log::error('Erro ao criar usuário via Admin: ' . $e->getMessage());
-            // **Se o erro persistir, o problema pode ser que a sua view não está exibindo os erros de validação.**
             return redirect()->back()->withInput()->with('error', 'Erro inesperado ao criar o usuário. Verifique o log do sistema.');
         }
     }
@@ -746,6 +920,7 @@ class AdminController extends Controller
 // -------------------------------------------------------------------------
 // 🛠️ MÉTODOS DE EDIÇÃO E EXCLUSÃO DE USUÁRIOS
 // -------------------------------------------------------------------------
+
 
     /**
      * Exibe o formulário para edição de um usuário específico.
@@ -777,7 +952,8 @@ class AdminController extends Controller
             'role' => ['required', 'string', Rule::in(['cliente', 'gestor', 'admin'])],
 
             // Campos Adicionais
-            'whatsapp_contact' => ['nullable', 'string', 'max:20', Rule::unique('users')->ignore($user->id, 'whatsapp_contact')], // UNIQUE com IGNORE ID
+            // APLICADA CORREÇÃO: WhatsApp deve ser único exceto para o usuário atual
+            'whatsapp_contact' => ['nullable', 'string', 'max:20', Rule::unique('users')->ignore($user->id)],
             'data_nascimento' => 'nullable|date|before:today',
 
             // Senha é opcional, mas se preenchida, deve ter pelo menos 8 caracteres e ser confirmada
@@ -789,12 +965,12 @@ class AdminController extends Controller
         // 2. Garante Permissão para Alterar Role 'admin'
         // Se o usuário logado não for admin, ele não pode definir a role como 'admin'
         if (Auth::user()->role !== 'admin' && $request->role === 'admin') {
-             return back()->withInput()->withErrors(['role' => 'Apenas Administradores podem definir um usuário como Administrador.']);
+            return back()->withInput()->withErrors(['role' => 'Apenas Administradores podem definir um usuário como Administrador.']);
         }
 
         // Impede que um gestor altere um admin para outra função
         if (Auth::user()->role !== 'admin' && $user->role === 'admin' && $request->role !== 'admin') {
-             return back()->withInput()->withErrors(['role' => 'Você não tem permissão para rebaixar um Administrador.']);
+            return back()->withInput()->withErrors(['role' => 'Você não tem permissão para rebaixar um Administrador.']);
         }
 
 
@@ -831,8 +1007,8 @@ class AdminController extends Controller
 
         // Regra de segurança 2: Apenas administradores podem excluir outros administradores
         if ($user->role === 'admin' && Auth::user()->role !== 'admin') {
-             return redirect()->route('admin.users.index')
-                 ->with('error', 'Você não tem permissão para excluir um usuário Administrador.');
+            return redirect()->route('admin.users.index')
+                ->with('error', 'Você não tem permissão para excluir um usuário Administrador.');
         }
 
         try {
