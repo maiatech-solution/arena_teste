@@ -612,8 +612,7 @@
                                     }
 
                                     const eventEnd = moment(event.end);
-                                    // Manter a validação de expiração aqui
-                                    return eventEnd.isAfter(now);
+                                    return eventEnd.isSameOrAfter(now);
                                 });
 
                                 successCallback(filteredEvents);
@@ -681,6 +680,8 @@
 
                     // 2. Se for um slot disponível (verde - isAvailable é true):
 
+                    // Nota: A correção de largura (width: 100% !important) está no CSS Global.
+
                     // Procura por QUALQUER evento real (não disponível) que se sobreponha a este slot fixo (verde)
                     const isCoveredByRealReservation = calendar.getEvents().some(otherEvent => {
                         // Ignora a si mesmo e outros slots fixos
@@ -737,7 +738,12 @@
                     const endDate = moment(event.end);
                     const extendedProps = event.extendedProps || {};
 
-                    // 🛑 Removida a validação de tempo do eventClick, pois o eventSources já filtrou 🛑
+                    // Validação: garante que o evento não está no passado
+                    if (endDate.isBefore(moment())) {
+                        showFrontendAlert("❌ Este horário acabou de ser expirado. Por favor, recarregue o calendário e tente um slot futuro.");
+                        calendar.getEventSourceById('available-slots-source-id')?.refetch();
+                        return;
+                    }
 
                     if (!event.id || !startDate.isValid() || !endDate.isValid() || extendedProps.price === undefined) {
                         showFrontendAlert("❌ Não foi possível carregar os detalhes do horário. Tente novamente.");
