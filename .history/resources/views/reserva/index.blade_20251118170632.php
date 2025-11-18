@@ -74,19 +74,14 @@
         }
 
         /* 🛑 CRÍTICO: ANULAÇÃO DA LÓGICA DE COLISÃO DO FULLCALENDAR NO MODO DIA (Time Grid) 🛑 */
-        /* Isso impede o cálculo de 50%/50% em caso de sobreposição e força 100% de largura */
+        /* Isso impede o cálculo de 50%/50% em caso de sobreposição */
         .fc-timegrid-col-events,
         .fc-timegrid-col-events > div {
+            /* Força o container do evento e o wrapper interno a ocuparem 100% */
             width: 100% !important;
             left: 0 !important;
             right: 0 !important;
             margin-left: 0 !important;
-        }
-
-        /* 🛑 NOVO: IMPEDE QUE EVENTOS NÃO DISPONÍVEIS (INVISÍVEIS) CAPTUREM O CLIQUE 🛑 */
-        /* Seleciona qualquer evento que não tenha a classe 'fc-event-available' */
-        .fc-timegrid-event:not(.fc-event-available) {
-            pointer-events: none !important;
         }
 
         /* Estilo para Eventos Disponíveis (Verde) */
@@ -106,7 +101,7 @@
             /* Garante que o botão verde ocupe 100% do espaço forçado acima */
             width: 100% !important;
             left: 0 !important;
-            z-index: 2; /* Garante que fique acima dos slots invisíveis/passivos */
+            z-index: 2; /* Garante que fique acima do slot reservado invisível */
         }
 
         .fc-event-available:hover {
@@ -291,7 +286,7 @@
                         <h5 class="text-xl font-bold mb-3 text-green-700 dark:text-green-400 flex items-center">
                             <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                             Reserva para sua conta
-                        </h4>
+                        </h5>
                         <p class="text-gray-700 dark:text-gray-300 mb-2">
                             Esta pré-reserva será vinculada automaticamente ao seu cadastro:
                         </p>
@@ -562,7 +557,7 @@
                     markerContainer.insertAdjacentHTML('beforeend', markerHtml);
                 }
 
-                // 🛑 CRÍTICO 2: Remoção forçada do contador nativo no escopo geral (Garantia)
+                // 🛑 CRÍTICO 2: Remoção forçada do contador nativo de cada célula individualmente (Garantia)
                 dayEl.querySelectorAll('.fc-daygrid-more-link').forEach(link => link.remove());
             });
         }
@@ -679,7 +674,7 @@
 
                     if (!isAvailable) {
                         // 1. Se for o slot Reservado (Invisível/Transparente):
-                        // O CSS global agora trata o pointer-events, mas mantemos o display: none
+                        // Forçamos o desaparecimento total (display: none)
                         info.el.style.display = 'none';
                         return;
                     }
@@ -742,7 +737,7 @@
                     const endDate = moment(event.end);
                     const extendedProps = event.extendedProps || {};
 
-                    // Removida a validação de tempo do eventClick (pois o eventSources já filtrou)
+                    // 🛑 Removida a validação de tempo do eventClick, pois o eventSources já filtrou 🛑
 
                     if (!event.id || !startDate.isValid() || !endDate.isValid() || extendedProps.price === undefined) {
                         showFrontendAlert("❌ Não foi possível carregar os detalhes do horário. Tente novamente.");

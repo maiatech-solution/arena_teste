@@ -58,10 +58,9 @@ class ApiReservaController extends Controller
                     Log::info("Slot ID {$slot->id}: Ajuste de data final para o dia seguinte (De {$slotDateString} para {$endDateTime->toDateString()}).");
                 }
 
-                // 🛑 CORREÇÃO DE REGRESSÃO: Usar format('Y-m-d\TH:i:s') em vez de toIso8601String()
-                // para evitar problemas de fuso horário no frontend.
-                $startOutput = $startDateTime->format('Y-m-d\TH:i:s');
-                $endOutput = $endDateTime->format('Y-m-d\TH:i:s');
+                // Garante o formato Y-m-d\TH:i:s para o output do FullCalendar
+                $startOutput = $startDateTime->toIso8601String();
+                $endOutput = $endDateTime->toIso8601String();
 
                 // 2. Checa se o slot FIXO está ocupado por uma RESERVA PONTUAL (real cliente)
                 $isOccupiedByPunctual = Reserva::where('is_fixed', false)
@@ -111,6 +110,7 @@ class ApiReservaController extends Controller
 
     // =========================================================================
     // ✅ MÉTODO: Horários Disponíveis p/ FORMULÁRIO PÚBLICO (HTML) - ROBUSTO
+    // (Ajuste de EndTime para evitar problemas de validação no front-end)
     // =========================================================================
     /**
      * Calcula e retorna os horários disponíveis para uma data específica (página pública e /admin/reservas/create).
@@ -188,3 +188,13 @@ class ApiReservaController extends Controller
         return response()->json($finalAvailableTimes);
     }
 }
+```
+
+### O que foi corrigido no `getAvailableSlotsApi`:
+
+1.  **Criação de Objetos `Carbon`:** Em vez de concatenar strings e usar `Carbon::parse()` implicitamente, criei objetos `Carbon` explícitos para `$startDateTime` e `$endDateTime`.
+2.  **Correção do Dia de Fim (The Fix):** Adicionei a verificação crucial:
+    ```php
+    if ($endDateTime->lte($startDateTime)) {
+        $endDateTime->addDay();
+    }
