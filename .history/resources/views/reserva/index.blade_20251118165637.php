@@ -73,19 +73,8 @@
             }
         }
 
-        /* 🛑 CRÍTICO: ANULAÇÃO DA LÓGICA DE COLISÃO DO FULLCALENDAR NO MODO DIA (Time Grid) 🛑 */
-        /* Isso impede o cálculo de 50%/50% em caso de sobreposição */
-        .fc-timegrid-col-events,
-        .fc-timegrid-col-events > div {
-            /* Força o container do evento e o wrapper interno a ocuparem 100% */
-            width: 100% !important;
-            left: 0 !important;
-            right: 0 !important;
-            margin-left: 0 !important;
-        }
-
         /* Estilo para Eventos Disponíveis (Verde) */
-        .fc-timegrid-event.fc-event-available {
+        .fc-event-available {
             background-color: #10B981 !important;
             border-color: #059669 !important;
             color: white !important;
@@ -97,13 +86,7 @@
             font-size: 0.8rem;
             line-height: 1.3;
             font-weight: 600;
-
-            /* Garante que o botão verde ocupe 100% do espaço forçado acima */
-            width: 100% !important;
-            left: 0 !important;
-            z-index: 2; /* Garante que fique acima do slot reservado invisível */
         }
-
         .fc-event-available:hover {
             opacity: 1;
             box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.5), 0 2px 4px -2px rgba(16, 185, 129, 0.5);
@@ -673,16 +656,18 @@
 
                     if (!isAvailable) {
                         // 1. Se for o slot Reservado (Invisível/Transparente):
-                        // Forçamos o desaparecimento total (display: none)
+                        // Forçamos o desaparecimento total para evitar artefatos de empilhamento.
                         info.el.style.display = 'none';
                         return;
                     }
 
                     // 2. Se for um slot disponível (verde - isAvailable é true):
 
-                    // Nota: A correção de largura (width: 100% !important) está no CSS Global.
+                    // A) Força a largura para 100% para evitar o empilhamento visual
+                    info.el.style.width = '100%';
+                    info.el.style.left = '0'; // Garante que começa no canto esquerdo
 
-                    // Procura por QUALQUER evento real (não disponível) que se sobreponha a este slot fixo (verde)
+                    // B) Procura por QUALQUER evento real (não disponível) que se sobreponha a este slot fixo (verde)
                     const isCoveredByRealReservation = calendar.getEvents().some(otherEvent => {
                         // Ignora a si mesmo e outros slots fixos
                         if (otherEvent.id === event.id || otherEvent.classNames.includes('fc-event-available')) {

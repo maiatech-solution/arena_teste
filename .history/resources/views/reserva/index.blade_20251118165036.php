@@ -73,19 +73,8 @@
             }
         }
 
-        /* 🛑 CRÍTICO: ANULAÇÃO DA LÓGICA DE COLISÃO DO FULLCALENDAR NO MODO DIA (Time Grid) 🛑 */
-        /* Isso impede o cálculo de 50%/50% em caso de sobreposição */
-        .fc-timegrid-col-events,
-        .fc-timegrid-col-events > div {
-            /* Força o container do evento e o wrapper interno a ocuparem 100% */
-            width: 100% !important;
-            left: 0 !important;
-            right: 0 !important;
-            margin-left: 0 !important;
-        }
-
         /* Estilo para Eventos Disponíveis (Verde) */
-        .fc-timegrid-event.fc-event-available {
+        .fc-event-available {
             background-color: #10B981 !important;
             border-color: #059669 !important;
             color: white !important;
@@ -97,13 +86,7 @@
             font-size: 0.8rem;
             line-height: 1.3;
             font-weight: 600;
-
-            /* Garante que o botão verde ocupe 100% do espaço forçado acima */
-            width: 100% !important;
-            left: 0 !important;
-            z-index: 2; /* Garante que fique acima do slot reservado invisível */
         }
-
         .fc-event-available:hover {
             opacity: 1;
             box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.5), 0 2px 4px -2px rgba(16, 185, 129, 0.5);
@@ -516,6 +499,7 @@
                 let reservedSlotsCount = 0;
 
                 eventsOnDay.forEach(event => {
+                    // Nota: O evento reservado REAL agora tem display: 'background' e NÃO tem a classe fc-event-available
                     const isAvailableClass = event.classNames.includes('fc-event-available');
                     const eventEnd = moment(event.end);
 
@@ -557,7 +541,7 @@
                     markerContainer.insertAdjacentHTML('beforeend', markerHtml);
                 }
 
-                // 🛑 CRÍTICO 2: Remoção forçada do contador nativo de cada célula individualmente (Garantia)
+                // 🛑 CRÍTICO 2: Remove o contador nativo de cada célula individualmente (Garantia)
                 dayEl.querySelectorAll('.fc-daygrid-more-link').forEach(link => link.remove());
             });
         }
@@ -577,11 +561,12 @@
                     failure: function() {
                         console.error('Falha ao carregar reservas reais.');
                     },
-                    // 🛑 CRÍTICO: Cor totalmente transparente e prioridade para BLOQUEAR.
-                    color: 'transparent',
-                    textColor: 'transparent',
-                    borderColor: 'transparent',
+                    // 🛑 CORREÇÃO CRÍTICA: Usa 'background' no modo Day para bloquear o tempo visualmente (fundo colorido)
+                    // e 'none' no modo Month para não afetar a contagem.
+                    display: 'background',
                     editable: false,
+                    color: '#3B82F6',
+                    // Se precisar de uma cor de fundo transparente, use 'color: "rgba(59, 130, 246, 0.2)"'
                     priority: 5,
                 },
                 // 2. Slots Disponíveis (Grade Fixa - Com className 'available')
@@ -662,7 +647,7 @@
                 const event = info.event;
                 const isAvailable = event.classNames.includes('fc-event-available');
 
-                // 🛑 LÓGICA DE VISIBILIDADE CRÍTICA (CORREÇÃO DE EMPILHAMENTO) 🛑
+                // 🛑 LÓGICA DE VISIBILIDADE CRÍTICA (Simplificada) 🛑
 
                 if (info.view.type === 'dayGridMonth') {
                     // Mês: Esconde TODOS os eventos para priorizar o marcador resumo
@@ -671,40 +656,17 @@
 
                 if (info.view.type === 'timeGridDay') {
 
-                    if (!isAvailable) {
-                        // 1. Se for o slot Reservado (Invisível/Transparente):
-                        // Forçamos o desaparecimento total (display: none)
-                        info.el.style.display = 'none';
-                        return;
-                    }
-
-                    // 2. Se for um slot disponível (verde - isAvailable é true):
-
-                    // Nota: A correção de largura (width: 100% !important) está no CSS Global.
-
-                    // Procura por QUALQUER evento real (não disponível) que se sobreponha a este slot fixo (verde)
-                    const isCoveredByRealReservation = calendar.getEvents().some(otherEvent => {
-                        // Ignora a si mesmo e outros slots fixos
-                        if (otherEvent.id === event.id || otherEvent.classNames.includes('fc-event-available')) {
-                            return false;
-                        }
-
-                        // Checa se o outro evento (Reserva Real, agora invisível) se sobrepõe
-                        const start = moment(event.start);
-                        const end = moment(event.end);
-                        const otherStart = moment(otherEvent.start);
-                        const otherEnd = moment(otherEvent.end);
-
-                        // Lógica de sobreposição
-                        return (start.isBefore(otherEnd) && otherStart.isBefore(end));
-                    });
-
-                    if (isCoveredByRealReservation) {
-                        // Se há uma reserva real cobrindo este slot, ESCONDA O SLOT VERDE.
-                        info.el.style.display = 'none';
-                    } else {
-                        // Slot verde, não sobreposto: mantenha visível e clicável
+                    // Se o evento é o slot verde (disponível), garantimos que seja clicável
+                    if (isAvailable) {
                         info.el.style.cursor = 'pointer';
+                    } else {
+                        // Se o evento for a Reserva Real (agora display: background), garantimos que não haja etiqueta
+                        // O FullCalendar já não renderiza a caixa de evento, mas se houver algum vestígio, garantimos que não é clicável.
+                        info.el.style.cursor = 'default';
+                        // A propriedade 'display: background' já deve fazer o trabalho, mas garantimos que a etiqueta é invisível:
+                        if (info.el.querySelector('.fc-event-title')) {
+                             info.el.querySelector('.fc-event-title').textContent = '';
+                        }
                     }
                 }
             },

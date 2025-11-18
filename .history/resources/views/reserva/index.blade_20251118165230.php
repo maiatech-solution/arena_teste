@@ -73,19 +73,8 @@
             }
         }
 
-        /* 🛑 CRÍTICO: ANULAÇÃO DA LÓGICA DE COLISÃO DO FULLCALENDAR NO MODO DIA (Time Grid) 🛑 */
-        /* Isso impede o cálculo de 50%/50% em caso de sobreposição */
-        .fc-timegrid-col-events,
-        .fc-timegrid-col-events > div {
-            /* Força o container do evento e o wrapper interno a ocuparem 100% */
-            width: 100% !important;
-            left: 0 !important;
-            right: 0 !important;
-            margin-left: 0 !important;
-        }
-
         /* Estilo para Eventos Disponíveis (Verde) */
-        .fc-timegrid-event.fc-event-available {
+        .fc-event-available {
             background-color: #10B981 !important;
             border-color: #059669 !important;
             color: white !important;
@@ -97,13 +86,7 @@
             font-size: 0.8rem;
             line-height: 1.3;
             font-weight: 600;
-
-            /* Garante que o botão verde ocupe 100% do espaço forçado acima */
-            width: 100% !important;
-            left: 0 !important;
-            z-index: 2; /* Garante que fique acima do slot reservado invisível */
         }
-
         .fc-event-available:hover {
             opacity: 1;
             box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.5), 0 2px 4px -2px rgba(16, 185, 129, 0.5);
@@ -557,7 +540,7 @@
                     markerContainer.insertAdjacentHTML('beforeend', markerHtml);
                 }
 
-                // 🛑 CRÍTICO 2: Remoção forçada do contador nativo de cada célula individualmente (Garantia)
+                // 🛑 CRÍTICO 2: Remove o contador nativo de cada célula individualmente (Garantia)
                 dayEl.querySelectorAll('.fc-daygrid-more-link').forEach(link => link.remove());
             });
         }
@@ -577,7 +560,7 @@
                     failure: function() {
                         console.error('Falha ao carregar reservas reais.');
                     },
-                    // 🛑 CRÍTICO: Cor totalmente transparente e prioridade para BLOQUEAR.
+                    // 🛑 CORREÇÃO CRÍTICA: Cor totalmente transparente e prioridade para BLOQUEAR.
                     color: 'transparent',
                     textColor: 'transparent',
                     borderColor: 'transparent',
@@ -662,7 +645,7 @@
                 const event = info.event;
                 const isAvailable = event.classNames.includes('fc-event-available');
 
-                // 🛑 LÓGICA DE VISIBILIDADE CRÍTICA (CORREÇÃO DE EMPILHAMENTO) 🛑
+                // 🛑 LÓGICA DE VISIBILIDADE CRÍTICA (Simplificada) 🛑
 
                 if (info.view.type === 'dayGridMonth') {
                     // Mês: Esconde TODOS os eventos para priorizar o marcador resumo
@@ -671,40 +654,15 @@
 
                 if (info.view.type === 'timeGridDay') {
 
-                    if (!isAvailable) {
-                        // 1. Se for o slot Reservado (Invisível/Transparente):
-                        // Forçamos o desaparecimento total (display: none)
-                        info.el.style.display = 'none';
-                        return;
-                    }
-
-                    // 2. Se for um slot disponível (verde - isAvailable é true):
-
-                    // Nota: A correção de largura (width: 100% !important) está no CSS Global.
-
-                    // Procura por QUALQUER evento real (não disponível) que se sobreponha a este slot fixo (verde)
-                    const isCoveredByRealReservation = calendar.getEvents().some(otherEvent => {
-                        // Ignora a si mesmo e outros slots fixos
-                        if (otherEvent.id === event.id || otherEvent.classNames.includes('fc-event-available')) {
-                            return false;
-                        }
-
-                        // Checa se o outro evento (Reserva Real, agora invisível) se sobrepõe
-                        const start = moment(event.start);
-                        const end = moment(event.end);
-                        const otherStart = moment(otherEvent.start);
-                        const otherEnd = moment(otherEvent.end);
-
-                        // Lógica de sobreposição
-                        return (start.isBefore(otherEnd) && otherStart.isBefore(end));
-                    });
-
-                    if (isCoveredByRealReservation) {
-                        // Se há uma reserva real cobrindo este slot, ESCONDA O SLOT VERDE.
-                        info.el.style.display = 'none';
-                    } else {
-                        // Slot verde, não sobreposto: mantenha visível e clicável
+                    // Se o evento é o slot verde (disponível), garantimos que seja clicável
+                    if (isAvailable) {
                         info.el.style.cursor = 'pointer';
+                    } else {
+                        // Se for a Reserva Real (invisível), garantimos que o elemento não seja clicável.
+                        info.el.style.cursor = 'default';
+                        // Como a cor é transparente, removemos qualquer vestígio de borda/fundo na mão (se houver herança)
+                        info.el.style.backgroundColor = 'transparent';
+                        info.el.style.borderColor = 'transparent';
                     }
                 }
             },

@@ -73,19 +73,8 @@
             }
         }
 
-        /* 🛑 CRÍTICO: ANULAÇÃO DA LÓGICA DE COLISÃO DO FULLCALENDAR NO MODO DIA (Time Grid) 🛑 */
-        /* Isso impede o cálculo de 50%/50% em caso de sobreposição */
-        .fc-timegrid-col-events,
-        .fc-timegrid-col-events > div {
-            /* Força o container do evento e o wrapper interno a ocuparem 100% */
-            width: 100% !important;
-            left: 0 !important;
-            right: 0 !important;
-            margin-left: 0 !important;
-        }
-
         /* Estilo para Eventos Disponíveis (Verde) */
-        .fc-timegrid-event.fc-event-available {
+        .fc-event-available {
             background-color: #10B981 !important;
             border-color: #059669 !important;
             color: white !important;
@@ -97,13 +86,7 @@
             font-size: 0.8rem;
             line-height: 1.3;
             font-weight: 600;
-
-            /* Garante que o botão verde ocupe 100% do espaço forçado acima */
-            width: 100% !important;
-            left: 0 !important;
-            z-index: 2; /* Garante que fique acima do slot reservado invisível */
         }
-
         .fc-event-available:hover {
             opacity: 1;
             box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.5), 0 2px 4px -2px rgba(16, 185, 129, 0.5);
@@ -147,6 +130,7 @@
 <body class="font-sans antialiased arena-bg">
 
 <div class="min-h-screen flex flex-col items-center justify-start p-4 md:p-8 py-12">
+    {{-- CRÍTICO: Removi TODAS as classes max-w-* do card principal para fluir 100% --}}
     <div class="w-full
         p-4 sm:p-6
         bg-white/95 dark:bg-gray-800/90
@@ -482,7 +466,7 @@
         }
 
 
-        // --- FUNÇÃO CRÍTICA: LÓGICA DE MARCADORES RESUMO SIMPLIFICADA (Existe/Não Existe) ---
+        // --- FUNÇÃO CRÍTICA: LÓGICA DE MARCADORES RESUMO (VERSÃO FINAL) ---
         function updateDayMarkers(calendar) {
             // Só executa na visão de mês
             if (calendar.view.type !== 'dayGridMonth') return;
@@ -512,8 +496,8 @@
                     moment(event.start).format('YYYY-MM-DD') === dateStr
                 );
 
-                let totalAvailableSlots = 0;
-                let reservedSlotsCount = 0;
+                let totalAvailableSlots = 0; // Contagem final de slots realmente disponíveis
+                let reservedSlotsCount = 0; // Contagem de reservas reais (ocupação)
 
                 eventsOnDay.forEach(event => {
                     const isAvailableClass = event.classNames.includes('fc-event-available');
@@ -524,31 +508,42 @@
                         return;
                     }
 
+                    // 🛑 LÓGICA DE CONTAGEM REFORÇADA 🛑
+                    // Esta contagem é para slots que são de disponibilidade (fixos).
                     if (isAvailableClass) {
                         totalAvailableSlots++;
-                    } else {
+                    }
+
+                    // Contamos todos os eventos que NÃO são slots fixos (reservas reais)
+                    if (!isAvailableClass) {
                         reservedSlotsCount++;
                     }
                 });
 
-                // O valor final disponível é o que resta dos slots fixos após as reservas reais
+                // O valor real disponível é a subtração: (Slots Fixos - Reservas Reais)
+                // O FullCalendar garante que o slot fixo e a reserva real são eventos separados.
                 const finalAvailableSlots = Math.max(0, totalAvailableSlots - reservedSlotsCount);
+
 
                 const markerContainer = dayEl.querySelector('.fc-daygrid-day-bottom');
                 if (!markerContainer) return;
 
                 let markerHtml = '';
 
-                // 🛑 LÓGICA MOTIVACIONAL SIMPLIFICADA 🛑
+                // Cria o novo marcador com base na contagem real
                 if (finalAvailableSlots > 0) {
                     markerHtml = `
                         <div class="day-marker marker-available">
-                            Há horários disponíveis
+                            Confira ${finalAvailableSlots} horário(s) disponível(eis)
                         </div>`;
                 } else {
+                    let message = (totalAvailableSlots > 0 && reservedSlotsCount >= totalAvailableSlots)
+                        ? "Dia Ocupado/Fechado"
+                        : "Nenhum horário disponível";
+
                     markerHtml = `
                         <div class="day-marker marker-none">
-                            Não há horários disponíveis
+                            ${message}
                         </div>`;
                 }
 
@@ -557,7 +552,7 @@
                     markerContainer.insertAdjacentHTML('beforeend', markerHtml);
                 }
 
-                // 🛑 CRÍTICO 2: Remoção forçada do contador nativo de cada célula individualmente (Garantia)
+                // 🛑 CRÍTICO 2: Remove o contador nativo de cada célula individualmente (Garantia)
                 dayEl.querySelectorAll('.fc-daygrid-more-link').forEach(link => link.remove());
             });
         }
@@ -571,25 +566,23 @@
 
             eventSources: [
                 // 1. Reservas Reais (Ocupados - Sem className 'available')
+                // 🛑 CRÍTICO: Usamos 'display: block' para que o evento seja carregado na memória do FullCalendar
+                // para que a função updateDayMarkers possa contá-lo e descontá-lo do slot fixo.
                 {
                     url: RESERVED_API_URL,
                     method: 'GET',
                     failure: function() {
                         console.error('Falha ao carregar reservas reais.');
                     },
-                    // 🛑 CRÍTICO: Cor totalmente transparente e prioridade para BLOQUEAR.
-                    color: 'transparent',
-                    textColor: 'transparent',
-                    borderColor: 'transparent',
+                    display: 'block', // Necessário para a contagem do JS
                     editable: false,
-                    priority: 5,
+                    color: '#3B82F6', // Cor para reservas reais (opcional, mas recomendado)
                 },
                 // 2. Slots Disponíveis (Grade Fixa - Com className 'available')
                 {
                     id: 'available-slots-source-id',
                     className: 'fc-event-available',
-                    display: 'block',
-                    priority: 1,
+                    display: 'block', // Necessário para a contagem do JS
                     events: function(fetchInfo, successCallback, failureCallback) {
                         const now = moment();
                         const todayDate = now.format('YYYY-MM-DD');
@@ -628,6 +621,7 @@
             views: {
                 dayGridMonth: {
                     buttonText: 'Mês',
+                    // Configuração para forçar a renderização completa e deixar o JS fazer a contagem
                     dayMaxEvents: 0,
                 },
                 timeGridDay: {
@@ -659,53 +653,10 @@
             },
 
             eventDidMount: function(info) {
-                const event = info.event;
-                const isAvailable = event.classNames.includes('fc-event-available');
-
-                // 🛑 LÓGICA DE VISIBILIDADE CRÍTICA (CORREÇÃO DE EMPILHAMENTO) 🛑
-
+                // 🛑 LÓGICA DE VISIBILIDADE CRÍTICA 🛑
                 if (info.view.type === 'dayGridMonth') {
-                    // Mês: Esconde TODOS os eventos para priorizar o marcador resumo
+                    // Esconde TODOS os eventos na visão de Mês (dayGridMonth) para priorizar o marcador resumo
                     info.el.style.display = 'none';
-                }
-
-                if (info.view.type === 'timeGridDay') {
-
-                    if (!isAvailable) {
-                        // 1. Se for o slot Reservado (Invisível/Transparente):
-                        // Forçamos o desaparecimento total (display: none)
-                        info.el.style.display = 'none';
-                        return;
-                    }
-
-                    // 2. Se for um slot disponível (verde - isAvailable é true):
-
-                    // Nota: A correção de largura (width: 100% !important) está no CSS Global.
-
-                    // Procura por QUALQUER evento real (não disponível) que se sobreponha a este slot fixo (verde)
-                    const isCoveredByRealReservation = calendar.getEvents().some(otherEvent => {
-                        // Ignora a si mesmo e outros slots fixos
-                        if (otherEvent.id === event.id || otherEvent.classNames.includes('fc-event-available')) {
-                            return false;
-                        }
-
-                        // Checa se o outro evento (Reserva Real, agora invisível) se sobrepõe
-                        const start = moment(event.start);
-                        const end = moment(event.end);
-                        const otherStart = moment(otherEvent.start);
-                        const otherEnd = moment(otherEvent.end);
-
-                        // Lógica de sobreposição
-                        return (start.isBefore(otherEnd) && otherStart.isBefore(end));
-                    });
-
-                    if (isCoveredByRealReservation) {
-                        // Se há uma reserva real cobrindo este slot, ESCONDA O SLOT VERDE.
-                        info.el.style.display = 'none';
-                    } else {
-                        // Slot verde, não sobreposto: mantenha visível e clicável
-                        info.el.style.cursor = 'pointer';
-                    }
                 }
             },
 
@@ -723,6 +674,7 @@
 
             eventClick: function(info) {
                 const event = info.event;
+                // Verifique se a classe é adicionada corretamente
                 const isAvailable = event.classNames.includes('fc-event-available');
 
                 // --- 🛑 LÓGICA DE SLOT DISPONÍVEL ---
@@ -741,6 +693,7 @@
                     // Validação: garante que o evento não está no passado
                     if (endDate.isBefore(moment())) {
                         showFrontendAlert("❌ Este horário acabou de ser expirado. Por favor, recarregue o calendário e tente um slot futuro.");
+                        // Força a recarga dos slots
                         calendar.getEventSourceById('available-slots-source-id')?.refetch();
                         return;
                     }
@@ -773,6 +726,7 @@
 
                     // 2.3 Exibir o modal (AQUI É ONDE ELE DEVE ABRIR CORRETAMENTE COM O NOVO CSS)
                     modal.classList.remove('hidden');
+                    // Certifica-se de que o display flex é aplicado para centralizar
                     modal.classList.add('flex');
 
                 } else {
