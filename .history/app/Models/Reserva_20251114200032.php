@@ -15,7 +15,6 @@ class Reserva extends Model
     // ------------------------------------------------------------------------
     // CONSTANTES DE STATUS
     // ------------------------------------------------------------------------
-    public const STATUS_FREE = 'free'; // ✅ NOVO STATUS: Slot disponível, não ocupado
     public const STATUS_PENDENTE = 'pending';
     public const STATUS_CONFIRMADA = 'confirmed';
     public const STATUS_CANCELADA = 'cancelled';
@@ -62,19 +61,14 @@ class Reserva extends Model
 
     /**
      * Scope local para retornar todas as reservas que ESTÃO OCUPANDO um horário.
-     * ✅ CRÍTICO: Este escopo agora só inclui reservas de CLIENTES ATIVAS.
-     * Ele não deve incluir slots FIXOS (is_fixed=true) ou FREE (STATUS_FREE).
      */
     public function scopeIsOccupied($query, string $checkDate, string $checkStartTime, string $checkEndTime)
     {
+        // Deve incluir PENDENTE e CONFIRMADA para ser considerado "ocupado".
         return $query->where('date', $checkDate) // 1. Filtra pela data específica
-            // 2. FILTRO CRÍTICO: Apenas status que indicam ocupação real
-            ->whereIn('status', [self::STATUS_CONFIRMADA, self::STATUS_PENDENTE])
-            // 3. Opcional: Para ter certeza de que estamos vendo apenas reservas de clientes,
-            // embora o filtro de status já exclua slots FREE.
-            ->where('is_fixed', false)
+            ->whereIn('status', [self::STATUS_CONFIRMADA, self::STATUS_PENDENTE]) // 2. FILTRO CRÍTICO
             ->where(function ($q) use ($checkStartTime, $checkEndTime) {
-                // 4. Lógica de sobreposição de tempo (usando as strings de hora 'HH:MM:SS')
+                // 3. Lógica de sobreposição de tempo (usando as strings de hora 'HH:MM:SS')
                 $q->where('start_time', '<', $checkEndTime)
                     ->where('end_time', '>', $checkStartTime);
             });
@@ -112,7 +106,6 @@ class Reserva extends Model
     {
         return Attribute::make(
             get: fn () => match ($this->status) {
-                self::STATUS_FREE => 'Livre (Slot)', // ✅ NOVO
                 self::STATUS_PENDENTE => 'Pendente',
                 self::STATUS_CONFIRMADA => 'Confirmada',
                 self::STATUS_CANCELADA => 'Cancelada',

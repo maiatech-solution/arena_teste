@@ -25,7 +25,7 @@ class ApiReservaController extends Controller
             $start = Carbon::parse($request->input('start', Carbon::today()->toDateString()));
             $end = Carbon::parse($request->input('end', Carbon::today()->addWeeks(6)->toDateString()));
 
-            // Filtra por reservas de cliente (não fixas) com status de ocupação real
+            // 🛑 CORREÇÃO CRÍTICA (Filtro Anti-Duplicação):
             $reservas = Reserva::where('is_fixed', false)
                                ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
                                ->whereDate('date', '>=', $start)
@@ -102,8 +102,7 @@ class ApiReservaController extends Controller
             $allFixedSlots = Reserva::where('is_fixed', true)
                                            ->whereDate('date', '>=', $startDate->toDateString())
                                            ->whereDate('date', '<=', $endDate->toDateString())
-                                           // 🛑 CRÍTICO: Deve buscar STATUS_FREE para slots disponíveis
-                                           ->where('status', Reserva::STATUS_FREE) // CORRIGIDO
+                                           ->where('status', Reserva::STATUS_CONFIRMADA)
                                            ->get();
 
             $events = [];
@@ -125,10 +124,8 @@ class ApiReservaController extends Controller
                 $startOutput = $startDateTime->format('Y-m-d\TH:i:s');
                 $endOutput = $endDateTime->format('Y-m-d\TH:i:s');
 
-                // Filtro de sobreposição remanescente (redundante, mas seguro)
                 $isOccupied = Reserva::where('is_fixed', false)
                     ->whereDate('date', $slotDateString)
-                    // Apenas CONFIRMADA e PENDENTE causam ocupação real
                     ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
                     ->where(function ($query) use ($slotStartTime, $slotEndTime) {
                         $query->where('start_time', '<', $slotEndTime)
@@ -138,6 +135,7 @@ class ApiReservaController extends Controller
 
                 if (!$isOccupied) {
 
+                    // 🛑 CORREÇÃO FINAL: Título apenas "Disponível" para evitar a duplicação do horário pelo FC.
                     $eventTitle = 'Disponível';
 
                     $events[] = [
@@ -148,7 +146,7 @@ class ApiReservaController extends Controller
                         'color' => '#10b981', // Verde (Available)
                         'className' => 'fc-event-available',
                         'extendedProps' => [
-                            'status' => Reserva::STATUS_FREE, // ✅ NOVO STATUS no extendedProps
+                            'status' => 'available',
                             'price' => $slot->price,
                             'is_fixed' => true,
                         ]
@@ -183,13 +181,11 @@ class ApiReservaController extends Controller
 
         $allFixedSlots = Reserva::where('is_fixed', true)
                                      ->whereDate('date', $dateString)
-                                     // 🛑 CRÍTICO: Deve buscar STATUS_FREE para slots disponíveis
-                                     ->where('status', Reserva::STATUS_FREE) // CORRIGIDO
+                                     ->where('status', Reserva::STATUS_CONFIRMADA)
                                      ->get();
 
         $occupiedReservas = Reserva::where('is_fixed', false)
                                            ->whereDate('date', $dateString)
-                                           // Apenas CONFIRMADA e PENDENTE causam ocupação real
                                            ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
                                            ->get();
 

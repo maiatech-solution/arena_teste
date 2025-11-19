@@ -21,7 +21,12 @@ use App\Http\Controllers\AdminController;
 
 class ReservaController extends Controller
 {
-    // 🛑 REMOVIDO: Constantes privadas duplicadas. Usaremos as constantes públicas do Model Reserva.
+    // Opcional: Define constantes internas para legibilidade, assumindo que o Model Reserva as define.
+    // 🛑 IMPORTANTE: Estas constantes devem ser definidas no seu modelo 'Reserva'.
+    private const STATUS_PENDENTE = 'pending';
+    private const STATUS_CONFIRMADA = 'confirmed';
+    private const STATUS_CANCELADA = 'cancelled';
+    private const STATUS_REJEITADA = 'rejected';
 
     /**
      * Exibe a página pública de agendamento (que carrega os slots via API).
@@ -66,10 +71,8 @@ class ReservaController extends Controller
         }
 
         $query = Reserva::whereDate('date', $date)
-            // 1. Checa apenas contra RESERVAS ATIVAS DE CLIENTES
-            // Slots FREE são ignorados.
+            // 1. Checa contra reservas CONFIRMADAS ou PENDENTES (reais ou slots fixos)
             ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE]);
-
 
         // 2. Ignora a reserva atual (seja ela fixa ou real)
         if ($ignoreReservaId) {
@@ -91,7 +94,6 @@ class ReservaController extends Controller
      */
     protected function getConflictingReservaIds(string $date, string $startTime, string $endTime, ?int $ignoreReservaId = null)
     {
-        // Apenas CONFIRMADA e PENDENTE causam conflito
         $activeStatuses = [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA];
 
         // Normaliza as horas para garantir que a consulta SQL seja precisa
@@ -128,12 +130,11 @@ class ReservaController extends Controller
             return;
         }
 
-        // ✅ MUDANÇA CRÍTICA: Checa se já existe um slot FIXO e LIVRE (STATUS_FREE)
         $existsFixedSlot = Reserva::where('is_fixed', true)
             ->where('date', $originalReserva->date)
             ->where('start_time', $originalReserva->start_time)
             ->where('end_time', $originalReserva->end_time)
-            ->where('status', Reserva::STATUS_FREE) // 🛑 AGORA BUSCA POR FREE
+            ->where('status', Reserva::STATUS_CONFIRMADA)
             ->exists();
 
         if ($existsFixedSlot) {
@@ -147,7 +148,7 @@ class ReservaController extends Controller
             'start_time' => $originalReserva->start_time,
             'end_time' => $originalReserva->end_time,
             'price' => $originalReserva->price,
-            'status' => Reserva::STATUS_FREE, // 🛑 CRÍTICO: Cria como FREE (disponível)
+            'status' => Reserva::STATUS_CONFIRMADA,
             'is_fixed' => true,
             'client_name' => 'Slot Fixo de 1h',
             'client_contact' => null,
@@ -248,15 +249,13 @@ class ReservaController extends Controller
         $oldReserva = Reserva::find($reservaIdToUpdate);
 
         // 1. Checagens de Segurança
-        // 🛑 CRÍTICO: O slot fixo deve ter status FREE para ser consumido
-        if (!$oldReserva || !$oldReserva->is_fixed || $oldReserva->status !== Reserva::STATUS_FREE) {
+        if (!$oldReserva || !$oldReserva->is_fixed || $oldReserva->status !== Reserva::STATUS_CONFIRMADA) {
             return response()->json(['success' => false, 'message' => 'O slot selecionado não é um horário fixo disponível.'], 409);
         }
 
         // 2. Checagem de Conflito Final (contra reservas reais)
-        // ✅ CRÍTICO: Passamos o ID do slot fixo para ser IGNORADO na checagem.
-        if ($this->checkOverlap($validated['date'], $validated['start_time'], $validated['end_time'], false, $reservaIdToUpdate)) {
-            $conflictingIds = $this->getConflictingReservaIds($validated['date'], $validated['start_time'], $validated['end_time'], $reservaIdToUpdate);
+        if ($this->checkOverlap($validated['date'], $validated['start_time'], $validated['end_time'], false)) {
+            $conflictingIds = $this->getConflictingReservaIds($validated['date'], $validated['start_time'], $validated['end_time'], null);
             return response()->json([
                 'success' => false,
                 'message' => 'Conflito: O horário acabou de ser agendado por outro cliente. (IDs: ' . $conflictingIds . ')'], 409);
@@ -290,7 +289,7 @@ class ReservaController extends Controller
                 'client_name' => $clientName,
                 'client_contact' => $clientContact,
                 'notes' => $validated['notes'] ?? null,
-                'status' => Reserva::STATUS_CONFIRMADA, // Reserva de cliente confirmada pelo Admin
+                'status' => Reserva::STATUS_CONFIRMADA,
                 'is_fixed' => false,
                 'is_recurrent' => false,
                 'manager_id' => Auth::id(),
@@ -340,11 +339,8 @@ class ReservaController extends Controller
         $initialDate = Carbon::parse($validated['date']);
         $dayOfWeek = $initialDate->dayOfWeek;
 
-        $startTimeRaw = $validated['start_time'];
-        $endTimeRaw = $validated['end_time'];
-
-        $startTimeNormalized = Carbon::createFromFormat('G:i', $startTimeRaw)->format('H:i:s');
-        $endTimeNormalized = Carbon::createFromFormat('G:i', $endTimeRaw)->format('H:i:s');
+        $startTimeNormalized = Carbon::createFromFormat('G:i', $validated['start_time'])->format('H:i:s');
+        $endTimeNormalized = Carbon::createFromFormat('G:i', $validated['end_time'])->format('H:i:s');
 
         $price = $validated['price'];
         $scheduleId = $validated['reserva_id_to_update'];
@@ -383,23 +379,15 @@ class ReservaController extends Controller
             $isFirstDate = $currentDate->toDateString() === $initialDate->toDateString();
             $isConflict = false;
 
-            // ✅ CORREÇÃO: 1. Checa conflito contra reservas *reais* de outros clientes (is_fixed = false)
-            $overlapWithReal = Reserva::whereDate('date', $dateString)
-                ->where('is_fixed', false) // CRÍTICO: Somente reservas de cliente
-                ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE]) // Apenas status que ocupam o slot
-                ->where(function ($q) use ($startTimeNormalized, $endTimeNormalized) {
-                    $q->where('start_time', '<', $endTimeNormalized)
-                      ->where('end_time', '>', $startTimeNormalized);
-                })
-                ->exists();
+            // 1. Checa conflito contra reservas *reais* de outros clientes
+            $overlapWithReal = $this->checkOverlap($dateString, $validated['start_time'], $validated['end_time'], false);
 
-
-            // 2. Busca o slot fixo ATIVO (free) para esta data/hora
+            // 2. Busca o slot fixo ATIVO (confirmed) para esta data/hora
             $fixedSlotQuery = Reserva::where('is_fixed', true)
                                      ->whereDate('date', $dateString)
                                      ->where('start_time', $startTimeNormalized)
                                      ->where('end_time', $endTimeNormalized)
-                                     ->where('status', Reserva::STATUS_FREE); // 🛑 AGORA BUSCA POR FREE
+                                     ->where('status', Reserva::STATUS_CONFIRMADA);
 
             if ($isFirstDate) {
                 // Para o primeiro slot, o ID deve ser o ID que foi clicado no calendário
@@ -408,17 +396,15 @@ class ReservaController extends Controller
 
             $fixedSlot = $fixedSlotQuery->first();
 
-            // 3. Avalia o conflito
+
             if ($overlapWithReal) {
-                $isConflict = true; // Conflito com reserva de cliente (azul/roxo)
+                $isConflict = true;
             } else if (!$fixedSlot) {
-                // ✅ MUDANÇA: O slot fixo (verde) DEVE ser FREE e existir
-                $isConflict = true; // O slot fixo (verde) está ausente (foi manualmente cancelado/consumido)
+                $isConflict = true; // O slot estava ocupado/ausente
             }
 
             if (!$isConflict) {
-                // Se não há conflito nem ausência do slot fixo, podemos agendar
-                $fixedSlotsToDelete[] = $fixedSlot->id; // Marca para consumo
+                $fixedSlotsToDelete[] = $fixedSlot->id;
 
                 $reservasToCreate[] = [
                     'user_id' => $userId,
@@ -430,21 +416,14 @@ class ReservaController extends Controller
                     'client_name' => $clientName,
                     'client_contact' => $clientContact,
                     'notes' => $validated['notes'] ?? null,
-                    'status' => Reserva::STATUS_CONFIRMADA, // Reserva de cliente confirmada pelo Admin
+                    'status' => Reserva::STATUS_CONFIRMADA,
                     'is_fixed' => false,
-                    'is_recurrent' => true,
                     'manager_id' => Auth::id(),
+                    'is_recurrent' => true,
                     'recurrent_series_id' => null,
                 ];
             } else {
                 $conflictCount++;
-                // Se o primeiro slot conflitar (incluindo o caso de não encontrar o fixedSlot inicial),
-                // a série não deve prosseguir.
-                if ($isFirstDate) {
-                    Log::error("Conflito/Ausência no slot inicial da série recorrente. ID: {$scheduleId}.");
-                    $conflictCount = count($datesToSchedule); // Marca todos como conflito para a mensagem de erro
-                    break;
-                }
             }
         }
 
@@ -511,8 +490,8 @@ class ReservaController extends Controller
     protected function getSeriesMaxDate(int $masterId): ?Carbon
     {
         $maxDate = Reserva::where(function($query) use ($masterId) {
-             $query->where('id', $masterId)
-                 ->orWhere('recurrent_series_id', $masterId);
+                $query->where('id', $masterId)
+                    ->orWhere('recurrent_series_id', $masterId);
             })
             ->where('is_recurrent', true)
             ->where('is_fixed', false)
@@ -584,10 +563,9 @@ class ReservaController extends Controller
         }
 
         // 2. Definir a janela de renovação
-        $startDate = $currentMaxDate->copy()->addWeek();
+        $startDate = $currentMaxDate->copy()->addDay()->next($masterReserva->day_of_week);
         $endDate = $currentMaxDate->copy()->addYear();
 
-        // Se a data de início da renovação for maior que a nova data final,
         if ($startDate->greaterThan($endDate)) {
             return response()->json(['success' => false, 'message' => 'A série já está totalmente coberta até ' . $endDate->format('d/m/Y') . '.'], 400);
         }
@@ -611,8 +589,7 @@ class ReservaController extends Controller
             $currentDate = $startDate->copy();
             $conflictedOrSkippedCount = 0;
 
-            // O loop deve ir até que a data atual seja menor ou igual à data final.
-            while ($currentDate->lessThanOrEqualTo($endDate)) {
+            while ($currentDate->lessThanOrEqualTo($endDate) && $newReservasCount + $conflictedOrSkippedCount < 60) {
                 $dateString = $currentDate->toDateString();
                 $isConflict = false;
 
@@ -635,8 +612,8 @@ class ReservaController extends Controller
                     $isOccupiedByRealCustomer = Reserva::whereDate('date', $dateString)
                         ->where('start_time', '<', $endTime)
                         ->where('end_time', '>', $startTime)
-                        ->where('is_fixed', false) // Exclui slots fixos
-                        ->where('recurrent_series_id', '!=', $masterId) // Exclui a própria série
+                        ->where('is_fixed', false)
+                        ->where('recurrent_series_id', '!=', $masterId)
                         ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
                         ->exists();
 
@@ -649,12 +626,11 @@ class ReservaController extends Controller
                 // 3.3. Busca o slot fixo, se existir, para DELETAR (consumir)
                 $fixedSlot = null;
                 if (!$isConflict) {
-                    // 🛑 AGORA BUSCA SLOT FIXO LIVRE (FREE)
                     $fixedSlot = Reserva::where('is_fixed', true)
                         ->whereDate('date', $dateString)
                         ->where('start_time', $startTime)
                         ->where('end_time', $endTime)
-                        ->where('status', Reserva::STATUS_FREE) // 🛑 CRÍTICO: Busca por STATUS_FREE
+                        ->where('status', Reserva::STATUS_CONFIRMADA)
                         ->first();
                 }
 
@@ -678,9 +654,9 @@ class ReservaController extends Controller
                     $newReservasCount++;
 
                     if ($fixedSlot) {
-                        $fixedSlot->delete(); // Consome o slot verde/FREE
+                        $fixedSlot->delete();
                     } else {
-                        Log::warning("Slot fixo ausente para série #{$masterId} na data {$dateString} durante a renovação. Reserva criada sem consumir slot FREE.");
+                        Log::warning("Slot fixo ausente para série #{$masterId} na data {$dateString}. Reserva criada sem consumir slot verde.");
                     }
                 } else {
                     $conflictedOrSkippedCount++;
@@ -692,12 +668,6 @@ class ReservaController extends Controller
             DB::commit();
 
             if ($newReservasCount > 0) {
-                // 4. Atualiza a data final em todas as reservas existentes da série.
-                Reserva::where('recurrent_series_id', $masterId)
-                        ->orWhere('id', $masterId) // Inclui a própria masterReserva
-                        ->where('is_fixed', false)
-                        ->update(['recurrent_end_date' => $endDate]);
-
                 $message = "Série #{$masterId} de '{$clientName}' renovada com sucesso! Foram adicionadas {$newReservasCount} novas reservas, estendendo o prazo até " . $endDate->format('d/m/Y') . ".";
 
                 if ($conflictedOrSkippedCount > 0) {
@@ -743,7 +713,6 @@ class ReservaController extends Controller
         if ($reservaDateTime->isPast()) {
             return response()->json(['message' => 'Esta reserva é no passado e não pode ser cancelada.'], 400);
         }
-        // Usamos as constantes do Model
         if ($reserva->status === Reserva::STATUS_CANCELADA || $reserva->status === Reserva::STATUS_REJEITADA) {
             return response()->json(['message' => 'Esta reserva já está cancelada ou rejeitada.'], 400);
         }
@@ -758,15 +727,12 @@ class ReservaController extends Controller
             $reserva->cancellation_reason = '[Cliente] ' . $validated['cancellation_reason'];
             $reserva->save();
 
-            // ⚠️ Importante: Quando uma reserva de cliente é cancelada,
-            // o slot fixo de disponibilidade (verde) deve ser recriado.
             $this->recreateFixedSlot($reserva); // Chama o helper
 
-            // ✅ CRÍTICO: Deletamos a reserva do cliente (que já está marcada como 'cancelled')
             $reserva->delete();
 
-            Log::info("Reserva ID: {$reserva->id} cancelada pelo cliente ID: {$user->id}. Slot fixo recriado.");
             DB::commit();
+            Log::info("Reserva ID: {$reserva->id} cancelada pelo cliente ID: {$user->id}. Slot fixo recriado.");
 
             return response()->json(['success' => true, 'message' => 'Reserva cancelada com sucesso! O slot foi liberado.'], 200);
 
@@ -787,8 +753,7 @@ class ReservaController extends Controller
             'hora_inicio' => ['required', 'date_format:G:i'],
             'hora_fim' => ['required', 'date_format:G:i', 'after:hora_inicio'],
             'price' => ['required', 'numeric', 'min:0'],
-            // 🛑 CRÍTICO: O slot fixo deve ter status FREE para ser selecionável
-            'schedule_id' => ['required', 'integer', 'exists:reservas,id,is_fixed,1,status,' . Reserva::STATUS_FREE],
+            'schedule_id' => ['required', 'integer', 'exists:reservas,id,is_fixed,1,status,' . Reserva::STATUS_CONFIRMADA],
             'reserva_conflito_id' => 'nullable',
 
             // Validação de formato/presença do cliente, SEM 'unique'
@@ -840,16 +805,14 @@ class ReservaController extends Controller
             if ($this->checkOverlap($date, $startTime, $endTime, false, $scheduleId)) {
                 DB::rollBack();
                 // A checagem falhou: há uma reserva REAL (não o slot fixo) em conflito.
-                $conflictingIds = $this->getConflictingReservaIds($date, $startTime, $endTime, $scheduleId);
-                $validator->errors()->add('reserva_conflito_id', "ERRO: Este horário acabou de ser reservado ou está em conflito. IDs: ({$conflictingIds})");
+                $validator->errors()->add('reserva_conflito_id', 'ERRO: Este horário acabou de ser reservado ou está em conflito.');
                 throw new ValidationException($validator);
             }
 
             // 4. Limpa o slot fixo (evento verde)
             $fixedSlot = Reserva::where('id', $scheduleId)
                 ->where('is_fixed', true)
-                // 🛑 CRÍTICO: O slot fixo deve ter status FREE para ser deletado/consumido
-                ->where('status', Reserva::STATUS_FREE)
+                ->where('status', Reserva::STATUS_CONFIRMADA)
                 ->first();
 
             if (!$fixedSlot) {

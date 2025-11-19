@@ -40,10 +40,10 @@ class Reserva extends Model
         'cancellation_reason', // ✅ ADICIONADO: Motivo do cancelamento
 
         // --- Campos para Recorrência ---
-        'is_fixed',         // Grade de slots fixos gerada pelo ConfigController
-        'day_of_week',      // Dia da semana para filtros (0=Dom, 1=Seg, ...)
+        'is_fixed',         // Grade de slots fixos gerada pelo ConfigController
+        'day_of_week',      // Dia da semana para filtros (0=Dom, 1=Seg, ...)
 
-        'is_recurrent',     // Flag para saber se é parte de uma série de cliente fixo
+        'is_recurrent',     // Flag para saber se é parte de uma série de cliente fixo
         'recurrent_series_id', // ID do primeiro slot da série (mestre)
     ];
 

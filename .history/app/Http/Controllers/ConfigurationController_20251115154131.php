@@ -68,10 +68,10 @@ class ConfigurationController extends Controller
         }
 
         // 3. Obtém as próximas 50 Reservas Fixas para exibição na tabela (usando is_fixed=true)
-        // 🛑 CRÍTICO: Agora busca STATUS_FREE (slots disponíveis) e STATUS_CANCELADA (indisponíveis).
+        // 🛑 CRÍTICO: Inclui slots CANCELADOS para que o gestor possa reativá-los!
         $fixedReservas = Reserva::where('is_fixed', true)
             ->where('date', '>=', Carbon::today()->toDateString())
-            ->whereIn('status', [Reserva::STATUS_FREE, Reserva::STATUS_CANCELADA]) // ✅ CORRIGIDO PARA STATUS_FREE
+            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CANCELADA])
             ->orderBy('date')
             ->orderBy('start_time')
             ->limit(50)
@@ -118,7 +118,7 @@ class ConfigurationController extends Controller
             foreach ($configsByDay as $dayOfWeek => $slots) {
                 $activeSlots = collect($slots)->filter(function ($slot) {
                     return isset($slot['is_active']) && (bool)$slot['is_active'] &&
-                            !empty($slot['start_time']) && !empty($slot['end_time']);
+                           !empty($slot['start_time']) && !empty($slot['end_time']);
                 })->values();
 
                 $count = $activeSlots->count();
@@ -201,7 +201,7 @@ class ConfigurationController extends Controller
                 return redirect()->back()->withInput()->with('error', 'ERRO DE CONFLITO: ' . $customOverlapError);
             }
 
-            return redirect()->back()->withInput()->withErrors($e->errors())->with('error', 'Houve um erro na validação dos dados. Verifique se todos os campos (Início, Fim, Preço) estão preenchidos para os dias ativos, ou se o Horário de Fim é posterior ao ao de Início.');
+            return redirect()->back()->withInput()->withErrors($e->errors())->with('error', 'Houve um erro na validação dos dados. Verifique se todos os campos (Início, Fim, Preço) estão preenchidos para os dias ativos, ou se o Horário de Fim é posterior ao de Início.');
         }
 
         $dayStatus = $validated['day_status'] ?? [];
@@ -324,19 +324,19 @@ class ConfigurationController extends Controller
                             $isOccupied = Reserva::isOccupied($currentDateString, $currentSlotStartTime, $currentSlotEndTime)
                                 ->where(function ($query) {
                                     $query->where('is_fixed', false) // Reserva de cliente REAL
-                                            ->orWhere(function($q) {
-                                                // Slot fixo editado que foi PRESERVADO acima
-                                                $q->where('is_fixed', true)
-                                                    ->where('client_name', '!=', 'Slot Fixo de 1h');
-                                            });
+                                          ->orWhere(function($q) {
+                                               // Slot fixo editado que foi PRESERVADO acima
+                                               $q->where('is_fixed', true)
+                                                 ->where('client_name', '!=', 'Slot Fixo de 1h');
+                                          });
                                 })
                                 // FILTRO: Adiciona a checagem de slots fixos cancelados (is_fixed=true, status=cancelled)
                                 ->orWhere(function ($query) use ($currentDateString, $currentSlotStartTime, $currentSlotEndTime) {
                                     $query->where('is_fixed', true)
-                                            ->where('date', $currentDateString)
-                                            ->where('status', Reserva::STATUS_CANCELADA)
-                                            ->where('start_time', $currentSlotStartTime)
-                                            ->where('end_time', $currentSlotEndTime);
+                                          ->where('date', $currentDateString)
+                                          ->where('status', Reserva::STATUS_CANCELADA)
+                                          ->where('start_time', $currentSlotStartTime)
+                                          ->where('end_time', $currentSlotEndTime);
                                 })
                                 ->exists();
 
@@ -354,7 +354,7 @@ class ConfigurationController extends Controller
                                 'price' => $price,
                                 'client_name' => 'Slot Fixo de 1h',
                                 'client_contact' => 'N/A',
-                                'status' => Reserva::STATUS_FREE, // ✅ CRÍTICO: CORRIGIDO PARA STATUS_FREE
+                                'status' => Reserva::STATUS_CONFIRMADA,
                                 'is_fixed' => true,
                             ]);
                             $newReservasCount++;
@@ -399,12 +399,11 @@ class ConfigurationController extends Controller
     }
 
     /**
-     * Altera o status de um slot fixo entre 'free' (Disponível) e 'cancelled' (Indisponível).
+     * Altera o status de um slot fixo entre 'confirmed' (Disponível) e 'cancelled' (Indisponível).
      */
     public function toggleFixedReservaStatus(Request $request, Reserva $reserva)
     {
-        // 🛑 CRÍTICO: A validação agora aceita FREE ou CANCELADA
-        $request->validate(['status' => ['required', 'string', Rule::in([Reserva::STATUS_FREE, Reserva::STATUS_CANCELADA])]]);
+        $request->validate(['status' => ['required', 'string', Rule::in([Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CANCELADA])]]);
 
         if (!$reserva->is_fixed) {
              return response()->json(['success' => false, 'error' => 'Ação permitida apenas em slots fixos (is_fixed=true).'], 403);
@@ -420,8 +419,7 @@ class ConfigurationController extends Controller
         $reserva->status = $newStatus;
         $reserva->save();
 
-        // 🛑 CRÍTICO: Atualiza a mensagem
-        $action = $newStatus === Reserva::STATUS_FREE ? 'disponibilizado' : 'marcado como indisponível (manutenção)';
+        $action = $newStatus === Reserva::STATUS_CONFIRMADA ? 'disponibilizado' : 'marcado como indisponível (manutenção)';
 
         return response()->json(['success' => true, 'message' => "Slot $action com sucesso."]);
     }
