@@ -21,15 +21,18 @@
                     </div>
                 @endif
 
-                <div class="p-6 sm:p-8">
-
-                    {{-- ✅ BOTÃO DE VOLTA: MOVIDO PARA O TOPO --}}
-                    <div class="mb-6">
-                        <button type="button" onclick="window.history.back()" class="inline-flex items-center text-indigo-600 hover:text-indigo-800 transition duration-150 font-medium px-4 py-2 bg-gray-100 rounded-lg shadow-sm hover:bg-gray-200 text-sm">
+                   {{-- Retorno para a Lista --}}
+                    <div class="mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
+                        {{-- CRÍTICO: Troca o link fixo por um botão que usa o histórico do navegador --}}
+                        <button type="button" onclick="window.history.back()" class="inline-flex items-center text-indigo-600 hover:text-indigo-800 transition duration-150 font-medium">
                             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
                             Voltar para a tela anterior
                         </button>
                     </div>
+
+                <div class="p-6 sm:p-8">
+
+
 
                     {{-- Cabeçalho e Status --}}
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-4 mb-6">
@@ -179,7 +182,7 @@
                         </div>
                     @endif
 
-                    {{-- 🛑 BOTÃO DE VOLTA: REMOVIDO DA PARTE INFERIOR --}}
+
 
                 </div>
             </div>
@@ -222,22 +225,6 @@
 <script>
     // Variável global para controle da URL de destino
     let currentCancellationUrl = '';
-
-    // ✅ NOVO: Função que garante o retorno à página anterior E força o recarregamento
-    function goBackAndReload() {
-        // Tentativa 1: Redireciona para o referer (página anterior), que costuma forçar o reload
-        // Isso cobre tanto /admin/users/{id}/reservas quanto /admin/reservas/confirmadas
-        if (document.referrer && document.referrer !== window.location.href) {
-            window.location.replace(document.referrer);
-        } else {
-            // Tentativa 2: Fallback (se o referer não estiver disponível ou for a própria página)
-            window.history.back();
-            // Uma pequena pausa antes de recarregar a página anterior.
-            setTimeout(() => {
-                window.location.reload();
-            }, 50);
-        }
-    }
 
     // Função para abrir o modal
     function openCancellationModal(clientName, reservaId, url, actionLabel) {
@@ -294,7 +281,6 @@
         // CRÍTICO: Obter o token CSRF
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-
         // CRÍTICO: O fetch usa a URL definida condicionalmente em openCancellationModal
         fetch(currentCancellationUrl, {
             method: 'PATCH',
@@ -302,17 +288,17 @@
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': csrfToken // Usa o token obtido
             },
-            // Envia a justificativa no corpo da requisição e o método PATCH, se necessário
-            body: JSON.stringify({ cancellation_reason: reason, _method: 'PATCH' })
+            // Envia a justificativa no corpo da requisição
+            body: JSON.stringify({ cancellation_reason: reason })
         })
         .then(response => response.json().then(data => ({ status: response.status, body: data })))
         .then(({ status, body }) => {
             closeCancellationModal();
             if (status >= 200 && status < 300) {
-                // Se sucesso, exibe mensagem e VOLTA PARA A PÁGINA ANTERIOR
-                // ✅ CORREÇÃO: Usa a nova função que força o reload da lista
+                // Se sucesso, exibe mensagem e recarrega
+                // Substituído alert() por console.log e recarregamento para evitar problemas em iframe
                 console.log('Sucesso: ' + body.message);
-                goBackAndReload();
+                window.location.reload();
             } else {
                 // Em caso de erro, exibe a mensagem de erro da API
                 // Substituído alert() por console.error
