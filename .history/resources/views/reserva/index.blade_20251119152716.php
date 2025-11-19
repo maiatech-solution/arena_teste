@@ -424,11 +424,11 @@
     const RESERVED_API_URL = '{{ route("api.reservas.confirmadas") }}';
 
     // Variáveis de checagem de status de autenticação (simplificadas, mas mantidas)
+    const IS_AUTHENTICATED = @json(Auth::check());
+    const IS_AUTHENTICATED_AS_CLIENT = @json(Auth::check() && optional(Auth::user())->isClient());
     const IS_AUTHENTICATED_AS_GESTOR = @json(Auth::check() && optional(Auth::user())->isGestor());
 
     let calendar; // Variável global para o calendário
-    // 🛑 NOVO: CACHE GLOBAL DE DIAS FUTUROS DISPONÍVEIS (YYYY-MM-DD)
-    let availableDaysCache = [];
 
     document.addEventListener('DOMContentLoaded', () => {
 
@@ -495,7 +495,6 @@
             const now = moment();
             const todayDate = now.format('YYYY-MM-DD');
 
-            // Agora busca todos os eventos no cache do FullCalendar para o dia específico
             const eventsOnDay = calendar.getEvents().filter(event =>
                 moment(event.start).format('YYYY-MM-DD') === dateStr
             );
@@ -518,14 +517,13 @@
         }
 
         // ----------------------------------------------------------------------
-        // --- FUNÇÃO CRÍTICA: LÓGICA DE MARCADORES RESUMO (CONTADOR) & SINCRONIZAÇÃO DE CACHE ---
+        // --- FUNÇÃO CRÍTICA: LÓGICA DE MARCADORES RESUMO (CONTADOR) ---
         // ----------------------------------------------------------------------
         function updateDayMarkers() {
             if (!calendar || calendar.view.type !== 'dayGridMonth') return;
 
             const dayCells = calendarEl.querySelectorAll('.fc-daygrid-day-frame');
             const today = moment().startOf('day');
-            const datesProcessed = [];
 
             dayCells.forEach(dayEl => {
                 const dateEl = dayEl.closest('.fc-daygrid-day');
@@ -546,9 +544,6 @@
 
                 // Conta slots usando a função separada
                 const finalAvailableSlots = countAvailableSlots(dateStr);
-
-                // Salva a informação para a correção do cache
-                datesProcessed.push({ dateStr, hasSlots: finalAvailableSlots > 0 });
 
                 const markerContainer = dayEl.querySelector('.fc-daygrid-day-bottom');
                 if (!markerContainer) return;
@@ -576,118 +571,72 @@
                     markerContainer.insertAdjacentHTML('beforeend', markerHtml);
                 }
 
-                // Remoção forçada do contador nativo no escopo geral (Garantia)
+                // 🛑 CRÍTICO 2: Remoção forçada do contador nativo no escopo geral (Garantia)
                 dayEl.querySelectorAll('.fc-daygrid-more-link').forEach(link => link.remove());
             });
+        }
 
-            // 🛑 CRÍTICO: SINCRONIZAÇÃO IMEDIATA DO CACHE DE NAVEGAÇÃO 🛑
-            datesProcessed.forEach(({ dateStr, hasSlots }) => {
-                const index = availableDaysCache.indexOf(dateStr);
 
-                if (hasSlots) {
-                    // Se tem slots e não está no cache, adiciona
-                    if (index === -1) {
-                        availableDaysCache.push(dateStr);
+        // ----------------------------------------------------------------------
+        // --- LÓGICA DE PULO DE DIAS ESGOTADOS NA NAVEGAÇÃO (REVISADA) ---
+        // ----------------------------------------------------------------------
+
+        /**
+         * Encontra a próxima data (ou anterior) com slots disponíveis.
+         */
+        function findNextAvailableDate(currentDateStr, direction) {
+            if (!calendar) return null;
+
+            console.log(`[NAV DEBUG] Buscando próxima data para: ${currentDateStr}. Direção: ${direction === 1 ? 'AVANÇAR' : 'RETROCEDER'}`);
+
+            const availableSource = calendar.getEventSourceById('available-slots-source-id');
+            const allAvailableEvents = availableSource ? availableSource.getEvents() : [];
+            const targetMoment = moment(currentDateStr).startOf('day');
+            const today = moment().startOf('day');
+
+            let candidates = [];
+
+            allAvailableEvents.forEach(event => {
+                const eventStart = moment(event.start).startOf('day');
+                const eventStartStr = eventStart.format('YYYY-MM-DD');
+
+                // 1. Bloqueia dias no passado
+                if (eventStart.isBefore(today, 'day')) {
+                    return;
+                }
+
+                if (direction === 1) {
+                    // Avançar: Queremos datas estritamente APÓS a data atual
+                    if (eventStart.isAfter(targetMoment, 'day')) {
+                        candidates.push(eventStartStr);
                     }
-                } else {
-                    // Se não tem slots e está no cache, remove (ex: foi preenchido)
-                    if (index !== -1) {
-                        availableDaysCache.splice(index, 1);
+                }
+                else if (direction === -1) {
+                    // Retroceder: Queremos datas estritamente ANTES da data atual, mas não antes de hoje
+                    if (eventStart.isBefore(targetMoment, 'day') && eventStart.isSameOrAfter(today, 'day')) {
+                        candidates.push(eventStartStr);
                     }
                 }
             });
-            // Reordena o cache para garantir que a navegação funcione
-            availableDaysCache.sort();
-            console.log(`[CACHE SYNC] Cache sincronizado para mês visível. Total: ${availableDaysCache.length}`);
-        }
 
-        // ----------------------------------------------------------------------
-        // --- FUNÇÃO CRÍTICA: POPULA O CACHE DE DIAS DISPONÍVEIS (6 MESES) ---
-        // ----------------------------------------------------------------------
-        /**
-         * Carrega a lista de todos os dias futuros com horários disponíveis e popula o cache.
-         */
-        async function loadAvailableDaysCache() {
-            const today = moment().startOf('day').format('YYYY-MM-DD');
-            const sixMonthsLater = moment().add(6, 'months').format('YYYY-MM-DD');
+            console.log(`[NAV DEBUG] Total de datas candidatas: ${candidates.length}`);
 
-            console.log(`[CACHE DEBUG] Buscando dias disponíveis de ${today} até ${sixMonthsLater}...`);
-
-            const urlWithParams = AVAILABLE_API_URL +
-                '?start=' + encodeURIComponent(today) +
-                '&end=' + encodeURIComponent(sixMonthsLater);
-
-            try {
-                const response = await fetch(urlWithParams);
-                if (!response.ok) throw new Error('Falha ao buscar slots para o cache.');
-                const events = await response.json();
-
-                // Extrai as datas únicas dos eventos
-                const uniqueDates = events.reduce((acc, event) => {
-                    const dateStr = moment(event.start).format('YYYY-MM-DD');
-                    if (!acc.includes(dateStr)) {
-                        acc.push(dateStr);
-                    }
-                    return acc;
-                }, []);
-
-                // Filtra para remover quaisquer datas passadas ou inválidas
-                const filteredDates = uniqueDates.filter(dateStr =>
-                    !moment(dateStr).isBefore(moment(), 'day')
-                );
-
-                // Armazena e ordena
-                availableDaysCache = filteredDates.sort();
-                console.log(`[CACHE DEBUG] Cache populado com ${availableDaysCache.length} dias disponíveis:`, availableDaysCache);
-
-            } catch (error) {
-                console.error('[CACHE ERROR] Erro ao popular cache de dias disponíveis:', error);
-            }
-        }
-
-
-        // ----------------------------------------------------------------------
-        // --- LÓGICA DE PULO DE DIAS ESGOTADOS NA NAVEGAÇÃO ---
-        // ----------------------------------------------------------------------
-
-        /**
-         * Encontra a próxima data (ou anterior) com slots disponíveis usando o cache.
-         */
-        function findNextAvailableDate(currentDateStr, direction) {
-
-            if (availableDaysCache.length === 0) {
-                console.warn("[NAV DEBUG] Cache de dias vazia. Navegação indisponível.");
+            if (candidates.length === 0) {
                 return null;
             }
 
-            const currentDate = moment(currentDateStr);
-            let nextDate = null;
+            // 2. Remove duplicatas e garante que a data é única
+            const uniqueDates = [...new Set(candidates)];
+            console.log(`[NAV DEBUG] Datas únicas candidatas: ${uniqueDates.join(', ')}`);
 
-            if (direction === 1) {
-                // AVANÇAR: Encontra o primeiro dia no cache que é estritamente DEPOIS do dia atual
-                for (const dateStr of availableDaysCache) {
-                    const cacheDate = moment(dateStr);
-                    // O cache já está ordenado, basta encontrar o primeiro depois da data atual
-                    if (cacheDate.isAfter(currentDate, 'day')) {
-                        nextDate = dateStr;
-                        break;
-                    }
-                }
-            } else if (direction === -1) {
-                // RETROCEDER: Encontra o último dia no cache que é estritamente ANTES do dia atual
-                // O cache está ordenado, então procuramos de trás para frente
-                for (let i = availableDaysCache.length - 1; i >= 0; i--) {
-                    const dateStr = availableDaysCache[i];
-                    const cacheDate = moment(dateStr);
+            // 3. Ordena as datas: ascendente para AVANÇAR, descendente para RETROCEDER
+            uniqueDates.sort((a, b) => {
+                return direction === 1 ? moment(a).valueOf() - moment(b).valueOf() : moment(b).valueOf() - moment(a).valueOf();
+            });
 
-                    if (cacheDate.isBefore(currentDate, 'day')) {
-                        nextDate = dateStr;
-                        break;
-                    }
-                }
-            }
-
-            console.log(`[NAV DEBUG] Próxima data encontrada na direção ${direction}: ${nextDate}`);
+            // O primeiro elemento é a data disponível mais próxima na direção correta
+            const nextDate = uniqueDates[0];
+            console.log(`[NAV DEBUG] Próxima data encontrada: ${nextDate}`);
             return nextDate;
         }
 
@@ -697,6 +646,7 @@
         function handleCustomNavigation(direction) {
             // Esta função só deve ser chamada para timeGridDay
             if (calendar.view.type !== 'timeGridDay') {
+                 // Este caso só deve ocorrer se o usuário clicar no botão e trocar de vista rapidamente.
                  console.warn("[NAV DEBUG] Navegação customizada ignorada: Não está no modo Dia.");
                  return;
             }
@@ -713,8 +663,8 @@
                 if (direction === 1) {
                     showFrontendAlert(`Não há mais horários disponíveis após ${formatarDataBrasileira(currentDateStr)}.`);
                 } else {
-                    // Se for para retroceder e não encontrou nada, tentamos o dia de hoje, se for no futuro
-                    if (moment(currentDateStr).isAfter(moment(today), 'day')) {
+                    // Tentativa de voltar para o dia atual (se ainda tiver slot)
+                    if (countAvailableSlots(today) > 0 && moment(currentDateStr).isAfter(moment(today), 'day')) {
                         calendar.changeView('timeGridDay', today);
                         showFrontendAlert(`Você voltou para o dia de hoje, ${formatarDataBrasileira(today)}.`);
                     } else {
@@ -741,30 +691,18 @@
             height: 'auto',
             timeZone: 'local',
 
-            // 🛑 CRÍTICO: DEFINIÇÃO DOS BOTÕES CUSTOMIZADOS 🛑
+            // 🛑 CRÍTICO: DEFINIÇÃO DOS BOTÕES CUSTOMIZADOS PARA CONTROLAR A NAVEGAÇÃO 🛑
             customButtons: {
                 customPrev: {
-                    text: 'Anterior', // Texto para o botão (opcional)
                     icon: 'chevron-left',
                     click: function() {
-                        // Modo Mês: Navegação nativa (muda o mês)
-                        if (calendar.view.type === 'dayGridMonth') {
-                            calendar.prev();
-                        } else { // Modo Dia: Navegação customizada (pula dias esgotados)
-                            handleCustomNavigation(-1);
-                        }
+                        handleCustomNavigation(-1);
                     }
                 },
                 customNext: {
-                    text: 'Próximo', // Texto para o botão (opcional)
                     icon: 'chevron-right',
                     click: function() {
-                        // Modo Mês: Navegação nativa (muda o mês)
-                        if (calendar.view.type === 'dayGridMonth') {
-                            calendar.next();
-                        } else { // Modo Dia: Navegação customizada (pula dias esgotados)
-                            handleCustomNavigation(1);
-                        }
+                        handleCustomNavigation(1);
                     }
                 }
             },
@@ -777,7 +715,7 @@
                     failure: function() {
                         console.error('Falha ao carregar reservas reais.');
                     },
-                    // Cor totalmente transparente e prioridade para BLOQUEAR.
+                    // 🛑 CRÍTICO: Cor totalmente transparente e prioridade para BLOQUEAR.
                     color: 'transparent',
                     textColor: 'transparent',
                     borderColor: 'transparent',
@@ -838,7 +776,7 @@
                 }
             },
             headerToolbar: {
-                // Usa os botões customizados que chamam nossa lógica
+                // 🛑 CRÍTICO: Usa os botões customizados que chamam nossa lógica 🛑
                 left: 'customPrev,customNext today',
                 center: 'title',
                 right: 'dayGridMonth,timeGridDay'
@@ -853,11 +791,17 @@
             },
 
             eventsSet: function(info) {
-                // 1. Chama o marcador (cálculo correto) E SINCRONIZAÇÃO DE CACHE
+                // 1. Chama o marcador (cálculo correto) após o FullCalendar processar todos os eventos
                 updateDayMarkers();
+
+                // 🛑 A FUNÇÃO overrideNavigationButtons FOI REMOVIDA POIS USAMOS customButtons AGORA 🛑
 
                 // 2. Remoção forçada do contador nativo no escopo geral (Garantia)
                 document.querySelectorAll('.fc-daygrid-more-link').forEach(link => link.remove());
+            },
+
+            datesSet: function(dateInfo) {
+                // Sem necessidade de overrideButtons aqui, pois a lógica está nos customButtons
             },
 
             eventDidMount: function(info) {
@@ -895,7 +839,7 @@
                         const otherEnd = moment(otherEvent.end);
 
                         // Lógica de sobreposição
-                        return (start.isBefore(otherEvent.end) && otherStart.isBefore(event.end));
+                        return (start.isBefore(otherEnd) && otherStart.isBefore(end));
                     });
 
                     if (isCoveredByRealReservation) {
@@ -992,10 +936,11 @@
 
         window.calendar = calendar; // Mantido para debugging externo, se necessário.
 
-        // 🛑 CRÍTICO: CHAMA O CARREGAMENTO DO CACHE NO INÍCIO E PERIODICAMENTE 🛑
-        loadAvailableDaysCache();
-        // Chama a cada 60s o carregamento de 6 meses (se um mês não estiver na tela, ele pega a info)
-        setInterval(loadAvailableDaysCache, 60000);
+        // CRÍTICO: Recarrega os eventos a cada 60 segundos
+        setInterval(() => {
+            console.log("Forçando recarga de eventos disponíveis para atualizar slots passados...");
+            calendar.getEventSourceById('available-slots-source-id')?.refetch();
+        }, 60000); // 60 segundos
 
         // === Lógica de Reabertura do Modal em caso de Erro de Validação ===
         if (oldDate && oldStart) {
@@ -1025,6 +970,8 @@
                 modal.classList.remove('flex'); // Removendo o flex ao esconder
             }
         });
+
+        // Não precisamos mais do overrideButtons aqui.
 
     });
 </script>

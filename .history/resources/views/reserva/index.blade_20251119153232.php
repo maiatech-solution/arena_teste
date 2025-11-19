@@ -495,7 +495,7 @@
             const now = moment();
             const todayDate = now.format('YYYY-MM-DD');
 
-            // Agora busca todos os eventos no cache do FullCalendar para o dia específico
+            // 🛑 Agora busca todos os eventos no cache do FullCalendar para o dia específico 🛑
             const eventsOnDay = calendar.getEvents().filter(event =>
                 moment(event.start).format('YYYY-MM-DD') === dateStr
             );
@@ -518,14 +518,13 @@
         }
 
         // ----------------------------------------------------------------------
-        // --- FUNÇÃO CRÍTICA: LÓGICA DE MARCADORES RESUMO (CONTADOR) & SINCRONIZAÇÃO DE CACHE ---
+        // --- FUNÇÃO CRÍTICA: LÓGICA DE MARCADORES RESUMO (CONTADOR) ---
         // ----------------------------------------------------------------------
         function updateDayMarkers() {
             if (!calendar || calendar.view.type !== 'dayGridMonth') return;
 
             const dayCells = calendarEl.querySelectorAll('.fc-daygrid-day-frame');
             const today = moment().startOf('day');
-            const datesProcessed = [];
 
             dayCells.forEach(dayEl => {
                 const dateEl = dayEl.closest('.fc-daygrid-day');
@@ -546,9 +545,6 @@
 
                 // Conta slots usando a função separada
                 const finalAvailableSlots = countAvailableSlots(dateStr);
-
-                // Salva a informação para a correção do cache
-                datesProcessed.push({ dateStr, hasSlots: finalAvailableSlots > 0 });
 
                 const markerContainer = dayEl.querySelector('.fc-daygrid-day-bottom');
                 if (!markerContainer) return;
@@ -576,29 +572,9 @@
                     markerContainer.insertAdjacentHTML('beforeend', markerHtml);
                 }
 
-                // Remoção forçada do contador nativo no escopo geral (Garantia)
+                // 🛑 Remoção forçada do contador nativo no escopo geral (Garantia)
                 dayEl.querySelectorAll('.fc-daygrid-more-link').forEach(link => link.remove());
             });
-
-            // 🛑 CRÍTICO: SINCRONIZAÇÃO IMEDIATA DO CACHE DE NAVEGAÇÃO 🛑
-            datesProcessed.forEach(({ dateStr, hasSlots }) => {
-                const index = availableDaysCache.indexOf(dateStr);
-
-                if (hasSlots) {
-                    // Se tem slots e não está no cache, adiciona
-                    if (index === -1) {
-                        availableDaysCache.push(dateStr);
-                    }
-                } else {
-                    // Se não tem slots e está no cache, remove (ex: foi preenchido)
-                    if (index !== -1) {
-                        availableDaysCache.splice(index, 1);
-                    }
-                }
-            });
-            // Reordena o cache para garantir que a navegação funcione
-            availableDaysCache.sort();
-            console.log(`[CACHE SYNC] Cache sincronizado para mês visível. Total: ${availableDaysCache.length}`);
         }
 
         // ----------------------------------------------------------------------
@@ -647,7 +623,7 @@
 
 
         // ----------------------------------------------------------------------
-        // --- LÓGICA DE PULO DE DIAS ESGOTADOS NA NAVEGAÇÃO ---
+        // --- LÓGICA DE PULO DE DIAS ESGOTADOS NA NAVEGAÇÃO (REVISADA) ---
         // ----------------------------------------------------------------------
 
         /**
@@ -667,7 +643,6 @@
                 // AVANÇAR: Encontra o primeiro dia no cache que é estritamente DEPOIS do dia atual
                 for (const dateStr of availableDaysCache) {
                     const cacheDate = moment(dateStr);
-                    // O cache já está ordenado, basta encontrar o primeiro depois da data atual
                     if (cacheDate.isAfter(currentDate, 'day')) {
                         nextDate = dateStr;
                         break;
@@ -675,7 +650,7 @@
                 }
             } else if (direction === -1) {
                 // RETROCEDER: Encontra o último dia no cache que é estritamente ANTES do dia atual
-                // O cache está ordenado, então procuramos de trás para frente
+                // O cache já está ordenado, então procuramos de trás para frente
                 for (let i = availableDaysCache.length - 1; i >= 0; i--) {
                     const dateStr = availableDaysCache[i];
                     const cacheDate = moment(dateStr);
@@ -741,16 +716,16 @@
             height: 'auto',
             timeZone: 'local',
 
-            // 🛑 CRÍTICO: DEFINIÇÃO DOS BOTÕES CUSTOMIZADOS 🛑
+            // 🛑 CRÍTICO: DEFINIÇÃO DOS BOTÕES CUSTOMIZADOS PARA CONTROLAR A NAVEGAÇÃO 🛑
             customButtons: {
                 customPrev: {
                     text: 'Anterior', // Texto para o botão (opcional)
                     icon: 'chevron-left',
                     click: function() {
-                        // Modo Mês: Navegação nativa (muda o mês)
+                        // Se estiver no modo Mês, usa a navegação nativa para mudar o mês
                         if (calendar.view.type === 'dayGridMonth') {
                             calendar.prev();
-                        } else { // Modo Dia: Navegação customizada (pula dias esgotados)
+                        } else {
                             handleCustomNavigation(-1);
                         }
                     }
@@ -759,10 +734,10 @@
                     text: 'Próximo', // Texto para o botão (opcional)
                     icon: 'chevron-right',
                     click: function() {
-                        // Modo Mês: Navegação nativa (muda o mês)
+                        // Se estiver no modo Mês, usa a navegação nativa para mudar o mês
                         if (calendar.view.type === 'dayGridMonth') {
                             calendar.next();
-                        } else { // Modo Dia: Navegação customizada (pula dias esgotados)
+                        } else {
                             handleCustomNavigation(1);
                         }
                     }
@@ -777,7 +752,7 @@
                     failure: function() {
                         console.error('Falha ao carregar reservas reais.');
                     },
-                    // Cor totalmente transparente e prioridade para BLOQUEAR.
+                    // 🛑 CRÍTICO: Cor totalmente transparente e prioridade para BLOQUEAR.
                     color: 'transparent',
                     textColor: 'transparent',
                     borderColor: 'transparent',
@@ -838,7 +813,7 @@
                 }
             },
             headerToolbar: {
-                // Usa os botões customizados que chamam nossa lógica
+                // 🛑 CRÍTICO: Usa os botões customizados que chamam nossa lógica 🛑
                 left: 'customPrev,customNext today',
                 center: 'title',
                 right: 'dayGridMonth,timeGridDay'
@@ -853,7 +828,7 @@
             },
 
             eventsSet: function(info) {
-                // 1. Chama o marcador (cálculo correto) E SINCRONIZAÇÃO DE CACHE
+                // 1. Chama o marcador (cálculo correto) após o FullCalendar processar todos os eventos
                 updateDayMarkers();
 
                 // 2. Remoção forçada do contador nativo no escopo geral (Garantia)
@@ -895,7 +870,7 @@
                         const otherEnd = moment(otherEvent.end);
 
                         // Lógica de sobreposição
-                        return (start.isBefore(otherEvent.end) && otherStart.isBefore(event.end));
+                        return (start.isBefore(otherEnd) && otherStart.isBefore(end));
                     });
 
                     if (isCoveredByRealReservation) {
@@ -994,8 +969,7 @@
 
         // 🛑 CRÍTICO: CHAMA O CARREGAMENTO DO CACHE NO INÍCIO E PERIODICAMENTE 🛑
         loadAvailableDaysCache();
-        // Chama a cada 60s o carregamento de 6 meses (se um mês não estiver na tela, ele pega a info)
-        setInterval(loadAvailableDaysCache, 60000);
+        setInterval(loadAvailableDaysCache, 60000); // Recarrega o cache a cada 60 segundos
 
         // === Lógica de Reabertura do Modal em caso de Erro de Validação ===
         if (oldDate && oldStart) {
