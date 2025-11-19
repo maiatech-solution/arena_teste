@@ -24,8 +24,8 @@
                 {{-- INÍCIO DA CORREÇÃO DA LÓGICA DE FILTRO --}}
                 @php
                     // Classes base para os botões de filtro
+                    // Note o 'border-2 border-transparent' que é essencial para o 'ring' funcionar bem no ativo/inativo
                     $filterBaseClasses = 'px-5 py-2 rounded-lg text-sm font-medium transition duration-150 ease-in-out shadow-md border-2 border-transparent';
-                    // Note: $roleFilter é passado pelo Controller e contém 'gestor', 'cliente' ou null
                 @endphp
 
                 <!-- FILTROS E BOTÕES DE CRIAÇÃO -->
@@ -134,7 +134,7 @@
                                             <!-- Formulário de Exclusão (Chama o modal de confirmação) -->
                                             @if (Auth::check() && Auth::user()->id !== $user->id)
                                                 <form id="delete-form-{{ $user->id }}" action="{{ route('admin.users.destroy', $user) }}" method="POST"
-                                                      onsubmit="return false;">
+                                                    onsubmit="return false;">
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="button"
@@ -143,8 +143,8 @@
                                                             title="Excluir Usuário"
                                                             data-username="{{ $user->name }}"
                                                             data-userid="{{ $user->id }}">
-                                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                                     </button>
+                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                    </button>
                                                 </form>
                                             @endif
                                         </div>
@@ -163,8 +163,7 @@
 
                 <!-- Paginação -->
                 <div class="mt-6">
-                    {{-- CORREÇÃO: Usa appends(request()->query()) para preservar o filtro de função na paginação --}}
-                    {{ $users->appends(request()->query())->links() }}
+                    {{ $users->appends(request()->query())->links() }} <!-- Exibe os links de paginação e preserva o filtro -->
                 </div>
 
             </div>

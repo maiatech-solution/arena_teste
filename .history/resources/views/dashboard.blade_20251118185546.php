@@ -133,8 +133,8 @@
                                 </div>
                             </div>
                             <div class="mt-4 sm:mt-0 sm:ml-6">
-                                {{-- ✅ CORREÇÃO: Aponta diretamente para a lista de pendentes --}}
-                                <a href="{{ route('admin.reservas.pendentes') }}" class="inline-block bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white font-bold py-2 px-6 rounded-lg text-sm transition duration-150 ease-in-out shadow-lg">
+                                {{-- Assumindo que 'admin.reservas.index' é a página de listagem de todas as reservas --}}
+                                <a href="{{ route('admin.reservas.index') }}" class="inline-block bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white font-bold py-2 px-6 rounded-lg text-sm transition duration-150 ease-in-out shadow-lg">
                                     Revisar Pendências
                                 </a>
                             </div>
@@ -480,7 +480,7 @@
                                 </div>
                             </div>
                             <div class="mt-4 sm:mt-0 sm:ml-6">
-                                <a href="{{ route('admin.reservas.pendentes') }}" class="inline-block bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white font-bold py-2 px-6 rounded-lg text-sm transition duration-150 ease-in-out shadow-lg">
+                                <a href="{{ route('admin.reservas.index') }}" class="inline-block bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white font-bold py-2 px-6 rounded-lg text-sm transition duration-150 ease-in-out shadow-lg">
                                     Revisar Pendências
                                 </a>
                             </div>
@@ -732,8 +732,6 @@
             // 2. Reseta a área de rejeição
             document.getElementById('rejection-reason-area').classList.add('hidden');
             document.getElementById('rejection-reason').value = '';
-            document.getElementById('reject-pending-btn').textContent = 'Rejeitar';
-            document.getElementById('reject-pending-btn').classList.replace('bg-red-800', 'bg-red-600'); // Garante a cor original
 
             // 3. Exibe o modal
             document.getElementById('pending-action-modal').classList.remove('hidden');
@@ -749,7 +747,6 @@
             const reservaId = document.getElementById('pending-reserva-id').value;
             const confirmationValue = document.getElementById('confirmation-value').value;
 
-            // Garante que a validação HTML5 do campo de valor seja acionada
             if (form.reportValidity()) {
                 const url = CONFIRM_PENDING_URL.replace(':id', reservaId);
                 const data = {
@@ -807,7 +804,6 @@
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': csrfToken,
-                        'X-Requested-With': 'XMLHttpRequest',
                         'Accept': 'application/json',
                     },
                     body: JSON.stringify(data)

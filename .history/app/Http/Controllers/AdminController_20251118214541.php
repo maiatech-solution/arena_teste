@@ -12,8 +12,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 use Illuminate\Validation\Rule;
-use Carbon\CarbonPeriod;
-use Illuminate\Validation\ValidationException;
 
 class AdminController extends Controller
 {
@@ -188,7 +186,7 @@ class AdminController extends Controller
                 'client_name' => $validated['client_name'],
                 'client_contact' => $validated['client_contact'],
                 'notes' => $validated['notes'] ?? null,
-                'status' => Reserva::STATUS_CONFIRMADA, // Reserva de cliente confirmada pelo Admin
+                'status' => Reserva::STATUS_CONFIRMADA,
                 'is_fixed' => false,
                 'is_recurrent' => false,
                 'manager_id' => Auth::id(),
@@ -275,7 +273,7 @@ class AdminController extends Controller
             $this->reservaController->recreateFixedSlot($reserva);
 
             // 2. 🛑 REMOVIDO: A linha $reserva->delete(); FOI REMOVIDA
-            //    Mantemos o registro para auditoria.
+            //    Mantemos o registro para auditoria.
 
             DB::commit();
             Log::info("Reserva ID: {$reserva->id} rejeitada pelo gestor ID: " . Auth::id());
@@ -319,7 +317,7 @@ class AdminController extends Controller
             $this->reservaController->recreateFixedSlot($reserva);
 
             // 2. 🛑 REMOVIDO: A linha $reserva->delete(); FOI REMOVIDA
-            //    Mantemos o registro para auditoria.
+            //    Mantemos o registro para auditoria.
 
             DB::commit();
             Log::info("Reserva PONTUAL ID: {$reserva->id} cancelada pelo gestor ID: " . Auth::id());
@@ -365,7 +363,7 @@ class AdminController extends Controller
             $this->reservaController->recreateFixedSlot($reserva);
 
             // 2. 🛑 REMOVIDO: A linha $reserva->delete(); FOI REMOVIDA
-            //    Mantemos o registro para auditoria.
+            //    Mantemos o registro para auditoria.
 
             DB::commit();
             Log::info("Reserva RECORRENTE PONTUAL ID: {$reserva->id} cancelada pelo gestor ID: " . Auth::id());
@@ -424,7 +422,7 @@ class AdminController extends Controller
                 $this->reservaController->recreateFixedSlot($slot);
 
                 // 🛑 REMOVIDO: A linha $slot->delete(); FOI REMOVIDA
-                //    Mantemos o registro para auditoria.
+                //    Mantemos o registro para auditoria.
 
                 $cancelledCount++;
             }
@@ -477,37 +475,13 @@ class AdminController extends Controller
     // ------------------------------------------------------------------------
 
     /**
-     * Exibe a lista de todos os usuários, com opção de filtro por função (role).
-     *
-     * @param \Illuminate\Http\Request $request
+     * Exibe a lista de todos os usuários.
      */
-    public function indexUsers(Request $request)
+    public function indexUsers()
     {
-        // 1. Obtém o filtro de função da query string (Ex: ?role_filter=gestor)
-        $roleFilter = $request->query('role_filter');
-
-        $query = User::query();
-
-        // 2. Aplica o filtro à consulta.
-        if ($roleFilter) {
-            if ($roleFilter === 'gestor') {
-                // ✅ CORREÇÃO: Inclui 'admin' e 'gestor'
-                $query->whereIn('role', ['gestor', 'admin']);
-            } elseif ($roleFilter === 'cliente') {
-                $query->where('role', 'cliente');
-            }
-            // Ignora outros valores, resultando em 'Todos'
-        }
-
-        // 3. Obtém os usuários, ordenando por nome e paginando
-        $users = $query->orderBy('name')->paginate(20);
-
-        // 4. Passa todas as variáveis necessárias para a View
-        return view('admin.users.index', [
-            'users' => $users,
-            'pageTitle' => 'Gerenciamento de Usuários',
-            'roleFilter' => $roleFilter, // Variável CRÍTICA passada para o Blade
-        ]);
+        // 🛑 CRÍTICO: Delega para o UserController (se for o caso) ou usa a lógica local
+        $users = User::all()->sortBy('name');
+        return view('admin.users.index', compact('users'));
     }
 
     /**
@@ -528,7 +502,7 @@ class AdminController extends Controller
             'email' => 'required|string|email|max:255|unique:users',
             'whatsapp_contact' => 'nullable|string|max:20',
             'password' => 'required|string|min:8|confirmed',
-            'role' => ['required', Rule::in(['cliente', 'gestor', 'admin'])], // ✅ ADICIONADO 'admin'
+            'role' => ['required', Rule::in(['cliente', 'gestor'])],
         ]);
 
         try { // 🐛 ADICIONADO TRY/CATCH
@@ -538,8 +512,7 @@ class AdminController extends Controller
                 'whatsapp_contact' => $request->whatsapp_contact,
                 'password' => Hash::make($request->password),
                 'role' => $request->role,
-                // O is_admin é derivado da role, se a role for 'admin' ou 'gestor'
-                'is_admin' => in_array($request->role, ['gestor', 'admin']),
+                'is_admin' => $request->role === 'gestor',
             ]);
 
             return redirect()->route('admin.users.index')->with('success', 'Usuário criado com sucesso.');
@@ -568,7 +541,7 @@ class AdminController extends Controller
             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
             'whatsapp_contact' => 'nullable|string|max:20',
             'password' => 'nullable|string|min:8|confirmed',
-            'role' => ['required', Rule::in(['cliente', 'gestor', 'admin'])], // ✅ ADICIONADO 'admin'
+            'role' => ['required', Rule::in(['cliente', 'gestor'])],
         ]);
 
         $userData = [
@@ -576,8 +549,7 @@ class AdminController extends Controller
             'email' => $request->email,
             'whatsapp_contact' => $request->whatsapp_contact,
             'role' => $request->role,
-            // O is_admin é derivado da role
-            'is_admin' => in_array($request->role, ['gestor', 'admin']),
+            'is_admin' => $request->role === 'gestor',
         ];
 
         if ($request->filled('password')) {
@@ -588,7 +560,6 @@ class AdminController extends Controller
             $user->update($userData);
 
             if (Auth::check()) {
-                // Atualiza a sessão se o próprio usuário foi editado
                 Auth::user()->fresh();
             }
 

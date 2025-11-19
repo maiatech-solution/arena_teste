@@ -188,7 +188,7 @@ class AdminController extends Controller
                 'client_name' => $validated['client_name'],
                 'client_contact' => $validated['client_contact'],
                 'notes' => $validated['notes'] ?? null,
-                'status' => Reserva::STATUS_CONFIRMADA, // Reserva de cliente confirmada pelo Admin
+                'status' => Reserva::STATUS_CONFIRMADA,
                 'is_fixed' => false,
                 'is_recurrent' => false,
                 'manager_id' => Auth::id(),
@@ -488,15 +488,9 @@ class AdminController extends Controller
 
         $query = User::query();
 
-        // 2. Aplica o filtro à consulta.
-        if ($roleFilter) {
-            if ($roleFilter === 'gestor') {
-                // ✅ CORREÇÃO: Inclui 'admin' e 'gestor'
-                $query->whereIn('role', ['gestor', 'admin']);
-            } elseif ($roleFilter === 'cliente') {
-                $query->where('role', 'cliente');
-            }
-            // Ignora outros valores, resultando em 'Todos'
+        // 2. Aplica o filtro à consulta, se for 'gestor' ou 'cliente'
+        if ($roleFilter && in_array($roleFilter, ['gestor', 'cliente'])) {
+            $query->where('role', $roleFilter);
         }
 
         // 3. Obtém os usuários, ordenando por nome e paginando
@@ -506,7 +500,7 @@ class AdminController extends Controller
         return view('admin.users.index', [
             'users' => $users,
             'pageTitle' => 'Gerenciamento de Usuários',
-            'roleFilter' => $roleFilter, // Variável CRÍTICA passada para o Blade
+            'roleFilter' => $roleFilter, // ✅ VARIÁVEL CRÍTICA PASSADA PARA RESOLVER O ERRO
         ]);
     }
 
@@ -528,7 +522,7 @@ class AdminController extends Controller
             'email' => 'required|string|email|max:255|unique:users',
             'whatsapp_contact' => 'nullable|string|max:20',
             'password' => 'required|string|min:8|confirmed',
-            'role' => ['required', Rule::in(['cliente', 'gestor', 'admin'])], // ✅ ADICIONADO 'admin'
+            'role' => ['required', Rule::in(['cliente', 'gestor'])],
         ]);
 
         try { // 🐛 ADICIONADO TRY/CATCH
@@ -538,8 +532,7 @@ class AdminController extends Controller
                 'whatsapp_contact' => $request->whatsapp_contact,
                 'password' => Hash::make($request->password),
                 'role' => $request->role,
-                // O is_admin é derivado da role, se a role for 'admin' ou 'gestor'
-                'is_admin' => in_array($request->role, ['gestor', 'admin']),
+                'is_admin' => $request->role === 'gestor',
             ]);
 
             return redirect()->route('admin.users.index')->with('success', 'Usuário criado com sucesso.');
@@ -568,7 +561,7 @@ class AdminController extends Controller
             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
             'whatsapp_contact' => 'nullable|string|max:20',
             'password' => 'nullable|string|min:8|confirmed',
-            'role' => ['required', Rule::in(['cliente', 'gestor', 'admin'])], // ✅ ADICIONADO 'admin'
+            'role' => ['required', Rule::in(['cliente', 'gestor'])],
         ]);
 
         $userData = [
@@ -576,8 +569,7 @@ class AdminController extends Controller
             'email' => $request->email,
             'whatsapp_contact' => $request->whatsapp_contact,
             'role' => $request->role,
-            // O is_admin é derivado da role
-            'is_admin' => in_array($request->role, ['gestor', 'admin']),
+            'is_admin' => $request->role === 'gestor',
         ];
 
         if ($request->filled('password')) {
@@ -588,7 +580,6 @@ class AdminController extends Controller
             $user->update($userData);
 
             if (Auth::check()) {
-                // Atualiza a sessão se o próprio usuário foi editado
                 Auth::user()->fresh();
             }
 
