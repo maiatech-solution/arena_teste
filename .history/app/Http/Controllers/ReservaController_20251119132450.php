@@ -203,11 +203,6 @@ class ReservaController extends Controller
             // Garante que o nome seja atualizado
              $updateData['name'] = $name;
 
-             // 🛑 CORREÇÃO: Garante que a role esteja sempre em Português ('cliente')
-             if ($user->role === 'client') {
-                 $updateData['role'] = 'cliente';
-             }
-
             $user->update($updateData);
             Log::info("Cliente existente encontrado e atualizado (ID: {$user->id}).");
             return $user;
@@ -220,8 +215,7 @@ class ReservaController extends Controller
                 'email' => $emailToUse,
                 'whatsapp_contact' => $contact,
                 'password' => Hash::make($randomPassword),
-                // 🛑 CORREÇÃO: USAR SEMPRE O PADRÃO EM PORTUGUÊS: 'cliente'
-                'role' => 'cliente',
+                'role' => 'client', // O role para clientes criados pelo sistema
                 'is_admin' => false,
                 'data_nascimento' => $data['data_nascimento'] ?? null,
             ]);
@@ -749,9 +743,9 @@ class ReservaController extends Controller
                 // Se você tiver a coluna 'recurrent_end_date' no seu modelo Reserva, descomente e adapte.
                 /*
                 Reserva::where('recurrent_series_id', $masterId)
-                             ->orWhere('id', $masterId) // Inclui a própria masterReserva
-                             ->where('is_fixed', false)
-                             ->update(['recurrent_end_date' => $endDate]);
+                         ->orWhere('id', $masterId) // Inclui a própria masterReserva
+                         ->where('is_fixed', false)
+                         ->update(['recurrent_end_date' => $endDate]);
                 */
 
                 $message = "Série #{$masterId} de '{$clientName}' renovada com sucesso! Foram adicionadas {$newReservasCount} novas reservas, estendendo o prazo até " . $endDate->format('d/m/Y') . ".";

@@ -383,9 +383,10 @@
         // ROTAS DE SUBMISSÃO
         const RECURRENT_STORE_URL = '{{ route("api.reservas.store_recurrent") }}';
         const QUICK_STORE_URL = '{{ route("api.reservas.store_quick") }}';
+        // ROTA DE BUSCA DE CLIENTES REMOVIDA
         const RENEW_SERIE_URL = '{{ route("admin.reservas.renew_serie", ":masterReserva") }}';
 
-        // ROTAS DE AÇÕES PENDENTES
+        // ROTAS DE AÇÕES PENDENTES (Novas)
         const CONFIRM_PENDING_URL = '{{ route("admin.reservas.confirmar", ":id") }}';
         const REJECT_PENDING_URL = '{{ route("admin.reservas.rejeitar", ":id") }}';
 
@@ -415,6 +416,7 @@
             const renewalAlertContainer = document.getElementById('renewal-alert-container');
             if (renewalAlertContainer) {
                 try {
+                    // Garante que o atributo data-series exista antes de tentar parsear
                     const dataSeriesAttr = renewalAlertContainer.getAttribute('data-series');
                     globalExpiringSeries = dataSeriesAttr ? JSON.parse(dataSeriesAttr) : [];
                 } catch (e) {
@@ -482,9 +484,14 @@
 
         /**
          * Valida se o contato do cliente é um número de WhatsApp com 11 dígitos.
+         * @param {string} contact O valor do campo de contato.
+         * @returns {boolean} True se a validação for bem-sucedida.
          */
         function validateClientContact(contact) {
+            // Remove todos os caracteres não numéricos (espaços, traços, parênteses)
             const numbersOnly = contact.replace(/\D/g, '');
+
+            // Verifica se tem exatamente 11 dígitos
             const isValid = numbersOnly.length === 11;
 
             const errorElement = whatsappError();
@@ -520,6 +527,7 @@
 
             // Validação de 11 dígitos no WhatsApp
             if (!validateClientContact(clientContact)) {
+                // A validação já exibiu a mensagem de erro no campo
                 return;
             }
 
@@ -527,10 +535,9 @@
             const formData = new FormData(form);
             const data = Object.fromEntries(formData.entries());
 
-            // ⚠️ DEBUG CRÍTICO: Mostra os dados enviados. NOTE: user_id está ausente, o controller deve tratar o client_contact.
-            console.log("Dados enviados (sem user_id):", data);
-
             const isRecurrent = document.getElementById('is-recurrent').checked;
+
+            // Altera a URL de destino com base no checkbox de recorrência
             const targetUrl = isRecurrent ? RECURRENT_STORE_URL : QUICK_STORE_URL;
 
             const submitBtn = document.getElementById('submit-quick-booking');
@@ -560,15 +567,20 @@
 
                 if (response.ok && result.success) {
                     alert(result.message);
+                    // Fecha o modal
                     document.getElementById('quick-booking-modal').classList.add('hidden');
+
+                    // Recarrega a página para garantir a atualização visual
                     setTimeout(() => {
                         window.location.reload();
                     }, 50);
 
                 } else if (response.status === 422 && result.errors) {
+                    // Erros de validação
                     const errors = Object.values(result.errors).flat().join('\n');
                     alert(`ERRO DE VALIDAÇÃO:\n${errors}`);
                 } else {
+                    // Erros como Conflito (409)
                     alert(result.message || `Erro desconhecido. Status: ${response.status}.`);
                 }
 
@@ -582,12 +594,8 @@
         }
 
         // =========================================================
-        // FLUXO DE AÇÕES PENDENTES, CANCELAMENTO E RENOVAÇÃO (MANTIDOS)
+        // FLUXO DE AÇÕES PENDENTES (MANTIDO)
         // =========================================================
-
-        function closeEventModal() {
-            document.getElementById('event-modal').classList.add('hidden');
-        }
 
         function openPendingActionModal(event) {
             const extendedProps = event.extendedProps || {};
@@ -597,8 +605,9 @@
             const priceDisplay = parseFloat(extendedProps.price || 0).toFixed(2).replace('.', ',');
             const clientName = event.title.split(' - R$ ')[0];
 
+            // 1. Popula o modal
             document.getElementById('pending-reserva-id').value = reservaId;
-            document.getElementById('confirmation-value').value = extendedProps.price || '';
+            document.getElementById('confirmation-value').value = extendedProps.price || ''; // Preenche com o valor sugerido
 
             document.getElementById('pending-modal-content').innerHTML = `
                 <p>O cliente **${clientName}** realizou uma pré-reserva.</p>
@@ -608,11 +617,13 @@
                 <p class="text-xs italic mt-2 text-orange-700">A confirmação remove o slot fixo e a rejeição recria o slot fixo.</p>
             `;
 
+            // 2. Reseta a área de rejeição
             document.getElementById('rejection-reason-area').classList.add('hidden');
             document.getElementById('rejection-reason').value = '';
             document.getElementById('reject-pending-btn').textContent = 'Rejeitar';
-            document.getElementById('reject-pending-btn').classList.replace('bg-red-800', 'bg-red-600');
+            document.getElementById('reject-pending-btn').classList.replace('bg-red-800', 'bg-red-600'); // Garante a cor original
 
+            // 3. Exibe o modal
             document.getElementById('pending-action-modal').classList.remove('hidden');
         }
 
@@ -620,11 +631,13 @@
             document.getElementById('pending-action-modal').classList.add('hidden');
         }
 
+        // --- Lógica de submissão do formulário de Ação Pendente (MANTIDO) ---
         document.getElementById('confirm-pending-btn').addEventListener('click', function() {
             const form = document.getElementById('pending-action-form');
             const reservaId = document.getElementById('pending-reserva-id').value;
             const confirmationValue = document.getElementById('confirmation-value').value;
 
+            // Garante que a validação HTML5 do campo de valor seja acionada
             if (form.reportValidity()) {
                 const url = CONFIRM_PENDING_URL.replace(':id', reservaId);
                 const data = {
@@ -640,14 +653,17 @@
             const reasonArea = document.getElementById('rejection-reason-area');
             const reasonInput = document.getElementById('rejection-reason');
 
+            // Alterna a exibição da área de motivo de rejeição
             if (reasonArea.classList.contains('hidden')) {
                 reasonArea.classList.remove('hidden');
+                // Altera o botão de rejeitar para submeter
                 this.textContent = 'Confirmar Rejeição';
                 this.classList.replace('bg-red-600', 'bg-red-800');
             } else {
                 const reservaId = document.getElementById('pending-reserva-id').value;
                 const reason = reasonInput.value.trim();
 
+                // Validação mínima para rejeição
                 if (reason.length < 5) {
                     alert("Por favor, forneça um motivo de rejeição com pelo menos 5 caracteres.");
                     return;
@@ -719,6 +735,10 @@
             }
         }
 
+
+        // =========================================================
+        // FLUXO DE CANCELAMENTO E RENOVAÇÃO (MANTIDO)
+        // =========================================================
 
         function closeEventModal() {
             document.getElementById('event-modal').classList.add('hidden');
@@ -821,6 +841,7 @@
             }
         });
 
+        // Funções específicas de Cancelamento
         const cancelarPontual = (id, isRecurrent) => {
             const urlBase = isRecurrent ? CANCEL_PONTUAL_URL : CANCEL_PADRAO_URL;
             const method = 'PATCH';
@@ -840,6 +861,8 @@
 
             openCancellationModal(id, method, urlBase, confirmation, buttonText);
         };
+
+        // --- LÓGICA DO MODAL DE RENOVAÇÃO (MANTIDO) ---
 
         function closeRenewalModal() {
             document.getElementById('renewal-modal').classList.add('hidden');
@@ -994,20 +1017,27 @@
             const quickBookingForm = document.getElementById('quick-booking-form');
             const clientContactInputEl = clientContactInput();
 
+            // 1. Inicializa a checagem de pendências e configura o intervalo
             checkPendingReservations();
             setInterval(checkPendingReservations, 30000);
 
+            // 2. Adiciona o listener para a submissão AJAX do agendamento rápido
             quickBookingForm.addEventListener('submit', handleQuickBookingSubmit);
 
+            // 3. Adiciona o listener para validação em tempo real do WhatsApp
             clientContactInputEl.addEventListener('input', function() {
+                // Remove caracteres não numéricos durante a digitação e limita a 11
                 this.value = this.value.replace(/\D/g,'').substring(0, 11);
+                // Valida o contato
                 validateClientContact(this.value);
             });
             clientContactInputEl.addEventListener('change', function() {
+                // Garante que a validação final seja executada ao sair do campo
                 validateClientContact(this.value);
             });
 
 
+            // [Lógica do FullCalendar - MANTIDA]
             calendar = new FullCalendar.Calendar(calendarEl, {
                 locale: 'pt-br',
                 initialView: 'dayGridMonth',
@@ -1121,28 +1151,33 @@
 
                         const reservaIdToUpdate = event.id;
 
+                        // 1. Preencher os campos ocultos do modal
                         document.getElementById('reserva-id-to-update').value = reservaIdToUpdate;
                         document.getElementById('quick-date').value = dateString;
                         document.getElementById('quick-start-time').value = startTimeInput;
                         document.getElementById('quick-end-time').value = endTimeInput;
                         document.getElementById('quick-price').value = price;
 
+                        // 2. Limpa campos de nome/contato e estados de erro/sucesso (nova simplificação)
                         clientNameInput().value = '';
                         clientContactInput().value = '';
                         whatsappError().classList.add('hidden');
                         clientContactInput().classList.remove('border-red-500', 'border-green-500');
 
 
+                        // 3. Limpa notas e checkbox de recorrência
                         document.getElementById('notes').value = '';
                         document.getElementById('is-recurrent').checked = false;
 
+                        // 4. Injetar a informação visível
                         document.getElementById('slot-info-display').innerHTML = `
                             <p><strong>Data:</strong> ${dateDisplay}</p>
                             <p><strong>Horário:</strong> ${timeSlotDisplay}</p>
                             <p><strong>Valor:</strong> R$ ${parseFloat(price).toFixed(2).replace('.', ',')}</p>
-
+                            <p class="text-xs text-indigo-500 mt-1">O ID do slot fixo a ser atualizado é: #${reservaIdToUpdate}</p>
                         `;
 
+                        // 5. Abrir o modal de agendamento rápido
                         quickBookingModal.classList.remove('hidden');
 
                     }

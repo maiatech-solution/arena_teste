@@ -21,7 +21,7 @@ use App\Http\Controllers\AdminController;
 
 class ReservaController extends Controller
 {
-    // O seu código não tinha constantes, então assumi as constantes padrão do Modelo Reserva.
+    // 🛑 REMOVIDO: Constantes privadas duplicadas. Usaremos as constantes públicas do Model Reserva.
 
     /**
      * Exibe a página pública de agendamento (que carrega os slots via API).
@@ -33,7 +33,6 @@ class ReservaController extends Controller
 
     /**
      * Exibe o Dashboard administrativo (incluindo o alerta de renovação).
-     * NOTA: Esta função normalmente residiria no AdminController, mas é mantida aqui se o Dashboard chamar o ReservaController.
      */
     public function dashboard()
     {
@@ -52,6 +51,7 @@ class ReservaController extends Controller
 
     /**
      * Checa sobreposição de horários (para validação do Controller).
+     * 🛑 Versão simplificada e robusta de sobreposição.
      * @return bool Retorna true se houver sobreposição.
      */
     public function checkOverlap(string $date, string $startTime, string $endTime, bool $isFixed, ?int $ignoreReservaId = null): bool
@@ -67,6 +67,7 @@ class ReservaController extends Controller
 
         $query = Reserva::whereDate('date', $date)
             // 1. Checa apenas contra RESERVAS ATIVAS DE CLIENTES
+            // Slots FREE são ignorados.
             ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE]);
 
 
@@ -123,7 +124,8 @@ class ReservaController extends Controller
      */
     public function recreateFixedSlot(Reserva $originalReserva): void
     {
-        // Se a reserva é recorrente E é a reserva mestra, não deve recriar para evitar duplicação.
+        // Se a reserva é recorrente E é a reserva mestra (ID é igual ao Recurrent ID), não deve recriar para evitar duplicação.
+        // Se for uma reserva que NÃO É MESTRA, mas é recorrente (cancelamento pontual), a recriação é PERMITIDA.
         if ($originalReserva->is_recurrent && $originalReserva->id === $originalReserva->recurrent_series_id) {
              Log::info("Slot ID {$originalReserva->id} é MESTRE recorrente. Recriação ignorada para evitar duplicação em cascata.");
              return;
@@ -142,8 +144,6 @@ class ReservaController extends Controller
             return;
         }
 
-        // ATENÇÃO: As colunas client_name, client_contact e user_id devem ser NULLable
-        // ou ter valores padrão para slots fixos, senão o DB MySQL gera erro 1048.
         Reserva::create([
             'date' => $originalReserva->date,
             'day_of_week' => $originalReserva->day_of_week,
@@ -152,8 +152,8 @@ class ReservaController extends Controller
             'price' => $originalReserva->price,
             'status' => Reserva::STATUS_FREE, // 🛑 CRÍTICO: Cria como FREE (disponível)
             'is_fixed' => true,
-            'client_name' => 'Slot Fixo de 1h', // Pode ser um valor de placeholder
-            'client_contact' => 'N/A', // 🛑 VALOR DE PLACEHOLDER para evitar erro 1048 (not null)
+            'client_name' => 'Slot Fixo de 1h',
+            'client_contact' => 'N/A', // 🛑 CORREÇÃO CRÍTICA: Resolve o erro 1048 (client_contact cannot be null)
             'user_id' => null,
             'manager_id' => null,
             'recurrent_series_id' => null,
@@ -165,13 +165,13 @@ class ReservaController extends Controller
 
 
     // -------------------------------------------------------------------------
-    // 👤 LÓGICA DE CLIENTE: ENCONTRAR OU CRIAR
+    // 👤 LÓGICA DE CLIENTE: ENCONTRAR OU CRIAR (COM EMAIL TEMPORÁRIO)
     // -------------------------------------------------------------------------
 
     /**
      * Encontra ou cria um usuário cliente (baseado no whatsapp_contact).
      *
-     * @param array $data Contém 'name', 'email' (opcional), 'whatsapp_contact'.
+     * @param array $data Contém 'name', 'email', 'whatsapp_contact' e 'data_nascimento'.
      * @return User
      */
     protected function findOrCreateClient(array $data): User
@@ -182,7 +182,7 @@ class ReservaController extends Controller
 
         $emailToUse = $inputEmail;
 
-        // LÓGICA: Se o email do input estiver vazio, gera um provisório.
+        // 🛑 LÓGICA RESTAURADA: Se o email do input estiver vazio, gera um provisório.
         if (empty($inputEmail)) {
             $uniquePart = Str::random(5);
             $emailToUse = "temp_" . time() . "{$uniquePart}" . "@arena.local";
@@ -192,21 +192,16 @@ class ReservaController extends Controller
         $user = User::where('whatsapp_contact', $contact)->first();
 
         if ($user) {
-            // 2. Cliente encontrado: Atualiza o nome e e-mail (se for temp ou se for fornecido)
+            // 2. Cliente encontrado: Atualiza o nome e email (se aplicável)
             $updateData = ['name' => $name];
 
-            // Atualiza o e-mail APENAS SE: (a) for um e-mail temporário OU (b) o cliente forneceu um e-mail real.
+            // Atualiza o e-mail APENAS SE: (a) for um temp OU (b) o cliente forneceu um email real.
             if (Str::contains($user->email, '@arena.local') || !empty($inputEmail)) {
                  $updateData['email'] = $emailToUse;
             }
 
-            // Garante que o nome seja atualizado
+            // Garante que o nome seja atualizado se houver divergência
              $updateData['name'] = $name;
-
-             // 🛑 CORREÇÃO: Garante que a role esteja sempre em Português ('cliente')
-             if ($user->role === 'client') {
-                 $updateData['role'] = 'cliente';
-             }
 
             $user->update($updateData);
             Log::info("Cliente existente encontrado e atualizado (ID: {$user->id}).");
@@ -220,7 +215,6 @@ class ReservaController extends Controller
                 'email' => $emailToUse,
                 'whatsapp_contact' => $contact,
                 'password' => Hash::make($randomPassword),
-                // 🛑 CORREÇÃO: USAR SEMPRE O PADRÃO EM PORTUGUÊS: 'cliente'
                 'role' => 'cliente',
                 'is_admin' => false,
                 'data_nascimento' => $data['data_nascimento'] ?? null,
@@ -232,33 +226,25 @@ class ReservaController extends Controller
 
 
     // -------------------------------------------------------------------------
-    // 🗓️ MÉTODOS API PARA O DASHBOARD (AGENDAMENTO RÁPIDO) - CORRIGIDOS
+    // 🗓️ MÉTODOS API PARA O DASHBOARD (AGENDAMENTO RÁPIDO)
     // -------------------------------------------------------------------------
 
-    /**
-     * API: Cria uma reserva pontual (quick) a partir do Dashboard.
-     * Lógica de validação alterada para aceitar apenas client_name e client_contact
-     */
     public function storeQuickReservaApi(Request $request)
     {
-        // 🚨 VALIDAÇÃO CORRIGIDA: user_id é removido da regra de required_without
         $validated = $request->validate([
             'date' => 'required|date_format:Y-m-d',
             'start_time' => 'required|date_format:G:i',
             'end_time' => 'required|date_format:G:i|after:start_time',
             'price' => 'required|numeric|min:0',
             'reserva_id_to_update' => 'required|exists:reservas,id',
-
-            // 🛑 AGORA SÓ EXIGE NAME E CONTACT
-            'client_name' => 'required|string|max:255',
-            'client_contact' => 'required|digits:11|max:255',
-
+            'user_id' => 'nullable|exists:users,id',
+            'client_name' => [Rule::requiredIf(empty($request->input('user_id'))), 'nullable', 'string', 'max:255'],
+            'client_contact' => [Rule::requiredIf(empty($request->input('user_id'))), 'nullable', 'string', 'max:255'],
             'notes' => 'nullable|string',
         ], [
             'reserva_id_to_update.exists' => 'O slot de horário selecionado não existe ou não está disponível.',
-            'client_contact.digits' => 'O WhatsApp deve conter exatamente 11 dígitos (DDD + Número).',
-            'client_name.required' => 'O Nome do Cliente é obrigatório.',
-            'client_contact.required' => 'O Contato do Cliente (WhatsApp) é obrigatório.',
+            'client_name.required_without' => 'O Nome do Cliente é obrigatório se nenhum cliente registrado for selecionado.',
+            'client_contact.required_without' => 'O Contato do Cliente é obrigatório se nenhum cliente registrado for selecionado.',
         ]);
 
         $reservaIdToUpdate = $validated['reserva_id_to_update'];
@@ -268,11 +254,13 @@ class ReservaController extends Controller
         $oldReserva = Reserva::find($reservaIdToUpdate);
 
         // 1. Checagens de Segurança
+        // 🛑 CRÍTICO: O slot fixo deve ter status FREE para ser consumido
         if (!$oldReserva || !$oldReserva->is_fixed || $oldReserva->status !== Reserva::STATUS_FREE) {
             return response()->json(['success' => false, 'message' => 'O slot selecionado não é um horário fixo disponível.'], 409);
         }
 
         // 2. Checagem de Conflito Final (contra reservas reais)
+        // ✅ CRÍTICO: Passamos o ID do slot fixo para ser IGNORADO na checagem.
         if ($this->checkOverlap($validated['date'], $validated['start_time'], $validated['end_time'], false, $reservaIdToUpdate)) {
             $conflictingIds = $this->getConflictingReservaIds($validated['date'], $validated['start_time'], $validated['end_time'], $reservaIdToUpdate);
             return response()->json([
@@ -281,17 +269,25 @@ class ReservaController extends Controller
         }
 
 
-        // 3. Processamento do Cliente (NOVA LÓGICA)
+        // 3. Prepara e Sincroniza os dados do Cliente (🚨 LÓGICA CORRIGIDA AQUI)
         $clientName = $validated['client_name'];
         $clientContact = $validated['client_contact'];
+        $userId = $validated['user_id'];
 
-        // Sincroniza/cria o cliente no DB (baseado no WhatsApp/contact)
-        $clientUser = $this->findOrCreateClient([
-            'name' => $clientName,
-            'whatsapp_contact' => $clientContact,
-            'email' => null,
-            'data_nascimento' => null,
-        ]);
+        $clientUser = null;
+
+        if ($userId) {
+            // Se o ID do usuário foi fornecido (busca no modal), apenas busca.
+            $clientUser = User::find($userId);
+        } else {
+            // ✅ Sincroniza/cria o cliente no DB se for inserção manual (baseado no WhatsApp/contact)
+            $clientUser = $this->findOrCreateClient([
+                'name' => $clientName,
+                'whatsapp_contact' => $clientContact,
+                'email' => null, // Não há campo de e-mail no quick booking, usa null
+                'data_nascimento' => null,
+            ]);
+        }
 
         if (!$clientUser) {
             return response()->json(['success' => false, 'message' => 'Erro interno ao identificar ou criar o cliente.'], 500);
@@ -345,11 +341,9 @@ class ReservaController extends Controller
 
     /**
      * API: Cria uma série recorrente (anual) a partir do Agendamento Rápido do Dashboard.
-     * Lógica de validação alterada para aceitar apenas client_name e client_contact
      */
     public function storeRecurrentReservaApi(Request $request)
     {
-        // 🚨 VALIDAÇÃO CORRIGIDA: user_id é removido da regra de required_without
         $validated = $request->validate([
             'date' => 'required|date_format:Y-m-d',
             'start_time' => 'required|date_format:G:i',
@@ -357,16 +351,15 @@ class ReservaController extends Controller
             'price' => 'required|numeric|min:0',
             'reserva_id_to_update' => 'required|exists:reservas,id', // O ID do slot FIXO inicial
 
-            // 🛑 AGORA SÓ EXIGE NAME E CONTACT
-            'client_name' => 'required|string|max:255',
-            'client_contact' => 'required|digits:11|max:255',
+            'user_id' => 'nullable|exists:users,id',
+            'client_name' => [Rule::requiredIf(empty($request->input('user_id'))), 'nullable', 'string', 'max:255'],
+            'client_contact' => [Rule::requiredIf(empty($request->input('user_id'))), 'nullable', 'string', 'max:255'],
 
             'notes' => 'nullable|string',
         ], [
             'reserva_id_to_update.exists' => 'O slot de horário selecionado não existe ou não está disponível.',
-            'client_contact.digits' => 'O WhatsApp deve conter exatamente 11 dígitos (DDD + Número).',
-            'client_name.required' => 'O Nome do Cliente é obrigatório.',
-            'client_contact.required' => 'O Contato do Cliente (WhatsApp) é obrigatório.',
+            'client_name.required_without' => 'O Nome do Cliente é obrigatório se nenhum cliente registrado for selecionado.',
+            'client_contact.required_without' => 'O Contato do Cliente é obrigatório se nenhum cliente registrado for selecionado.',
         ]);
 
         $initialDate = Carbon::parse($validated['date']);
@@ -384,17 +377,25 @@ class ReservaController extends Controller
         // Define a janela de agendamento (Exatamente 1 ano a partir da data inicial)
         $endDate = $initialDate->copy()->addYear()->subDay();
 
-
-        // 1. Processamento do Cliente (NOVA LÓGICA)
+        // 1. Prepara e Sincroniza os dados do Cliente (🚨 LÓGICA CORRIGIDA AQUI)
         $clientName = $validated['client_name'];
         $clientContact = $validated['client_contact'];
+        $userId = $validated['user_id'];
 
-        $clientUser = $this->findOrCreateClient([
-            'name' => $clientName,
-            'whatsapp_contact' => $clientContact,
-            'email' => null,
-            'data_nascimento' => null,
-        ]);
+        $clientUser = null;
+
+        if ($userId) {
+            // Se o ID do usuário foi fornecido (busca no modal), apenas busca.
+            $clientUser = User::find($userId);
+        } else {
+            // ✅ Sincroniza/cria o cliente no DB se for inserção manual (baseado no WhatsApp/contact)
+            $clientUser = $this->findOrCreateClient([
+                'name' => $clientName,
+                'whatsapp_contact' => $clientContact,
+                'email' => null, // Não há campo de e-mail no quick booking, usa null
+                'data_nascimento' => null,
+            ]);
+        }
 
         if (!$clientUser) {
             return response()->json(['success' => false, 'message' => 'Erro interno ao identificar ou criar o cliente.'], 500);
@@ -414,7 +415,7 @@ class ReservaController extends Controller
             $date->addWeek();
         }
 
-        // 3. Lógica de Checagem Recorrente (MANTIDA)
+        // 🛑 LÓGICA DE CHECAGEM RECORRENTE
         $masterReservaId = null;
         $newReservasCount = 0;
         $conflictCount = 0;
@@ -426,10 +427,10 @@ class ReservaController extends Controller
             $isFirstDate = $currentDate->toDateString() === $initialDate->toDateString();
             $isConflict = false;
 
-            // 1. Checa conflito contra reservas *reais* de outros clientes
+            // ✅ CORREÇÃO: 1. Checa conflito contra reservas *reais* de outros clientes (is_fixed = false)
             $overlapWithReal = Reserva::whereDate('date', $dateString)
                 ->where('is_fixed', false) // CRÍTICO: Somente reservas de cliente
-                ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+                ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE]) // Apenas status que ocupam o slot
                 ->where(function ($q) use ($startTimeNormalized, $endTimeNormalized) {
                     $q->where('start_time', '<', $endTimeNormalized)
                       ->where('end_time', '>', $startTimeNormalized);
@@ -442,9 +443,10 @@ class ReservaController extends Controller
                                      ->whereDate('date', $dateString)
                                      ->where('start_time', $startTimeNormalized)
                                      ->where('end_time', $endTimeNormalized)
-                                     ->where('status', Reserva::STATUS_FREE);
+                                     ->where('status', Reserva::STATUS_FREE); // 🛑 AGORA BUSCA POR FREE
 
             if ($isFirstDate) {
+                // Para o primeiro slot, o ID deve ser o ID que foi clicado no calendário
                 $fixedSlotQuery->where('id', $scheduleId);
             }
 
@@ -452,9 +454,10 @@ class ReservaController extends Controller
 
             // 3. Avalia o conflito
             if ($overlapWithReal) {
-                $isConflict = true;
+                $isConflict = true; // Conflito com reserva de cliente (azul/roxo)
             } else if (!$fixedSlot) {
-                $isConflict = true;
+                // ✅ MUDANÇA: O slot fixo (verde) DEVE ser FREE e existir
+                $isConflict = true; // O slot fixo (verde) está ausente (foi manualmente cancelado/consumido)
             }
 
             if (!$isConflict) {
@@ -471,25 +474,25 @@ class ReservaController extends Controller
                     'client_name' => $clientName,
                     'client_contact' => $clientContact,
                     'notes' => $validated['notes'] ?? null,
-                    'status' => Reserva::STATUS_CONFIRMADA,
+                    'status' => Reserva::STATUS_CONFIRMADA, // Reserva de cliente confirmada pelo Admin
                     'is_fixed' => false,
                     'is_recurrent' => true,
                     'manager_id' => Auth::id(),
-                    // Campos para mass insert
-                    'created_at' => Carbon::now(),
-                    'updated_at' => Carbon::now(),
+                    'recurrent_series_id' => null,
                 ];
             } else {
                 $conflictCount++;
+                // Se o primeiro slot conflitar (incluindo o caso de não encontrar o fixedSlot inicial),
+                // a série não deve prosseguir.
                 if ($isFirstDate) {
                     Log::error("Conflito/Ausência no slot inicial da série recorrente. ID: {$scheduleId}.");
-                    $conflictCount = count($datesToSchedule);
+                    $conflictCount = count($datesToSchedule); // Marca todos como conflito para a mensagem de erro
                     break;
                 }
             }
         }
 
-        // 4. Checagem final de integridade:
+        // 3. Checagem final de integridade:
         if (empty($reservasToCreate)) {
             $message = "ERRO: O sistema não conseguiu agendar o slot inicial. Há um conflito ativo ou o slot inicial foi removido. Cheque o calendário manualmente.";
             if ($conflictCount > 0) {
@@ -504,32 +507,23 @@ class ReservaController extends Controller
         DB::beginTransaction();
         $masterReservaId = null;
         try {
-            // 5. Deleta todos os slots fixos válidos
+            // 4. Deleta todos os slots fixos válidos
             Reserva::whereIn('id', $fixedSlotsToDelete)->delete();
 
-            // 6. Cria a série de reservas reais
-            $reservasWithMasterId = [];
-
-            // Cria a primeira reserva (que se tornará a Mestra)
-            $firstReservaData = array_shift($reservasToCreate);
-            $masterReserva = Reserva::create($firstReservaData);
-            $masterReservaId = $masterReserva->id;
-
-            // Atualiza a própria mestra e prepara as demais para inserção em massa
-            $masterReserva->update(['recurrent_series_id' => $masterReservaId]);
-
-            // Adiciona o masterId nas reservas restantes antes do insert
+            // 5. Cria a série de reservas reais
             foreach ($reservasToCreate as $reservaData) {
-                 $reservaData['recurrent_series_id'] = $masterReservaId;
-                 $reservasWithMasterId[] = $reservaData;
-            }
 
-            // Inserção em Massa
-            if (!empty($reservasWithMasterId)) {
-                Reserva::insert($reservasWithMasterId);
-            }
+                $newReserva = Reserva::create($reservaData);
 
-            $newReservasCount = count($reservasWithMasterId) + 1; // +1 para a mestra
+                if ($masterReservaId === null) {
+                    $masterReservaId = $newReserva->id;
+                    $newReserva->update(['recurrent_series_id' => $masterReservaId]);
+                } else {
+                    $newReserva->update(['recurrent_series_id' => $masterReservaId]);
+                }
+
+                $newReservasCount++;
+            }
 
             DB::commit();
 
@@ -555,6 +549,8 @@ class ReservaController extends Controller
 
     /**
      * Encontra a data máxima de uma série recorrente (que não seja um slot fixo).
+     * @param int $masterId ID da série (que é o ID da primeira reserva).
+     * @return Carbon|null A data de expiração ou null se a série não for encontrada.
      */
     protected function getSeriesMaxDate(int $masterId): ?Carbon
     {
@@ -578,11 +574,12 @@ class ReservaController extends Controller
         $cutoffDate = Carbon::now()->addDays(60)->endOfDay();
         $today = Carbon::now()->startOfDay();
 
-        $latestReservations = Reserva::selectRaw('recurrent_series_id, MAX(date) as last_date, MIN(date) as first_date, MIN(start_time) as slot_time, MAX(price) as slot_price, day_of_week, client_name')
+        // ✅ MODIFICAÇÃO: Inclui MIN(date) para verificar a duração real da série.
+        $latestReservations = Reserva::selectRaw('recurrent_series_id, MAX(date) as last_date, MIN(date) as first_date, MIN(start_time) as slot_time, MAX(price) as slot_price')
             ->where('is_recurrent', true)
             ->where('is_fixed', false)
             ->where('status', Reserva::STATUS_CONFIRMADA)
-            ->groupBy('recurrent_series_id', 'day_of_week', 'client_name')
+            ->groupBy('recurrent_series_id')
             ->get();
 
         $expiringSeries = [];
@@ -593,14 +590,15 @@ class ReservaController extends Controller
             }
 
             $lastDate = Carbon::parse($latest->last_date);
-            $firstDate = Carbon::parse($latest->first_date);
+            $firstDate = Carbon::parse($latest->first_date); // ✅ NOVO: Data do primeiro slot
 
             // 1. Condição principal: A série está no período de expiração (próximos 60 dias)?
             if ($lastDate->greaterThanOrEqualTo($today) && $lastDate->lessThanOrEqualTo($cutoffDate)) {
 
-                // 2. FILTRO DE SEGURANÇA: Se a série tem menos de 7 dias de duração, ignora.
+                // 2. ✅ NOVO FILTRO DE SEGURANÇA: Se a série tem menos de 7 dias de duração,
+                // assume-se que a geração falhou ou é muito curta, e ignora o alerta.
                 if ($lastDate->diffInDays($firstDate) <= 7) {
-                    Log::warning("Série Recorrente ID {$latest->recurrent_series_id} ignorada. Duração muito curta.");
+                    Log::warning("Série Recorrente ID {$latest->recurrent_series_id} ignorada. Duração de apenas " . $lastDate->diffInDays($firstDate) . " dias, o que sugere falha na geração ou é uma série propositadamente curta.");
                     continue;
                 }
 
@@ -628,7 +626,7 @@ class ReservaController extends Controller
      */
     public function renewRecurrentSeries(Request $request, Reserva $masterReserva)
     {
-        if (!$masterReserva->is_recurrent || $masterReserva->id !== $masterReserva->recurrent_series_id) {
+        if (!$masterReserva->is_recurrent) {
             return response()->json(['success' => false, 'message' => 'A reserva fornecida não é a mestra de uma série recorrente.'], 400);
         }
 
@@ -643,6 +641,7 @@ class ReservaController extends Controller
         $startDate = $currentMaxDate->copy()->addWeek();
         $endDate = $currentMaxDate->copy()->addYear();
 
+        // Se a data de início da renovação for maior que a nova data final,
         if ($startDate->greaterThan($endDate)) {
             return response()->json(['success' => false, 'message' => 'A série já está totalmente coberta até ' . $endDate->format('d/m/Y') . '.'], 400);
         }
@@ -666,11 +665,12 @@ class ReservaController extends Controller
             $currentDate = $startDate->copy();
             $conflictedOrSkippedCount = 0;
 
+            // O loop deve ir até que a data atual seja menor ou igual à data final.
             while ($currentDate->lessThanOrEqualTo($endDate)) {
                 $dateString = $currentDate->toDateString();
                 $isConflict = false;
 
-                // 3.1. Checagem de Duplicação (dentro da própria série)
+                // 3.1. Checagem de Duplicação
                 $isDuplicate = Reserva::whereDate('date', $dateString)
                     ->where('start_time', $startTime)
                     ->where('end_time', $endTime)
@@ -689,8 +689,8 @@ class ReservaController extends Controller
                     $isOccupiedByRealCustomer = Reserva::whereDate('date', $dateString)
                         ->where('start_time', '<', $endTime)
                         ->where('end_time', '>', $startTime)
-                        ->where('is_fixed', false)
-                        ->where('recurrent_series_id', '!=', $masterId)
+                        ->where('is_fixed', false) // Exclui slots fixos
+                        ->where('recurrent_series_id', '!=', $masterId) // Exclui a própria série
                         ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
                         ->exists();
 
@@ -703,11 +703,12 @@ class ReservaController extends Controller
                 // 3.3. Busca o slot fixo, se existir, para DELETAR (consumir)
                 $fixedSlot = null;
                 if (!$isConflict) {
+                    // 🛑 AGORA BUSCA SLOT FIXO LIVRE (FREE)
                     $fixedSlot = Reserva::where('is_fixed', true)
                         ->whereDate('date', $dateString)
                         ->where('start_time', $startTime)
                         ->where('end_time', $endTime)
-                        ->where('status', Reserva::STATUS_FREE)
+                        ->where('status', Reserva::STATUS_FREE) // 🛑 CRÍTICO: Busca por STATUS_FREE
                         ->first();
                 }
 
@@ -745,14 +746,11 @@ class ReservaController extends Controller
             DB::commit();
 
             if ($newReservasCount > 0) {
-                // 4. Atualiza a data final em todas as reservas existentes da série. (Seu código não tinha o campo 'recurrent_end_date' mas é uma boa prática)
-                // Se você tiver a coluna 'recurrent_end_date' no seu modelo Reserva, descomente e adapte.
-                /*
+                // 4. Atualiza a data final em todas as reservas existentes da série.
                 Reserva::where('recurrent_series_id', $masterId)
-                             ->orWhere('id', $masterId) // Inclui a própria masterReserva
-                             ->where('is_fixed', false)
-                             ->update(['recurrent_end_date' => $endDate]);
-                */
+                        ->orWhere('id', $masterId) // Inclui a própria masterReserva
+                        ->where('is_fixed', false)
+                        ->update(['recurrent_end_date' => $endDate]);
 
                 $message = "Série #{$masterId} de '{$clientName}' renovada com sucesso! Foram adicionadas {$newReservasCount} novas reservas, estendendo o prazo até " . $endDate->format('d/m/Y') . ".";
 
@@ -796,6 +794,7 @@ class ReservaController extends Controller
         // 1. Validação (Incluindo a nova flag)
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
+            // O request é enviado como string '1' ou '0', por isso nullable|boolean
             'is_series_cancellation' => 'nullable|boolean',
         ], [
             'cancellation_reason.required' => 'O motivo do cancelamento é obrigatório.',
@@ -821,8 +820,10 @@ class ReservaController extends Controller
         // 🚨 FLUXO 1: SOLICITAÇÃO DE CANCELAMENTO DE SÉRIE (RECORRENTE)
         // =====================================================================
         if ($reserva->is_recurrent && $isSeriesRequest) {
+            // A regra do negócio é: Cliente não cancela a série diretamente, apenas solicita.
 
             // 1. Encontra a reserva Mestra (ou usa a atual se for a mestra)
+            // Usa o recurrent_series_id para encontrar o mestre, ou o ID da reserva se for ela.
             $masterReservaId = $reserva->recurrent_series_id ?? $reserva->id;
             $masterReserva = Reserva::find($masterReservaId);
 
@@ -838,9 +839,11 @@ class ReservaController extends Controller
 
                 $masterReserva->update([
                     'notes' => Str::limit($newNote, 5000), // Evita estouro de campo
+                    // Não alteramos o status aqui, pois a série permanece ativa até a ação do gestor.
                     'cancellation_reason' => '[PENDENTE GESTOR] Solicitação de cancelamento de série registrada.'
                 ]);
 
+                // Opcional: Notificar Gestor (a ser implementado, apenas logamos por enquanto)
                 Log::warning("SOLICITAÇÃO DE CANCELAMENTO DE SÉRIE: Cliente ID: {$user->id}, Série ID: {$masterReservaId}. Motivo: {$reason}");
 
                 DB::commit();
@@ -861,6 +864,7 @@ class ReservaController extends Controller
         // 🛑 FLUXO 2: RESERVA RECORRENTE INDIVIDUAL (Bloqueio)
         // =====================================================================
         if ($reserva->is_recurrent && !$isSeriesRequest) {
+             // Se é recorrente, mas não pediu o cancelamento da série (apenas o slot), bloqueia.
              return response()->json(['message' => 'Você não pode cancelar slots individuais de uma série recorrente. Use a opção de cancelamento de série no histórico.'], 400);
         }
 
@@ -903,6 +907,7 @@ class ReservaController extends Controller
             'hora_inicio' => ['required', 'date_format:G:i'],
             'hora_fim' => ['required', 'date_format:G:i', 'after:hora_inicio'],
             'price' => ['required', 'numeric', 'min:0'],
+            // 🛑 CRÍTICO: O slot fixo deve ter status FREE para ser selecionável
             'schedule_id' => ['required', 'integer', 'exists:reservas,id,is_fixed,1,status,' . Reserva::STATUS_FREE],
             'reserva_conflito_id' => 'nullable',
 
@@ -951,6 +956,7 @@ class ReservaController extends Controller
             ]);
 
             // === 3. Checagem de Conflito FINAL (CRÍTICO) ===
+            // 🛑 CORREÇÃO DA RACE CONDITION: Passa o ID do slot fixo ($scheduleId) para ser IGNORADO na checagem.
             if ($this->checkOverlap($date, $startTime, $endTime, false, $scheduleId)) {
                 DB::rollBack();
                 // A checagem falhou: há uma reserva REAL (não o slot fixo) em conflito.
@@ -962,6 +968,7 @@ class ReservaController extends Controller
             // 4. Limpa o slot fixo (evento verde)
             $fixedSlot = Reserva::where('id', $scheduleId)
                 ->where('is_fixed', true)
+                // 🛑 CRÍTICO: O slot fixo deve ter status FREE para ser deletado/consumido
                 ->where('status', Reserva::STATUS_FREE)
                 ->first();
 

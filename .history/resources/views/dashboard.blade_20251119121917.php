@@ -304,7 +304,7 @@
     </div>
 
 
-    {{-- Modal de Agendamento Rápido (SLOTS DISPONÍVEIS) - SIMPLIFICADO --}}
+    {{-- Modal de Agendamento Rápido (SLOTS DISPONÍVEIS) - ATUALIZADO --}}
     <div id="quick-booking-modal" class="modal-overlay hidden" onclick="document.getElementById('quick-booking-modal').classList.add('hidden')">
         <div class="bg-white p-6 rounded-xl shadow-2xl max-w-lg w-full transition-all duration-300 transform scale-100" onclick="event.stopPropagation()">
             <h3 class="text-xl font-bold text-green-700 mb-4 border-b pb-2">Agendamento Rápido de Horários</h3>
@@ -313,7 +313,6 @@
                 @csrf
 
                 <div id="slot-info-display" class="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700">
-                    {{-- Informações do slot (Data/Hora/Preço) injetadas pelo JS --}}
                 </div>
 
                 <input type="hidden" name="schedule_id" id="quick-schedule-id">
@@ -324,9 +323,31 @@
                 <input type="hidden" name="reserva_id_to_update" id="reserva-id-to-update">
 
 
-                <div id="client_fields">
+                <div class="mb-4">
+                    <label for="client_search" class="block text-sm font-medium text-gray-700">
+                        Buscar Cliente Registrado (Nome, Email ou WhatsApp - Opcional):
+                    </label>
+                    <div class="relative">
+                        <input type="text" name="client_search" id="client_search" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500" placeholder="Comece a digitar para buscar">
+                        <div id="client_results" class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto hidden">
+                        </div>
+                    </div>
+                    <input type="hidden" name="user_id" id="quick-user-id">
+
+                    <div id="selected_client_info" class="mt-2 p-2 bg-green-100 border border-green-300 rounded-md hidden">
+                        <p class="text-sm font-semibold text-green-800 flex justify-between items-center">
+                            Cliente Selecionado: <span id="selected_client_name" class="font-normal"></span>
+                            <button type="button" onclick="clearSelectedClient()" class="text-red-500 hover:text-red-700 text-sm ml-4">
+                                (Limpar)
+                            </button>
+                        </p>
+                    </div>
+                </div>
+
+                <div id="manual_client_fields">
+                    {{-- CAMPOS MANUAIS: Visíveis por padrão ou se a busca for limpa/inutilizada --}}
                     <div class="mb-4">
-                        <label for="client_name" class="block text-sm font-medium text-gray-700">Nome Completo do Cliente *</label>
+                        <label for="client_name" class="block text-sm font-medium text-gray-700">Nome Completo do Cliente (Obrigatório se não buscar)</label>
                         <input type="text" name="client_name" id="client_name" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                     </div>
 
@@ -383,9 +404,10 @@
         // ROTAS DE SUBMISSÃO
         const RECURRENT_STORE_URL = '{{ route("api.reservas.store_recurrent") }}';
         const QUICK_STORE_URL = '{{ route("api.reservas.store_quick") }}';
+        const SEARCH_CLIENTS_API_URL = '{{ route("admin.api.search-clients") }}';
         const RENEW_SERIE_URL = '{{ route("admin.reservas.renew_serie", ":masterReserva") }}';
 
-        // ROTAS DE AÇÕES PENDENTES
+        // ROTAS DE AÇÕES PENDENTES (Novas)
         const CONFIRM_PENDING_URL = '{{ route("admin.reservas.confirmar", ":id") }}';
         const REJECT_PENDING_URL = '{{ route("admin.reservas.rejeitar", ":id") }}';
 
@@ -405,16 +427,11 @@
         let currentUrlBase = null;
         let globalExpiringSeries = [];
 
-        // Elementos do Formulário
-        const clientNameInput = () => document.getElementById('client_name');
-        const clientContactInput = () => document.getElementById('client_contact');
-        const whatsappError = () => document.getElementById('whatsapp-error-message');
-
-
         document.addEventListener('DOMContentLoaded', () => {
             const renewalAlertContainer = document.getElementById('renewal-alert-container');
             if (renewalAlertContainer) {
                 try {
+                    // Garante que o atributo data-series exista antes de tentar parsear
                     const dataSeriesAttr = renewalAlertContainer.getAttribute('data-series');
                     globalExpiringSeries = dataSeriesAttr ? JSON.parse(dataSeriesAttr) : [];
                 } catch (e) {
@@ -427,8 +444,10 @@
 
         /**
          * FUNÇÃO PARA CHECAR AS RESERVAS PENDENTES EM TEMPO REAL (PERIÓDICO)
+         * Interage com o container estático do Blade para garantir visibilidade imediata.
          */
         const checkPendingReservations = async () => {
+            // console.log("Iniciando verificação de reservas pendentes...");
             const notificationContainer = document.getElementById('pending-alert-container');
             const apiUrl = PENDING_API_URL;
 
@@ -444,6 +463,7 @@
                 let htmlContent = '';
 
                 if (count > 0) {
+                    // Alerta Laranja (Pendências) - Copiado do Blade para consistência
                     htmlContent = `
                         <div class="bg-orange-100 border-l-4 border-orange-500 text-orange-700 p-4 mb-6 rounded-lg shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between transition-all duration-300 transform hover:scale-[1.005]" role="alert">
                             <div class="flex items-start">
@@ -463,36 +483,177 @@
                         </div>
                     `;
                 } else {
+                    // Se a contagem for zero, o HTML fica vazio, removendo o alerta.
                     htmlContent = '';
                 }
 
+                // Garante que o container só seja atualizado se o conteúdo for diferente
                 if (notificationContainer.innerHTML.trim() !== htmlContent.trim()) {
                     notificationContainer.innerHTML = htmlContent;
                 }
 
             } catch (error) {
                 console.error('[PENDÊNCIA DEBUG] Erro ao buscar o status de pendências:', error);
+                // Deixa o container vazio em caso de erro para não poluir a tela
                 notificationContainer.innerHTML = '';
             }
         };
 
         // =========================================================
-        // 🚨 FUNÇÃO DE VALIDAÇÃO WHATSAPP (11 DÍGITOS)
+        // 🔎 FUNÇÕES DE BUSCA DE CLIENTE
+        // =========================================================
+        let clientSearchTimeout;
+        const clientSearchInput = () => document.getElementById('client_search');
+        const clientResultsDiv = () => document.getElementById('client_results');
+        const manualFieldsDiv = () => document.getElementById('manual_client_fields');
+        const selectedClientInfoDiv = () => document.getElementById('selected_client_info');
+        const quickUserIdInput = () => document.getElementById('quick-user-id');
+        const clientNameInput = () => document.getElementById('client_name');
+        const clientContactInput = () => document.getElementById('client_contact');
+
+
+        function initClientSearch() {
+            clientSearchInput().addEventListener('input', function() {
+                clearTimeout(clientSearchTimeout);
+                const query = this.value;
+
+                if (query.length < 2) {
+                    clientResultsDiv().classList.add('hidden');
+                    clientResultsDiv().innerHTML = '';
+                    return;
+                }
+
+                clientSearchTimeout = setTimeout(() => {
+                    searchClients(query);
+                }, 300); // Debounce de 300ms
+            });
+
+            // Handle focus/blur to hide results gracefully
+            clientSearchInput().addEventListener('blur', function() {
+                setTimeout(() => {
+                    clientResultsDiv().classList.add('hidden');
+                }, 200);
+            });
+
+            clientSearchInput().addEventListener('focus', function() {
+                    // Show results if there is a query and results
+                    if (this.value.length >= 2 && clientResultsDiv().innerHTML.trim() !== '') {
+                        clientResultsDiv().classList.remove('hidden');
+                    }
+            });
+        }
+
+        async function searchClients(query) {
+            console.log(`Buscando clientes para a query: ${query}`);
+            try {
+                // Rota que busca clientes por nome, email ou whatsapp
+                const response = await fetch(SEARCH_CLIENTS_API_URL + '?query=' + encodeURIComponent(query));
+                const clients = await response.json();
+                console.log("Resultados da busca de clientes:", clients);
+
+                clientResultsDiv().innerHTML = '';
+                if (clients.length > 0) {
+                    clients.forEach(client => {
+                        const item = document.createElement('div');
+                        item.className = 'p-2 cursor-pointer hover:bg-indigo-100 border-b border-gray-100 last:border-b-0 text-sm';
+                        // Priorize whatsapp_contact if available
+                        const contactDisplay = client.whatsapp_contact || client.email || 'N/A';
+                        item.innerHTML = `<p class="font-semibold">${client.name}</p><p class="text-xs text-gray-500">${contactDisplay}</p>`;
+
+                        // Use mousedown para evitar que o blur feche a lista antes do click
+                        item.addEventListener('mousedown', (e) => {
+                            e.preventDefault();
+                            selectClient(client);
+                        });
+                        clientResultsDiv().appendChild(item);
+                    });
+                    clientResultsDiv().classList.remove('hidden');
+                } else {
+                    clientResultsDiv().innerHTML = `<div class="p-2 text-sm text-gray-500">Nenhum cliente registrado encontrado.</div>`;
+                    clientResultsDiv().classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Erro na busca de clientes:', error);
+                clientResultsDiv().classList.add('hidden');
+            }
+        }
+
+        function selectClient(client) {
+            console.log("Cliente selecionado:", client);
+
+            // 1. Preenche o campo oculto com o ID do cliente
+            quickUserIdInput().value = client.id;
+
+            // 2. Atualiza a exibição
+            const contactDisplay = client.whatsapp_contact || client.email || 'N/A';
+            document.getElementById('selected_client_name').textContent = `${client.name} (${contactDisplay})`;
+            selectedClientInfoDiv().classList.remove('hidden');
+
+            // 3. Oculta os campos de entrada manual e resultados
+            manualFieldsDiv().classList.add('hidden');
+            clientResultsDiv().classList.add('hidden');
+
+            // 4. Remove a obrigatoriedade dos campos manuais
+            clientNameInput().removeAttribute('required');
+            clientContactInput().removeAttribute('required');
+
+            // 5. Preenche os campos manuais em background (útil para o FormData)
+            clientNameInput().value = client.name;
+            clientContactInput().value = client.whatsapp_contact || client.email || '';
+
+            // 6. Limpa o input de busca (a informação já está em #selected_client_info)
+            clientSearchInput().value = '';
+
+            // Oculta mensagem de erro de WhatsApp se ela estiver visível
+            document.getElementById('whatsapp-error-message').classList.add('hidden');
+        }
+
+        function clearSelectedClient() {
+            // 1. Limpa o ID do cliente
+            quickUserIdInput().value = '';
+
+            // 2. Oculta a exibição do cliente selecionado
+            selectedClientInfoDiv().classList.add('hidden');
+
+            // 3. Reexibe os campos manuais
+            manualFieldsDiv().classList.remove('hidden');
+
+            // 4. Restaura a obrigatoriedade dos campos manuais
+            clientNameInput().setAttribute('required', 'required');
+            clientContactInput().setAttribute('required', 'required');
+
+            // 5. Limpa os campos manuais e o input de busca
+            clientNameInput().value = '';
+            clientContactInput().value = '';
+            clientSearchInput().value = '';
+            clientResultsDiv().innerHTML = ''; // Limpa resultados
+        }
+
+
+        // =========================================================
+        // 🚨 NOVO: FUNÇÃO DE VALIDAÇÃO WHATSAPP (11 DÍGITOS)
         // =========================================================
 
         /**
          * Valida se o contato do cliente é um número de WhatsApp com 11 dígitos.
+         * @param {string} contact O valor do campo de contato.
+         * @returns {boolean} True se a validação for bem-sucedida.
          */
         function validateClientContact(contact) {
+            // Remove todos os caracteres não numéricos (espaços, traços, parênteses)
             const numbersOnly = contact.replace(/\D/g, '');
+
+            // Verifica se tem exatamente 11 dígitos
             const isValid = numbersOnly.length === 11;
 
-            const errorElement = whatsappError();
+            // Atualiza a mensagem de erro na tela
+            const errorElement = document.getElementById('whatsapp-error-message');
             const contactInputEl = clientContactInput();
 
             if (isValid) {
                 errorElement.classList.add('hidden');
                 contactInputEl.classList.remove('border-red-500');
+                // Adiciona uma borda verde sutil para feedback visual de sucesso (opcional)
                 contactInputEl.classList.add('border-green-500');
             } else {
                 errorElement.classList.remove('hidden');
@@ -505,32 +666,36 @@
 
 
         // =========================================================
-        // FUNÇÃO CRÍTICA: Lidar com a submissão do Agendamento Rápido via AJAX
+        // FUNÇÃO CRÍTICA: Lidar com a submissão do Agendamento Rápido via AJAX (ATUALIZADO)
         // =========================================================
         async function handleQuickBookingSubmit(event) {
-            event.preventDefault();
-
-            const clientName = clientNameInput().value.trim();
-            const clientContact = clientContactInput().value.trim();
-
-            if (!clientName) {
-                alert("Por favor, preencha o Nome Completo do Cliente.");
-                return;
-            }
-
-            // Validação de 11 dígitos no WhatsApp
-            if (!validateClientContact(clientContact)) {
-                return;
-            }
+            event.preventDefault(); // CRÍTICO: Previne a navegação de página
 
             const form = event.target;
             const formData = new FormData(form);
             const data = Object.fromEntries(formData.entries());
 
-            // ⚠️ DEBUG CRÍTICO: Mostra os dados enviados. NOTE: user_id está ausente, o controller deve tratar o client_contact.
-            console.log("Dados enviados (sem user_id):", data);
-
             const isRecurrent = document.getElementById('is-recurrent').checked;
+
+            const userId = data.user_id;
+            const clientName = data.client_name ? data.client_name.trim() : '';
+            const clientContact = data.client_contact ? data.client_contact.trim() : '';
+
+            // Só faz a validação do WhatsApp se o usuário não foi selecionado e o campo de contato está visível/preenchido
+            if (!userId && clientContact) {
+                 if (!validateClientContact(clientContact)) {
+                    // A validação já exibiu a mensagem de erro no campo
+                    return;
+                }
+            }
+
+
+            if (!userId && (!clientName || !clientContact)) {
+                alert("Por favor, selecione um cliente registrado OU preencha Nome e WhatsApp manualmente.");
+                return;
+            }
+
+            // Altera a URL de destino com base no checkbox de recorrência
             const targetUrl = isRecurrent ? RECURRENT_STORE_URL : QUICK_STORE_URL;
 
             const submitBtn = document.getElementById('submit-quick-booking');
@@ -560,15 +725,20 @@
 
                 if (response.ok && result.success) {
                     alert(result.message);
+                    // Fecha o modal
                     document.getElementById('quick-booking-modal').classList.add('hidden');
+
+                    // Recarrega a página para garantir a atualização visual
                     setTimeout(() => {
                         window.location.reload();
                     }, 50);
 
                 } else if (response.status === 422 && result.errors) {
+                    // Erros de validação
                     const errors = Object.values(result.errors).flat().join('\n');
                     alert(`ERRO DE VALIDAÇÃO:\n${errors}`);
                 } else {
+                    // Erros como Conflito (409)
                     alert(result.message || `Erro desconhecido. Status: ${response.status}.`);
                 }
 
@@ -582,12 +752,8 @@
         }
 
         // =========================================================
-        // FLUXO DE AÇÕES PENDENTES, CANCELAMENTO E RENOVAÇÃO (MANTIDOS)
+        // FLUXO DE AÇÕES PENDENTES (NOVO)
         // =========================================================
-
-        function closeEventModal() {
-            document.getElementById('event-modal').classList.add('hidden');
-        }
 
         function openPendingActionModal(event) {
             const extendedProps = event.extendedProps || {};
@@ -597,8 +763,9 @@
             const priceDisplay = parseFloat(extendedProps.price || 0).toFixed(2).replace('.', ',');
             const clientName = event.title.split(' - R$ ')[0];
 
+            // 1. Popula o modal
             document.getElementById('pending-reserva-id').value = reservaId;
-            document.getElementById('confirmation-value').value = extendedProps.price || '';
+            document.getElementById('confirmation-value').value = extendedProps.price || ''; // Preenche com o valor sugerido
 
             document.getElementById('pending-modal-content').innerHTML = `
                 <p>O cliente **${clientName}** realizou uma pré-reserva.</p>
@@ -608,11 +775,13 @@
                 <p class="text-xs italic mt-2 text-orange-700">A confirmação remove o slot fixo e a rejeição recria o slot fixo.</p>
             `;
 
+            // 2. Reseta a área de rejeição
             document.getElementById('rejection-reason-area').classList.add('hidden');
             document.getElementById('rejection-reason').value = '';
             document.getElementById('reject-pending-btn').textContent = 'Rejeitar';
-            document.getElementById('reject-pending-btn').classList.replace('bg-red-800', 'bg-red-600');
+            document.getElementById('reject-pending-btn').classList.replace('bg-red-800', 'bg-red-600'); // Garante a cor original
 
+            // 3. Exibe o modal
             document.getElementById('pending-action-modal').classList.remove('hidden');
         }
 
@@ -620,11 +789,13 @@
             document.getElementById('pending-action-modal').classList.add('hidden');
         }
 
+        // --- Lógica de submissão do formulário de Ação Pendente ---
         document.getElementById('confirm-pending-btn').addEventListener('click', function() {
             const form = document.getElementById('pending-action-form');
             const reservaId = document.getElementById('pending-reserva-id').value;
             const confirmationValue = document.getElementById('confirmation-value').value;
 
+            // Garante que a validação HTML5 do campo de valor seja acionada
             if (form.reportValidity()) {
                 const url = CONFIRM_PENDING_URL.replace(':id', reservaId);
                 const data = {
@@ -640,14 +811,17 @@
             const reasonArea = document.getElementById('rejection-reason-area');
             const reasonInput = document.getElementById('rejection-reason');
 
+            // Alterna a exibição da área de motivo de rejeição
             if (reasonArea.classList.contains('hidden')) {
                 reasonArea.classList.remove('hidden');
+                // Altera o botão de rejeitar para submeter
                 this.textContent = 'Confirmar Rejeição';
                 this.classList.replace('bg-red-600', 'bg-red-800');
             } else {
                 const reservaId = document.getElementById('pending-reserva-id').value;
                 const reason = reasonInput.value.trim();
 
+                // Validação mínima para rejeição
                 if (reason.length < 5) {
                     alert("Por favor, forneça um motivo de rejeição com pelo menos 5 caracteres.");
                     return;
@@ -667,6 +841,7 @@
             const submitBtn = document.getElementById('confirm-pending-btn');
             const rejectBtn = document.getElementById('reject-pending-btn');
 
+            // Temporariamente desabilita os botões
             submitBtn.disabled = true;
             rejectBtn.disabled = true;
             submitBtn.textContent = buttonText;
@@ -697,6 +872,7 @@
                 if (response.ok && result.success) {
                     alert(result.message);
                     closePendingActionModal();
+                    // Recarrega a página para atualizar o calendário
                     setTimeout(() => window.location.reload(), 50);
 
                 } else if (response.status === 422 && result.errors) {
@@ -710,30 +886,42 @@
                 console.error('Erro de Rede:', error);
                 alert("Erro de Rede. Tente novamente.");
             } finally {
+                // Restaura o estado dos botões em caso de falha
                 submitBtn.disabled = false;
                 rejectBtn.disabled = false;
                 submitBtn.textContent = 'Confirmar Reserva';
                 rejectBtn.textContent = 'Rejeitar';
+                // Garante que o estado visual de Rejeitar seja resetado se a rejeição falhar
                 document.getElementById('rejection-reason-area').classList.add('hidden');
                 rejectBtn.classList.replace('bg-red-800', 'bg-red-600');
             }
         }
 
 
+        // =========================================================
+        // FLUXO DE CANCELAMENTO E RENOVAÇÃO (JS) - MANTIDO
+        // =========================================================
+
         function closeEventModal() {
             document.getElementById('event-modal').classList.add('hidden');
         }
 
+        /**
+         * Abre o modal de cancelamento e configura os dados da reserva.
+         */
         function openCancellationModal(reservaId, method, urlBase, message, buttonText) {
+            // Fecha o modal de detalhes para abrir o de cancelamento
             closeEventModal();
+
             currentReservaId = reservaId;
             currentMethod = method;
             currentUrlBase = urlBase;
-            document.getElementById('cancellation-reason-input').value = '';
+            document.getElementById('cancellation-reason-input').value = ''; // Limpa o campo
 
             document.getElementById('modal-message-cancel').textContent = message;
             document.getElementById('cancellation-modal').classList.remove('hidden');
 
+            // Ativa a transição do modal (opcional, dependendo do seu CSS)
             setTimeout(() => {
                 document.getElementById('cancellation-modal-content').classList.remove('opacity-0', 'scale-95');
             }, 10);
@@ -741,6 +929,9 @@
             document.getElementById('confirm-cancellation-btn').textContent = buttonText;
         }
 
+        /**
+         * Fecha o modal de cancelamento.
+         */
         function closeCancellationModal() {
             document.getElementById('cancellation-modal-content').classList.add('opacity-0', 'scale-95');
             setTimeout(() => {
@@ -748,15 +939,23 @@
             }, 300);
         }
 
+
+        /**
+         * FUNÇÃO AJAX GENÉRICA PARA CANCELAMENTO
+         */
         async function sendCancellationRequest(reservaId, method, urlBase, reason) {
+            // Usa a URL base do Laravel, que aceita POST e trata o cancelamento
+            // CRÍTICO: Troca o :id pelo ID real
             const url = urlBase.replace(':id', reservaId);
+
             const bodyData = {
                 cancellation_reason: reason,
                 _token: csrfToken,
-                _method: method,
+                _method: method, // Envia o método PATCH/DELETE, se necessário
             };
 
             const fetchConfig = {
+                // CRÍTICO: O fetch SEMPRE usa POST para rotas que esperam PATCH/DELETE
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -786,6 +985,8 @@
                 if (response.ok && result.success) {
                     alert(result.message || "Ação realizada com sucesso. O calendário será atualizado.");
                     closeCancellationModal();
+
+                    // FORÇA A RECARGA DA PÁGINA
                     setTimeout(() => {
                         window.location.reload();
                     }, 50);
@@ -806,24 +1007,31 @@
             }
         }
 
+        // --- Listener de Confirmação do Modal de Cancelamento ---
         document.getElementById('confirm-cancellation-btn').addEventListener('click', function() {
             const reason = document.getElementById('cancellation-reason-input').value.trim();
 
+            // Validação mínima do Front-end (o Controller fará a validação final)
             if (reason.length < 5) {
                 alert("Por favor, forneça um motivo de cancelamento com pelo menos 5 caracteres.");
                 return;
             }
 
             if (currentReservaId && currentMethod && currentUrlBase) {
+                // Passa o currentMethod para a função AJAX
                 sendCancellationRequest(currentReservaId, currentMethod, currentUrlBase, reason);
             } else {
                 alert("Erro: Dados da reserva não configurados corretamente.");
             }
         });
 
+        // --- Funções Chamadas pelos Botões do #event-modal (Expostas globalmente) ---
+        // Funções específicas de Cancelamento
         const cancelarPontual = (id, isRecurrent) => {
+            // O Controller precisa saber se deve limpar apenas o slot ou o dia inteiro (recorrente)
+            // CORREÇÃO DA ROTA: Se for recorrente, usa CANCEL_PONTUAL_URL
             const urlBase = isRecurrent ? CANCEL_PONTUAL_URL : CANCEL_PADRAO_URL;
-            const method = 'PATCH';
+            const method = 'PATCH'; // Usamos PATCH/POST para atualizar o status no Controller
             const confirmation = isRecurrent
                 ? "Cancelar SOMENTE ESTA reserva (exceção)? O horário será liberado pontualmente."
                 : "Cancelar esta reserva pontual (O horário será liberado e a reserva deletada).";
@@ -834,18 +1042,22 @@
 
         const cancelarSerie = (id) => {
             const urlBase = CANCEL_SERIE_URL;
-            const method = 'DELETE';
+            const method = 'DELETE'; // Usamos DELETE/POST para o cancelamento da série
             const confirmation = "⚠️ ATENÇÃO: Cancelar TODA A SÉRIE desta reserva? Todos os horários futuros serão liberados.";
             const buttonText = 'Confirmar Cancelamento de SÉRIE';
 
             openCancellationModal(id, method, urlBase, confirmation, buttonText);
         };
 
+        // --- LÓGICA DO MODAL DE RENOVAÇÃO ---
+
         function closeRenewalModal() {
             document.getElementById('renewal-modal').classList.add('hidden');
+            // Opcional: Limpar mensagens ao fechar
             document.getElementById('renewal-message-box').classList.add('hidden');
         }
 
+        // Atualiza o texto do alerta principal e sua visibilidade
         function updateMainAlert() {
             const alertContainer = document.getElementById('renewal-alert-container');
             const count = globalExpiringSeries.length;
@@ -861,7 +1073,7 @@
         function openRenewalModal() {
             const series = globalExpiringSeries;
             const listContainer = document.getElementById('renewal-list');
-            listContainer.innerHTML = '';
+            listContainer.innerHTML = ''; // Limpa a lista antes de popular
             document.getElementById('renewal-message-box').classList.add('hidden');
 
             if (series.length === 0) {
@@ -871,6 +1083,7 @@
                     const dayNames = {0: 'Domingo', 1: 'Segunda', 2: 'Terça', 3: 'Quarta', 4: 'Quinta', 5: 'Sexta', 6: 'Sábado'};
                     const dayName = dayNames[item.day_of_week] || 'Dia Desconhecido';
 
+                    // Converte a data de 'YYYY-MM-DD' para 'DD/MM/YYYY'
                     const lastDateDisplay = moment(item.last_date, 'YYYY-MM-DD').format('DD/MM/YYYY');
                     const priceDisplay = parseFloat(item.slot_price).toFixed(2).replace('.', ',');
 
@@ -902,6 +1115,7 @@
             document.getElementById('renewal-modal').classList.remove('hidden');
         }
 
+        // Função para exibir mensagens no modal
         function displayRenewalMessage(message, isSuccess) {
             const msgBox = document.getElementById('renewal-message-box');
             msgBox.textContent = message;
@@ -919,6 +1133,7 @@
             const itemContainer = document.getElementById(`renewal-item-${masterId}`);
             const renewBtn = document.querySelector(`.renew-btn-${masterId}`);
 
+            // Busca os dados do cliente para o confirm
             const seriesData = globalExpiringSeries.find(s => s.master_id === masterId);
             const clientName = seriesData ? seriesData.client_name : 'Cliente Desconhecido';
 
@@ -939,35 +1154,44 @@
                         'X-CSRF-TOKEN': csrfToken,
                         'Accept': 'application/json',
                     },
-                    body: JSON.stringify({})
+                    body: JSON.stringify({}) // Sem dados no corpo
                 });
 
                 let result = {};
                 try {
                     result = await response.json();
                 } catch (e) {
+                    // Trata caso o servidor retorne HTML em erro 500
                     const errorText = await response.text();
                     console.error("Falha ao ler JSON de resposta.", errorText);
                     result = { success: false, message: `Erro do Servidor (${response.status}). Verifique o console.` };
                 }
 
                 if (response.ok && result.success) {
+                    // Sucesso: Remove o item do modal e notifica
                     displayRenewalMessage(result.message, true);
                     itemContainer.remove();
 
+                    // Remove do array global
                     globalExpiringSeries = globalExpiringSeries.filter(s => s.master_id !== masterId);
+
+                    // Atualiza o alerta principal na página (no frontend)
                     updateMainAlert();
 
+                    // Se a lista estiver vazia, atualiza o modal e fecha
                     if (document.getElementById('renewal-list').children.length === 0) {
                            document.getElementById('renewal-list').innerHTML = '<p class="text-gray-500 italic text-center p-4">Nenhuma série a ser renovada no momento. Bom trabalho!</p>';
-                           setTimeout(() => closeRenewalModal(), 3000);
+                           setTimeout(() => closeRenewalModal(), 3000); // Fechae após 3s
                     }
 
+                    // Recarrega o calendário após sucesso para mostrar os novos slots
+                    // CRÍTICO: Recarrega a página para sumir com o alerta
                     setTimeout(() => {
                         window.location.reload();
                     }, 50);
 
                 } else {
+                    // Falha: Reativa o botão e exibe o erro
                     displayRenewalMessage(`Falha na renovação: ${result.message || 'Erro desconhecido.'}`, false);
                     renewBtn.disabled = false;
                     renewBtn.textContent = 'Renovar por 1 Ano';
@@ -994,33 +1218,47 @@
             const quickBookingForm = document.getElementById('quick-booking-form');
             const clientContactInputEl = clientContactInput();
 
+            // 1. Inicializa a checagem de pendências e configura o intervalo
             checkPendingReservations();
             setInterval(checkPendingReservations, 30000);
 
+            // 2. Inicializa a funcionalidade de busca de cliente
+            initClientSearch();
+
+            // 3. Adiciona o listener para a submissão AJAX do agendamento rápido
             quickBookingForm.addEventListener('submit', handleQuickBookingSubmit);
 
+            // 4. Adiciona o listener para validação em tempo real do WhatsApp
             clientContactInputEl.addEventListener('input', function() {
+                // Remove caracteres não numéricos durante a digitação
                 this.value = this.value.replace(/\D/g,'').substring(0, 11);
+                // Valida o contato
                 validateClientContact(this.value);
             });
             clientContactInputEl.addEventListener('change', function() {
+                // Garante que a validação final seja executada ao sair do campo
                 validateClientContact(this.value);
             });
 
 
+            // [Lógica do FullCalendar]
             calendar = new FullCalendar.Calendar(calendarEl, {
                 locale: 'pt-br',
                 initialView: 'dayGridMonth',
                 height: 'auto',
                 timeZone: 'local',
                 slotMinTime: '06:00:00',
+                // Corrigido para 23:00 para não estender a barra de tempo
                 slotMaxTime: '23:00:00',
 
+                // CRÍTICO: Impede navegação para datas anteriores a hoje.
                 validRange: {
                     start: moment().format('YYYY-MM-DD')
                 },
 
+
                 eventSources: [
+                    // 1. Fonte de Reservas Confirmadas/Pendentes (Azuis/Fúcsia/Laranja)
                     {
                         url: RESERVED_API_URL,
                         method: 'GET',
@@ -1028,21 +1266,31 @@
                             console.error('Falha ao carregar reservas confirmadas via API.');
                         },
                         textColor: 'white',
+                        // CRÍTICO: Filtra eventos que são na verdade 'slots disponíveis' (status: available)
+                        // para garantir que apenas o segundo source (AVAILABLE_API_URL) os renderize.
                         eventDataTransform: function(eventData) {
                             if (eventData.extendedProps && eventData.extendedProps.status === 'available') {
+                                // Retorna null para ignorar este evento
                                 return null;
                             }
                             return eventData;
                         }
                     },
+                    // 2. Fonte de Horários Disponíveis (Eventos Verdes) - AGORA COM FILTRAGEM DE TEMPO
                     {
+                        // CRÍTICO: ID para recarga no setInterval
                         id: 'available-slots-source-id',
                         className: 'fc-event-available',
                         display: 'block',
+                        // Utilizamos a propriedade 'events' para buscar os dados via JS e aplicar o filtro
                         events: function(fetchInfo, successCallback, failureCallback) {
                             const now = moment();
+                            // Formato YYYY-MM-DD para comparação de data
                             const todayDate = now.format('YYYY-MM-DD');
 
+                            // O FullCalendar passa os limites de data/hora (start/end) no fetchInfo, mas
+                            // a rota AVAILABLE_API_URL provavelmente já usa esses limites internamente.
+                            // Vamos usar a URL original (com os parâmetros de start/end adicionados pelo FC)
                             const urlWithParams = AVAILABLE_API_URL +
                                 '?start=' + encodeURIComponent(fetchInfo.startStr) +
                                 '&end=' + encodeURIComponent(fetchInfo.endStr);
@@ -1055,17 +1303,28 @@
                                 .then(availableEvents => {
                                     const filteredEvents = availableEvents.filter(event => {
                                         const eventDate = moment(event.start).format('YYYY-MM-DD');
+                                        const eventStart = moment(event.start);
 
+                                        // 1. Se o dia é estritamente anterior a hoje, ignora.
+                                        // (Embora o validRange ajude, este é um filtro de segurança)
                                         if (eventDate < todayDate) {
                                             return false;
                                         }
 
+                                        // 2. Se for hoje, verifica a hora de início/fim do slot.
                                         if (eventDate === todayDate) {
                                             const eventEnd = moment(event.end);
+
+                                            // Retorna TRUE se o horário de TÉRMINO do evento for AGORA ou FUTURO.
+                                            // Se o horário de término já passou, ele é ignorado.
                                             return eventEnd.isSameOrAfter(now);
                                         }
+
+                                        // 3. Se for dia futuro (eventDate > todayDate), sempre exibe.
                                         return true;
                                     });
+
+                                    // 4. Retorna a lista filtrada para o FullCalendar
                                     successCallback(filteredEvents);
                                 })
                                 .catch(error => {
@@ -1095,15 +1354,19 @@
                     const extendedProps = event.extendedProps || {};
                     const status = extendedProps.status;
 
+                    // --- NOVO: LÓGICA DE SLOT PENDENTE (ABRE O MODAL DE AÇÃO) ---
                     if (status === 'pending') {
                         openPendingActionModal(event);
-                        return;
+                        return; // CRÍTICO: Para o fluxo aqui!
                     }
 
+
+                    // --- LÓGICA DE SLOT DISPONÍVEL (Agendamento Rápido) ---
                     if (isAvailable) {
                         const startDate = moment(event.start);
                         const endDate = moment(event.end);
 
+                        // Se o slot disponível clicado for passado, ignora o clique
                         if (endDate.isBefore(moment())) {
                             console.log("Slot passado, clique ignorado.");
                             return;
@@ -1112,46 +1375,57 @@
                         const dateString = startDate.format('YYYY-MM-DD');
                         const dateDisplay = startDate.format('DD/MM/YYYY');
 
+                        // Garante o formato H:mm (ex: 6:00, não 06:00) para o controller
                         const startTimeInput = startDate.format('H:mm');
                         const endTimeInput = endDate.format('H:mm');
 
-                        const timeSlotDisplay = startDate.format('HH:mm') + ' - ' + endDate.format('HH:mm');
+                        const timeSlotDisplay = startDate.format('HH:mm') + ' - ' + endDate.format('HH:mm'); // Display no modal
 
                         const price = extendedProps.price || 0;
 
                         const reservaIdToUpdate = event.id;
 
+                        // 1. Preencher os campos ocultos do modal (para envio ao servidor)
                         document.getElementById('reserva-id-to-update').value = reservaIdToUpdate;
                         document.getElementById('quick-date').value = dateString;
                         document.getElementById('quick-start-time').value = startTimeInput;
                         document.getElementById('quick-end-time').value = endTimeInput;
                         document.getElementById('quick-price').value = price;
 
-                        clientNameInput().value = '';
-                        clientContactInput().value = '';
-                        whatsappError().classList.add('hidden');
-                        clientContactInput().classList.remove('border-red-500', 'border-green-500');
+                        // 🛑 NOVO: Resetar o estado de busca de cliente ao abrir o modal
+                        clearSelectedClient();
 
-
+                        // Limpa notas e checkbox de recorrência
                         document.getElementById('notes').value = '';
                         document.getElementById('is-recurrent').checked = false;
 
+
+                        // 2. Injetar a informação visível
                         document.getElementById('slot-info-display').innerHTML = `
                             <p><strong>Data:</strong> ${dateDisplay}</p>
                             <p><strong>Horário:</strong> ${timeSlotDisplay}</p>
                             <p><strong>Valor:</strong> R$ ${parseFloat(price).toFixed(2).replace('.', ',')}</p>
-
+                            <p class="text-xs text-indigo-500 mt-1">O ID do slot fixo a ser atualizado é: #${reservaIdToUpdate}</p>
                         `;
 
+                        // 3. Oculta a mensagem de erro do WhatsApp no modal e remove a borda de erro/sucesso
+                        document.getElementById('whatsapp-error-message').classList.add('hidden');
+                        clientContactInputEl.classList.remove('border-red-500', 'border-green-500');
+
+
+                        // 4. Abrir o modal de agendamento rápido
                         quickBookingModal.classList.remove('hidden');
 
                     }
+                    // --- LÓGICA DE RESERVA EXISTENTE (Modal de Detalhes) ---
                     else if (event.id) {
                         const startTime = event.start;
                         const endTime = event.end;
                         const reservaId = event.id;
 
                         const isRecurrent = extendedProps.is_recurrent;
+
+                        // NOTA: O status 'pending' é tratado acima, este else if cobre 'confirmed'
 
                         const dateDisplay = moment(startTime).format('DD/MM/YYYY');
 
@@ -1160,14 +1434,18 @@
                             timeDisplay += ' - ' + moment(endTime).format('H:i');
                         }
 
+                        // Lógica para extrair título e preço
                         const titleParts = event.title.split(' - R$ ');
                         const title = titleParts[0];
                         const priceDisplay = titleParts.length > 1 ? `R$ ${titleParts[1]}` : 'N/A';
 
+                        // Determinar o status textual
                         let statusText = 'Confirmada';
+
 
                         const showUrl = SHOW_RESERVA_URL.replace(':id', reservaId);
 
+                        // ATUALIZAÇÃO DO DISPLAY DE RECORRÊNCIA PARA NOVA COR
                         let recurrentStatus = isRecurrent ?
                             '<p class="text-sm font-semibold text-fuchsia-600">Parte de uma Série Recorrente</p>' :
                             '<p class="text-sm font-semibold text-gray-500">Reserva Pontual</p>';
@@ -1182,11 +1460,14 @@
                             ${recurrentStatus}
                         `;
 
+                        // --- LÓGICA CONDICIONAL PARA OS BOTÕES DE AÇÃO ---
                         let actionButtons = `
                             <a href="${showUrl}" class="w-full inline-block text-center mb-2 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition duration-150 text-sm">
                                 Ver Detalhes / Gerenciar Reserva
                             </a>
                         `;
+
+                        // ADICIONA BOTÕES DE CANCELAMENTO QUE CHAMAM O MODAL DE MOTIVO
 
                         if (isRecurrent) {
                             actionButtons += `
@@ -1198,6 +1479,7 @@
                                 </button>
                             `;
                         } else {
+                            // Reserva Pontual
                             actionButtons += `
                                 <button onclick="cancelarPontual(${reservaId}, false)" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition duration-150 text-sm">
                                     Cancelar Reserva Pontual
@@ -1220,18 +1502,24 @@
             });
 
             calendar.render();
+            // Torna o calendário globalmente acessível para funções como handleRenewal
             window.calendar = calendar;
 
+            // CRÍTICO: Recarrega os eventos a cada 60 segundos
+            // Isso garante que os slots "disponíveis" no dia atual sejam corretamente filtrados.
+            // O getEventSourceById só é seguro se o ID foi definido (como fizemos: 'available-slots-source-id')
             setInterval(() => {
+                console.log("Forçando recarga de eventos para atualizar slots passados...");
                 calendar.getEventSourceById('available-slots-source-id')?.refetch();
-            }, 60000);
+            }, 60000); // 60 segundos
         };
         // Expondo funções globais
         window.cancelarPontual = cancelarPontual;
         window.cancelarSerie = cancelarSerie;
         window.openRenewalModal = openRenewalModal;
         window.handleRenewal = handleRenewal;
-        window.openPendingActionModal = openPendingActionModal;
-        window.closePendingActionModal = closePendingActionModal;
+        window.clearSelectedClient = clearSelectedClient;
+        window.openPendingActionModal = openPendingActionModal; // Novo
+        window.closePendingActionModal = closePendingActionModal; // Novo
     </script>
 </x-app-layout>
