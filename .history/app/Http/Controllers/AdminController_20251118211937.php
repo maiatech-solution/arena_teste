@@ -109,8 +109,43 @@ class AdminController extends Controller
         ]);
     }
 
-    // O método 'canceled_index' foi removido, pois a rota não será mais usada.
-    // O histórico de cancelamento/rejeição agora é mantido no DB sem a necessidade de deletar.
+    /**
+     * Exibe a lista de Reservas Canceladas/Rejeitadas.
+     */
+    public function canceled_index(Request $request)
+    {
+        $search = $request->input('search');
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+
+        $reservas = Reserva::whereIn('status', [Reserva::STATUS_CANCELADA, Reserva::STATUS_REJEITADA])
+            ->where('is_fixed', false)
+            ->orderByDesc('date')
+            ->orderBy('start_time')
+            ->when($search, function ($query, $search) {
+                return $query->where(function ($q) use ($search) {
+                    $q->where('client_name', 'like', '%' . $search . '%')
+                        ->orWhere('client_contact', 'like', '%' . $search . '%');
+                });
+            })
+            ->when($startDate, function ($query, $startDate) {
+                return $query->whereDate('date', '>=', $startDate);
+            })
+            ->when($endDate, function ($query, $endDate) {
+                return $query->whereDate('date', '<=', $endDate);
+            })
+            ->paginate(20)
+            ->appends($request->except('page'));
+
+
+        return view('admin.reservas.canceled-index', [
+            'reservas' => $reservas,
+            'pageTitle' => 'Reservas Canceladas/Rejeitadas',
+            'search' => $search,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+        ]);
+    }
 
     /**
      * Exibe o formulário para criação manual de reserva.
@@ -272,8 +307,8 @@ class AdminController extends Controller
             // 🛑 CRÍTICO: Delega para o helper correto no ReservaController
             $this->reservaController->recreateFixedSlot($reserva);
 
-            // 2. 🛑 REMOVIDO: A linha $reserva->delete(); FOI REMOVIDA
-            //    Mantemos o registro para auditoria.
+            // 2. Deleta a reserva de cliente (que já está marcada como 'rejected')
+            $reserva->delete();
 
             DB::commit();
             Log::info("Reserva ID: {$reserva->id} rejeitada pelo gestor ID: " . Auth::id());
@@ -316,8 +351,8 @@ class AdminController extends Controller
             // 🛑 CRÍTICO: Delega para o helper correto no ReservaController
             $this->reservaController->recreateFixedSlot($reserva);
 
-            // 2. 🛑 REMOVIDO: A linha $reserva->delete(); FOI REMOVIDA
-            //    Mantemos o registro para auditoria.
+            // 2. Deleta a reserva de cliente (que já está marcada como 'cancelled')
+            $reserva->delete();
 
             DB::commit();
             Log::info("Reserva PONTUAL ID: {$reserva->id} cancelada pelo gestor ID: " . Auth::id());
@@ -362,8 +397,8 @@ class AdminController extends Controller
             // ✅ CRÍTICO: Delega para o helper correto no ReservaController. Isso resolve o problema de slot sumir.
             $this->reservaController->recreateFixedSlot($reserva);
 
-            // 2. 🛑 REMOVIDO: A linha $reserva->delete(); FOI REMOVIDA
-            //    Mantemos o registro para auditoria.
+            // 2. Deleta a reserva de cliente (que já está marcada como 'cancelled')
+            $reserva->delete();
 
             DB::commit();
             Log::info("Reserva RECORRENTE PONTUAL ID: {$reserva->id} cancelada pelo gestor ID: " . Auth::id());
@@ -421,8 +456,8 @@ class AdminController extends Controller
                 // 🛑 CRÍTICO: Recria o slot fixo para cada item cancelado da série.
                 $this->reservaController->recreateFixedSlot($slot);
 
-                // 🛑 REMOVIDO: A linha $slot->delete(); FOI REMOVIDA
-                //    Mantemos o registro para auditoria.
+                // Deleta a reserva de cliente (que já está marcada como 'cancelled')
+                $slot->delete();
 
                 $cancelledCount++;
             }
@@ -456,7 +491,6 @@ class AdminController extends Controller
                 }
             }
 
-            // CRÍTICO: Aqui mantemos o delete, pois o propósito deste método é a exclusão PERMANENTE.
             $reserva->delete();
 
             DB::commit();

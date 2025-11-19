@@ -153,7 +153,7 @@ class ReservaController extends Controller
             'status' => Reserva::STATUS_FREE, // 🛑 CRÍTICO: Cria como FREE (disponível)
             'is_fixed' => true,
             'client_name' => 'Slot Fixo de 1h',
-            'client_contact' => 'N/A', // 🛑 CORREÇÃO CRÍTICA: Resolve o erro 1048 (client_contact cannot be null)
+            'client_contact' => null,
             'user_id' => null,
             'manager_id' => null,
             'recurrent_series_id' => null,

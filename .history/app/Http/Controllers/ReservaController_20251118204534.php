@@ -120,15 +120,12 @@ class ReservaController extends Controller
 
     /**
      * Recria o slot fixo para que o horário volte a ficar disponível no calendário (usado no cancelamento).
-     * 🛑 CRÍTICO: Permite a recriação para reservas recorrentes que são canceladas pontualmente.
      */
-    public function recreateFixedSlot(Reserva $originalReserva): void
+    protected function recreateFixedSlot(Reserva $originalReserva): void
     {
-        // Se a reserva é recorrente E é a reserva mestra (ID é igual ao Recurrent ID), não deve recriar para evitar duplicação.
-        // Se for uma reserva que NÃO É MESTRA, mas é recorrente (cancelamento pontual), a recriação é PERMITIDA.
-        if ($originalReserva->is_recurrent && $originalReserva->id === $originalReserva->recurrent_series_id) {
-             Log::info("Slot ID {$originalReserva->id} é MESTRE recorrente. Recriação ignorada para evitar duplicação em cascata.");
-             return;
+        if ($originalReserva->is_recurrent) {
+            Log::info("Slot ID {$originalReserva->id} é recorrente. Ignorando recriação automática.");
+            return;
         }
 
         // ✅ MUDANÇA CRÍTICA: Checa se já existe um slot FIXO e LIVRE (STATUS_FREE)
@@ -153,7 +150,7 @@ class ReservaController extends Controller
             'status' => Reserva::STATUS_FREE, // 🛑 CRÍTICO: Cria como FREE (disponível)
             'is_fixed' => true,
             'client_name' => 'Slot Fixo de 1h',
-            'client_contact' => 'N/A', // 🛑 CORREÇÃO CRÍTICA: Resolve o erro 1048 (client_contact cannot be null)
+            'client_contact' => null,
             'user_id' => null,
             'manager_id' => null,
             'recurrent_series_id' => null,

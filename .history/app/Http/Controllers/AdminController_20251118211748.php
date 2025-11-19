@@ -109,8 +109,43 @@ class AdminController extends Controller
         ]);
     }
 
-    // O método 'canceled_index' foi removido, pois a rota não será mais usada.
-    // O histórico de cancelamento/rejeição agora é mantido no DB sem a necessidade de deletar.
+    /**
+     * Exibe a lista de Reservas Canceladas/Rejeitadas.
+     */
+    public function canceled_index(Request $request)
+    {
+        $search = $request->input('search');
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+
+        $reservas = Reserva::whereIn('status', [Reserva::STATUS_CANCELADA, Reserva::STATUS_REJEITADA])
+            ->where('is_fixed', false)
+            ->orderByDesc('date')
+            ->orderBy('start_time')
+            ->when($search, function ($query, $search) {
+                return $query->where(function ($q) use ($search) {
+                    $q->where('client_name', 'like', '%' . $search . '%')
+                        ->orWhere('client_contact', 'like', '%' . $search . '%');
+                });
+            })
+            ->when($startDate, function ($query, $startDate) {
+                return $query->whereDate('date', '>=', $startDate);
+            })
+            ->when($endDate, function ($query, $endDate) {
+                return $query->whereDate('date', '<=', $endDate);
+            })
+            ->paginate(20)
+            ->appends($request->except('page'));
+
+
+        return view('admin.reservas.canceled-index', [
+            'reservas' => $reservas,
+            'pageTitle' => 'Reservas Canceladas/Rejeitadas',
+            'search' => $search,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+        ]);
+    }
 
     /**
      * Exibe o formulário para criação manual de reserva.
@@ -197,8 +232,7 @@ class AdminController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            // 🐛 MELHORIA: Loga a exceção completa
-            Log::error("Erro ao criar reserva manual.", ['exception' => $e, 'data' => $validated]);
+            Log::error("Erro ao criar reserva manual: " . $e->getMessage());
             return redirect()->back()->withInput()->with('error', 'Erro interno ao criar reserva. Tente novamente.');
         }
     }
@@ -239,8 +273,7 @@ class AdminController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            // 🐛 MELHORIA: Loga a exceção completa
-            Log::error("Erro ao confirmar reserva ID: {$reserva->id}.", ['exception' => $e]);
+            Log::error("Erro ao confirmar reserva ID: {$reserva->id}. Erro: " . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Erro interno ao confirmar a reserva.'], 500);
         }
     }
@@ -272,8 +305,8 @@ class AdminController extends Controller
             // 🛑 CRÍTICO: Delega para o helper correto no ReservaController
             $this->reservaController->recreateFixedSlot($reserva);
 
-            // 2. 🛑 REMOVIDO: A linha $reserva->delete(); FOI REMOVIDA
-            //    Mantemos o registro para auditoria.
+            // 2. Deleta a reserva de cliente (que já está marcada como 'rejected')
+            $reserva->delete();
 
             DB::commit();
             Log::info("Reserva ID: {$reserva->id} rejeitada pelo gestor ID: " . Auth::id());
@@ -281,8 +314,7 @@ class AdminController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            // 🐛 MELHORIA: Loga a exceção completa
-            Log::error("Erro ao rejeitar reserva ID: {$reserva->id}.", ['exception' => $e]);
+            Log::error("Erro ao rejeitar reserva ID: {$reserva->id}. Erro: " . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Erro interno ao rejeitar a reserva.'], 500);
         }
     }
@@ -316,8 +348,8 @@ class AdminController extends Controller
             // 🛑 CRÍTICO: Delega para o helper correto no ReservaController
             $this->reservaController->recreateFixedSlot($reserva);
 
-            // 2. 🛑 REMOVIDO: A linha $reserva->delete(); FOI REMOVIDA
-            //    Mantemos o registro para auditoria.
+            // 2. Deleta a reserva de cliente (que já está marcada como 'cancelled')
+            $reserva->delete();
 
             DB::commit();
             Log::info("Reserva PONTUAL ID: {$reserva->id} cancelada pelo gestor ID: " . Auth::id());
@@ -325,8 +357,7 @@ class AdminController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            // 🐛 MELHORIA: Loga a exceção completa
-            Log::error("Erro ao cancelar reserva PONTUAL ID: {$reserva->id}.", ['exception' => $e]);
+            Log::error("Erro ao cancelar reserva PONTUAL ID: {$reserva->id}. Erro: " . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Erro interno ao cancelar a reserva.'], 500);
         }
     }
@@ -362,8 +393,8 @@ class AdminController extends Controller
             // ✅ CRÍTICO: Delega para o helper correto no ReservaController. Isso resolve o problema de slot sumir.
             $this->reservaController->recreateFixedSlot($reserva);
 
-            // 2. 🛑 REMOVIDO: A linha $reserva->delete(); FOI REMOVIDA
-            //    Mantemos o registro para auditoria.
+            // 2. Deleta a reserva de cliente (que já está marcada como 'cancelled')
+            $reserva->delete();
 
             DB::commit();
             Log::info("Reserva RECORRENTE PONTUAL ID: {$reserva->id} cancelada pelo gestor ID: " . Auth::id());
@@ -371,9 +402,8 @@ class AdminController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            // 🐛 MELHORIA: Loga a exceção completa
-            Log::error("Erro ao cancelar reserva RECORRENTE PONTUAL ID: {$reserva->id}.", ['exception' => $e]);
-            return response()->json(['success' => false, 'message' => 'Erro interno ao cancelar a reserva pontual: ' . $e->getMessage()], 500);
+            Log::error("Erro ao cancelar reserva RECORRENTE PONTUAL ID: {$reserva->id}. Erro: " . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Erro interno ao cancelar a reserva pontual.'], 500);
         }
     }
 
@@ -421,8 +451,8 @@ class AdminController extends Controller
                 // 🛑 CRÍTICO: Recria o slot fixo para cada item cancelado da série.
                 $this->reservaController->recreateFixedSlot($slot);
 
-                // 🛑 REMOVIDO: A linha $slot->delete(); FOI REMOVIDA
-                //    Mantemos o registro para auditoria.
+                // Deleta a reserva de cliente (que já está marcada como 'cancelled')
+                $slot->delete();
 
                 $cancelledCount++;
             }
@@ -434,8 +464,7 @@ class AdminController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            // 🐛 MELHORIA: Loga a exceção completa
-            Log::error("Erro ao cancelar série recorrente ID: {$masterId}.", ['exception' => $e]);
+            Log::error("Erro ao cancelar série recorrente ID: {$masterId}. Erro: " . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Erro interno ao cancelar a série recorrente.'], 500);
         }
     }
@@ -456,16 +485,12 @@ class AdminController extends Controller
                 }
             }
 
-            // CRÍTICO: Aqui mantemos o delete, pois o propósito deste método é a exclusão PERMANENTE.
             $reserva->delete();
 
             DB::commit();
-            Log::warning("Reserva ID: {$reserva->id} excluída permanentemente pelo gestor ID: " . Auth::id()); // 🐛 ADICIONADO LOG
             return redirect()->route('admin.reservas.confirmadas')->with('success', 'Reserva excluída permanentemente.');
         } catch (\Exception $e) {
             DB::rollBack();
-            // 🐛 MELHORIA: Loga a exceção completa
-            Log::error("Erro ao excluir reserva ID: {$reserva->id}.", ['exception' => $e]);
             return redirect()->back()->with('error', 'Erro ao excluir reserva: ' . $e->getMessage());
         }
     }
@@ -505,22 +530,16 @@ class AdminController extends Controller
             'role' => ['required', Rule::in(['cliente', 'gestor'])],
         ]);
 
-        try { // 🐛 ADICIONADO TRY/CATCH
-            User::create([
-                'name' => $request->name,
-                'email' => $request->email,
-                'whatsapp_contact' => $request->whatsapp_contact,
-                'password' => Hash::make($request->password),
-                'role' => $request->role,
-                'is_admin' => $request->role === 'gestor',
-            ]);
+        User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'whatsapp_contact' => $request->whatsapp_contact,
+            'password' => Hash::make($request->password),
+            'role' => $request->role,
+            'is_admin' => $request->role === 'gestor',
+        ]);
 
-            return redirect()->route('admin.users.index')->with('success', 'Usuário criado com sucesso.');
-        } catch (\Exception $e) {
-            // 🐛 MELHORIA: Loga a exceção completa
-            Log::error("Erro ao criar usuário via Admin:", ['exception' => $e]);
-            return redirect()->back()->withInput()->with('error', 'Erro ao criar usuário: ' . $e->getMessage());
-        }
+        return redirect()->route('admin.users.index')->with('success', 'Usuário criado com sucesso.');
     }
 
     /**
@@ -556,19 +575,9 @@ class AdminController extends Controller
             $userData['password'] = Hash::make($request->password);
         }
 
-        try { // 🐛 ADICIONADO TRY/CATCH
-            $user->update($userData);
+        $user->update($userData);
 
-            if (Auth::check()) {
-                Auth::user()->fresh();
-            }
-
-            return redirect()->route('admin.users.index')->with('success', 'Usuário atualizado com sucesso.');
-        } catch (\Exception $e) {
-            // 🐛 MELHORIA: Loga a exceção completa
-            Log::error("Erro ao atualizar usuário ID: {$user->id}.", ['exception' => $e]);
-            return redirect()->back()->withInput()->with('error', 'Erro ao atualizar usuário: ' . $e->getMessage());
-        }
+        return redirect()->route('admin.users.index')->with('success', 'Usuário atualizado com sucesso.');
     }
 
     /**
@@ -581,19 +590,12 @@ class AdminController extends Controller
             return redirect()->back()->with('error', 'Você não pode excluir sua própria conta.');
         }
 
-        try {
-            // Antes de excluir o usuário, zere os IDs de manager nas reservas para manter a integridade
-            Reserva::where('manager_id', $user->id)->update(['manager_id' => null]);
+        // Antes de excluir o usuário, zere os IDs de manager nas reservas para manter a integridade
+        Reserva::where('manager_id', $user->id)->update(['manager_id' => null]);
 
-            $user->delete();
+        $user->delete();
 
-            Log::warning("Usuário ID: {$user->id} excluído pelo gestor ID: " . Auth::id()); // 🐛 ADICIONADO LOG
-            return redirect()->route('admin.users.index')->with('success', 'Usuário excluído com sucesso.');
-        } catch (\Exception $e) {
-            // 🐛 MELHORIA: Loga a exceção completa
-            Log::error("Erro ao excluir o usuário {$user->id}.", ['exception' => $e]);
-            return redirect()->back()->with('error', 'Erro ao excluir o usuário: ' . $e->getMessage());
-        }
+        return redirect()->route('admin.users.index')->with('success', 'Usuário excluído com sucesso.');
     }
 
     // ------------------------------------------------------------------------

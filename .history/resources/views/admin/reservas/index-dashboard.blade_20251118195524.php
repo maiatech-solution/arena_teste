@@ -14,13 +14,14 @@
                     Selecione o Status das Reservas:
                 </h3>
 
-                <!-- GRID DE BOTÕES DE FILTRO (AJUSTADO PARA 2 COLUNAS) -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- GRID DE BOTÕES DE FILTRO -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
                     <!-- Botão 1: RESERVAS PENDENTES -->
                     <a href="{{ route('admin.reservas.pendentes') }}" class="block p-6 bg-orange-50 border border-orange-200 rounded-xl shadow-lg hover:shadow-xl transition duration-300 transform hover:-translate-y-1">
                         <div class="flex items-center">
                             <h4 class="text-xl font-bold text-orange-700">Pendentes</h4>
+                            {{-- Contagem removida conforme solicitação --}}
                         </div>
                         <p class="mt-2 text-sm text-gray-600">
                             Pré-reservas que aguardam sua confirmação ou rejeição.
@@ -31,13 +32,23 @@
                     <a href="{{ route('admin.reservas.confirmadas') }}" class="block p-6 bg-indigo-50 border border-indigo-200 rounded-xl shadow-lg hover:shadow-xl transition duration-300 transform hover:-translate-y-1">
                         <div class="flex items-center">
                             <h4 class="text-xl font-bold text-indigo-700">Confirmadas</h4>
+                            {{-- Contagem removida conforme solicitação --}}
                         </div>
                         <p class="mt-2 text-sm text-gray-600">
                             Próximos agendamentos confirmados (inclui Recorrentes).
                         </p>
                     </a>
 
-                    {{-- Botão 3: RESERVAS CANCELADAS FOI REMOVIDO --}}
+                    <!-- Botão 3: RESERVAS CANCELADAS -->
+                    <a href="{{ route('admin.reservas.canceladas') }}" class="block p-6 bg-red-50 border border-red-200 rounded-xl shadow-lg hover:shadow-xl transition duration-300 transform hover:-translate-y-1">
+                        <div class="flex items-center">
+                            <h4 class="text-xl font-bold text-red-700">Canceladas</h4>
+                            {{-- Contagem removida conforme solicitação --}}
+                        </div>
+                        <p class="mt-2 text-sm text-gray-600">
+                            Histórico de reservas canceladas ou rejeitadas.
+                        </p>
+                    </a>
 
                 </div>
 

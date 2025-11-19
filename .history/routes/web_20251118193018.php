@@ -122,7 +122,7 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             // Rotas de Listagem de Status
             Route::get('pendentes', [AdminController::class, 'indexReservas'])->name('pendentes'); // Lista de Pendentes (Era index)
             Route::get('confirmadas', [AdminController::class, 'confirmed_index'])->name('confirmadas'); // Lista de Confirmadas
-            // ROTA DE CANCELADAS REMOVIDA
+            Route::get('canceladas', [AdminController::class, 'canceled_index'])->name('canceladas'); // NOVO: Lista de Canceladas
         });
 
         // --- ROTAS DE AÇÕES E CRIAÇÃO (Permanecem fora do prefixo 'reservas' para evitar duplicação no nome da rota) ---
