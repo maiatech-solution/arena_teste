@@ -120,15 +120,10 @@
                                         <div class="text-indigo-600 text-xs font-semibold">
                                             {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }} - {{ \Carbon\Carbon::parse($reserva->end_time)->format('H:i') }}
                                         </div>
-                                        {{-- ✅ INDICADOR DE RECORRÊNCIA/PONTUALIDADE NA TABELA --}}
+                                        {{-- ✅ INDICADOR DE RECORRÊNCIA NA TABELA --}}
                                         @if ($reserva->is_recurrent)
                                             <span class="mt-1 inline-block text-[10px] font-bold text-indigo-700 bg-indigo-200 px-1 rounded">
                                                 RECORRENTE
-                                            </span>
-                                        @else
-                                            <!-- Condição para Reserva Pontual (Não-recorrente) -->
-                                            <span class="mt-1 inline-block text-[10px] font-bold text-blue-700 bg-blue-200 px-1 rounded">
-                                                PONTUAL
                                             </span>
                                         @endif
                                     </td>
