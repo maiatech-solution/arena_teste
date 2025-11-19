@@ -21,6 +21,7 @@
                     </div>
                 @endif
 
+                {{-- INÍCIO DA CORREÇÃO DA LÓGICA DE FILTRO --}}
                 @php
                     // Classes base para os botões de filtro
                     $filterBaseClasses = 'px-5 py-2 rounded-lg text-sm font-medium transition duration-150 ease-in-out shadow-md border-2 border-transparent';
@@ -88,6 +89,7 @@
                         </a>
                     </div>
                 </div>
+                {{-- FIM DA CORREÇÃO DA LÓGICA DE FILTRO --}}
 
                 <!-- INÍCIO DO CAMPO DE PESQUISA -->
                 <div class="mb-6">
@@ -121,7 +123,7 @@
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-700">
                             <tr>
-                                {{-- A COLUNA ID FOI REMOVIDA AQUI --}}
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ID</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nome</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Função (Role)</th>
@@ -132,7 +134,7 @@
                         <tbody class="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                             @forelse ($users as $user)
                                 <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                    {{-- DADOS DO USUÁRIO SEM O ID --}}
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{{ $user->id }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{{ $user->name }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{{ $user->email }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm">
@@ -152,6 +154,7 @@
 
                                             <!-- Botão de Reservas (Apenas para Clientes) -->
                                             @if ($user->role === 'cliente')
+                                                {{-- CRÍTICO: Rota a ser criada no web.php --}}
                                                 <a href="{{ route('admin.users.reservas', $user) }}"
                                                    class="text-green-600 hover:text-green-800 transition duration-150 p-1 bg-green-100 rounded-full"
                                                    title="Ver Reservas Agendadas">
@@ -187,7 +190,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                    <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                                         Nenhum usuário encontrado para a função selecionada.
                                     </td>
                                 </tr>

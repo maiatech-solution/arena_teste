@@ -114,7 +114,6 @@ Route::middleware(['auth', 'gestor'])->group(function () {
 
         // =========================================================================
         // 🚀 MÓDULO: GERENCIAMENTO DE RESERVAS (Centralizado)
-        // ✅ TODAS AS ROTAS DE AÇÃO FORAM MOVIDAS PARA DENTRO DESTE GRUPO.
         // =========================================================================
         Route::prefix('reservas')->name('reservas.')->group(function () {
             // Rota principal para o dashboard de botões: /admin/reservas
@@ -123,32 +122,31 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             // Rotas de Listagem de Status
             Route::get('pendentes', [AdminController::class, 'indexReservas'])->name('pendentes'); // Lista de Pendentes (Era index)
             Route::get('confirmadas', [AdminController::class, 'confirmed_index'])->name('confirmadas'); // Lista de Confirmadas
-
-            // --- ROTAS DE AÇÕES E CRIAÇÃO (MOVIDAS PARA CÁ) ---
-            Route::get('{reserva}/show', [AdminController::class, 'showReserva'])->name('show');
-            Route::get('create', [AdminController::class, 'createReserva'])->name('create');
-            Route::post('/', [AdminController::class, 'storeReserva'])->name('store');
-            Route::post('tornar-fixo', [AdminController::class, 'makeRecurrent'])->name('make_recurrent');
-
-            // AÇÕES (STATUS E EXCLUSÃO)
-            Route::patch('{reserva}/update-status', [AdminController::class, 'updateStatusReserva'])->name('updateStatus');
-            Route::patch('{reserva}/confirmar', [AdminController::class, 'confirmarReserva'])->name('confirmar');
-            Route::patch('{reserva}/rejeitar', [AdminController::class, 'rejeitarReserva'])->name('rejeitar');
-
-            // ROTAS DE CANCELAMENTO AJAX (RESTful)
-            Route::patch('{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('cancelar');
-            Route::patch('{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('cancelar_pontual');
-            Route::delete('{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('cancelar_serie');
-
-            Route::delete('{reserva}', [AdminController::class, 'destroyReserva'])->name('destroy');
-
-            // 🛑 ROTA DE RENOVAÇÃO
-            Route::post('{masterReserva}/renew-serie', [ReservaController::class, 'renewRecurrentSeries'])
-                ->name('renew_serie');
-
-            // 🛑 ROTA NOVA E CRÍTICA PARA O CANCELAMENTO DE SÉRIE EM MASSA NO HISTÓRICO DE CLIENTE
-            Route::delete('series/{masterId}/cancel', [AdminController::class, 'cancelClientSeries'])->name('cancel_client_series');
+            // ROTA DE CANCELADAS REMOVIDA
         });
+
+        // --- ROTAS DE AÇÕES E CRIAÇÃO (Permanecem fora do prefixo 'reservas' para evitar duplicação no nome da rota) ---
+        Route::get('reservas/{reserva}/show', [AdminController::class, 'showReserva'])->name('reservas.show');
+        Route::get('reservas/create', [AdminController::class, 'createReserva'])->name('reservas.create');
+        Route::post('reservas', [AdminController::class, 'storeReserva'])->name('reservas.store');
+        Route::post('reservas/tornar-fixo', [AdminController::class, 'makeRecurrent'])->name('reservas.make_recurrent');
+
+        // AÇÕES (STATUS E EXCLUSÃO)
+        Route::patch('reservas/{reserva}/update-status', [AdminController::class, 'updateStatusReserva'])->name('reservas.updateStatus');
+        Route::patch('reservas/{reserva}/confirmar', [AdminController::class, 'confirmarReserva'])->name('reservas.confirmar');
+        Route::patch('reservas/{reserva}/rejeitar', [AdminController::class, 'rejeitarReserva'])->name('reservas.rejeitar');
+
+        // ROTAS DE CANCELAMENTO AJAX (RESTful)
+        Route::patch('reservas/{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('reservas.cancelar');
+        Route::patch('reservas/{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('reservas.cancelar_pontual');
+        Route::delete('reservas/{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('reservas.cancelar_serie');
+
+        Route::delete('reservas/{reserva}', [AdminController::class, 'destroyReserva'])->name('reservas.destroy');
+
+        // 🛑 ROTA DE RENOVAÇÃO
+        Route::post('reservas/{masterReserva}/renew-serie', [ReservaController::class, 'renewRecurrentSeries'])
+            ->name('reservas.renew_serie');
+
 
         // --- ROTAS DE GERENCIAMENTO DE USUÁRIOS (User Resource) ---
         Route::get('users', [AdminController::class, 'indexUsers'])->name('users.index');
@@ -159,9 +157,6 @@ Route::middleware(['auth', 'gestor'])->group(function () {
         Route::get('users/{user}/edit', [AdminController::class, 'editUser'])->name('users.edit');
         Route::put('users/{user}', [AdminController::class, 'updateUser'])->name('users.update');
         Route::delete('users/{user}', [AdminController::class, 'destroyUser'])->name('users.destroy');
-
-        // ✅ NOVA ROTA: Reservas de um cliente específico
-        Route::get('users/{user}/reservas', [AdminController::class, 'clientReservations'])->name('users.reservas');
 
     });
     // FIM DO GRUPO DE ROTAS 'admin.'

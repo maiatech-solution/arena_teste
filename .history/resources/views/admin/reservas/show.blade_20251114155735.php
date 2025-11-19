@@ -116,7 +116,7 @@
                             <div class="flex flex-col space-y-3">
 
                                 @if ($reserva->status === $reserva::STATUS_PENDENTE)
-                                    {{-- Botão Confirmar (mantido com confirm nativo) --}}
+                                    {{-- Botão Confirmar --}}
                                     <form method="POST" action="{{ route('admin.reservas.confirmar', $reserva) }}" onsubmit="return confirm('Confirmar o agendamento de {{ $reserva->client_name }}?');">
                                         @csrf
                                         @method('PATCH')
@@ -125,7 +125,7 @@
                                         </button>
                                     </form>
 
-                                    {{-- Botão Rejeitar (mantido com confirm nativo) --}}
+                                    {{-- Botão Rejeitar --}}
                                     <form method="POST" action="{{ route('admin.reservas.rejeitar', $reserva) }}" onsubmit="return confirm('Tem certeza que deseja REJEITAR a pré-reserva de {{ $reserva->client_name }}?');">
                                         @csrf
                                         @method('PATCH')
@@ -136,29 +136,20 @@
                                 @endif
 
                                 @if ($reserva->status === $reserva::STATUS_CONFIRMADA)
-                                    {{-- NOVO BOTÃO CANCELAR: Chama o modal com a rota CORRETA --}}
-                                @php
-                                    // CRÍTICO: Define a rota correta baseada no status de recorrência
-                                    $cancellationRouteName = $reserva->is_recurrent
-                                        ? 'admin.reservas.cancelar_pontual' // Cancelar UM slot recorrente
-                                        : 'admin.reservas.cancelar';        // Cancelar reserva pontual
-                                    $actionLabel = $reserva->is_recurrent
-                                        ? 'Cancelar SOMENTE Este Dia'
-                                        : 'Mudar para Status Cancelada';
-                                @endphp
-
-                                <button type="button"
-                                    class="w-full md:w-auto px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150 shadow-lg"
-                                    onclick="openCancellationModal('{{ $reserva->client_name }}', {{ $reserva->id }}, '{{ route($cancellationRouteName, $reserva->id) }}', '{{ $actionLabel }}')"
-                                    id="cancel-button">
-                                    {{ $actionLabel }}
-                                </button>
+                                    {{-- Botão Cancelar --}}
+                                    <form method="POST" action="{{ route('admin.reservas.cancelar', $reserva) }}" onsubmit="return confirm('Tem certeza que deseja CANCELAR a reserva de {{ $reserva->client_name }}?');">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="submit" class="w-full md:w-auto px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150 shadow-lg">
+                                            Mudar para Status Cancelada
+                                        </button>
+                                    </form>
                                 @endif
 
-                                {{-- Aviso de Recorrência (Agora complementar) --}}
+                                {{-- Aviso de Recorrência (Substitui os botões redundantes) --}}
                                 @if ($reserva->is_recurrent)
                                     <p class="text-sm text-yellow-600 dark:text-yellow-400 p-2 border border-yellow-300 rounded-md">
-                                        ⚠️ **Atenção:** Esta ação cancela **apenas** o dia atual. Para gerenciar a série completa, use a lista de **Reservas Confirmadas** ou o **Calendário**.
+                                        ⚠️ Esta é uma reserva recorrente. Para gerenciar o cancelamento pontual ou da série inteira, use a lista de **Reservas Confirmadas** ou o **Calendário**.
                                     </p>
                                 @endif
                             </div>
@@ -173,145 +164,14 @@
 
                     {{-- Retorno para a Lista --}}
                     <div class="mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
-                        {{-- CRÍTICO: Troca o link fixo por um botão que usa o histórico do navegador --}}
-                        <button type="button" onclick="window.history.back()" class="inline-flex items-center text-indigo-600 hover:text-indigo-800 transition duration-150 font-medium">
+                        <a href="{{ route('admin.reservas.confirmed_index') }}" class="inline-flex items-center text-indigo-600 hover:text-indigo-800 transition duration-150">
                             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-                            Voltar para a tela anterior
-                        </button>
+                            Voltar para a Lista de Confirmadas
+                        </a>
                     </div>
 
                 </div>
             </div>
         </div>
     </div>
-
-{{-- Modal Comum de Justificativa de Cancelamento (Novo) --}}
-<div id="cancellationReasonModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden z-50 overflow-y-auto">
-    <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md transform transition-all duration-300">
-            <h2 class="text-xl font-bold mb-4 text-gray-800" id="modalTitle">Cancelar Reserva</h2>
-            <p class="mb-4 text-gray-600">Confirme o cancelamento da reserva de <span id="clientNamePlaceholder" class="font-semibold text-red-600"></span> e insira uma justificativa:</p>
-
-            <form id="cancellationForm" method="POST" action="">
-                @csrf
-                @method('PATCH')
-
-                <input type="hidden" id="cancellationReservaId" name="reserva_id">
-
-                <div class="mb-6">
-                    <label for="cancellation_reason" class="block text-sm font-medium text-gray-700 mb-1">Justificativa do Cancelamento (obrigatório):</label>
-                    <textarea id="cancellation_reason" name="cancellation_reason" rows="3" required
-                              class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 p-3"
-                              placeholder="Motivo do cancelamento: cliente não pôde vir, erro de agendamento, etc."></textarea>
-                </div>
-
-                <div class="flex justify-end space-x-3">
-                    <button type="button" onclick="closeCancellationModal()" class="px-5 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150">
-                        Fechar
-                    </button>
-                    <button type="submit" class="px-5 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition duration-150 shadow-md">
-                        Confirmar Cancelamento
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<script>
-    // Variável global para controle da URL de destino
-    let currentCancellationUrl = '';
-
-    // Função para abrir o modal
-    function openCancellationModal(clientName, reservaId, url, actionLabel) {
-        // Atualiza os dados no modal
-        document.getElementById('modalTitle').textContent = actionLabel;
-        document.getElementById('clientNamePlaceholder').textContent = clientName;
-        document.getElementById('cancellationReservaId').value = reservaId;
-
-        // Define a URL de ação do formulário (rota correta: pontual ou recorrente)
-        currentCancellationUrl = url;
-
-        // Limpa a justificativa e mostra o modal
-        document.getElementById('cancellation_reason').value = '';
-        document.getElementById('cancellationReasonModal').classList.remove('hidden');
-    }
-
-    // Função para fechar o modal
-    function closeCancellationModal() {
-        document.getElementById('cancellationReasonModal').classList.add('hidden');
-    }
-
-    // Lógica AJAX para submeter o formulário
-    document.getElementById('cancellationForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        const reason = document.getElementById('cancellation_reason').value;
-
-        if (!reason || reason.length < 5) {
-            // Em vez de alert(), podemos melhorar para mostrar a mensagem no modal
-            const form = document.getElementById('cancellationForm');
-            let errorDiv = form.querySelector('#reasonError');
-            if (!errorDiv) {
-                errorDiv = document.createElement('div');
-                errorDiv.id = 'reasonError';
-                errorDiv.className = 'text-red-500 text-sm mb-3';
-                // Insere a mensagem de erro antes dos botões
-                form.querySelector('.flex.justify-end').insertAdjacentElement('beforebegin', errorDiv);
-            }
-            errorDiv.textContent = 'Por favor, insira uma justificativa válida (mínimo 5 caracteres).';
-            return;
-        }
-
-        // Remove a mensagem de erro se houver
-        const errorDiv = document.getElementById('cancellationForm').querySelector('#reasonError');
-        if (errorDiv) {
-            errorDiv.remove();
-        }
-
-        // Desabilita o botão para evitar cliques múltiplos
-        const submitButton = e.submitter;
-        submitButton.disabled = true;
-        submitButton.textContent = 'Processando...';
-
-        // CRÍTICO: Obter o token CSRF
-        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-        // CRÍTICO: O fetch usa a URL definida condicionalmente em openCancellationModal
-        fetch(currentCancellationUrl, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': csrfToken // Usa o token obtido
-            },
-            // Envia a justificativa no corpo da requisição
-            body: JSON.stringify({ cancellation_reason: reason })
-        })
-        .then(response => response.json().then(data => ({ status: response.status, body: data })))
-        .then(({ status, body }) => {
-            closeCancellationModal();
-            if (status >= 200 && status < 300) {
-                // Se sucesso, exibe mensagem e recarrega
-                // Substituído alert() por console.log e recarregamento para evitar problemas em iframe
-                console.log('Sucesso: ' + body.message);
-                window.location.reload();
-            } else {
-                // Em caso de erro, exibe a mensagem de erro da API
-                // Substituído alert() por console.error
-                console.error('Erro ao cancelar: ' + (body.message || 'Erro desconhecido.'));
-                // Opcional: Você pode querer exibir uma notificação na tela principal aqui.
-            }
-        })
-        .catch(error => {
-            closeCancellationModal();
-            // Substituído alert() por console.error
-            console.error('Erro de conexão ou processamento ao cancelar.', error);
-        })
-        .finally(() => {
-            // Habilita o botão novamente
-            submitButton.disabled = false;
-            submitButton.textContent = 'Confirmar Cancelamento';
-        });
-    });
-</script>
 </x-app-layout>

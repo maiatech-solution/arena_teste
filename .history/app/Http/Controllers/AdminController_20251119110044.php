@@ -6,11 +6,11 @@ use App\Models\Reserva;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB; // Necessário para a função DB::raw()
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Carbon\Carbon; // Necessário para Carbon::today()
+use Carbon\Carbon;
 use Illuminate\Validation\Rule;
 use Carbon\CarbonPeriod;
 use Illuminate\Validation\ValidationException;
@@ -652,34 +652,19 @@ class AdminController extends Controller
         }
 
         // 1. Busca todas as reservas do cliente, excluindo slots fixos (is_fixed=true)
+        // ✅ CORREÇÃO CRÍTICA: Uso de get() em vez de paginate() para permitir o agrupamento em Blade.
         $reservas = Reserva::where('user_id', $user->id)
-                             ->where('is_fixed', false)
-                             // 🛑 CORRIGIDO: Ordem crescente (asc) por data e hora para mostrar o histórico cronológico
-                             ->orderBy('date', 'asc')
-                             ->orderBy('start_time', 'asc')
-                             ->get();
+                            ->where('is_fixed', false)
+                            ->orderBy('date', 'desc')
+                            ->orderBy('start_time', 'desc')
+                            ->get();
 
-        // 2. ✅ CRÍTICO: Cálculo da Contagem Total de Slots FUTUROS/HOJE por Série (ANTES da paginação)
-        // Isso garante que o botão de cancelamento de série na view mostre o total correto de slots futuros.
-        $seriesFutureCounts = Reserva::where('user_id', $user->id)
-            ->where('is_fixed', false)
-            ->where('is_recurrent', true)
-            // Filtra apenas status que podem ser cancelados (ativos)
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
-            // Filtra apenas reservas futuras ou de hoje
-            ->whereDate('date', '>=', Carbon::today()->toDateString())
-            ->select('recurrent_series_id', DB::raw('count(*) as total'))
-            ->groupBy('recurrent_series_id')
-            ->pluck('total', 'recurrent_series_id')
-            ->toArray();
-
-
-        // 3. Paginação manual do Collection (mantém a lógica da view, mas agrupa primeiro)
+        // 2. Paginação manual do Collection (mantém a lógica da view, mas agrupa primeiro)
         $perPage = 20;
         $page = request()->get('page', 1);
         $paginatedReservas = $reservas->slice(($page - 1) * $perPage, $perPage)->values();
 
-        // 4. Cria o Paginator
+        // 3. Cria o Paginator
         $reservasPaginadas = new \Illuminate\Pagination\LengthAwarePaginator(
             $paginatedReservas,
             $reservas->count(),
@@ -693,7 +678,6 @@ class AdminController extends Controller
             'reservas' => $reservasPaginadas, // Passa o paginator
             'client' => $user,
             'pageTitle' => "Reservas de Cliente: {$user->name}",
-            'seriesFutureCounts' => $seriesFutureCounts, // ✅ NOVO: Passa a contagem total
         ]);
     }
 

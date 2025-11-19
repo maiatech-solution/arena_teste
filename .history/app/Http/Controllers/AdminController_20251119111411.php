@@ -653,11 +653,10 @@ class AdminController extends Controller
 
         // 1. Busca todas as reservas do cliente, excluindo slots fixos (is_fixed=true)
         $reservas = Reserva::where('user_id', $user->id)
-                             ->where('is_fixed', false)
-                             // 🛑 CORRIGIDO: Ordem crescente (asc) por data e hora para mostrar o histórico cronológico
-                             ->orderBy('date', 'asc')
-                             ->orderBy('start_time', 'asc')
-                             ->get();
+                            ->where('is_fixed', false)
+                            ->orderBy('date', 'desc')
+                            ->orderBy('start_time', 'desc')
+                            ->get();
 
         // 2. ✅ CRÍTICO: Cálculo da Contagem Total de Slots FUTUROS/HOJE por Série (ANTES da paginação)
         // Isso garante que o botão de cancelamento de série na view mostre o total correto de slots futuros.

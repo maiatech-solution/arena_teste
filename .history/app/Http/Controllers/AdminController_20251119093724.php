@@ -6,11 +6,11 @@ use App\Models\Reserva;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB; // Necessário para a função DB::raw()
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Carbon\Carbon; // Necessário para Carbon::today()
+use Carbon\Carbon;
 use Illuminate\Validation\Rule;
 use Carbon\CarbonPeriod;
 use Illuminate\Validation\ValidationException;
@@ -272,7 +272,8 @@ class AdminController extends Controller
             // 🛑 CRÍTICO: Delega para o helper correto no ReservaController
             $this->reservaController->recreateFixedSlot($reserva);
 
-            // 2. Mantemos o registro para auditoria.
+            // 2. 🛑 REMOVIDO: A linha $reserva->delete(); FOI REMOVIDA
+            //    Mantemos o registro para auditoria.
 
             DB::commit();
             Log::info("Reserva ID: {$reserva->id} rejeitada pelo gestor ID: " . Auth::id());
@@ -296,7 +297,7 @@ class AdminController extends Controller
             return response()->json(['success' => false, 'message' => 'Use as rotas de cancelamento de série para reservas recorrentes.'], 400);
         }
         if ($reserva->status !== Reserva::STATUS_CONFIRMADA) {
-            return response()->json(['success' => false, 'message' => 'A reserva não está confirmada.'], 400);
+             return response()->json(['success' => false, 'message' => 'A reserva não está confirmada.'], 400);
         }
 
         $validated = $request->validate([
@@ -314,7 +315,8 @@ class AdminController extends Controller
             // 🛑 CRÍTICO: Delega para o helper correto no ReservaController
             $this->reservaController->recreateFixedSlot($reserva);
 
-            // 2. Mantemos o registro para auditoria.
+            // 2. 🛑 REMOVIDO: A linha $reserva->delete(); FOI REMOVIDA
+            //    Mantemos o registro para auditoria.
 
             DB::commit();
             Log::info("Reserva PONTUAL ID: {$reserva->id} cancelada pelo gestor ID: " . Auth::id());
@@ -358,7 +360,8 @@ class AdminController extends Controller
             // ✅ CRÍTICO: Delega para o helper correto no ReservaController. Isso resolve o problema de slot sumir.
             $this->reservaController->recreateFixedSlot($reserva);
 
-            // 2. Mantemos o registro para auditoria.
+            // 2. 🛑 REMOVIDO: A linha $reserva->delete(); FOI REMOVIDA
+            //    Mantemos o registro para auditoria.
 
             DB::commit();
             Log::info("Reserva RECORRENTE PONTUAL ID: {$reserva->id} cancelada pelo gestor ID: " . Auth::id());
@@ -415,7 +418,8 @@ class AdminController extends Controller
                 // 🛑 CRÍTICO: Recria o slot fixo para cada item cancelado da série.
                 $this->reservaController->recreateFixedSlot($slot);
 
-                // 2. Mantemos o registro para auditoria.
+                // 2. 🛑 REMOVIDO: A linha $slot->delete(); FOI REMOVIDA
+                //    Mantemos o registro para auditoria.
 
                 $cancelledCount++;
             }
@@ -492,17 +496,13 @@ class AdminController extends Controller
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', '%' . $search . '%')
-                    ->orWhere('email', 'like', '%' . $search . '%')
-                    ->orWhere('whatsapp_contact', 'like', '%' . $search . '%');
+                  ->orWhere('email', 'like', '%' . $search . '%')
+                  ->orWhere('whatsapp_contact', 'like', '%' . $search . '%');
             });
         }
 
-        // 4. Obtém os usuários, ordenando primeiro por Função (Gestor/Admin = 0, Cliente = 1), e depois por Nome.
-        // 🛑 NOVO: Aplica a ordenação por função prioritária (Admin/Gestor = 0)
-        $users = $query
-            ->orderByRaw("CASE WHEN role IN ('admin', 'gestor') THEN 0 ELSE 1 END")
-            ->orderBy('name')
-            ->paginate(20);
+        // 4. Obtém os usuários, ordenando por nome e paginando
+        $users = $query->orderBy('name')->paginate(20);
 
         // 5. Passa todas as variáveis necessárias para a View
         return view('admin.users.index', [
@@ -600,30 +600,16 @@ class AdminController extends Controller
 
     /**
      * Exclui um usuário.
-     * ✅ NOVO: Inclui checagem de integridade de reservas ativas.
      */
     public function destroyUser(User $user)
     {
-        // 1. Impede a auto-exclusão
+        // Impede a auto-exclusão
         if (Auth::user()->id === $user->id) {
             return redirect()->back()->with('error', 'Você não pode excluir sua própria conta.');
         }
 
-        // 2. 🛑 CHECAGEM CRÍTICA DE RESERVAS ATIVAS (Pontuais ou Recorrentes)
-        $activeReservationsExist = Reserva::where('user_id', $user->id)
-            ->where('is_fixed', false) // Apenas reservas reais de clientes, não slots de disponibilidade
-            ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-            ->exists(); // Usa exists() para eficiência
-
-        if ($activeReservationsExist) {
-            $errorMessage = "Impossível excluir o usuário '{$user->name}'. Ele(a) possui reservas ativas (pendentes ou confirmadas). Cancele ou rejeite todas as reservas dele(a) antes de prosseguir com a exclusão.";
-            Log::warning("Exclusão de usuário ID: {$user->id} bloqueada por reservas ativas.");
-            return redirect()->back()->with('error', $errorMessage);
-        }
-        // ----------------------------------------------------------------------
-
         try {
-            // 3. Antes de excluir o usuário, zere os IDs de manager nas reservas para manter a integridade
+            // Antes de excluir o usuário, zere os IDs de manager nas reservas para manter a integridade
             Reserva::where('manager_id', $user->id)->update(['manager_id' => null]);
 
             $user->delete();
@@ -653,114 +639,17 @@ class AdminController extends Controller
 
         // 1. Busca todas as reservas do cliente, excluindo slots fixos (is_fixed=true)
         $reservas = Reserva::where('user_id', $user->id)
-                             ->where('is_fixed', false)
-                             // 🛑 CORRIGIDO: Ordem crescente (asc) por data e hora para mostrar o histórico cronológico
-                             ->orderBy('date', 'asc')
-                             ->orderBy('start_time', 'asc')
-                             ->get();
-
-        // 2. ✅ CRÍTICO: Cálculo da Contagem Total de Slots FUTUROS/HOJE por Série (ANTES da paginação)
-        // Isso garante que o botão de cancelamento de série na view mostre o total correto de slots futuros.
-        $seriesFutureCounts = Reserva::where('user_id', $user->id)
-            ->where('is_fixed', false)
-            ->where('is_recurrent', true)
-            // Filtra apenas status que podem ser cancelados (ativos)
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
-            // Filtra apenas reservas futuras ou de hoje
-            ->whereDate('date', '>=', Carbon::today()->toDateString())
-            ->select('recurrent_series_id', DB::raw('count(*) as total'))
-            ->groupBy('recurrent_series_id')
-            ->pluck('total', 'recurrent_series_id')
-            ->toArray();
-
-
-        // 3. Paginação manual do Collection (mantém a lógica da view, mas agrupa primeiro)
-        $perPage = 20;
-        $page = request()->get('page', 1);
-        $paginatedReservas = $reservas->slice(($page - 1) * $perPage, $perPage)->values();
-
-        // 4. Cria o Paginator
-        $reservasPaginadas = new \Illuminate\Pagination\LengthAwarePaginator(
-            $paginatedReservas,
-            $reservas->count(),
-            $perPage,
-            $page,
-            ['path' => request()->url(), 'query' => request()->query()]
-        );
-
+                            ->where('is_fixed', false)
+                            ->orderBy('date', 'desc')
+                            ->orderBy('start_time', 'desc')
+                            ->paginate(20);
 
         return view('admin.users.reservas', [ // View a ser criada
-            'reservas' => $reservasPaginadas, // Passa o paginator
+            'reservas' => $reservas,
             'client' => $user,
             'pageTitle' => "Reservas de Cliente: {$user->name}",
-            'seriesFutureCounts' => $seriesFutureCounts, // ✅ NOVO: Passa a contagem total
         ]);
     }
-
-    /**
-     * Cancela TODAS as reservas futuras de uma série recorrente específica (a partir do masterId).
-     * Rota usada na listagem de reservas do cliente.
-     * @param Request $request
-     * @param int $masterId O ID da reserva mestra (recurrent_series_id).
-     */
-    public function cancelClientSeries(Request $request, $masterId)
-    {
-        $validated = $request->validate([
-            'justificativa_gestor' => 'required|string|min:5|max:255', // Campo adaptado do front-end
-        ]);
-
-        // Validação adicional: garante que o ID mestre existe e pertence a uma série recorrente de cliente
-        $masterReserva = Reserva::find($masterId);
-        if (!$masterReserva || !$masterReserva->is_recurrent || $masterReserva->is_fixed) {
-             return response()->json(['success' => false, 'message' => 'ID da série inválido ou não é uma série recorrente ativa de cliente.'], 400);
-        }
-
-        $today = Carbon::today()->toDateString();
-        $cancellationReason = '[Gestor - Cliente/Série] ' . $validated['justificativa_gestor'];
-        $managerId = Auth::id();
-
-        DB::beginTransaction();
-        try {
-            // Busca todas as reservas da série (incluindo a mestra) que estão no futuro
-            $seriesReservas = Reserva::where(function ($query) use ($masterId) {
-                $query->where('recurrent_series_id', $masterId)
-                    ->orWhere('id', $masterId);
-                })
-                ->where('is_fixed', false)
-                ->whereDate('date', '>=', $today)
-                // Inclui pendentes para garantir que a série inteira seja cancelada
-                ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
-                ->get();
-
-            $cancelledCount = 0;
-
-            foreach ($seriesReservas as $slot) {
-                // 1. Marca como CANCELADA (status) e adiciona o motivo
-                $slot->status = Reserva::STATUS_CANCELADA;
-                $slot->manager_id = $managerId;
-                $slot->cancellation_reason = $cancellationReason;
-                $slot->save();
-
-                // 2. Recria o slot fixo de disponibilidade (verde)
-                $this->reservaController->recreateFixedSlot($slot);
-
-                // 3. MANTÉM A RESERVA (sem o delete)
-
-                $cancelledCount++;
-            }
-
-            DB::commit();
-            Log::info("Série Recorrente (Cliente: {$masterReserva->client_name}, Master ID: {$masterId}) cancelada. Total: {$cancelledCount} slots liberados.");
-
-            return response()->json(['success' => true, 'message' => "A série recorrente (ID: {$masterId}) de {$masterReserva->client_name} foi cancelada com sucesso! Total de {$cancelledCount} horários futuros liberados."], 200);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("Erro ao cancelar série recorrente (Admin/Cliente) ID: {$masterId}.", ['exception' => $e]);
-            return response()->json(['success' => false, 'message' => 'Erro interno ao cancelar a série recorrente: ' . $e->getMessage()], 500);
-        }
-    }
-
 
     // ------------------------------------------------------------------------
     // MÉTODOS OBSOLETOS OU DELEGADOS (Removidos do corpo do controller)

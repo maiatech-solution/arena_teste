@@ -21,20 +21,21 @@
                     </div>
                 @endif
 
+                {{-- INÍCIO DA CORREÇÃO DA LÓGICA DE FILTRO --}}
                 @php
                     // Classes base para os botões de filtro
                     $filterBaseClasses = 'px-5 py-2 rounded-lg text-sm font-medium transition duration-150 ease-in-out shadow-md border-2 border-transparent';
-                    // Note: $roleFilter e $search são passados pelo Controller
+                    // Note: $roleFilter é passado pelo Controller e contém 'gestor', 'cliente' ou null
                 @endphp
 
                 <!-- FILTROS E BOTÕES DE CRIAÇÃO -->
                 <div class="flex flex-col sm:flex-row justify-between items-center mb-6 space-y-3 sm:space-y-0">
 
                     <!-- Filtros de Função -->
-                    <div class="flex space-x-3 flex-wrap gap-3 sm:gap-x-3">
+                    <div class="flex space-x-3">
 
                         {{-- Botão Todos os Usuários (Ativo quando $roleFilter é null) --}}
-                        <a href="{{ route('admin.users.index', ['search' => $search ?? null]) }}"
+                        <a href="{{ route('admin.users.index') }}"
                             class="{{ $filterBaseClasses }}
                                 @if(is_null($roleFilter))
                                     {{-- ESTADO ATIVO: Cinza mais escuro com anel de destaque --}}
@@ -47,7 +48,7 @@
                         </a>
 
                         {{-- Botão Gestores/Admins (Roxo/Indigo) --}}
-                        <a href="{{ route('admin.users.index', ['role_filter' => 'gestor', 'search' => $search ?? null]) }}"
+                        <a href="{{ route('admin.users.index', ['role_filter' => 'gestor']) }}"
                             class="{{ $filterBaseClasses }}
                                 @if($roleFilter == 'gestor')
                                     {{-- ESTADO ATIVO: Roxo mais escuro com anel de destaque --}}
@@ -60,7 +61,7 @@
                         </a>
 
                         {{-- Botão Clientes (Verde) --}}
-                        <a href="{{ route('admin.users.index', ['role_filter' => 'cliente', 'search' => $search ?? null]) }}"
+                        <a href="{{ route('admin.users.index', ['role_filter' => 'cliente']) }}"
                             class="{{ $filterBaseClasses }}
                                 @if($roleFilter == 'cliente')
                                     {{-- ESTADO ATIVO: Verde mais escuro com anel de destaque --}}
@@ -88,51 +89,25 @@
                         </a>
                     </div>
                 </div>
-
-                <!-- INÍCIO DO CAMPO DE PESQUISA -->
-                <div class="mb-6">
-                    <form method="GET" action="{{ route('admin.users.index') }}" class="flex items-center space-x-2">
-                        {{-- Preserva o filtro de função --}}
-                        <input type="hidden" name="role_filter" value="{{ $roleFilter ?? '' }}">
-
-                        <input type="text" name="search" placeholder="Buscar por nome, email ou contato..."
-                               value="{{ $search ?? '' }}"
-                               class="flex-grow p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-
-                        <button type="submit"
-                                class="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition duration-200">
-                            Buscar
-                        </button>
-
-                        @if (!empty($search))
-                            {{-- Botão para Limpar a Busca --}}
-                            <a href="{{ route('admin.users.index', ['role_filter' => $roleFilter ?? null]) }}"
-                                class="px-3 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-300 transition duration-200"
-                                title="Limpar busca">
-                                X
-                            </a>
-                        @endif
-                    </form>
-                </div>
-                <!-- FIM DO CAMPO DE PESQUISA -->
+                {{-- FIM DA CORREÇÃO DA LÓGICA DE FILTRO --}}
 
                 <!-- Tabela de Usuários Atualizada -->
                 <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-700">
                             <tr>
-                                {{-- A COLUNA ID FOI REMOVIDA AQUI --}}
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ID</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nome</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Função (Role)</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Contato (WhatsApp)</th>
-                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider min-w-[150px]">Ações</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ações</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                             @forelse ($users as $user)
                                 <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                    {{-- DADOS DO USUÁRIO SEM O ID --}}
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{{ $user->id }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{{ $user->name }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{{ $user->email }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm">
@@ -147,18 +122,8 @@
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
                                         {{ $user->whatsapp_contact ?? 'N/A' }}
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium min-w-[150px]">
-                                        <div class="flex justify-center space-x-3 items-center">
-
-                                            <!-- Botão de Reservas (Apenas para Clientes) -->
-                                            @if ($user->role === 'cliente')
-                                                <a href="{{ route('admin.users.reservas', $user) }}"
-                                                   class="text-green-600 hover:text-green-800 transition duration-150 p-1 bg-green-100 rounded-full"
-                                                   title="Ver Reservas Agendadas">
-                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                                </a>
-                                            @endif
-
+                                    <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                        <div class="flex justify-center space-x-3">
                                             <!-- Link de Edição -->
                                             <a href="{{ route('admin.users.edit', $user) }}"
                                                class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600 transition duration-150"
@@ -187,7 +152,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                    <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                                         Nenhum usuário encontrado para a função selecionada.
                                     </td>
                                 </tr>
@@ -198,7 +163,7 @@
 
                 <!-- Paginação -->
                 <div class="mt-6">
-                    {{-- CORREÇÃO: Usa appends(request()->query()) para preservar o filtro de função e a busca --}}
+                    {{-- CORREÇÃO: Usa appends(request()->query()) para preservar o filtro de função na paginação --}}
                     {{ $users->appends(request()->query())->links() }}
                 </div>
 

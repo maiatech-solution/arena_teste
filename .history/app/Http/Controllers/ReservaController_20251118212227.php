@@ -200,9 +200,6 @@ class ReservaController extends Controller
                  $updateData['email'] = $emailToUse;
             }
 
-            // Garante que o nome seja atualizado se houver divergência
-             $updateData['name'] = $name;
-
             $user->update($updateData);
             Log::info("Cliente existente encontrado e atualizado (ID: {$user->id}).");
             return $user;
@@ -269,35 +266,16 @@ class ReservaController extends Controller
         }
 
 
-        // 3. Prepara e Sincroniza os dados do Cliente (🚨 LÓGICA CORRIGIDA AQUI)
+        // 3. Prepara os dados
         $clientName = $validated['client_name'];
         $clientContact = $validated['client_contact'];
         $userId = $validated['user_id'];
 
-        $clientUser = null;
-
         if ($userId) {
-            // Se o ID do usuário foi fornecido (busca no modal), apenas busca.
-            $clientUser = User::find($userId);
-        } else {
-            // ✅ Sincroniza/cria o cliente no DB se for inserção manual (baseado no WhatsApp/contact)
-            $clientUser = $this->findOrCreateClient([
-                'name' => $clientName,
-                'whatsapp_contact' => $clientContact,
-                'email' => null, // Não há campo de e-mail no quick booking, usa null
-                'data_nascimento' => null,
-            ]);
+            $user = User::find($userId);
+            $clientName = $user->name;
+            $clientContact = $user->whatsapp_contact ?? $user->email;
         }
-
-        if (!$clientUser) {
-            return response()->json(['success' => false, 'message' => 'Erro interno ao identificar ou criar o cliente.'], 500);
-        }
-
-        // Atualiza as variáveis de reserva com os dados Sincronizados
-        $userId = $clientUser->id;
-        $clientName = $clientUser->name;
-        $clientContact = $clientUser->whatsapp_contact ?? $clientUser->email;
-
 
         DB::beginTransaction();
         try {
@@ -306,7 +284,7 @@ class ReservaController extends Controller
 
             // 5. Cria a nova reserva real do cliente (o evento azul)
             $newReserva = Reserva::create([
-                'user_id' => $userId, // Usa o ID sincronizado
+                'user_id' => $userId,
                 'date' => $validated['date'],
                 'day_of_week' => Carbon::parse($validated['date'])->dayOfWeek,
                 'start_time' => $startTimeNormalized,
@@ -377,35 +355,16 @@ class ReservaController extends Controller
         // Define a janela de agendamento (Exatamente 1 ano a partir da data inicial)
         $endDate = $initialDate->copy()->addYear()->subDay();
 
-        // 1. Prepara e Sincroniza os dados do Cliente (🚨 LÓGICA CORRIGIDA AQUI)
+        // 1. Prepara os dados do cliente
         $clientName = $validated['client_name'];
         $clientContact = $validated['client_contact'];
         $userId = $validated['user_id'];
 
-        $clientUser = null;
-
         if ($userId) {
-            // Se o ID do usuário foi fornecido (busca no modal), apenas busca.
-            $clientUser = User::find($userId);
-        } else {
-            // ✅ Sincroniza/cria o cliente no DB se for inserção manual (baseado no WhatsApp/contact)
-            $clientUser = $this->findOrCreateClient([
-                'name' => $clientName,
-                'whatsapp_contact' => $clientContact,
-                'email' => null, // Não há campo de e-mail no quick booking, usa null
-                'data_nascimento' => null,
-            ]);
+            $user = User::find($userId);
+            $clientName = $user->name;
+            $clientContact = $user->whatsapp_contact ?? $user->email;
         }
-
-        if (!$clientUser) {
-            return response()->json(['success' => false, 'message' => 'Erro interno ao identificar ou criar o cliente.'], 500);
-        }
-
-        // Atualiza as variáveis de reserva com os dados Sincronizados
-        $userId = $clientUser->id;
-        $clientName = $clientUser->name;
-        $clientContact = $clientUser->whatsapp_contact ?? $clientUser->email;
-
 
         // 2. Coleta todas as datas futuras para este dia da semana dentro da janela
         $datesToSchedule = [];
@@ -465,7 +424,7 @@ class ReservaController extends Controller
                 $fixedSlotsToDelete[] = $fixedSlot->id; // Marca para consumo
 
                 $reservasToCreate[] = [
-                    'user_id' => $userId, // ✅ Usa o ID do cliente sincronizado/criado
+                    'user_id' => $userId,
                     'date' => $dateString,
                     'day_of_week' => $dayOfWeek,
                     'start_time' => $startTimeNormalized,
@@ -574,8 +533,7 @@ class ReservaController extends Controller
         $cutoffDate = Carbon::now()->addDays(60)->endOfDay();
         $today = Carbon::now()->startOfDay();
 
-        // ✅ MODIFICAÇÃO: Inclui MIN(date) para verificar a duração real da série.
-        $latestReservations = Reserva::selectRaw('recurrent_series_id, MAX(date) as last_date, MIN(date) as first_date, MIN(start_time) as slot_time, MAX(price) as slot_price')
+        $latestReservations = Reserva::selectRaw('recurrent_series_id, MAX(date) as last_date, MIN(start_time) as slot_time, MAX(price) as slot_price')
             ->where('is_recurrent', true)
             ->where('is_fixed', false)
             ->where('status', Reserva::STATUS_CONFIRMADA)
@@ -590,17 +548,8 @@ class ReservaController extends Controller
             }
 
             $lastDate = Carbon::parse($latest->last_date);
-            $firstDate = Carbon::parse($latest->first_date); // ✅ NOVO: Data do primeiro slot
 
-            // 1. Condição principal: A série está no período de expiração (próximos 60 dias)?
             if ($lastDate->greaterThanOrEqualTo($today) && $lastDate->lessThanOrEqualTo($cutoffDate)) {
-
-                // 2. ✅ NOVO FILTRO DE SEGURANÇA: Se a série tem menos de 7 dias de duração,
-                // assume-se que a geração falhou ou é muito curta, e ignora o alerta.
-                if ($lastDate->diffInDays($firstDate) <= 7) {
-                    Log::warning("Série Recorrente ID {$latest->recurrent_series_id} ignorada. Duração de apenas " . $lastDate->diffInDays($firstDate) . " dias, o que sugere falha na geração ou é uma série propositadamente curta.");
-                    continue;
-                }
 
                 $masterReserva = Reserva::find($latest->recurrent_series_id);
 
@@ -781,9 +730,6 @@ class ReservaController extends Controller
     // -------------------------------------------------------------------------
     // CANCELAMENTO PELO CLIENTE (FRONT-END)
     // -------------------------------------------------------------------------
-    /**
-     * Permite ao cliente cancelar uma reserva pontual ou solicitar o cancelamento de uma série recorrente.
-     */
     public function cancelByCustomer(Request $request, Reserva $reserva)
     {
         $user = Auth::user();
@@ -791,111 +737,48 @@ class ReservaController extends Controller
             return response()->json(['message' => 'Não autorizado ou a reserva não pertence a você.'], 403);
         }
 
-        // 1. Validação (Incluindo a nova flag)
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
-            // O request é enviado como string '1' ou '0', por isso nullable|boolean
-            'is_series_cancellation' => 'nullable|boolean',
-        ], [
-            'cancellation_reason.required' => 'O motivo do cancelamento é obrigatório.',
-            'cancellation_reason.min' => 'O motivo deve ter pelo menos 5 caracteres.',
         ]);
-
-        $isSeriesRequest = (bool)($request->input('is_series_cancellation') ?? false);
-        $reason = $validated['cancellation_reason'];
 
         $reservaDateTime = Carbon::parse($reserva->date->format('Y-m-d') . ' ' . $reserva->start_time);
 
         if ($reservaDateTime->isPast()) {
             return response()->json(['message' => 'Esta reserva é no passado e não pode ser cancelada.'], 400);
         }
-
-        // Checa status
+        // Usamos as constantes do Model
         if ($reserva->status === Reserva::STATUS_CANCELADA || $reserva->status === Reserva::STATUS_REJEITADA) {
             return response()->json(['message' => 'Esta reserva já está cancelada ou rejeitada.'], 400);
         }
 
-
-        // =====================================================================
-        // 🚨 FLUXO 1: SOLICITAÇÃO DE CANCELAMENTO DE SÉRIE (RECORRENTE)
-        // =====================================================================
-        if ($reserva->is_recurrent && $isSeriesRequest) {
-            // A regra do negócio é: Cliente não cancela a série diretamente, apenas solicita.
-
-            // 1. Encontra a reserva Mestra (ou usa a atual se for a mestra)
-            // Usa o recurrent_series_id para encontrar o mestre, ou o ID da reserva se for ela.
-            $masterReservaId = $reserva->recurrent_series_id ?? $reserva->id;
-            $masterReserva = Reserva::find($masterReservaId);
-
-            if (!$masterReserva) {
-                return response()->json(['message' => 'Erro interno ao encontrar a série recorrente.'], 500);
-            }
-
-            // 2. Atualiza a reserva Mestra com o pedido.
-            DB::beginTransaction();
-            try {
-                // Adiciona o pedido de cancelamento nas notas/motivo da reserva mestra
-                $newNote = "[SOLICITAÇÃO DE CANCELAMENTO DE SÉRIE PELO CLIENTE {$user->name} ({$user->id}) em ". Carbon::now()->format('d/m/Y H:i') ."]: {$reason}\n\n[Notas Originais]: {$masterReserva->notes}";
-
-                $masterReserva->update([
-                    'notes' => Str::limit($newNote, 5000), // Evita estouro de campo
-                    // Não alteramos o status aqui, pois a série permanece ativa até a ação do gestor.
-                    'cancellation_reason' => '[PENDENTE GESTOR] Solicitação de cancelamento de série registrada.'
-                ]);
-
-                // Opcional: Notificar Gestor (a ser implementado, apenas logamos por enquanto)
-                Log::warning("SOLICITAÇÃO DE CANCELAMENTO DE SÉRIE: Cliente ID: {$user->id}, Série ID: {$masterReservaId}. Motivo: {$reason}");
-
-                DB::commit();
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Solicitação de cancelamento da série enviada com sucesso ao Gestor. Ele fará a análise e a aprovação.'
-                ], 200);
-
-            } catch (\Exception $e) {
-                DB::rollBack();
-                Log::error("Erro ao registrar solicitação de cancelamento de série: " . $e->getMessage());
-                return response()->json(['message' => 'Erro interno ao registrar a solicitação.'], 500);
-            }
+        if ($reserva->is_recurrent) {
+            return response()->json(['message' => 'Esta é uma reserva recorrente. Entre em contato com o Gestor para gerenciar séries.'], 400);
         }
 
-        // =====================================================================
-        // 🛑 FLUXO 2: RESERVA RECORRENTE INDIVIDUAL (Bloqueio)
-        // =====================================================================
-        if ($reserva->is_recurrent && !$isSeriesRequest) {
-             // Se é recorrente, mas não pediu o cancelamento da série (apenas o slot), bloqueia.
-             return response()->json(['message' => 'Você não pode cancelar slots individuais de uma série recorrente. Use a opção de cancelamento de série no histórico.'], 400);
+        DB::beginTransaction();
+        try {
+            $reserva->status = Reserva::STATUS_CANCELADA;
+            $reserva->cancellation_reason = '[Cliente] ' . $validated['cancellation_reason'];
+            $reserva->save();
+
+            // ⚠️ Importante: Quando uma reserva de cliente é cancelada,
+            // o slot fixo de disponibilidade (verde) deve ser recriado.
+            $this->recreateFixedSlot($reserva); // Chama o helper
+
+            // ✅ CRÍTICO: Deletamos a reserva do cliente (que já está marcada como 'cancelled')
+            $reserva->delete();
+
+            Log::info("Reserva ID: {$reserva->id} cancelada pelo cliente ID: {$user->id}. Slot fixo recriado.");
+            DB::commit();
+
+            return response()->json(['success' => true, 'message' => 'Reserva cancelada com sucesso! O slot foi liberado.'], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Erro ao cancelar reserva pelo cliente ID: {$user->id}. Reserva ID: {$reserva->id}. Erro: " . $e->getMessage());
+            return response()->json(['message' => 'Ocorreu um erro ao processar o cancelamento. Tente novamente.'], 500);
         }
-
-        // =====================================================================
-        // ✅ FLUXO 3: CANCELAMENTO DE RESERVA PONTUAL (Ação Direta)
-        // =====================================================================
-        if (!$reserva->is_recurrent) {
-            DB::beginTransaction();
-            try {
-                $reserva->status = Reserva::STATUS_CANCELADA;
-                $reserva->cancellation_reason = '[Cliente] ' . $reason;
-                $reserva->save();
-
-                // Recria o slot fixo de disponibilidade (o evento verde)
-                $this->recreateFixedSlot($reserva);
-
-                Log::info("Reserva ID: {$reserva->id} (Pontual) cancelada pelo cliente ID: {$user->id}. Slot fixo recriado.");
-                DB::commit();
-
-                return response()->json(['success' => true, 'message' => 'Reserva pontual cancelada com sucesso! O slot foi liberado.'], 200);
-
-            } catch (\Exception $e) {
-                DB::rollBack();
-                Log::error("Erro ao cancelar reserva pontual pelo cliente ID: {$user->id}. Reserva ID: {$reserva->id}. Erro: " . $e->getMessage());
-                return response()->json(['message' => 'Ocorreu um erro ao processar o cancelamento. Tente novamente.'], 500);
-            }
-        }
-
-        return response()->json(['message' => 'Ação inválida para o tipo de reserva selecionado.'], 400);
     }
-
 
     /**
      * Salva a pré-reserva (Formulário Público) - FLUXO SEM LOGIN.
