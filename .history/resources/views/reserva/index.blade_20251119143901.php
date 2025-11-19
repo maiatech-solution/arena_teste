@@ -123,13 +123,8 @@
             margin-top: 2px;
             text-align: center;
             line-height: 1.2;
-            cursor: default;
-            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
-        }
-
-        /* 🛑 CRÍTICO: NOVO ESTILO PARA O CURSOR NOS DIAS CLICÁVEIS 🛑 */
-        .fc-daygrid-day.has-slots {
             cursor: pointer;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
         }
 
         .marker-available {
@@ -430,6 +425,44 @@
 
     let calendar; // Variável global para o calendário
 
+    /**
+     * Formata a data para o padrão Brasileiro (Dia da semana, dia de Mês de Ano).
+     */
+    function formatarDataBrasileira(dateString) {
+        const date = new Date(dateString + 'T00:00:00');
+        if (isNaN(date)) {
+            return 'Data Inválida';
+        }
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        const formatted = date.toLocaleDateString('pt-BR', options);
+        return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    }
+
+
+    /**
+     * Exibe um alerta temporário no modal (Substitui alert()).
+     */
+    function showFrontendAlert(message) {
+        const alertBox = document.getElementById('frontend-alert-box');
+        const alertMessage = document.getElementById('frontend-alert-message').querySelector('span.ml-1');
+
+        alertMessage.textContent = message;
+        alertBox.classList.remove('hidden');
+
+        setTimeout(() => {
+            alertBox.classList.add('hidden');
+        }, 5000); // 5 segundos
+
+        console.error(message);
+    }
+
+    /**
+     * Limpa a string de telefone, removendo tudo exceto dígitos (0-9).
+     */
+    function cleanPhoneNumber(value) {
+        return value.replace(/\D/g, '');
+    }
+
 
     document.addEventListener('DOMContentLoaded', () => {
 
@@ -445,106 +478,61 @@
         const oldScheduleId = @json(old('schedule_id'));
 
 
-        // --- Funções Auxiliares (Movidas para dentro do escopo DOMContentLoaded) ---
-
-        /**
-         * Formata a data para o padrão Brasileiro (Dia da semana, dia de Mês de Ano).
-         */
-        function formatarDataBrasileira(dateString) {
-            const date = new Date(dateString + 'T00:00:00');
-            if (isNaN(date)) {
-                return 'Data Inválida';
-            }
-            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-            const formatted = date.toLocaleDateString('pt-BR', options);
-            return formatted.charAt(0).toUpperCase() + formatted.slice(1);
-        }
-
-        /**
-         * Exibe um alerta temporário no modal (Substitui alert()).
-         */
-        function showFrontendAlert(message) {
-            const alertBox = document.getElementById('frontend-alert-box');
-            const alertMessage = document.getElementById('frontend-alert-message').querySelector('span.ml-1');
-
-            alertMessage.textContent = message;
-            alertBox.classList.remove('hidden');
-
-            setTimeout(() => {
-                alertBox.classList.add('hidden');
-            }, 5000); // 5 segundos
-
-            console.error(message);
-        }
-
-        /**
-         * Limpa a string de telefone, removendo tudo exceto dígitos (0-9).
-         */
-        function cleanPhoneNumber(value) {
-            return value.replace(/\D/g, '');
-        }
-
-        // ----------------------------------------------------------------------
-        // --- FUNÇÃO CRÍTICA: LÓGICA DE CONTAGEM DE SLOTS DISPONÍVEIS ---
-        // ----------------------------------------------------------------------
-        function countAvailableSlots(dateStr) {
-            // Verifica se a instância do calendário está disponível
-            if (!calendar) return 0;
-
-            const now = moment();
-            const todayDate = now.format('YYYY-MM-DD');
-
-            // Obtém todos os eventos do dia
-            const eventsOnDay = calendar.getEvents().filter(event =>
-                moment(event.start).format('YYYY-MM-DD') === dateStr
-            );
-
-            let finalAvailableSlots = 0;
-
-            eventsOnDay.forEach(event => {
-                const isAvailableClass = event.classNames.includes('fc-event-available');
-                const eventEnd = moment(event.end);
-
-                // Verifica se o evento disponível já expirou HOJE
-                const isExpiredAvailableSlot = isAvailableClass && dateStr === todayDate && eventEnd.isBefore(now);
-
-                if (isAvailableClass && !isExpiredAvailableSlot) {
-                    finalAvailableSlots++;
-                }
+        // CRÍTICO: Lógica de limpeza no input de telefone
+        const guestContactInput = document.getElementById('guest-contact');
+        if (guestContactInput) {
+            guestContactInput.addEventListener('input', function() {
+                this.value = cleanPhoneNumber(this.value);
             });
-
-            return finalAvailableSlots;
         }
+
 
         // ----------------------------------------------------------------------
         // --- FUNÇÃO CRÍTICA: LÓGICA DE MARCADORES RESUMO (CONTADOR) ---
         // ----------------------------------------------------------------------
-        function updateDayMarkers() {
-            // 🛑 SANITY CHECK 🛑
-            if (!calendar || calendar.view.type !== 'dayGridMonth') return;
+        function updateDayMarkers(calendar) {
+            // Só executa na visão de mês
+            if (calendar.view.type !== 'dayGridMonth') return;
 
             const dayCells = calendarEl.querySelectorAll('.fc-daygrid-day-frame');
-            const today = moment().startOf('day');
+            const now = moment();
+            const todayDate = now.format('YYYY-MM-DD');
 
             dayCells.forEach(dayEl => {
                 const dateEl = dayEl.closest('.fc-daygrid-day');
                 const dateStr = dateEl ? dateEl.getAttribute('data-date') : null;
                 if (!dateStr) return;
 
-                // 1. Limpa classes de clique e marcadores antigos
-                dateEl.classList.remove('has-slots');
+                // 1. Limpa marcadores antigos
                 const existingMarker = dayEl.querySelector('.day-marker');
                 if (existingMarker) existingMarker.remove();
 
                 // Verifica se o dia é passado
-                const isTodayOrFuture = !moment(dateStr).isBefore(today, 'day');
+                const isTodayOrFuture = !moment(dateStr).isBefore(now.startOf('day'), 'day');
 
                 if (!isTodayOrFuture) {
                     return; // Não mostra marcador em dias passados
                 }
 
-                // Conta slots usando a função separada
-                const finalAvailableSlots = countAvailableSlots(dateStr);
+                // Obtém todos os eventos do dia (slots fixos E reservas reais)
+                const eventsOnDay = calendar.getEvents().filter(event =>
+                    moment(event.start).format('YYYY-MM-DD') === dateStr
+                );
+
+                let finalAvailableSlots = 0; // Contagem de slots LIVRES
+
+                eventsOnDay.forEach(event => {
+                    const isAvailableClass = event.classNames.includes('fc-event-available');
+                    const eventEnd = moment(event.end);
+
+                    // Verifica se o evento disponível já expirou HOJE
+                    const isExpiredAvailableSlot = isAvailableClass && dateStr === todayDate && eventEnd.isBefore(now);
+
+                    if (isAvailableClass && !isExpiredAvailableSlot) {
+                        // Contamos apenas os slots disponíveis que ainda não expiraram hoje.
+                        finalAvailableSlots++;
+                    }
+                });
 
                 const markerContainer = dayEl.querySelector('.fc-daygrid-day-bottom');
                 if (!markerContainer) return;
@@ -555,14 +543,12 @@
                 if (finalAvailableSlots > 0) {
                     const plural = finalAvailableSlots > 1 ? 's' : '';
                     markerHtml = `
-                        <div class="day-marker marker-available" data-available-slots="${finalAvailableSlots}">
+                        <div class="day-marker marker-available">
                             ${finalAvailableSlots} horário${plural} disponível${plural}
                         </div>`;
-                    // Adiciona classe para permitir clique e estilizar o cursor
-                    dateEl.classList.add('has-slots');
                 } else {
                     markerHtml = `
-                        <div class="day-marker marker-none" data-available-slots="0">
+                        <div class="day-marker marker-none">
                             Esgotado
                         </div>`;
                 }
@@ -576,16 +562,6 @@
                 dayEl.querySelectorAll('.fc-daygrid-more-link').forEach(link => link.remove());
             });
         }
-
-
-        // CRÍTICO: Lógica de limpeza no input de telefone
-        const guestContactInput = document.getElementById('guest-contact');
-        if (guestContactInput) {
-            guestContactInput.addEventListener('input', function() {
-                this.value = cleanPhoneNumber(this.value);
-            });
-        }
-
 
         // === Inicialização do FullCalendar ===
         calendar = new FullCalendar.Calendar(calendarEl, {
@@ -678,7 +654,7 @@
 
             eventsSet: function(info) {
                 // 1. Chama o marcador (cálculo correto) após o FullCalendar processar todos os eventos
-                updateDayMarkers();
+                updateDayMarkers(calendar);
 
                 // 🛑 CRÍTICO 3: Remoção forçada do contador nativo no escopo geral (Garantia)
                 document.querySelectorAll('.fc-daygrid-more-link').forEach(link => link.remove());
@@ -732,26 +708,16 @@
                 }
             },
 
-            // 🛑 CORREÇÃO NO dateClick 🛑
             dateClick: function(info) {
-                const clickedDateStr = info.dateStr;
-                const clickedDate = moment(clickedDateStr);
+                const clickedDate = moment(info.dateStr);
                 const today = moment().startOf('day');
 
                 if (clickedDate.isBefore(today, 'day')) {
                     return; // Ignora cliques em dias passados
                 }
 
-                // Checa a disponibilidade usando a função que agora está no escopo correto
-                const availableSlotsCount = countAvailableSlots(clickedDateStr);
-
-                if (availableSlotsCount > 0) {
-                    // Se houver slots disponíveis, muda para a visão de Dia
-                    calendar.changeView('timeGridDay', clickedDateStr);
-                } else {
-                    // Se estiver esgotado, exibe alerta e não muda a view
-                    showFrontendAlert(`❌ O dia ${formatarDataBrasileira(clickedDateStr)} está esgotado ou não tem horários disponíveis.`);
-                }
+                // Muda para a visão de Dia
+                calendar.changeView('timeGridDay', info.dateStr);
             },
 
             eventClick: function(info) {
@@ -816,7 +782,7 @@
 
         calendar.render();
 
-        window.calendar = calendar; // Mantido para debugging externo, se necessário.
+        window.calendar = calendar;
 
         // CRÍTICO: Recarrega os eventos a cada 60 segundos
         setInterval(() => {

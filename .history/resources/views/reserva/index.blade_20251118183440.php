@@ -15,16 +15,16 @@
 
         * { font-family: 'Inter', sans-serif; }
 
-        /* Fundo Gradiente para a "Arena" (Ajustado para ser mais sutil e moderno) */
+        /* Fundo Gradiente para a "Arena" */
         .arena-bg {
-            background: linear-gradient(135deg, #4f46e5 0%, #10b981 100%);
+            background: linear-gradient(135deg, #1e3a8a 0%, #10b981 100%);
         }
 
-        /* Container do Calendário (Aumentado border-radius e melhorado o box-shadow) */
+        /* Container do Calendário (Removido overflow-x: auto) */
         .calendar-container {
             background-color: #ffffff;
-            border-radius: 16px;
-            box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.2), 0 5px 15px -5px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
         }
 
         /* 🛑 CRÍTICO: ESTILO PARA O MODAL (SOBREPOSIÇÃO) 🛑 */
@@ -37,6 +37,7 @@
             background-color: rgba(0, 0, 0, 0.6); /* Fundo escuro semi-transparente */
             z-index: 50;
             overflow-y: auto;
+            /* Tailwind classes: items-center justify-center, p-4 (já no HTML) */
         }
 
         /* Estilos do FullCalendar */
@@ -73,6 +74,7 @@
         }
 
         /* 🛑 CRÍTICO: ANULAÇÃO DA LÓGICA DE COLISÃO DO FULLCALENDAR NO MODO DIA (Time Grid) 🛑 */
+        /* Isso impede o cálculo de 50%/50% em caso de sobreposição e força 100% de largura */
         .fc-timegrid-col-events,
         .fc-timegrid-col-events > div {
             width: 100% !important;
@@ -82,6 +84,7 @@
         }
 
         /* 🛑 NOVO: IMPEDE QUE EVENTOS NÃO DISPONÍVEIS (INVISÍVEIS) CAPTUREM O CLIQUE 🛑 */
+        /* Seleciona qualquer evento que não tenha a classe 'fc-event-available' */
         .fc-timegrid-event:not(.fc-event-available) {
             pointer-events: none !important;
         }
@@ -116,20 +119,15 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.8rem; /* Ligeiramente maior */
+            font-size: 0.75rem;
             font-weight: bold;
-            padding: 6px; /* Mais preenchimento */
-            border-radius: 8px; /* Mais arredondado */
+            padding: 4px;
+            border-radius: 6px;
             margin-top: 2px;
             text-align: center;
             line-height: 1.2;
-            cursor: default;
-            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
-        }
-
-        /* 🛑 CRÍTICO: NOVO ESTILO PARA O CURSOR NOS DIAS CLICÁVEIS 🛑 */
-        .fc-daygrid-day.has-slots {
             cursor: pointer;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
         }
 
         .marker-available {
@@ -144,7 +142,6 @@
             border: 1px solid #FCA5A5;
             cursor: default;
         }
-
         /* 🛑 CRÍTICO 1: Oculta o contador nativo "+X more" que está exibindo o valor errado */
         .fc-daygrid-more-link {
             display: none !important;
@@ -154,22 +151,21 @@
 
 <body class="font-sans antialiased arena-bg">
 
-{{-- 🛑 MUDANÇA: max-w-5xl para limitar a largura em telas grandes 🛑 --}}
-<div class="min-h-screen flex flex-col items-center justify-start p-4 md:p-8 py-16">
-    <div class="w-full max-w-5xl mx-auto
-        p-6 sm:p-10
+<div class="min-h-screen flex flex-col items-center justify-start p-4 md:p-8 py-12">
+    <div class="w-full
+        p-4 sm:p-6
         bg-white/95 dark:bg-gray-800/90
-        backdrop-blur-sm shadow-2xl shadow-gray-900/70 dark:shadow-indigo-900/50
+        backdrop-blur-md shadow-2xl shadow-gray-900/70 dark:shadow-indigo-900/50
         rounded-3xl transform transition-all duration-300 ease-in-out">
 
-        <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-gray-100 mb-6
-            border-b-4 border-indigo-600 dark:border-indigo-400 pb-3 text-center
-            tracking-tight">
+        <h1 class="text-4xl sm:text-5xl font-extrabold text-gray-900 dark:text-gray-100 mb-8
+            border-b-4 border-indigo-600 dark:border-indigo-400 pb-4 text-center
+            tracking-tighter">
             ⚽ ELITE SOCCER - Agendamento Online
         </h1>
 
-        <p class="text-gray-600 dark:text-gray-400 mb-8 text-center text-base sm:text-lg font-medium">
-            Selecione uma data para ver os horários detalhados e a quantidade de vagas disponíveis.
+        <p class="text-gray-600 dark:text-gray-400 mb-10 text-center text-lg sm:text-xl font-medium">
+            Selecione uma data no calendário abaixo e **clique nela** para ver os horários detalhados.
         </p>
 
         {{-- --- Mensagens de Status (Mantidas) --- --}}
@@ -203,7 +199,7 @@
         @if ($errors->any())
             <div class="bg-red-100 dark:bg-red-900/50 border-l-4 border-red-600 text-red-800 dark:text-red-300 p-4 rounded-xl relative mb-8 shadow-lg" role="alert">
                 <p class="font-bold flex items-center text-lg"><svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg> Correção Necessária!</p>
-                <p class="mt-1">Houve um problema com a sua seleção ou dados. Por favor, verifique os campos destacados.</p>
+                <p class="mt-1">Houve um problema com a sua seleção ou dados. Por favor, verifique os campos destacados no formulário abaixo.</p>
             </div>
         @endif
 
@@ -217,8 +213,7 @@
 
 {{-- --- Modal de Confirmação de Dados --- --}}
 <div id="booking-modal" class="modal-overlay hidden items-center justify-center z-50 p-4">
-    {{-- 🛑 MUDANÇA: max-w-md para modal mais apertado 🛑 --}}
-    <div id="modal-content" class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto transform transition-all duration-300 scale-100 border-t-8
+    <div id="modal-content" class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto transform transition-all duration-300 scale-100 border-t-8
         @if ($errors->any() && old('data_reserva')) border-red-600 dark:border-red-500 @else border-indigo-600 dark:border-indigo-500 @endif" onclick="event.stopPropagation()">
 
         {{-- Área de Mensagens de Erro (reutilizada) --}}
@@ -273,7 +268,7 @@
         {{-- 🛑 FORMULÁRIO PRINCIPAL (Visível para Guest E Cliente Logado) 🛑 --}}
         @if (!Auth::check() || (Auth::check() && Auth::user()->isClient()))
 
-            <h4 class="text-2xl font-extrabold mb-5 text-gray-900 dark:text-gray-100 border-b pb-2">Confirme Sua Pré-Reserva</h4>
+            <h4 class="text-3xl font-extrabold mb-6 text-gray-900 dark:text-gray-100 border-b pb-3">Confirme Sua Pré-Reserva</h4>
 
             <form id="booking-form" method="POST" action="{{ route('reserva.store') }}">
                 @csrf
@@ -430,6 +425,44 @@
 
     let calendar; // Variável global para o calendário
 
+    /**
+     * Formata a data para o padrão Brasileiro (Dia da semana, dia de Mês de Ano).
+     */
+    function formatarDataBrasileira(dateString) {
+        const date = new Date(dateString + 'T00:00:00');
+        if (isNaN(date)) {
+            return 'Data Inválida';
+        }
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        const formatted = date.toLocaleDateString('pt-BR', options);
+        return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    }
+
+
+    /**
+     * Exibe um alerta temporário no modal (Substitui alert()).
+     */
+    function showFrontendAlert(message) {
+        const alertBox = document.getElementById('frontend-alert-box');
+        const alertMessage = document.getElementById('frontend-alert-message').querySelector('span.ml-1');
+
+        alertMessage.textContent = message;
+        alertBox.classList.remove('hidden');
+
+        setTimeout(() => {
+            alertBox.classList.add('hidden');
+        }, 5000); // 5 segundos
+
+        console.error(message);
+    }
+
+    /**
+     * Limpa a string de telefone, removendo tudo exceto dígitos (0-9).
+     */
+    function cleanPhoneNumber(value) {
+        return value.replace(/\D/g, '');
+    }
+
 
     document.addEventListener('DOMContentLoaded', () => {
 
@@ -445,125 +478,82 @@
         const oldScheduleId = @json(old('schedule_id'));
 
 
-        // --- Funções Auxiliares (Movidas para dentro do escopo DOMContentLoaded) ---
-
-        /**
-         * Formata a data para o padrão Brasileiro (Dia da semana, dia de Mês de Ano).
-         */
-        function formatarDataBrasileira(dateString) {
-            const date = new Date(dateString + 'T00:00:00');
-            if (isNaN(date)) {
-                return 'Data Inválida';
-            }
-            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-            const formatted = date.toLocaleDateString('pt-BR', options);
-            return formatted.charAt(0).toUpperCase() + formatted.slice(1);
-        }
-
-        /**
-         * Exibe um alerta temporário no modal (Substitui alert()).
-         */
-        function showFrontendAlert(message) {
-            const alertBox = document.getElementById('frontend-alert-box');
-            const alertMessage = document.getElementById('frontend-alert-message').querySelector('span.ml-1');
-
-            alertMessage.textContent = message;
-            alertBox.classList.remove('hidden');
-
-            setTimeout(() => {
-                alertBox.classList.add('hidden');
-            }, 5000); // 5 segundos
-
-            console.error(message);
-        }
-
-        /**
-         * Limpa a string de telefone, removendo tudo exceto dígitos (0-9).
-         */
-        function cleanPhoneNumber(value) {
-            return value.replace(/\D/g, '');
-        }
-
-        // ----------------------------------------------------------------------
-        // --- FUNÇÃO CRÍTICA: LÓGICA DE CONTAGEM DE SLOTS DISPONÍVEIS ---
-        // ----------------------------------------------------------------------
-        function countAvailableSlots(dateStr) {
-            // Verifica se a instância do calendário está disponível
-            if (!calendar) return 0;
-
-            const now = moment();
-            const todayDate = now.format('YYYY-MM-DD');
-
-            // Obtém todos os eventos do dia
-            const eventsOnDay = calendar.getEvents().filter(event =>
-                moment(event.start).format('YYYY-MM-DD') === dateStr
-            );
-
-            let finalAvailableSlots = 0;
-
-            eventsOnDay.forEach(event => {
-                const isAvailableClass = event.classNames.includes('fc-event-available');
-                const eventEnd = moment(event.end);
-
-                // Verifica se o evento disponível já expirou HOJE
-                const isExpiredAvailableSlot = isAvailableClass && dateStr === todayDate && eventEnd.isBefore(now);
-
-                if (isAvailableClass && !isExpiredAvailableSlot) {
-                    finalAvailableSlots++;
-                }
+        // CRÍTICO: Lógica de limpeza no input de telefone
+        const guestContactInput = document.getElementById('guest-contact');
+        if (guestContactInput) {
+            guestContactInput.addEventListener('input', function() {
+                this.value = cleanPhoneNumber(this.value);
             });
-
-            return finalAvailableSlots;
         }
 
-        // ----------------------------------------------------------------------
-        // --- FUNÇÃO CRÍTICA: LÓGICA DE MARCADORES RESUMO (CONTADOR) ---
-        // ----------------------------------------------------------------------
-        function updateDayMarkers() {
-            // 🛑 SANITY CHECK 🛑
-            if (!calendar || calendar.view.type !== 'dayGridMonth') return;
+
+        // --- FUNÇÃO CRÍTICA: LÓGICA DE MARCADORES RESUMO SIMPLIFICADA (Existe/Não Existe) ---
+        function updateDayMarkers(calendar) {
+            // Só executa na visão de mês
+            if (calendar.view.type !== 'dayGridMonth') return;
 
             const dayCells = calendarEl.querySelectorAll('.fc-daygrid-day-frame');
-            const today = moment().startOf('day');
+            const now = moment();
+            const todayDate = now.format('YYYY-MM-DD');
 
             dayCells.forEach(dayEl => {
                 const dateEl = dayEl.closest('.fc-daygrid-day');
                 const dateStr = dateEl ? dateEl.getAttribute('data-date') : null;
                 if (!dateStr) return;
 
-                // 1. Limpa classes de clique e marcadores antigos
-                dateEl.classList.remove('has-slots');
+                // 1. Limpa marcadores antigos
                 const existingMarker = dayEl.querySelector('.day-marker');
                 if (existingMarker) existingMarker.remove();
 
                 // Verifica se o dia é passado
-                const isTodayOrFuture = !moment(dateStr).isBefore(today, 'day');
+                const isTodayOrFuture = !moment(dateStr).isBefore(now.startOf('day'), 'day');
 
                 if (!isTodayOrFuture) {
                     return; // Não mostra marcador em dias passados
                 }
 
-                // Conta slots usando a função separada
-                const finalAvailableSlots = countAvailableSlots(dateStr);
+                // Obtém todos os eventos do dia (slots fixos E reservas reais)
+                const eventsOnDay = calendar.getEvents().filter(event =>
+                    moment(event.start).format('YYYY-MM-DD') === dateStr
+                );
+
+                let totalAvailableSlots = 0;
+                let reservedSlotsCount = 0;
+
+                eventsOnDay.forEach(event => {
+                    const isAvailableClass = event.classNames.includes('fc-event-available');
+                    const eventEnd = moment(event.end);
+
+                    // Ignora todos os eventos que já expiraram na data de hoje
+                    if (dateStr === todayDate && eventEnd.isBefore(now)) {
+                        return;
+                    }
+
+                    if (isAvailableClass) {
+                        totalAvailableSlots++;
+                    } else {
+                        reservedSlotsCount++;
+                    }
+                });
+
+                // O valor final disponível é o que resta dos slots fixos após as reservas reais
+                const finalAvailableSlots = Math.max(0, totalAvailableSlots - reservedSlotsCount);
 
                 const markerContainer = dayEl.querySelector('.fc-daygrid-day-bottom');
                 if (!markerContainer) return;
 
                 let markerHtml = '';
 
-                // 🛑 LÓGICA: MOSTRA A QUANTIDADE 🛑
+                // 🛑 LÓGICA MOTIVACIONAL SIMPLIFICADA 🛑
                 if (finalAvailableSlots > 0) {
-                    const plural = finalAvailableSlots > 1 ? 's' : '';
                     markerHtml = `
-                        <div class="day-marker marker-available" data-available-slots="${finalAvailableSlots}">
-                            ${finalAvailableSlots} horário${plural} disponível${plural}
+                        <div class="day-marker marker-available">
+                            Há horários disponíveis
                         </div>`;
-                    // Adiciona classe para permitir clique e estilizar o cursor
-                    dateEl.classList.add('has-slots');
                 } else {
                     markerHtml = `
-                        <div class="day-marker marker-none" data-available-slots="0">
-                            Esgotado
+                        <div class="day-marker marker-none">
+                            Não há horários disponíveis
                         </div>`;
                 }
 
@@ -577,16 +567,6 @@
             });
         }
 
-
-        // CRÍTICO: Lógica de limpeza no input de telefone
-        const guestContactInput = document.getElementById('guest-contact');
-        if (guestContactInput) {
-            guestContactInput.addEventListener('input', function() {
-                this.value = cleanPhoneNumber(this.value);
-            });
-        }
-
-
         // === Inicialização do FullCalendar ===
         calendar = new FullCalendar.Calendar(calendarEl, {
             locale: 'pt-br',
@@ -595,7 +575,7 @@
             timeZone: 'local',
 
             eventSources: [
-                // 1. Reservas Reais (Ocupados - Sem className 'available') - Apenas para bloqueio visual/clique
+                // 1. Reservas Reais (Ocupados - Sem className 'available')
                 {
                     url: RESERVED_API_URL,
                     method: 'GET',
@@ -609,7 +589,7 @@
                     editable: false,
                     priority: 5,
                 },
-                // 2. Slots Disponíveis (Grade Fixa - Com className 'available') - Fonte para a contagem
+                // 2. Slots Disponíveis (Grade Fixa - Com className 'available')
                 {
                     id: 'available-slots-source-id',
                     className: 'fc-event-available',
@@ -637,7 +617,7 @@
                                     }
 
                                     const eventEnd = moment(event.end);
-                                    // Filtra slots disponíveis que já expiraram hoje
+                                    // Manter a validação de expiração aqui
                                     return eventEnd.isAfter(now);
                                 });
 
@@ -678,7 +658,7 @@
 
             eventsSet: function(info) {
                 // 1. Chama o marcador (cálculo correto) após o FullCalendar processar todos os eventos
-                updateDayMarkers();
+                updateDayMarkers(calendar);
 
                 // 🛑 CRÍTICO 3: Remoção forçada do contador nativo no escopo geral (Garantia)
                 document.querySelectorAll('.fc-daygrid-more-link').forEach(link => link.remove());
@@ -699,6 +679,7 @@
 
                     if (!isAvailable) {
                         // 1. Se for o slot Reservado (Invisível/Transparente):
+                        // O CSS global agora trata o pointer-events, mas mantemos o display: none
                         info.el.style.display = 'none';
                         return;
                     }
@@ -732,26 +713,16 @@
                 }
             },
 
-            // 🛑 CORREÇÃO NO dateClick 🛑
             dateClick: function(info) {
-                const clickedDateStr = info.dateStr;
-                const clickedDate = moment(clickedDateStr);
+                const clickedDate = moment(info.dateStr);
                 const today = moment().startOf('day');
 
                 if (clickedDate.isBefore(today, 'day')) {
                     return; // Ignora cliques em dias passados
                 }
 
-                // Checa a disponibilidade usando a função que agora está no escopo correto
-                const availableSlotsCount = countAvailableSlots(clickedDateStr);
-
-                if (availableSlotsCount > 0) {
-                    // Se houver slots disponíveis, muda para a visão de Dia
-                    calendar.changeView('timeGridDay', clickedDateStr);
-                } else {
-                    // Se estiver esgotado, exibe alerta e não muda a view
-                    showFrontendAlert(`❌ O dia ${formatarDataBrasileira(clickedDateStr)} está esgotado ou não tem horários disponíveis.`);
-                }
+                // Muda para a visão de Dia
+                calendar.changeView('timeGridDay', info.dateStr);
             },
 
             eventClick: function(info) {
@@ -816,7 +787,7 @@
 
         calendar.render();
 
-        window.calendar = calendar; // Mantido para debugging externo, se necessário.
+        window.calendar = calendar;
 
         // CRÍTICO: Recarrega os eventos a cada 60 segundos
         setInterval(() => {
