@@ -45,6 +45,10 @@ class Reserva extends Model
 
         'is_recurrent',     // Flag para saber se é parte de uma série de cliente fixo
         'recurrent_series_id', // ID do primeiro slot da série (mestre)
+        'final_price',
+        'signal_value',
+        'total_paid',
+        'payment_status',
     ];
 
     /**
@@ -131,5 +135,35 @@ class Reserva extends Model
         return Attribute::make(
             get: fn () => $this->manager?->name ?? 'Cliente via Web',
         );
+    }
+
+    // =========================================================================
+    // 💰 MÓDULO FINANCEIRO
+    // =========================================================================
+
+    /**
+     * Relacionamento: Uma reserva tem várias transações financeiras.
+     */
+    public function transactions()
+    {
+        return $this->hasMany(FinancialTransaction::class);
+    }
+
+    /**
+     * Calcula quanto falta o cliente pagar.
+     * Lógica: (Preço Final ou Preço Original) - Total Pago
+     */
+    public function getRemainingAmountAttribute(): float
+    {
+        $total = $this->final_price ?? $this->price;
+        return max(0, $total - $this->total_paid);
+    }
+
+    /**
+     * Verifica se a reserva está totalmente quitada.
+     */
+    public function getIsPaidAttribute(): bool
+    {
+        return $this->payment_status === 'paid' || $this->remaining_amount <= 0;
     }
 }

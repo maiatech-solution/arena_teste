@@ -1,69 +1,47 @@
 <nav x-data="{ open: false }" class="bg-white border-b border-gray-100">
-    <!-- Primary Navigation Menu -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between h-16">
             <div class="flex">
-                <!-- Logo -->
                 <div class="shrink-0 flex items-center">
-                    <!-- Redireciona para o Dashboard se for gestor, ou para a Home se não for -->
                     <a href="{{ Auth::check() && Auth::user()->is_gestor ? route('dashboard') : route('home') }}">
                         <x-application-logo class="block h-9 w-auto fill-current text-gray-800" />
                     </a>
                 </div>
 
-                <!-- Navigation Links (Desktop) -->
                 <div class="hidden space-x-4 sm:-my-px sm:ms-10 sm:flex items-center">
 
-                    {{-- 🛑 1. LINKS DE GESTÃO (VISÍVEIS APENAS PARA GESTORES) 🛑 --}}
+                    {{-- 🛑 1. LINKS DE GESTÃO (VISÍVEIS APENAS PARA GESTORES/ADMINS) 🛑 --}}
                     @if (Auth::check() && Auth::user()->is_gestor)
-                        <!-- 1. Dashboard -->
                         <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')" class="px-3 py-2">
                             {{ __('Home') }}
                         </x-nav-link>
 
-                        <!-- 🚀 2. NOVO LINK CENTRALIZADO: RESERVAS -->
-                        <!-- Ativo se a rota for 'admin.reservas.index' ou qualquer sub-rota de 'admin.reservas.*' -->
                         <x-nav-link :href="route('admin.reservas.index')"
                                     :active="request()->routeIs('admin.reservas.*')"
-                                    class="
-                                        px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
-                                        hover:bg-gray-50 hover:text-gray-700
-                                        focus:outline-none focus:bg-gray-50 focus:text-gray-700
-                                    ">
+                                    class="px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:bg-gray-50 focus:text-gray-700">
                             {{ __('Reservas') }}
                         </x-nav-link>
 
-                        {{-- Links antigos 'Confirmadas' e 'Pendentes' removidos daqui --}}
+                        <x-nav-link :href="route('admin.payment.index')"
+                                    :active="request()->routeIs('admin.payment.*')"
+                                    class="px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:bg-gray-50 focus:text-gray-700">
+                            {{ __('Caixa') }}
+                        </x-nav-link>
 
-                        <!-- 3. Gerenciar Usuários (Corrigido para Lista/Index de Usuários) -->
-                        <x-nav-link
-                            :href="route('admin.users.index')"
-                            :active="request()->routeIs('admin.users.index') || request()->routeIs('admin.users.create') || request()->routeIs('admin.users.edit')"
-                            class="
-                                px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
-                                hover:bg-gray-50 hover:text-gray-700
-                                focus:outline-none focus:bg-gray-50 focus:text-gray-700
-                            ">
+                        <x-nav-link :href="route('admin.users.index')"
+                                    :active="request()->routeIs('admin.users.index') || request()->routeIs('admin.users.create') || request()->routeIs('admin.users.edit')"
+                                    class="px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:bg-gray-50 focus:text-gray-700">
                             {{ __('Gerenciar Usuários') }}
                         </x-nav-link>
 
-                        <!-- 4. Configuração de Horários (ÚLTIMA POSIÇÃO) -->
-                        <x-nav-link :href="route('admin.config.index')" :active="request()->routeIs('admin.config.index')" class="
-                            px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold
-                            hover:bg-gray-50 hover:text-gray-700
-                            focus:outline-none focus:bg-gray-50 focus:text-gray-700
-                        ">
+                        <x-nav-link :href="route('admin.config.index')" :active="request()->routeIs('admin.config.index')" class="px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:bg-gray-50 focus:text-gray-700">
                             {{ __('Funcionamento') }}
                         </x-nav-link>
                     @endif
 
-                    {{-- 🟢 2. LINKS DE CLIENTE (VISÍVEIS APENAS PARA CLIENTES AUTENTICADOS) 🟢 --}}
+                    {{-- 🟢 2. LINKS DE CLIENTE (VISÍVEIS APENAS PARA CLIENTES) 🟢 --}}
                     @if (Auth::check() && !Auth::user()->is_gestor)
-                        <x-nav-link :href="route('customer.reservations.history')" :active="request()->routeIs('customer.reservations.history')" class="
-                            px-3 py-2 rounded-lg text-sm font-bold text-indigo-700
-                            hover:bg-indigo-50 hover:text-indigo-900
-                            focus:outline-none focus:bg-indigo-50 focus:text-indigo-900
-                        ">
+                        <x-nav-link :href="route('customer.reservations.history')" :active="request()->routeIs('customer.reservations.history')" class="px-3 py-2 rounded-lg text-sm font-bold text-indigo-700 hover:bg-indigo-50 hover:text-indigo-900 focus:outline-none focus:bg-indigo-50 focus:text-indigo-900">
                             {{ __('Minhas Reservas') }}
                         </x-nav-link>
                     @endif
@@ -71,9 +49,8 @@
                 </div>
             </div>
 
-            <!-- Settings Dropdown -->
             <div class="hidden sm:flex sm:items-center sm:ms-6">
-                @if (Auth::check()) {{-- Verifica se o usuário está logado --}}
+                @if (Auth::check())
                 <x-dropdown align="right" width="48">
                     <x-slot name="trigger">
                         <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
@@ -92,11 +69,8 @@
                             {{ __('Profile') }}
                         </x-dropdown-link>
 
-                        <!-- Authentication -->
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
-
-                            {{-- CORREÇÃO: O onclick foi colocado em uma única linha para evitar ParseError no Blade. --}}
                             <x-dropdown-link :href="route('logout')"
                                 onclick="event.preventDefault(); this.closest('form').submit();">
                                 {{ __('Log Out') }}
@@ -105,14 +79,12 @@
                     </x-slot>
                 </x-dropdown>
                 @else
-                    {{-- Se não estiver logado, mostra link para o Login do Cliente --}}
                     <a href="{{ route('customer.login') }}" class="px-3 py-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition duration-150">
                         {{ __('Login Cliente') }}
                     </a>
                 @endif
             </div>
 
-            <!-- Hamburger -->
             <div class="-me-2 flex items-center sm:hidden">
                 <button @click="open = ! open" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:bg-gray-100 focus:text-gray-500 transition duration-150 ease-in-out">
                     <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
@@ -124,40 +96,33 @@
         </div>
     </div>
 
-    <!-- Responsive Navigation Menu (Mobile) -->
     <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
         <div class="pt-2 pb-3 space-y-1">
 
             {{-- 🛑 1. LINKS DE GESTÃO RESPONSIVOS --}}
             @if (Auth::check() && Auth::user()->is_gestor)
-                <!-- 1. Dashboard -->
                 <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                     {{ __('Home') }}
                 </x-responsive-nav-link>
 
-                <!-- 🚀 2. NOVO LINK CENTRALIZADO: RESERVAS -->
                 <x-responsive-nav-link :href="route('admin.reservas.index')"
                                        :active="request()->routeIs('admin.reservas.*')"
                                        class="border-l-4 border-gray-500 text-gray-600">
                     {{ __('Reservas') }}
                 </x-responsive-nav-link>
 
-                {{-- Links antigos 'Confirmadas' e 'Pendentes' removidos daqui --}}
-                {{--
-                <x-responsive-nav-link :href="route('admin.reservas.confirmed_index')" ...>
-                <x-responsive-nav-link :href="route('admin.reservas.index')" ...>
-                --}}
+                <x-responsive-nav-link :href="route('admin.payment.index')"
+                                       :active="request()->routeIs('admin.payment.*')"
+                                       class="border-l-4 border-gray-500 text-gray-600">
+                    {{ __('Financeiro / Caixa') }}
+                </x-responsive-nav-link>
 
-
-                <!-- 3. Gerenciar Usuários (Corrigido para Lista/Index de Usuários) -->
-                <x-responsive-nav-link
-                    :href="route('admin.users.index')"
-                    :active="request()->routeIs('admin.users.index') || request()->routeIs('admin.users.create') || request()->routeIs('admin.users.edit')"
-                    class="border-l-4 border-gray-500 text-gray-600">
+                <x-responsive-nav-link :href="route('admin.users.index')"
+                                       :active="request()->routeIs('admin.users.index') || request()->routeIs('admin.users.create') || request()->routeIs('admin.users.edit')"
+                                       class="border-l-4 border-gray-500 text-gray-600">
                     {{ __('Gerenciar Usuários') }}
                 </x-responsive-nav-link>
 
-                <!-- 4. Configuração de Horários (ÚLTIMA POSIÇÃO) -->
                 <x-responsive-nav-link :href="route('admin.config.index')" :active="request()->routeIs('admin.config.index')" class="border-l-4 border-indigo-500 text-indigo-600">
                     {{ __('Funcionamento') }}
                 </x-responsive-nav-link>
@@ -172,7 +137,6 @@
 
         </div>
 
-        <!-- Responsive Settings Options -->
         <div class="pt-4 pb-1 border-t border-gray-200">
             @if (Auth::check())
                 <div class="px-4">
@@ -185,11 +149,8 @@
                         {{ __('Profile') }}
                     </x-responsive-nav-link>
 
-                    <!-- Authentication -->
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
-
-                        {{-- CORREÇÃO: O onclick foi colocado em uma única linha para evitar ParseError no Blade. --}}
                         <x-responsive-nav-link :href="route('logout')"
                             onclick="event.preventDefault(); this.closest('form').submit();">
                             {{ __('Log Out') }}

@@ -26,7 +26,10 @@ class User extends Authenticatable implements MustVerifyEmail
         'whatsapp_contact',
         'password',
         'role', // 'admin', 'gestor', 'cliente'
-    ];
+        'no_show_count',
+        'is_vip',
+        'is_blocked',
+        ];
 
     /**
      * The attributes that should be hidden for serialization.
@@ -47,6 +50,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
         // 'data_nascimento' foi removido daqui
+        'is_vip' => 'boolean',
+        'is_blocked' => 'boolean',
     ];
 
     // =========================================================================
@@ -109,5 +114,38 @@ class User extends Authenticatable implements MustVerifyEmail
                 return $attributes['whatsapp_contact'];
             },
         );
+    }
+    //NOVA IMPLEMENTAÇÃO
+    public function requiresSignal(): bool
+    {
+        return !$this->is_vip; // Se for VIP, retorna false (não precisa de sinal)
+    }
+
+    // Verifica se está na Blacklist
+    public function canSchedule(): bool
+    {
+    return !$this->is_blocked;
+    }
+
+    // =========================================================================
+    // ⭐ REPUTAÇÃO E FINANCEIRO
+    // =========================================================================
+
+    /**
+     * Define se o usuário é "Bom Pagador" (VIP).
+     * Pode ser setado manualmente ou calculado com base no histórico.
+     */
+    public function isGoodPayer(): bool
+    {
+        return $this->is_vip;
+    }
+
+    /**
+     * Verifica se o usuário está na lista negra.
+     */
+    public function isBlacklisted(): bool
+    {
+        // Exemplo: Bloqueado manualmente OU mais de 3 faltas
+        return $this->is_blocked || $this->no_show_count >= 3;
     }
 }

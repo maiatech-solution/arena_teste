@@ -16,6 +16,7 @@ return new class extends Migration
             $table->unsignedBigInteger('user_id')->nullable()->index('recurrent_series_user_id_foreign');
             $table->date('end_date')->nullable()->comment('Data de término da série de reservas fixas.');
             $table->boolean('is_active')->default(true);
+            $table->foreign(['user_id'])->references(['id'])->on('users')->onUpdate('restrict')->onDelete('set null');
             $table->timestamps();
         });
     }

@@ -138,13 +138,13 @@ class HorarioController extends Controller
         $endTime = $validated['end_time'];
 
         // 1. VERIFICAÇÃO DE CONFLITO COM OUTROS SLOTS DE DISPONIBILIDADE (Schedule)
-        $existingHorario = Schedule::where('date', $date)
+        /*$existingHorario = Schedule::where('date', $date)
             ->where('is_active', true)
             ->where(function ($query) use ($startTime, $endTime) {
                 $query->where('start_time', '<', $endTime)
                       ->where('end_time', '>', $startTime);
             })
-            ->exists();
+            ->exists(); */  //schedule não existe mais
 
         if ($existingHorario) {
             return back()->withInput()->withErrors(['time_conflict' => 'Já existe outro slot de disponibilidade ativo e conflitante para esta data e período.']);
@@ -164,14 +164,14 @@ class HorarioController extends Controller
         }
 
         // Cria o slot de disponibilidade avulso
-        $newSchedule = Schedule::create([
+        /*$newSchedule = Schedule::create([
             'date' => $date,
             'start_time' => $startTime,
             'end_time' => $endTime,
             'price' => $validated['price'],
             'is_active' => true,
             'day_of_week' => null, // Mantém nulo
-        ]);
+        ]); */
 
         $message = 'Slot Avulso adicionado com sucesso para ' . Carbon::parse($validated['date'])->format('d/m/Y') . '!';
 

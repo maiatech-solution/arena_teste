@@ -10,6 +10,7 @@ use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ApiReservaController;
+use App\Http\Controllers\Admin\PaymentController;
 
 // -----------------------------------------------------------------------------------
 // 🏠 ROTA RAIZ (PÚBLICA) - Bem-vindo à Arena
@@ -164,6 +165,14 @@ Route::middleware(['auth', 'gestor'])->group(function () {
         Route::get('users/{user}/reservas', [AdminController::class, 'clientReservations'])->name('users.reservas');
 
     });
+    //ROTAS DE PAGAMENTOS
+    // 💰 Módulo Financeiro / Pagamentos
+    Route::get('/admin/pagamentos', [PaymentController::class, 'index'])->name('admin.payment.index');
+    Route::post('/admin/pagamentos/{reserva}/finalizar', [PaymentController::class, 'store'])->name('admin.payment.store');
+    Route::post('/admin/pagamentos/{reserva}/falta', [PaymentController::class, 'markNoShow'])->name('admin.payment.noshow');
+
+    //Route::get('/admin/pagamento', [AdminController::class, 'paymentManagementIndex'])->name('admin.payment.index');
+    
     // FIM DO GRUPO DE ROTAS 'admin.'
     // ===============================================
 

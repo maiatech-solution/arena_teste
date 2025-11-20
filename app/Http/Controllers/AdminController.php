@@ -10,10 +10,13 @@ use Illuminate\Support\Facades\DB; // Necessário para a função DB::raw()
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Carbon\Carbon; // Necessário para Carbon::today()
+use Carbon\Carbon;       // Necessário para Carbon::today()
 use Illuminate\Validation\Rule;
 use Carbon\CarbonPeriod;
 use Illuminate\Validation\ValidationException;
+use Carbon\Carbon as BaseCarbon;
+use App\Models\FinancialTransaction; 
+
 
 class AdminController extends Controller
 {
@@ -208,55 +211,105 @@ class AdminController extends Controller
     // ------------------------------------------------------------------------
     // MÓDULO: AÇÕES DE STATUS E CANCELAMENTO
     // ------------------------------------------------------------------------
-
+  
     /**
-     * Confirma uma reserva pendente (chamado pelo Admin/Dashboard).
-     * @param Reserva $reserva A reserva PENDENTE a ser confirmada.
+     * Confirma uma reserva pendente e registra o sinal financeiro.
+     * @param Request $request
+     * @param Reserva $reserva
      */
     public function confirmarReserva(Request $request, Reserva $reserva)
     {
+        // 1. Validação de Status
         if ($reserva->status !== Reserva::STATUS_PENDENTE) {
-            return response()->json(['success' => false, 'message' => 'A reserva não está pendente.'], 400);
+            // Se a requisição for via AJAX, retorna JSON. Se for via form (Blade), retorna redirect.
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'A reserva não está pendente.'], 400);
+            }
+            return redirect()->back()->with('error', 'A reserva não está mais pendente.');
         }
 
-        // Validação para aceitar o valor do sinal
+        // 2. Validação do Input (Sinal)
         $validated = $request->validate([
-            'confirmation_value' => 'nullable|numeric|min:0',
+            'signal_value' => 'nullable|numeric|min:0',
         ]);
+
+        $sinal = $validated['signal_value'] ?? 0.00;
+        $managerId = Auth::id();
 
         DB::beginTransaction();
         try {
+            // 3. Atualiza a Reserva
             $reserva->status = Reserva::STATUS_CONFIRMADA;
-            $reserva->manager_id = Auth::id();
-            // Atualiza o preço se um valor de confirmação foi fornecido
-            if (isset($validated['confirmation_value'])) {
-                $reserva->price = $validated['confirmation_value'];
+            $reserva->manager_id = $managerId;
+            
+            // Salva o valor do sinal exigido/pago na reserva
+            $reserva->signal_value = $sinal; 
+
+            // Atualiza o total pago e o status financeiro
+            if ($sinal > 0) {
+                $reserva->total_paid = $reserva->total_paid + $sinal;
+                
+                // Se o total pago for >= preço, marca como 'paid', senão 'partial'
+                $reserva->payment_status = ($reserva->total_paid >= $reserva->price) ? 'paid' : 'partial';
+            } else {
+                // Sem sinal: continua pendente de pagamento, mas confirmada na agenda
+                $reserva->payment_status = 'pending';
             }
+
             $reserva->save();
 
+            // 4. Gera a Transação Financeira (Entrada no Caixa)
+            // Isso é crucial para o seu relatório financeiro do dia
+            if ($sinal > 0) {
+                \App\Models\FinancialTransaction::create([
+                    'reserva_id' => $reserva->id,
+                    'user_id' => $reserva->user_id,
+                    'manager_id' => $managerId,
+                    'amount' => $sinal,
+                    'type' => 'signal', // Tipo: Sinal
+                    'payment_method' => 'pix', // Padrão assumido ou adicione select no form se quiser
+                    'description' => 'Sinal recebido na confirmação do agendamento',
+                    'paid_at' => \Carbon\Carbon::now(),
+                ]);
+            }
+
             DB::commit();
-            Log::info("Reserva ID: {$reserva->id} confirmada pelo gestor ID: " . Auth::id());
-            return response()->json(['success' => true, 'message' => 'Reserva confirmada com sucesso!'], 200);
+            Log::info("Reserva ID: {$reserva->id} confirmada por Gestor ID: {$managerId}. Sinal: R$ {$sinal}");
+
+            // Resposta compatível com AJAX e Blade
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => true, 'message' => 'Reserva confirmada com sucesso!'], 200);
+            }
+            
+            return redirect()->back()->with('success', 'Reserva confirmada e sinal de R$ ' . number_format($sinal, 2, ',', '.') . ' registrado com sucesso!');
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao confirmar reserva ID: {$reserva->id}.", ['exception' => $e]);
-            return response()->json(['success' => false, 'message' => 'Erro interno ao confirmar a reserva.'], 500);
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Erro interno ao confirmar a reserva.'], 500);
+            }
+            return redirect()->back()->with('error', 'Erro interno ao confirmar reserva. Tente novamente.');
         }
     }
 
-
     /**
-     * Rejeita uma reserva pendente (chamado pelo Admin/Dashboard).
-     * @param Reserva $reserva A reserva PENDENTE a ser rejeitada.
+     * Rejeita uma reserva pendente.
+     * @param Request $request
+     * @param Reserva $reserva
      */
     public function rejeitarReserva(Request $request, Reserva $reserva)
     {
+        // 1. Validação de Status
         if ($reserva->status !== Reserva::STATUS_PENDENTE) {
-            return response()->json(['success' => false, 'message' => 'A reserva não está pendente.'], 400);
+             if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'A reserva não está pendente.'], 400);
+            }
+            return redirect()->back()->with('error', 'A reserva não está mais pendente.');
         }
 
-        // O motivo de rejeição é opcional no Front-end, mas importante.
+        // 2. Validação do Motivo (Opcional)
         $validated = $request->validate([
             'rejection_reason' => 'nullable|string|min:5|max:255',
         ]);
@@ -265,23 +318,34 @@ class AdminController extends Controller
         try {
             $reserva->status = Reserva::STATUS_REJEITADA;
             $reserva->manager_id = Auth::id();
-            $reserva->cancellation_reason = $validated['rejection_reason'] ?? 'Rejeitada pelo gestor por motivo não especificado.';
+            $reserva->cancellation_reason = $validated['rejection_reason'] ?? 'Rejeitada pelo gestor (motivo não especificado).';
             $reserva->save();
 
-            // 1. Recria o slot fixo de disponibilidade (verde)
-            // 🛑 CRÍTICO: Delega para o helper correto no ReservaController
-            $this->reservaController->recreateFixedSlot($reserva);
-
-            // 2. Mantemos o registro para auditoria.
+            // 3. Recria o slot fixo de disponibilidade (verde) para liberar a agenda
+            // Verifica se o controller injetado existe antes de chamar
+            if (isset($this->reservaController)) {
+                $this->reservaController->recreateFixedSlot($reserva);
+            } else {
+                // Fallback se não estiver injetado (instancia manualmente ou usa log)
+                Log::warning("ReservaController não injetado em AdminController. Slot fixo não recriado automaticamente para reserva {$reserva->id}.");
+            }
 
             DB::commit();
             Log::info("Reserva ID: {$reserva->id} rejeitada pelo gestor ID: " . Auth::id());
-            return response()->json(['success' => true, 'message' => 'Reserva rejeitada com sucesso! O horário foi liberado.'], 200);
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => true, 'message' => 'Reserva rejeitada com sucesso! O horário foi liberado.'], 200);
+            }
+            return redirect()->back()->with('success', 'Reserva rejeitada e horário liberado com sucesso!');
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao rejeitar reserva ID: {$reserva->id}.", ['exception' => $e]);
-            return response()->json(['success' => false, 'message' => 'Erro interno ao rejeitar a reserva.'], 500);
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Erro interno ao rejeitar a reserva.'], 500);
+            }
+            return redirect()->back()->with('error', 'Erro interno ao rejeitar a reserva.');
         }
     }
 
@@ -760,6 +824,138 @@ class AdminController extends Controller
             return response()->json(['success' => false, 'message' => 'Erro interno ao cancelar a série recorrente: ' . $e->getMessage()], 500);
         }
     }
+
+    // No arquivo AdminController.php
+
+/**
+ * Exibe a página de gerenciamento de pagamentos/baixa de agendamentos.
+ */
+public function paymentManagementIndex()
+{
+    // Retorna a view para gerenciar os pagamentos
+    return view('admin.payment.index');
+}
+
+public function getDailyReservations(Request $request)
+{
+    // 1. Validação da Data
+    $request->validate([
+        'date' => 'required|date_format:Y-m-d',
+    ]);
+
+    $targetDate = $request->input('date');
+    $managerId = Auth::id(); // Usado para registrar quem deu baixa/falta
+
+    // 2. Busca Agendamentos do Dia
+    // Buscamos apenas reservas REAIS de clientes (is_fixed=false)
+    $reservations = Reserva::where('is_fixed', false)
+        ->whereDate('date', $targetDate)
+        // Inclui status que podem ser finalizados (Confirmada, Pendente)
+        ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, Reserva::STATUS_CANCELADA])
+        ->orderBy('start_time')
+        ->get();
+
+    // 3. Formata e calcula valores para a resposta
+    $reservationsData = $reservations->map(function ($reserva) {
+        $depositPrice = 10.00; // ⚠️ AQUI: Você precisa definir como o "sinal" é calculado/armazenado.
+                               // Por enquanto, uso R$ 10,00 como exemplo, mas é uma **MELHORIA CRÍTICA**
+                               // para integrar o valor do sinal no Modelo Reserva (se for variável).
+
+        $finalPrice = $reserva->price; // Valor total do agendamento
+        $remainingValue = $finalPrice - $depositPrice;
+
+        return [
+            'id' => $reserva->id,
+            'time_slot' => Carbon::parse($reserva->start_time)->format('H:i') . ' - ' . Carbon::parse($reserva->end_time)->format('H:i'),
+            'date' => Carbon::parse($reserva->date)->format('d/m/Y'),
+            'client_name' => $reserva->client_name,
+            'client_contact' => $reserva->client_contact,
+            'total_price' => number_format($finalPrice, 2, ',', '.'),
+            'raw_total_price' => $finalPrice,
+            'deposit_price' => number_format($depositPrice, 2, ',', '.'),
+            'remaining_value' => number_format(max(0, $remainingValue), 2, ',', '.'),
+            'raw_remaining_value' => max(0, $remainingValue),
+            'status' => $reserva->status,
+            'status_text' => $reserva->status_text, // Acessor no modelo Reserva
+        ];
+    });
+
+    return response()->json(['success' => true, 'reservations' => $reservationsData]);
+}
+
+public function finalizeReservationPayment(Request $request, Reserva $reserva)
+{
+    // 1. Validação (o gestor pode dar um desconto, editando o valor final)
+    $validated = $request->validate([
+        'final_price' => 'required|numeric|min:0', // Permite que o gestor edite o valor total
+    ]);
+
+    $managerId = Auth::id();
+
+    DB::beginTransaction();
+    try {
+        // 2. Atualiza os dados da reserva
+        $reserva->status = Reserva::STATUS_CONFIRMADA; // Altera status para Confirmada (Baixa no Caixa)
+        $reserva->manager_id = $managerId;
+        $reserva->price = $validated['final_price']; // Salva o valor final (com ou sem desconto)
+        // Poderíamos adicionar um campo 'payment_finalized_at' e 'payment_final_price' se quisermos rastrear mais detalhes
+        $reserva->save();
+
+        DB::commit();
+
+        Log::info("Pagamento da Reserva ID: {$reserva->id} finalizado por Gestor ID: {$managerId}. Valor Final: R$ {$reserva->price}");
+
+        return response()->json(['success' => true, 'message' => 'Pagamento finalizado com sucesso. Reserva Confirmada.'], 200);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error("Erro ao finalizar pagamento da Reserva ID: {$reserva->id}.", ['exception' => $e]);
+        return response()->json(['success' => false, 'message' => 'Erro interno ao finalizar o pagamento: ' . $e->getMessage()], 500);
+    }
+}
+
+/**
+ * Marca uma reserva como falta e qualifica o cliente (opcionalmente blacklist).
+ */
+public function markNoShowAndQualify(Request $request, Reserva $reserva)
+{
+    // 1. Validação
+    $validated = $request->validate([
+        'customer_qualification' => 'nullable|string|max:50', // Ex: 'good', 'warning', 'blacklist'
+    ]);
+
+    $managerId = Auth::id();
+
+    DB::beginTransaction();
+    try {
+        // 2. Atualiza a Reserva
+        $reserva->status = Reserva::STATUS_CANCELADA; // Usa CANCELADA ou REJEITADA para indicar que não houve ocupação
+        $reserva->manager_id = $managerId;
+        $reserva->cancellation_reason = "FALTA (No-Show) - Gestor: " . Auth::user()->name;
+        $reserva->save();
+
+        // 3. Atualiza a qualificação do Cliente (se for um usuário registrado)
+        if ($reserva->user_id && !empty($validated['customer_qualification'])) {
+            $user = User::find($reserva->user_id);
+            if ($user) {
+                // ⚠️ CRÍTICO: Este campo 'customer_qualification' deve ser criado na tabela 'users'
+                $user->customer_qualification = $validated['customer_qualification'];
+                $user->save();
+            }
+        }
+
+        DB::commit();
+
+        Log::info("Reserva ID: {$reserva->id} marcada como FALTA por Gestor ID: {$managerId}. Cliente qualificado: {$validated['customer_qualification']}");
+
+        return response()->json(['success' => true, 'message' => 'Falta registrada e cliente qualificado com sucesso.'], 200);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error("Erro ao registrar falta/qualificar cliente da Reserva ID: {$reserva->id}.", ['exception' => $e]);
+        return response()->json(['success' => false, 'message' => 'Erro interno ao processar a falta: ' . $e->getMessage()], 500);
+    }
+}
 
 
     // ------------------------------------------------------------------------

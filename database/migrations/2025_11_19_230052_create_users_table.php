@@ -16,7 +16,15 @@ return new class extends Migration
             $table->string('name');
             $table->string('whatsapp_contact', 15)->nullable()->unique();
             $table->string('email')->unique();
-            $table->string('role', 20)->default('cliente');
+            $table->string('role', 20)->default('cliente');            
+            
+            $table->boolean('is_vip')->default(false); // Bom pagador (Desconto/Sem sinal)
+            $table->boolean('is_blocked')->default(false); // Blacklist (Bloqueia novos agendamentos)
+            $table->integer('no_show_count')->default(0); // Contador de faltas
+
+            //$table->decimal('custom_discount_rate', 5, 2)->default(0); // Desconto fixo em % (opcional)
+            $table->string('customer_qualification', 20)->default('normal');
+
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->rememberToken();
