@@ -11,9 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('reservas', function (Blueprint $table) {
-            // Adiciona a coluna para armazenar o motivo do cancelamento
-            $table->text('cancellation_reason')->nullable()->after('manager_id');
+        Schema::create('password_reset_tokens', function (Blueprint $table) {
+            $table->string('email')->primary();
+            $table->string('token');
+            $table->timestamp('created_at')->nullable();
         });
     }
 
@@ -22,8 +23,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('reservas', function (Blueprint $table) {
-            $table->dropColumn('cancellation_reason');
-        });
+        Schema::dropIfExists('password_reset_tokens');
     }
 };

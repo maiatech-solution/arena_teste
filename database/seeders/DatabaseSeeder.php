@@ -17,11 +17,3 @@ class DatabaseSeeder extends Seeder
         ]);
     }
 }
-```
-
-#### Passo 4: Executar o Seeder
-
-Para criar esses usuários automaticamente (e aplicar quaisquer outras seeds):
-
-```bash
-php artisan db:seed

@@ -11,9 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('reservas', function (Blueprint $table) {
-            // Adiciona a coluna 'price' (decimal com 8 dígitos no total e 2 decimais)
-            $table->decimal('price', 8, 2)->after('end_time');
+        Schema::table('recurrent_series', function (Blueprint $table) {
+            $table->foreign(['user_id'])->references(['id'])->on('users')->onUpdate('restrict')->onDelete('set null');
         });
     }
 
@@ -22,8 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('reservas', function (Blueprint $table) {
-            $table->dropColumn('price');
+        Schema::table('recurrent_series', function (Blueprint $table) {
+            $table->dropForeign('recurrent_series_user_id_foreign');
         });
     }
 };
