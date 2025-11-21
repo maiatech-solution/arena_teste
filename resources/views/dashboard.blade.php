@@ -342,6 +342,16 @@
                         </p>
                     </div>
                 </div>
+
+                {{-- ✅ CAMPO: VALOR DO SINAL --}}
+                <div class="mb-4">
+                    <label for="signal_value" class="block text-sm font-medium text-gray-700">Valor do Sinal/Entrada (R$)</label>
+                    <input type="number" name="signal_value" id="signal_value" step="0.01" min="0" placeholder="0.00"
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500">
+                    <p class="text-xs text-gray-500 mt-1">Opcional. Valor pago antecipadamente para confirmar a reserva.</p>
+                </div>
+                {{-- FIM DO CAMPO --}}
+
                 {{-- CHECKBOX PARA RECORRÊNCIA --}}
                 <div class="mb-4 p-3 border border-indigo-200 rounded-lg bg-indigo-50">
                     <div class="flex items-center">
@@ -380,7 +390,7 @@
         const AVAILABLE_API_URL = '{{ route("api.horarios.disponiveis") }}';
         const SHOW_RESERVA_URL = '{{ route("admin.reservas.show", ":id") }}';
 
-        // 🎯 NOVO: ROTA PARA O CAIXA/PAGAMENTO
+        // 🎯 ROTA PARA O CAIXA/PAGAMENTO
         const PAYMENT_INDEX_URL = '{{ route("admin.payment.index") }}';
 
         // ROTAS DE SUBMISSÃO
@@ -515,6 +525,8 @@
 
             const clientName = clientNameInput().value.trim();
             const clientContact = clientContactInput().value.trim();
+            
+            // O valor do sinal é capturado automaticamente pelo FormData.entries()
 
             if (!clientName) {
                 alert("Por favor, preencha o Nome Completo do Cliente.");
@@ -530,8 +542,8 @@
             const formData = new FormData(form);
             const data = Object.fromEntries(formData.entries());
 
-            // ⚠️ DEBUG CRÍTICO: Mostra os dados enviados. NOTE: user_id está ausente, o controller deve tratar o client_contact.
-            console.log("Dados enviados (sem user_id):", data);
+            // ⚠️ DEBUG CRÍTICO: Mostra os dados enviados.
+            console.log("Dados enviados (incluindo signal_value):", data);
 
             const isRecurrent = document.getElementById('is-recurrent').checked;
             const targetUrl = isRecurrent ? RECURRENT_STORE_URL : QUICK_STORE_URL;
@@ -564,6 +576,7 @@
                 if (response.ok && result.success) {
                     alert(result.message);
                     document.getElementById('quick-booking-modal').classList.add('hidden');
+                    // Recarrega o calendário para mostrar o novo evento (com status parcial e signal_value)
                     setTimeout(() => {
                         window.location.reload();
                     }, 50);
@@ -631,7 +644,7 @@
             if (form.reportValidity()) {
                 const url = CONFIRM_PENDING_URL.replace(':id', reservaId);
                 const data = {
-                    confirmation_value: confirmationValue,
+                    signal_value: confirmationValue, // ✅ ATUALIZADO: Usando 'signal_value' para consistência
                     _token: csrfToken,
                     _method: 'PATCH',
                 };
@@ -891,7 +904,7 @@
                             </div>
                             <div class="mt-3 md:mt-0">
                                 <button onclick="handleRenewal(${item.master_id})"
-                                                class="renew-btn-${item.master_id} w-full md:w-auto px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg text-sm">
+                                            class="renew-btn-${item.master_id} w-full md:w-auto px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg text-sm">
                                     Renovar por 1 Ano
                                 </button>
                             </div>
@@ -963,8 +976,8 @@
                     updateMainAlert();
 
                     if (document.getElementById('renewal-list').children.length === 0) {
-                           document.getElementById('renewal-list').innerHTML = '<p class="text-gray-500 italic text-center p-4">Nenhuma série a ser renovada no momento. Bom trabalho!</p>';
-                           setTimeout(() => closeRenewalModal(), 3000);
+                             document.getElementById('renewal-list').innerHTML = '<p class="text-gray-500 italic text-center p-4">Nenhuma série a ser renovada no momento. Bom trabalho!</p>';
+                             setTimeout(() => closeRenewalModal(), 3000);
                     }
 
                     setTimeout(() => {
@@ -1136,6 +1149,8 @@
                         whatsappError().classList.add('hidden');
                         clientContactInput().classList.remove('border-red-500', 'border-green-500');
 
+                        // Inicializa o campo de sinal do agendamento rápido
+                        document.getElementById('signal_value').value = '';
 
                         document.getElementById('notes').value = '';
                         document.getElementById('is-recurrent').checked = false;
@@ -1156,10 +1171,11 @@
                         const reservaId = event.id;
 
                         const isRecurrent = extendedProps.is_recurrent;
+                        // ✅ Pega o valor do sinal (já pago, se houver) da API do calendário
+                        const signalValue = extendedProps.signal_value || 0; 
 
                         const dateDisplay = moment(startTime).format('DD/MM/YYYY');
                         
-                        // ✅ CORREÇÃO APLICADA: Extrair a data no formato YYYY-MM-DD
                         const dateReservation = moment(startTime).format('YYYY-MM-DD');
 
 
@@ -1176,8 +1192,9 @@
 
                         const showUrl = SHOW_RESERVA_URL.replace(':id', reservaId);
                         
-                        // ✅ CORREÇÃO APLICADA: Incluir a data na URL do Caixa
-                        const paymentUrl = `${PAYMENT_INDEX_URL}?reserva_id=${reservaId}&data_reserva=${dateReservation}`;
+                        // ✅ ATUALIZADO: Incluir a data E o valor do sinal na URL do Caixa
+                        // Isso permite que o Controller de Pagamentos pré-preencha o campo Pago
+                        const paymentUrl = `${PAYMENT_INDEX_URL}?reserva_id=${reservaId}&data_reserva=${dateReservation}&signal_value=${signalValue}`;
 
                         let recurrentStatus = isRecurrent ?
                             '<p class="text-sm font-semibold text-fuchsia-600">Parte de uma Série Recorrente</p>' :

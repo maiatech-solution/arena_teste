@@ -167,10 +167,13 @@
                                                 Detalhes
                                             </a>
 
-                                            {{-- NOVO BOTÃO: Lançar no Caixa (passa a data da reserva para o filtro da página de destino) --}}
-                                            {{-- Assumindo que a rota do Caixa aceita o parâmetro 'date' no formato YYYY-MM-DD --}}
-                                            <a href="{{ route('admin.payment.index', ['date' => \Carbon\Carbon::parse($reserva->date)->format('Y-m-d')]) }}"
-                                               class="inline-block w-full text-center bg-green-500 hover:bg-green-800 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                                            {{-- 🔄 CORREÇÃO APLICADA AQUI: Passando reserva_id, data e signal_value --}}
+                                            <a href="{{ route('admin.payment.index', [
+                                                'reserva_id' => $reserva->id,
+                                                'data_reserva' => \Carbon\Carbon::parse($reserva->date)->format('Y-m-d'),
+                                                'signal_value' => $reserva->signal_value ?? 0
+                                            ]) }}"
+                                               class="inline-block w-full text-center bg-green-600 hover:bg-green-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
                                                 Lançar no Caixa
                                             </a>
 
@@ -179,18 +182,18 @@
                                                 {{-- CANCELAR PONTUAL DA SÉRIE --}}
                                                 <button onclick="openCancellationModal({{ $reserva->id }}, 'PATCH', '{{ route('admin.reservas.cancelar_pontual', ':id') }}', 'Cancelar SOMENTE ESTA reserva recorrente. O slot será liberado pontualmente.', 'Cancelar ESTE DIA')"
                                                     class="inline-block w-full text-center bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
-                                                        Cancelar ESTE DIA
+                                                    Cancelar ESTE DIA
                                                 </button>
                                                 {{-- CANCELAR SÉRIE INTEIRA --}}
                                                 <button onclick="openCancellationModal({{ $reserva->id }}, 'DELETE', '{{ route('admin.reservas.cancelar_serie', ':id') }}', 'Tem certeza que deseja cancelar TODA A SÉRIE (futura) para este cliente? Todos os horários serão liberados.', 'Cancelar SÉRIE')"
                                                     class="inline-block w-full text-center bg-red-800 hover:bg-red-900 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
-                                                        Cancelar SÉRIE
+                                                    Cancelar SÉRIE
                                                 </button>
                                             @else
                                                 {{-- ✅ AÇÃO PADRÃO PARA RESERVAS PONTUAIS (PATCH INTERNO) --}}
                                                 <button onclick="openCancellationModal({{ $reserva->id }}, 'PATCH', '{{ route('admin.reservas.cancelar', ':id') }}', 'Tem certeza que deseja CANCELAR esta reserva PONTUAL? Isso a marcará como cancelada no sistema.', 'Cancelar')"
                                                     class="inline-block w-full text-center bg-red-600 hover:bg-red-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
-                                                        Cancelar
+                                                    Cancelar
                                                 </button>
                                             @endif
 
@@ -365,8 +368,8 @@
                 console.error('Erro de Rede/Comunicação:', error);
                 alert("Erro de conexão. Tente novamente.");
             } finally {
-                 document.getElementById('confirm-cancellation-btn').disabled = false;
-                 submitBtn.textContent = 'Confirmar Cancelamento';
+                document.getElementById('confirm-cancellation-btn').disabled = false;
+                submitBtn.textContent = 'Confirmar Cancelamento';
             }
         }
 

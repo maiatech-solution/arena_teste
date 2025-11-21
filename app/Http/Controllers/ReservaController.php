@@ -22,6 +22,7 @@ use App\Http\Controllers\AdminController;
 class ReservaController extends Controller
 {
     // O seu código não tinha constantes, então assumi as constantes padrão do Modelo Reserva.
+    // Para fins de clareza nas correções, usarei as strings literais que você usou.
 
     /**
      * Exibe a página pública de agendamento (que carrega os slots via API).
@@ -67,7 +68,7 @@ class ReservaController extends Controller
 
         $query = Reserva::whereDate('date', $date)
             // 1. Checa apenas contra RESERVAS ATIVAS DE CLIENTES
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE]);
+            ->whereIn('status', ['confirmed', 'pending']);
 
 
         // 2. Ignora a reserva atual (seja ela fixa ou real)
@@ -91,7 +92,7 @@ class ReservaController extends Controller
     protected function getConflictingReservaIds(string $date, string $startTime, string $endTime, ?int $ignoreReservaId = null)
     {
         // Apenas CONFIRMADA e PENDENTE causam conflito
-        $activeStatuses = [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA];
+        $activeStatuses = ['pending', 'confirmed'];
 
         // Normaliza as horas para garantir que a consulta SQL seja precisa
         try {
@@ -134,7 +135,7 @@ class ReservaController extends Controller
             ->where('date', $originalReserva->date)
             ->where('start_time', $originalReserva->start_time)
             ->where('end_time', $originalReserva->end_time)
-            ->where('status', Reserva::STATUS_FREE) // 🛑 AGORA BUSCA POR FREE
+            ->where('status', 'free') // 🛑 AGORA BUSCA POR FREE
             ->exists();
 
         if ($existsFixedSlot) {
@@ -150,7 +151,7 @@ class ReservaController extends Controller
             'start_time' => $originalReserva->start_time,
             'end_time' => $originalReserva->end_time,
             'price' => $originalReserva->price,
-            'status' => Reserva::STATUS_FREE, // 🛑 CRÍTICO: Cria como FREE (disponível)
+            'status' => 'free', // 🛑 CRÍTICO: Cria como FREE (disponível)
             'is_fixed' => true,
             'client_name' => 'Slot Fixo de 1h', // Pode ser um valor de placeholder
             'client_contact' => 'N/A', // 🛑 VALOR DE PLACEHOLDER para evitar erro 1048 (not null)
@@ -252,6 +253,9 @@ class ReservaController extends Controller
             // 🛑 AGORA SÓ EXIGE NAME E CONTACT
             'client_name' => 'required|string|max:255',
             'client_contact' => 'required|digits:11|max:255',
+            
+            // ✅ CORREÇÃO CRÍTICA: Adiciona a validação do valor do sinal
+            'signal_value' => 'nullable|numeric|min:0',
 
             'notes' => 'nullable|string',
         ], [
@@ -261,6 +265,21 @@ class ReservaController extends Controller
             'client_contact.required' => 'O Contato do Cliente (WhatsApp) é obrigatório.',
         ]);
 
+        // ---------------------------------------------------------------------
+        // ✅ NOVA LÓGICA DE VALORES E PAGAMENTO
+        // ---------------------------------------------------------------------
+        $price = (float) $validated['price'];
+        $signalValue = (float) ($validated['signal_value'] ?? 0.00);
+        $totalPaid = $signalValue;
+        
+        $paymentStatus = 'pending';
+        if ($signalValue > 0 && $signalValue < $price) {
+            $paymentStatus = 'partial'; // Pagamento parcial (sinal)
+        } elseif ($signalValue >= $price) {
+            $paymentStatus = 'paid'; // Totalmente pago (sinal == preço total)
+        }
+        // ---------------------------------------------------------------------
+
         $reservaIdToUpdate = $validated['reserva_id_to_update'];
         $startTimeNormalized = Carbon::createFromFormat('G:i', $validated['start_time'])->format('H:i:s');
         $endTimeNormalized = Carbon::createFromFormat('G:i', $validated['end_time'])->format('H:i:s');
@@ -268,7 +287,7 @@ class ReservaController extends Controller
         $oldReserva = Reserva::find($reservaIdToUpdate);
 
         // 1. Checagens de Segurança
-        if (!$oldReserva || !$oldReserva->is_fixed || $oldReserva->status !== Reserva::STATUS_FREE) {
+        if (!$oldReserva || !$oldReserva->is_fixed || $oldReserva->status !== 'free') {
             return response()->json(['success' => false, 'message' => 'O slot selecionado não é um horário fixo disponível.'], 409);
         }
 
@@ -315,11 +334,15 @@ class ReservaController extends Controller
                 'day_of_week' => Carbon::parse($validated['date'])->dayOfWeek,
                 'start_time' => $startTimeNormalized,
                 'end_time' => $endTimeNormalized,
-                'price' => $validated['price'],
+                'price' => $price,
+                // ✅ Adicionado: Valor do Sinal, Total Pago e Status de Pagamento
+                'signal_value' => $signalValue,
+                'total_paid' => $totalPaid,
+                'payment_status' => $paymentStatus,
                 'client_name' => $clientName,
                 'client_contact' => $clientContact,
                 'notes' => $validated['notes'] ?? null,
-                'status' => Reserva::STATUS_CONFIRMADA, // Reserva de cliente confirmada pelo Admin
+                'status' => 'confirmed', // Reserva de cliente confirmada pelo Admin
                 'is_fixed' => false,
                 'is_recurrent' => false,
                 'manager_id' => Auth::id(),
@@ -327,7 +350,12 @@ class ReservaController extends Controller
 
             DB::commit();
 
-            return response()->json(['success' => true, 'message' => "Agendamento pontual para {$clientName} confirmado com sucesso!"], 200);
+            $message = "Agendamento pontual para {$clientName} confirmado com sucesso!";
+            if ($signalValue > 0) {
+                $message .= " Sinal de R$ " . number_format($signalValue, 2, ',', '.') . " registrado.";
+            }
+
+            return response()->json(['success' => true, 'message' => $message], 200);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -360,6 +388,9 @@ class ReservaController extends Controller
             // 🛑 AGORA SÓ EXIGE NAME E CONTACT
             'client_name' => 'required|string|max:255',
             'client_contact' => 'required|digits:11|max:255',
+            
+            // ✅ CORREÇÃO CRÍTICA: Adiciona a validação do valor do sinal
+            'signal_value' => 'nullable|numeric|min:0',
 
             'notes' => 'nullable|string',
         ], [
@@ -368,6 +399,21 @@ class ReservaController extends Controller
             'client_name.required' => 'O Nome do Cliente é obrigatório.',
             'client_contact.required' => 'O Contato do Cliente (WhatsApp) é obrigatório.',
         ]);
+
+        // ---------------------------------------------------------------------
+        // ✅ NOVA LÓGICA DE VALORES E PAGAMENTO (para a Mestra e todas as cópias)
+        // ---------------------------------------------------------------------
+        $price = (float) $validated['price'];
+        $signalValue = (float) ($validated['signal_value'] ?? 0.00);
+        $totalPaid = $signalValue;
+        
+        $paymentStatus = 'pending';
+        if ($signalValue > 0 && $signalValue < $price) {
+            $paymentStatus = 'partial'; // Pagamento parcial (sinal)
+        } elseif ($signalValue >= $price) {
+            $paymentStatus = 'paid'; // Totalmente pago (sinal == preço total)
+        }
+        // ---------------------------------------------------------------------
 
         $initialDate = Carbon::parse($validated['date']);
         $dayOfWeek = $initialDate->dayOfWeek;
@@ -378,7 +424,6 @@ class ReservaController extends Controller
         $startTimeNormalized = Carbon::createFromFormat('G:i', $startTimeRaw)->format('H:i:s');
         $endTimeNormalized = Carbon::createFromFormat('G:i', $endTimeRaw)->format('H:i:s');
 
-        $price = $validated['price'];
         $scheduleId = $validated['reserva_id_to_update'];
 
         // Define a janela de agendamento (Exatamente 1 ano a partir da data inicial)
@@ -429,7 +474,7 @@ class ReservaController extends Controller
             // 1. Checa conflito contra reservas *reais* de outros clientes
             $overlapWithReal = Reserva::whereDate('date', $dateString)
                 ->where('is_fixed', false) // CRÍTICO: Somente reservas de cliente
-                ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+                ->whereIn('status', ['confirmed', 'pending'])
                 ->where(function ($q) use ($startTimeNormalized, $endTimeNormalized) {
                     $q->where('start_time', '<', $endTimeNormalized)
                       ->where('end_time', '>', $startTimeNormalized);
@@ -439,10 +484,10 @@ class ReservaController extends Controller
 
             // 2. Busca o slot fixo ATIVO (free) para esta data/hora
             $fixedSlotQuery = Reserva::where('is_fixed', true)
-                                     ->whereDate('date', $dateString)
-                                     ->where('start_time', $startTimeNormalized)
-                                     ->where('end_time', $endTimeNormalized)
-                                     ->where('status', Reserva::STATUS_FREE);
+                                         ->whereDate('date', $dateString)
+                                         ->where('start_time', $startTimeNormalized)
+                                         ->where('end_time', $endTimeNormalized)
+                                         ->where('status', 'free');
 
             if ($isFirstDate) {
                 $fixedSlotQuery->where('id', $scheduleId);
@@ -468,10 +513,14 @@ class ReservaController extends Controller
                     'start_time' => $startTimeNormalized,
                     'end_time' => $endTimeNormalized,
                     'price' => $price,
+                    // ✅ Adicionado: Valor do Sinal, Total Pago e Status de Pagamento
+                    'signal_value' => $signalValue,
+                    'total_paid' => $totalPaid,
+                    'payment_status' => $paymentStatus,
                     'client_name' => $clientName,
                     'client_contact' => $clientContact,
                     'notes' => $validated['notes'] ?? null,
-                    'status' => Reserva::STATUS_CONFIRMADA,
+                    'status' => 'confirmed',
                     'is_fixed' => false,
                     'is_recurrent' => true,
                     'manager_id' => Auth::id(),
@@ -534,6 +583,12 @@ class ReservaController extends Controller
             DB::commit();
 
             $message = "Série recorrente de {$clientName} criada com sucesso! Total de {$newReservasCount} reservas agendadas até " . $endDate->format('d/m/Y') . ".";
+            
+            // ✅ Adicionado: Mensagem sobre o sinal
+            if ($signalValue > 0) {
+                $message .= " Sinal de R$ " . number_format($signalValue, 2, ',', '.') . " registrado na série mestra.";
+            }
+
             if ($conflictCount > 0) {
                 $message .= " Atenção: {$conflictCount} datas foram puladas/conflitantes e não foram agendadas. Verifique o calendário.";
             }
@@ -561,10 +616,10 @@ class ReservaController extends Controller
         $maxDate = Reserva::where(function($query) use ($masterId) {
              $query->where('id', $masterId)
                  ->orWhere('recurrent_series_id', $masterId);
-            })
+             })
             ->where('is_recurrent', true)
             ->where('is_fixed', false)
-            ->where('status', Reserva::STATUS_CONFIRMADA)
+            ->where('status', 'confirmed')
             ->max('date');
 
         return $maxDate ? Carbon::parse($maxDate) : null;
@@ -581,7 +636,7 @@ class ReservaController extends Controller
         $latestReservations = Reserva::selectRaw('recurrent_series_id, MAX(date) as last_date, MIN(date) as first_date, MIN(start_time) as slot_time, MAX(price) as slot_price, day_of_week, client_name')
             ->where('is_recurrent', true)
             ->where('is_fixed', false)
-            ->where('status', Reserva::STATUS_CONFIRMADA)
+            ->where('status', 'confirmed')
             ->groupBy('recurrent_series_id', 'day_of_week', 'client_name')
             ->get();
 
@@ -658,6 +713,14 @@ class ReservaController extends Controller
         $masterId = $masterReserva->id;
         $managerId = Auth::id();
 
+        // ---------------------------------------------------------------------
+        // ✅ Mantém os valores de pagamento da série mestra para as novas cópias
+        // ---------------------------------------------------------------------
+        $signalValue = $masterReserva->signal_value ?? 0.00;
+        $totalPaid = $masterReserva->total_paid ?? 0.00;
+        $paymentStatus = $masterReserva->payment_status ?? 'pending';
+        // ---------------------------------------------------------------------
+        
         $newReservasCount = 0;
 
         DB::beginTransaction();
@@ -676,7 +739,7 @@ class ReservaController extends Controller
                     ->where('end_time', $endTime)
                     ->where('recurrent_series_id', $masterId)
                     ->where('is_fixed', false)
-                    ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+                    ->whereIn('status', ['confirmed', 'pending'])
                     ->exists();
 
                 if ($isDuplicate) {
@@ -691,7 +754,7 @@ class ReservaController extends Controller
                         ->where('end_time', '>', $startTime)
                         ->where('is_fixed', false)
                         ->where('recurrent_series_id', '!=', $masterId)
-                        ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+                        ->whereIn('status', ['confirmed', 'pending'])
                         ->exists();
 
                     if ($isOccupiedByRealCustomer) {
@@ -707,7 +770,7 @@ class ReservaController extends Controller
                         ->whereDate('date', $dateString)
                         ->where('start_time', $startTime)
                         ->where('end_time', $endTime)
-                        ->where('status', Reserva::STATUS_FREE)
+                        ->where('status', 'free')
                         ->first();
                 }
 
@@ -721,9 +784,14 @@ class ReservaController extends Controller
                         'start_time' => $startTime,
                         'end_time' => $endTime,
                         'price' => $price,
+                        // ✅ Adicionado: Valores de Pagamento (iguais aos da mestra)
+                        'signal_value' => 0.00, // Sinal só é pago uma vez na série mestra
+                        'total_paid' => 0.00, // O pagamento é gerenciado na mestra/fatura
+                        'payment_status' => 'pending', // Pagamento individual é pending
+                        // ---------------------------------------------------------------------
                         'client_name' => $clientName,
                         'client_contact' => $clientContact,
-                        'status' => Reserva::STATUS_CONFIRMADA,
+                        'status' => 'confirmed',
                         'is_fixed' => false,
                         'is_recurrent' => true,
                         'recurrent_series_id' => $masterId,
@@ -748,11 +816,11 @@ class ReservaController extends Controller
                 // 4. Atualiza a data final em todas as reservas existentes da série. (Seu código não tinha o campo 'recurrent_end_date' mas é uma boa prática)
                 // Se você tiver a coluna 'recurrent_end_date' no seu modelo Reserva, descomente e adapte.
                 /*
-                Reserva::where('recurrent_series_id', $masterId)
-                             ->orWhere('id', $masterId) // Inclui a própria masterReserva
-                             ->where('is_fixed', false)
-                             ->update(['recurrent_end_date' => $endDate]);
-                */
+                 Reserva::where('recurrent_series_id', $masterId)
+                              ->orWhere('id', $masterId) // Inclui a própria masterReserva
+                              ->where('is_fixed', false)
+                              ->update(['recurrent_end_date' => $endDate]);
+                 */
 
                 $message = "Série #{$masterId} de '{$clientName}' renovada com sucesso! Foram adicionadas {$newReservasCount} novas reservas, estendendo o prazo até " . $endDate->format('d/m/Y') . ".";
 
@@ -812,7 +880,7 @@ class ReservaController extends Controller
         }
 
         // Checa status
-        if ($reserva->status === Reserva::STATUS_CANCELADA || $reserva->status === Reserva::STATUS_REJEITADA) {
+        if ($reserva->status === 'cancelled' || $reserva->status === 'rejected') {
             return response()->json(['message' => 'Esta reserva já está cancelada ou rejeitada.'], 400);
         }
 
@@ -870,7 +938,7 @@ class ReservaController extends Controller
         if (!$reserva->is_recurrent) {
             DB::beginTransaction();
             try {
-                $reserva->status = Reserva::STATUS_CANCELADA;
+                $reserva->status = 'cancelled';
                 $reserva->cancellation_reason = '[Cliente] ' . $reason;
                 $reserva->save();
 
@@ -903,7 +971,7 @@ class ReservaController extends Controller
             'hora_inicio' => ['required', 'date_format:G:i'],
             'hora_fim' => ['required', 'date_format:G:i', 'after:hora_inicio'],
             'price' => ['required', 'numeric', 'min:0'],
-            'schedule_id' => ['required', 'integer', 'exists:reservas,id,is_fixed,1,status,' . Reserva::STATUS_FREE],
+            'schedule_id' => ['required', 'integer', 'exists:reservas,id,is_fixed,1,status,free'],
             'reserva_conflito_id' => 'nullable',
 
             // Validação de formato/presença do cliente, SEM 'unique'
@@ -911,6 +979,8 @@ class ReservaController extends Controller
             'contato_cliente' => 'required|string|regex:/^\d{10,11}$/|max:20',
             'email_cliente' => 'nullable|email|max:255',
             'notes' => 'nullable|string|max:500',
+            // ✅ Adiciona validação do sinal na pré-reserva (embora seja pré-reserva, é bom ter)
+            'signal_value' => 'nullable|numeric|min:0',
         ];
 
         // 1. Validação
@@ -934,6 +1004,21 @@ class ReservaController extends Controller
         $nomeCliente = $validated['nome_cliente'];
         $contatoCliente = $validated['contato_cliente'];
         $emailCliente = $validated['email_cliente'];
+        
+        // ---------------------------------------------------------------------
+        // ✅ NOVA LÓGICA DE VALORES E PAGAMENTO (para storePublic)
+        // ---------------------------------------------------------------------
+        $price = (float) $validated['price'];
+        $signalValue = (float) ($validated['signal_value'] ?? 0.00);
+        $totalPaid = $signalValue;
+        
+        $paymentStatus = 'pending';
+        if ($signalValue > 0 && $signalValue < $price) {
+            $paymentStatus = 'partial';
+        } elseif ($signalValue >= $price) {
+            $paymentStatus = 'paid';
+        }
+        // ---------------------------------------------------------------------
 
 
         // Normaliza as horas para o formato do banco de dados (H:i:s)
@@ -962,7 +1047,7 @@ class ReservaController extends Controller
             // 4. Limpa o slot fixo (evento verde)
             $fixedSlot = Reserva::where('id', $scheduleId)
                 ->where('is_fixed', true)
-                ->where('status', Reserva::STATUS_FREE)
+                ->where('status', 'free')
                 ->first();
 
             if (!$fixedSlot) {
@@ -981,11 +1066,15 @@ class ReservaController extends Controller
                 'day_of_week' => Carbon::parse($date)->dayOfWeek,
                 'start_time' => $startTimeNormalized,
                 'end_time' => $endTimeNormalized,
-                'price' => $validated['price'],
+                'price' => $price,
+                // ✅ Adicionado: Valor do Sinal, Total Pago e Status de Pagamento
+                'signal_value' => $signalValue,
+                'total_paid' => $totalPaid,
+                'payment_status' => $paymentStatus,
                 'client_name' => $clientUser->name,
                 'client_contact' => $clientUser->whatsapp_contact,
                 'notes' => $validated['notes'] ?? null,
-                'status' => Reserva::STATUS_PENDENTE,
+                'status' => 'pending',
                 'is_fixed' => false,
                 'is_recurrent' => false,
             ]);
@@ -995,14 +1084,18 @@ class ReservaController extends Controller
             // 6. Mensagem de Sucesso e Link do WhatsApp
             $successMessage = 'Pré-reserva registrada com sucesso! Seu cadastro de cliente foi atualizado ou criado automaticamente. Aguarde a confirmação.';
 
+            // Adaptação da mensagem do WhatsApp para incluir o sinal
             $whatsappNumber = '91985320997';
             $data = Carbon::parse($reserva->date)->format('d/m/Y');
             $hora = Carbon::parse($reserva->start_time)->format('H:i');
+            $valorSinal = $signalValue > 0 ? "Sinal Pago: R$ " . number_format($signalValue, 2, ',', '.') : "Sinal: R$ 0,00";
+
 
             $messageText = "🚨 NOVA PRÉ-RESERVA PENDENTE\n\n" .
                 "Cliente: {$reserva->client_name}\n" .
                 "Data/Hora: {$data} às {$hora}\n" .
-                "Valor: R$ " . number_format($reserva->price, 2, ',', '.') . "\n";
+                "Valor Total: R$ " . number_format($reserva->price, 2, ',', '.') . "\n" .
+                "{$valorSinal}\n";
 
             $whatsappLink = "https://api.whatsapp.com/send?phone={$whatsappNumber}&text=" . urlencode($messageText);
 
@@ -1028,7 +1121,7 @@ class ReservaController extends Controller
      */
     public function countPending()
     {
-        $futureOrTodayCount = Reserva::where('status', Reserva::STATUS_PENDENTE)
+        $futureOrTodayCount = Reserva::where('status', 'pending')
             ->count();
 
         return response()->json(['count' => $futureOrTodayCount], 200);
