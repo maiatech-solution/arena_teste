@@ -15,10 +15,10 @@
                 </h3>
 
                 <!-- GRID DE BOTÕES DE FILTRO (AJUSTADO PARA 2 COLUNAS) -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
                     <!-- Botão 1: RESERVAS PENDENTES -->
-                    <a href="{{ route('admin.reservas.pendentes') }}" class="block p-4 bg-orange-50 border border-orange-200 rounded-xl shadow-lg hover:shadow-xl transition duration-300 transform hover:-translate-y-1">
+                    <a href="{{ route('admin.reservas.pendentes') }}" class="block p-4 bg-orange-100 border border-orange-200 rounded-xl shadow-lg hover:shadow-xl transition duration-300 transform hover:-translate-y-1">
                         <div class="flex items-center">
                             <h4 class="text-xl font-bold text-orange-700">Pendentes</h4>
                         </div>
@@ -37,21 +37,16 @@
                         </p>
                     </a>
 
-                    {{-- Botão 3: RESERVAS REJEITADAS --}}                    
-                    <!-- Card Rejeitadas -->
-                <a href="{{ route('admin.reservas.rejeitadas') }}" 
-                   class="block p-4 transform transition duration-300 hover:scale-105">
-                    <div class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-6 rounded-lg shadow-sm">
-                        <div class="flex items-center">                            
-                            <div class="flex-1">
-                                <p class="text-sm font-medium text-red-800 dark:text-red-200">Rejeitadas</p>                                
-                                <p class="text-xs text-red-600 dark:text-red-300 mt-1">
-                                    Reservas rejeitadas pela administração
-                                </p>
-                            </div>                            
+                     <!---- Botão 3: RESERVAS REJEITADAS -->
+                      <a href="{{ route('admin.reservas.rejeitadas') }}" class="block p-4 bg-red-100 border border-red-200 rounded-xl shadow-lg hover:shadow-xl transition duration-300 transform hover:-translate-y-1">
+                        <div class="flex items-center">
+                            <h4 class="text-xl font-bold text-red-700">Rejeitadas</h4>
                         </div>
-                    </div>
-                </a>
+                        <p class="mt-2 text-sm text-gray-600">
+                            Reservas rejeitadas pela administração
+                        </p>
+                    </a>
+
             </div>
 
                 </div>

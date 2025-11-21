@@ -163,27 +163,34 @@
                                         <div class="flex flex-col space-y-1">
 
                                             <a href="{{ route('admin.reservas.show', $reserva) }}"
-                                               class="inline-block w-full text-center bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                                                class="inline-block w-full text-center bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
                                                 Detalhes
+                                            </a>
+
+                                            {{-- NOVO BOTÃO: Lançar no Caixa (passa a data da reserva para o filtro da página de destino) --}}
+                                            {{-- Assumindo que a rota do Caixa aceita o parâmetro 'date' no formato YYYY-MM-DD --}}
+                                            <a href="{{ route('admin.payment.index', ['date' => \Carbon\Carbon::parse($reserva->date)->format('Y-m-d')]) }}"
+                                               class="inline-block w-full text-center bg-green-500 hover:bg-green-800 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                                                Lançar no Caixa
                                             </a>
 
                                             @if ($reserva->is_recurrent)
                                                 {{-- ✅ AÇÕES PARA RESERVAS RECORRENTES (DELETE INTERNO) --}}
                                                 {{-- CANCELAR PONTUAL DA SÉRIE --}}
                                                 <button onclick="openCancellationModal({{ $reserva->id }}, 'PATCH', '{{ route('admin.reservas.cancelar_pontual', ':id') }}', 'Cancelar SOMENTE ESTA reserva recorrente. O slot será liberado pontualmente.', 'Cancelar ESTE DIA')"
-                                                   class="inline-block w-full text-center bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
-                                                     Cancelar ESTE DIA
+                                                    class="inline-block w-full text-center bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                                                        Cancelar ESTE DIA
                                                 </button>
                                                 {{-- CANCELAR SÉRIE INTEIRA --}}
                                                 <button onclick="openCancellationModal({{ $reserva->id }}, 'DELETE', '{{ route('admin.reservas.cancelar_serie', ':id') }}', 'Tem certeza que deseja cancelar TODA A SÉRIE (futura) para este cliente? Todos os horários serão liberados.', 'Cancelar SÉRIE')"
-                                                     class="inline-block w-full text-center bg-red-800 hover:bg-red-900 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
-                                                     Cancelar SÉRIE
+                                                    class="inline-block w-full text-center bg-red-800 hover:bg-red-900 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                                                        Cancelar SÉRIE
                                                 </button>
                                             @else
                                                 {{-- ✅ AÇÃO PADRÃO PARA RESERVAS PONTUAIS (PATCH INTERNO) --}}
                                                 <button onclick="openCancellationModal({{ $reserva->id }}, 'PATCH', '{{ route('admin.reservas.cancelar', ':id') }}', 'Tem certeza que deseja CANCELAR esta reserva PONTUAL? Isso a marcará como cancelada no sistema.', 'Cancelar')"
-                                                     class="inline-block w-full text-center bg-red-600 hover:bg-red-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
-                                                     Cancelar
+                                                    class="inline-block w-full text-center bg-red-600 hover:bg-red-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                                                        Cancelar
                                                 </button>
                                             @endif
 
@@ -242,7 +249,8 @@
     {{-- SCRIPTS DE AÇÃO AJAX --}}
     <script>
         // Variáveis de Rota e Token
-        const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        const metaTag = document.querySelector('meta[name="csrf-token"]');
+        const CSRF_TOKEN = metaTag ? metaTag.getAttribute('content') : null;
         // Usamos as rotas do web.php.
         const CANCEL_PONTUAL_URL = '{{ route("admin.reservas.cancelar_pontual", ":id") }}';
         const CANCEL_SERIE_URL = '{{ route("admin.reservas.cancelar_serie", ":id") }}';
@@ -289,6 +297,12 @@
          */
         async function sendAjaxRequest(reservaId, method, urlBase, reason) {
             const url = urlBase.replace(':id', reservaId);
+            
+            if (!CSRF_TOKEN) {
+                console.error("CSRF Token not found. Please ensure <meta name='csrf-token'> exists.");
+                alert("Erro de segurança: Token CSRF não encontrado.");
+                return;
+            }
 
             // Monta o body da requisição
             const bodyData = {
