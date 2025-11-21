@@ -79,8 +79,7 @@ Route::middleware(['auth', 'gestor'])->group(function () {
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
 
     // ✅ ROTA API INTERNA PARA O DASHBOARD (Contagem de Pendências)
-    Route::get('/api/reservas/pendentes', [ReservaController::class, 'countPending'])
-        ->name('api.reservas.pendentes.count');
+    Route::get('/api/reservas/pendentes', [ReservaController::class, 'countPending'])->name('api.reservas.pendentes.count');
 
     // ✅ ROTA API PARA PESQUISA DE CLIENTES
     Route::get('/api/clientes/search', [UserController::class, 'searchClients'])
@@ -118,6 +117,7 @@ Route::middleware(['auth', 'gestor'])->group(function () {
         // ✅ TODAS AS ROTAS DE AÇÃO FORAM MOVIDAS PARA DENTRO DESTE GRUPO.
         // =========================================================================
         Route::prefix('reservas')->name('reservas.')->group(function () {
+            
             // Rota principal para o dashboard de botões: /admin/reservas
             Route::get('/', [AdminController::class, 'indexReservasDashboard'])->name('index'); // Painel de botões
 
@@ -140,6 +140,9 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::patch('{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('cancelar');
             Route::patch('{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('cancelar_pontual');
             Route::delete('{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('cancelar_serie');
+            
+            // 📋 ROTA PARA RESERVAS REJEITADAS
+            Route::get('rejeitadas', [AdminController::class, 'indexReservasRejeitadas'])->name('rejeitadas');
 
             Route::delete('{reserva}', [AdminController::class, 'destroyReserva'])->name('destroy');
 
@@ -163,16 +166,20 @@ Route::middleware(['auth', 'gestor'])->group(function () {
 
         // ✅ NOVA ROTA: Reservas de um cliente específico
         Route::get('users/{user}/reservas', [AdminController::class, 'clientReservations'])->name('users.reservas');
-
     });
     //ROTAS DE PAGAMENTOS
     // 💰 Módulo Financeiro / Pagamentos
     Route::get('/admin/pagamentos', [PaymentController::class, 'index'])->name('admin.payment.index');
     Route::post('/admin/pagamentos/{reserva}/finalizar', [PaymentController::class, 'store'])->name('admin.payment.store');
     Route::post('/admin/pagamentos/{reserva}/falta', [PaymentController::class, 'markNoShow'])->name('admin.payment.noshow');
+    // 📊 ROTAS DO DASHBOARD FINANCEIRO
+    Route::get('/admin/financeiro', [AdminController::class, 'financeiro'])->name('admin.financeiro');
+    Route::get('/admin/financeiro', [AdminController::class, 'dashboardFinanceiro'])->name('admin.financeiro.dashboard');
+    Route::get('/api/financeiro/resumo', [AdminController::class, 'getResumoFinanceiro'])->name('api.financeiro.resumo');
+    Route::get('/api/financeiro/pagamentos-pendentes', [AdminController::class, 'getPagamentosPendentes'])->name('api.financeiro.pagamentos-pendentes');
 
     //Route::get('/admin/pagamento', [AdminController::class, 'paymentManagementIndex'])->name('admin.payment.index');
-    
+
     // FIM DO GRUPO DE ROTAS 'admin.'
     // ===============================================
 
@@ -192,4 +199,4 @@ Route::middleware('auth')->group(function () {
 
 
 // Importação das rotas de autenticação (Login, Logout, etc.)
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';
