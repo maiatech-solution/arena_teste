@@ -22,21 +22,29 @@
                             {{ __('Reservas') }}
                         </x-nav-link>
 
-                        <x-nav-link :href="route('admin.payment.index')"
-                                    :active="request()->routeIs('admin.payment.*')"
-                                    class="px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:bg-gray-50 focus:text-gray-700">
-                            {{ __('Caixa') }}
-                        </x-nav-link>
-
                         <x-nav-link :href="route('admin.users.index')"
                                     :active="request()->routeIs('admin.users.index') || request()->routeIs('admin.users.create') || request()->routeIs('admin.users.edit')"
                                     class="px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:bg-gray-50 focus:text-gray-700">
                             {{ __('Gerenciar Usuários') }}
                         </x-nav-link>
 
+                        <x-nav-link :href="route('admin.payment.index')"
+                                    :active="request()->routeIs('admin.payment.*')"
+                                    class="px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:bg-gray-50 focus:text-gray-700">
+                            {{ __('Caixa') }}
+                        </x-nav-link>
+
                         <x-nav-link :href="route('admin.config.index')" :active="request()->routeIs('admin.config.index')" class="px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:bg-gray-50 focus:text-gray-700">
                             {{ __('Funcionamento') }}
                         </x-nav-link>
+
+                          {{-- NOVO BOTÃO: RELATÓRIOS (FINANCEIRO) --}}
+                        <x-nav-link :href="route('admin.financeiro.dashboard')" {{-- Rota corrigida para 'admin.financeiro.dashboard' --}}
+                                    :active="request()->routeIs('admin.financeiro.*')"
+                                    class="px-3 py-2 rounded-lg text-sm text-gray-600 font-semibold hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:bg-gray-50 focus:text-gray-700">
+                            {{ __('Relatórios') }}
+                        </x-nav-link>
+                        {{-- FIM NOVO BOTÃO --}}
                     @endif
 
                     {{-- 🟢 2. LINKS DE CLIENTE (VISÍVEIS APENAS PARA CLIENTES) 🟢 --}}
@@ -45,6 +53,8 @@
                             {{ __('Minhas Reservas') }}
                         </x-nav-link>
                     @endif
+
+                   
 
                 </div>
             </div>
@@ -96,6 +106,7 @@
         </div>
     </div>
 
+    {{-- Menu Responsivo --}}
     <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
         <div class="pt-2 pb-3 space-y-1">
 
@@ -106,20 +117,28 @@
                 </x-responsive-nav-link>
 
                 <x-responsive-nav-link :href="route('admin.reservas.index')"
-                                       :active="request()->routeIs('admin.reservas.*')"
-                                       class="border-l-4 border-gray-500 text-gray-600">
+                                        :active="request()->routeIs('admin.reservas.*')"
+                                        class="border-l-4 border-gray-500 text-gray-600">
                     {{ __('Reservas') }}
                 </x-responsive-nav-link>
 
                 <x-responsive-nav-link :href="route('admin.payment.index')"
-                                       :active="request()->routeIs('admin.payment.*')"
-                                       class="border-l-4 border-gray-500 text-gray-600">
-                    {{ __('Financeiro / Caixa') }}
+                                        :active="request()->routeIs('admin.payment.*')"
+                                        class="border-l-4 border-gray-500 text-gray-600">
+                    {{ __('Caixa') }}
                 </x-responsive-nav-link>
 
+                {{-- NOVO BOTÃO RESPONSIVO: RELATÓRIOS (FINANCEIRO) --}}
+                <x-responsive-nav-link :href="route('admin.financeiro.dashboard')" {{-- Rota corrigida para 'admin.financeiro.dashboard' --}}
+                                        :active="request()->routeIs('admin.financeiro.*')"
+                                        class="border-l-4 border-yellow-500 text-yellow-700 font-bold">
+                    {{ __('Relatórios') }}
+                </x-responsive-nav-link>
+                {{-- FIM NOVO BOTÃO RESPONSIVO --}}
+
                 <x-responsive-nav-link :href="route('admin.users.index')"
-                                       :active="request()->routeIs('admin.users.index') || request()->routeIs('admin.users.create') || request()->routeIs('admin.users.edit')"
-                                       class="border-l-4 border-gray-500 text-gray-600">
+                                        :active="request()->routeIs('admin.users.index') || request()->routeIs('admin.users.create') || request()->routeIs('admin.users.edit')"
+                                        class="border-l-4 border-gray-500 text-gray-600">
                     {{ __('Gerenciar Usuários') }}
                 </x-responsive-nav-link>
 
