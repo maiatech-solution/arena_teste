@@ -127,7 +127,7 @@ Route::middleware(['auth', 'gestor'])->group(function () {
 
             // --- ROTAS DE AÇÕES E CRIAÇÃO (MOVIDAS PARA CÁ) ---
             Route::get('{reserva}/show', [AdminController::class, 'showReserva'])->name('show');
-            Route::get('create', [AdminController::class, 'createReserva'])->name('create');
+            Route::get('create', [AdminController::class, 'createUser'])->name('create');
             Route::post('/', [AdminController::class, 'storeReserva'])->name('store');
             Route::post('tornar-fixo', [AdminController::class, 'makeRecurrent'])->name('make_recurrent');
 
@@ -167,18 +167,20 @@ Route::middleware(['auth', 'gestor'])->group(function () {
         // ✅ NOVA ROTA: Reservas de um cliente específico
         Route::get('users/{user}/reservas', [AdminController::class, 'clientReservations'])->name('users.reservas');
     });
-    //ROTAS DE PAGAMENTOS
+    
+    //ROTAS DE PAGAMENTOS (Corrigido os métodos do Controller)
     // 💰 Módulo Financeiro / Pagamentos
     Route::get('/admin/pagamentos', [PaymentController::class, 'index'])->name('admin.payment.index');
-    Route::post('/admin/pagamentos/{reserva}/finalizar', [PaymentController::class, 'store'])->name('admin.payment.store');
-    Route::post('/admin/pagamentos/{reserva}/falta', [PaymentController::class, 'markNoShow'])->name('admin.payment.noshow');
+    // Finalizar: Aponta para processPayment e rota renomeada para 'process'
+    Route::post('/admin/pagamentos/{reserva}/finalizar', [PaymentController::class, 'processPayment'])->name('admin.payment.process'); 
+    // Falta: Aponta para registerNoShow
+    Route::post('/admin/pagamentos/{reserva}/falta', [PaymentController::class, 'registerNoShow'])->name('admin.payment.noshow');
+    
     // 📊 ROTAS DO DASHBOARD FINANCEIRO
     Route::get('/admin/financeiro', [AdminController::class, 'financeiro'])->name('admin.financeiro');
     Route::get('/admin/financeiro', [AdminController::class, 'dashboardFinanceiro'])->name('admin.financeiro.dashboard');
     Route::get('/api/financeiro/resumo', [AdminController::class, 'getResumoFinanceiro'])->name('api.financeiro.resumo');
     Route::get('/api/financeiro/pagamentos-pendentes', [AdminController::class, 'getPagamentosPendentes'])->name('api.financeiro.pagamentos-pendentes');
-
-    //Route::get('/admin/pagamento', [AdminController::class, 'paymentManagementIndex'])->name('admin.payment.index');
 
     // FIM DO GRUPO DE ROTAS 'admin.'
     // ===============================================

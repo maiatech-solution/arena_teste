@@ -4,166 +4,219 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\Reserva;
-use App\Models\FinancialTransaction;
-use App\Models\User;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
+
+// Modelos do usuário
+use App\Models\Reserva;
+use App\Models\User;
+// ⚠️ Adicione o seu modelo de transações se for utilizá-lo (ex: use App\Models\FinancialTransaction;)
 
 class PaymentController extends Controller
 {
     /**
-     * Exibe o Dashboard Financeiro Diário (Lista de Pagamentos).
+     * Exibe o Dashboard de Caixa e gerencia filtros de data e ID.
      */
     public function index(Request $request)
     {
-        // 1. Filtro de Data (Padrão: Hoje)
-        $dateInput = $request->input('date', Carbon::today()->toDateString());
-        $selectedDate = Carbon::parse($dateInput);
-
-        // 2. Busca as Reservas do Dia (para listar na tabela)
-        // Incluímos as rejeitadas/canceladas apenas se tiverem gerado transação financeira (ex: estorno pendente)
-        // Mas focamos nas ATIVAS (Confirmada/Pendente) e nas FINALIZADAS (que pagaram hoje)
-        $reservas = Reserva::with(['user', 'transactions']) // Carrega relacionamentos
-            ->whereDate('date', $selectedDate)
-            ->where('is_fixed', false) // Apenas clientes reais
-            ->orderBy('start_time')
-            ->get();
-
-        // 3. KPIs Financeiros (Totais do Topo)
+        // 1. Definição da Data e ID da Reserva
+        $selectedDateString = $request->input('data_reserva') 
+                            ?? $request->input('date') 
+                            ?? Carbon::today()->toDateString();
         
-        // A. Total Recebido HOJE (Caixa Real)
-        // Soma todas as transações feitas na data selecionada (independente de quando foi a reserva)
-        $totalReceivedToday = FinancialTransaction::whereDate('paid_at', $selectedDate)
-            ->sum('amount');
+        $dateObject = Carbon::parse($selectedDateString);
+        // Captura o ID da reserva que pode ter vindo do dashboard
+        $selectedReservaId = $request->input('reserva_id'); 
 
-        // B. Total Previsto (Soma dos preços das reservas confirmadas/pendentes do dia)
-        $totalExpected = $reservas->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
-            ->sum(fn($r) => $r->final_price ?? $r->price);
+        // =========================================================================
+        // 1. CONSULTA REAL NO BANCO DE DADOS
+        // =========================================================================
+        
+        $query = Reserva::with('user'); // 🎯 Inicia a query e carrega os dados do cliente (User)
 
-        // C. Pendente (O que falta receber das reservas de hoje)
-        $totalPending = $reservas->sum('remaining_amount');
+        // --- LÓGICA DE FILTRO CONDICIONAL ---
+        if ($selectedReservaId) {
+            // ✅ PRIORIDADE: Se um ID de reserva for fornecido (clique no dashboard),
+            // filtra APENAS por ele.
+            $query->where('id', $selectedReservaId);
+        } else {
+            // Caso contrário, filtra pela data (visão padrão do caixa diário).
+            $query->whereDate('date', $dateObject);
+        }
+        
+        // Filtros comuns (aplicados em ambos os casos para garantir que sejam reservas de cliente válidas)
+        $query->whereNotNull('user_id') 
+              ->where('is_fixed', false) // Exclui slots fixos
+              
+              // Inclui reservas confirmadas, pendentes, concluídas e no_show (para visualização no caixa)
+              ->whereIn('status', [
+                  Reserva::STATUS_CONFIRMADA, 
+                  Reserva::STATUS_PENDENTE,
+                  'completed', 
+                  'no_show'    
+              ]); 
+            
+        $reservas = $query->get();
 
-        // D. Contagem de Faltas (No-Show) no dia
+        // 2. Cálculo dos Totais sobre a coleção de Reservas
+        // Se a coleção só tiver 1 item (por ter filtrado pelo ID), os totais serão corretos para esse item.
+        
+        // Total Esperado: Soma de todos os final_price ou price
+        $totalExpected = $reservas->sum(fn($r) => $r->final_price ?? $r->price);
+        
+        // Total Recebido Hoje (Caixa): Soma dos valores efetivamente pagos
+        $totalReceived = $reservas->sum('total_paid');
+        
+        // Total Pendente (A Receber): Soma do que falta pagar (usando o accessor do modelo)
+        $totalPending = $reservas->sum('remaining_amount'); // Usando getRemainingAmountAttribute()
+        
+        // Faltas (No-Show)
         $noShowCount = $reservas->where('status', 'no_show')->count();
 
+        // 3. Retorno para a View
         return view('admin.payment.index', [
-            'selectedDate' => $dateInput,
+            'selectedDate' => $selectedDateString,
             'reservas' => $reservas,
-            'totalReceived' => $totalReceivedToday,
-            'totalExpected' => $totalExpected,
+            'totalReceived' => $totalReceived,
             'totalPending' => $totalPending,
+            'totalExpected' => $totalExpected,
             'noShowCount' => $noShowCount,
+            'highlightReservaId' => $selectedReservaId,
         ]);
     }
 
     /**
-     * Processa a Baixa de Pagamento (Finalizar Agendamento).
+     * Processa o Pagamento de uma Reserva
      */
-    public function store(Request $request, Reserva $reserva)
+    public function processPayment(Request $request, $reservaId)
     {
-        $validated = $request->validate([
-            'payment_method' => 'required|string', // money, pix, card
-            'amount_paid' => 'required|numeric|min:0', // Valor pago AGORA
-            'final_price' => 'nullable|numeric|min:0', // Permite editar o total (desconto)
-            'description' => 'nullable|string',
+        $request->validate([
+            'final_price' => 'required|numeric|min:0',
+            'amount_paid' => 'required|numeric|min:0',
+            'payment_method' => 'required|string|max:50',
         ]);
 
-        DB::beginTransaction();
-        try {
-            $managerId = Auth::id();
-            $amountNow = $validated['amount_paid'];
-            
-            // 1. Atualiza o Preço Final (se o gestor alterou/deu desconto)
-            if (isset($validated['final_price'])) {
-                $reserva->final_price = $validated['final_price'];
-            }
-            // Se não tinha final_price, define como o price original para garantir consistência
-            if (is_null($reserva->final_price)) {
-                $reserva->final_price = $reserva->price;
-            }
+        if ($request->amount_paid <= 0) {
+             return response()->json([
+                'success' => false, 
+                'message' => 'O valor a ser recebido deve ser positivo.',
+            ], 422);
+        }
 
-            // 2. Registra a Transação Financeira
-            if ($amountNow > 0) {
-                FinancialTransaction::create([
+        try {
+            $reserva = Reserva::findOrFail($reservaId);
+            $paymentStatus = 'pending'; 
+
+            DB::transaction(function () use ($request, $reserva, &$paymentStatus) {
+                $finalPrice = (float) $request->final_price;
+                $amountPaid = (float) $request->amount_paid;
+                $paymentMethod = $request->payment_method;
+
+                $previousPaid = (float) $reserva->total_paid;
+                $newTotalPaid = $previousPaid + $amountPaid;
+                
+                // Define o novo status de pagamento com base no total pago
+                if (round($newTotalPaid, 2) >= round($finalPrice, 2)) {
+                    $paymentStatus = 'paid';
+                } elseif ($newTotalPaid > 0) {
+                    $paymentStatus = 'partial';
+                } else {
+                    $paymentStatus = 'pending';
+                }
+                
+                // Atualiza a reserva
+                $reserva->total_paid = $newTotalPaid;
+                $reserva->final_price = $finalPrice; 
+                $reserva->payment_status = $paymentStatus;
+                
+                // Se o pagamento estiver completo, marca a reserva como concluída
+                if ($paymentStatus === 'paid') {
+                     $reserva->status = 'completed'; 
+                }
+                
+                $reserva->save(); 
+                
+                // ⚠️ Se você tiver uma tabela de transações, adicione o registro aqui:
+                /*
+                \App\Models\FinancialTransaction::create([
                     'reserva_id' => $reserva->id,
                     'user_id' => $reserva->user_id,
-                    'manager_id' => $managerId,
-                    'amount' => $amountNow,
-                    'type' => 'remaining', // Ou 'full', dependendo da lógica
-                    'payment_method' => $validated['payment_method'],
-                    'description' => $validated['description'] ?? 'Baixa no caixa',
-                    'paid_at' => Carbon::now(),
+                    'amount' => $amountPaid,
+                    'type' => 'payment',
+                    'method' => $paymentMethod,
+                    'notes' => 'Pagamento processado via dashboard de caixa.',
                 ]);
-            }
+                */
+            });
 
-            // 3. Atualiza os totais da Reserva
-            $reserva->total_paid += $amountNow;
-            $reserva->manager_id = $managerId; // Atualiza quem atendeu por último
-
-            // 4. Define Status
-            // Se pagou tudo (ou mais), status = paid. Se não, partial.
-            if ($reserva->total_paid >= $reserva->final_price) {
-                $reserva->payment_status = 'paid';
-                $reserva->status = Reserva::STATUS_CONFIRMADA; // Garante que está confirmada
-            } else {
-                $reserva->payment_status = 'partial';
-            }
-
-            $reserva->save();
-
-            DB::commit();
-            return response()->json(['success' => true, 'message' => 'Pagamento registrado com sucesso!']);
+            return response()->json([
+                'success' => true, 
+                'message' => 'Pagamento de R$ ' . number_format($request->amount_paid, 2, ',', '.') . ' registrado com sucesso!',
+                'status' => $paymentStatus 
+            ]);
 
         } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("Erro no pagamento: " . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Erro ao processar pagamento.'], 500);
+            Log::error("Erro ao processar pagamento: {$e->getMessage()}", ['reserva_id' => $reservaId]);
+            return response()->json([
+                'success' => false, 
+                'message' => 'Erro interno ao processar o pagamento. Contate o suporte.',
+            ], 500);
         }
     }
 
     /**
-     * Registra Falta (No-Show) e pune o cliente.
+     * Registra Falta (No-Show)
      */
-    public function markNoShow(Request $request, Reserva $reserva)
+    public function registerNoShow(Request $request, $reservaId)
     {
-        $validated = $request->validate([
-            'block_user' => 'nullable|boolean', // Checkbox "Bloquear cliente?"
-            'notes' => 'nullable|string'
+        $request->validate([
+            'notes' => 'nullable|string|max:500',
+            'block_user' => 'nullable|boolean',
         ]);
 
-        DB::beginTransaction();
         try {
-            // 1. Atualiza Reserva
-            $reserva->status = 'no_show'; // Status que criamos mentalmente, pode adicionar na constante se quiser
-            $reserva->payment_status = 'retained'; // Sinal retido
-            $reserva->cancellation_reason = "FALTA (No-Show). " . ($validated['notes'] ?? '');
-            $reserva->manager_id = Auth::id();
-            $reserva->save();
+            // 1. Encontrar a Reserva REAL, carregando o User para lógica de bloqueio
+            $reserva = Reserva::with('user')->findOrFail($reservaId);
 
-            // 2. Atualiza Reputação do Cliente
-            if ($reserva->user_id) {
-                $user = User::find($reserva->user_id);
-                if ($user) {
-                    $user->increment('no_show_count');
+            DB::transaction(function () use ($request, $reserva) {
+                
+                // 3. Atualizar a Reserva
+                $reserva->status = 'no_show';
+                $reserva->notes = $request->notes;
+                
+                // Mantém o pagamento retido, se houver sinal
+                if ($reserva->signal_value > 0) {
+                     $reserva->payment_status = 'retained'; 
+                } else {
+                     $reserva->payment_status = 'unpaid'; 
+                }
+                $reserva->save(); 
+
+                // 4. Lógica de Bloqueio de Usuário (se aplicável)
+                if ($request->boolean('block_user') && $reserva->user_id && $reserva->user) {
+                    $user = $reserva->user;
+                    $user->no_show_count = ($user->no_show_count ?? 0) + 1; // Incrementa no_show_count
                     
-                    // Bloqueio Opcional (checkbox) ou Automático (>3 faltas)
-                    if (!empty($validated['block_user']) || $user->no_show_count >= 3) {
+                    // Se o cliente atingir 3 ou mais faltas, bloqueia
+                    if ($user->no_show_count >= 3) { 
                         $user->is_blocked = true;
-                        Log::warning("Usuário {$user->name} bloqueado por faltas.");
                     }
                     $user->save();
                 }
-            }
+            });
 
-            DB::commit();
-            return response()->json(['success' => true, 'message' => 'Falta registrada e reputação do cliente atualizada.']);
+            return response()->json([
+                'success' => true, 
+                'message' => 'Falta (No-Show) registrada com sucesso.',
+            ]);
 
         } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Erro ao registrar falta.'], 500);
+            Log::error("Erro ao registrar falta: {$e->getMessage()}", ['reserva_id' => $reservaId]);
+            return response()->json([
+                'success' => false, 
+                'message' => 'Erro interno ao registrar a falta. Contate o suporte.',
+            ], 500);
         }
     }
 }

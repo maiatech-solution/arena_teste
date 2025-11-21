@@ -333,10 +333,10 @@
                     <div class="mb-4">
                         <label for="client_contact" class="block text-sm font-medium text-gray-700">WhatsApp para Contato (Apenas 11 dígitos)*</label>
                         <input type="tel" name="client_contact" id="client_contact" required
-                               maxlength="11" pattern="\d{11}"
-                               title="O WhatsApp deve conter apenas 11 dígitos (DDD + 9º Dígito + Número)."
-                               placeholder="Ex: 91985320997"
-                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                                maxlength="11" pattern="\d{11}"
+                                title="O WhatsApp deve conter apenas 11 dígitos (DDD + 9º Dígito + Número)."
+                                placeholder="Ex: 91985320997"
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                         <p id="whatsapp-error-message" class="text-xs text-red-600 mt-1 hidden font-semibold">
                             ⚠️ Por favor, insira exatamente 11 dígitos para o WhatsApp (Ex: 91985320997).
                         </p>
@@ -379,6 +379,9 @@
         const RESERVED_API_URL = '{{ route("api.reservas.confirmadas") }}';
         const AVAILABLE_API_URL = '{{ route("api.horarios.disponiveis") }}';
         const SHOW_RESERVA_URL = '{{ route("admin.reservas.show", ":id") }}';
+
+        // 🎯 NOVO: ROTA PARA O CAIXA/PAGAMENTO
+        const PAYMENT_INDEX_URL = '{{ route("admin.payment.index") }}';
 
         // ROTAS DE SUBMISSÃO
         const RECURRENT_STORE_URL = '{{ route("api.reservas.store_recurrent") }}';
@@ -922,6 +925,7 @@
             const seriesData = globalExpiringSeries.find(s => s.master_id === masterId);
             const clientName = seriesData ? seriesData.client_name : 'Cliente Desconhecido';
 
+            // ATENÇÃO: Substituindo alert/confirm por uma forma de notificação que o usuário possa ver
             if (!confirm(`Confirmar a renovação da série #${masterId} por mais 1 ano para ${clientName}?`)) {
                 return;
             }
@@ -1154,6 +1158,10 @@
                         const isRecurrent = extendedProps.is_recurrent;
 
                         const dateDisplay = moment(startTime).format('DD/MM/YYYY');
+                        
+                        // ✅ CORREÇÃO APLICADA: Extrair a data no formato YYYY-MM-DD
+                        const dateReservation = moment(startTime).format('YYYY-MM-DD');
+
 
                         let timeDisplay = moment(startTime).format('H:i');
                         if (endTime) {
@@ -1167,6 +1175,9 @@
                         let statusText = 'Confirmada';
 
                         const showUrl = SHOW_RESERVA_URL.replace(':id', reservaId);
+                        
+                        // ✅ CORREÇÃO APLICADA: Incluir a data na URL do Caixa
+                        const paymentUrl = `${PAYMENT_INDEX_URL}?reserva_id=${reservaId}&data_reserva=${dateReservation}`;
 
                         let recurrentStatus = isRecurrent ?
                             '<p class="text-sm font-semibold text-fuchsia-600">Parte de uma Série Recorrente</p>' :
@@ -1182,9 +1193,13 @@
                             ${recurrentStatus}
                         `;
 
+                        // 🔄 BOTÕES DE AÇÃO: Priorizando o link para o Caixa
                         let actionButtons = `
+                            <a href="${paymentUrl}" class="w-full inline-block text-center mb-2 px-4 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 text-md shadow-xl">
+                                Registrar Pagamento / Acessar Caixa
+                            </a>
                             <a href="${showUrl}" class="w-full inline-block text-center mb-2 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition duration-150 text-sm">
-                                Ver Detalhes / Gerenciar Reserva
+                                Ver Detalhes / Gerenciar (Status, Notas)
                             </a>
                         `;
 
