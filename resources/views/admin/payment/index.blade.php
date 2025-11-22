@@ -129,20 +129,44 @@
                                         $total = $reserva->final_price ?? $reserva->price;
                                         $pago = $reserva->total_paid;
                                         $restante = max(0, $total - $pago);
-                                        
+                                        $currentStatus = $reserva->payment_status;
+                                        $isOverdue = false;
+
+                                        // LÓGICA DE DETECÇÃO DE ATRASO (Implementação da melhoria)
+                                        if (in_array($currentStatus, ['pending', 'unpaid'])) {
+                                            // 1. Corrigir a concatenação da data/hora para evitar o erro de formatação
+                                            $dateTimeString = \Carbon\Carbon::parse($reserva->date)->format('Y-m-d') . ' ' . $reserva->end_time;
+                                            $reservaEndTime = \Carbon\Carbon::parse($dateTimeString);
+                                            
+                                            // 2. Checar se a hora de término da reserva já passou
+                                            if ($reservaEndTime->lessThan(\Carbon\Carbon::now())) {
+                                                $isOverdue = true;
+                                                // O status real do DB continua sendo 'pending' ou 'unpaid', mas mudamos a visualização
+                                            }
+                                        }
+
                                         // Cor da Linha / Status
-                                        $statusClass = match($reserva->payment_status) {
-                                            'paid' => 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-                                            'partial' => 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
-                                            'retained' => 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-                                            default => 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-                                        };
-                                        $statusLabel = match($reserva->payment_status) {
-                                            'paid' => 'Pago',
-                                            'partial' => 'Parcial',
-                                            'retained' => 'Retido (Falta)',
-                                            default => 'Pendente',
-                                        };
+                                        $statusClass = '';
+                                        $statusLabel = '';
+
+                                        if ($reserva->status === 'no_show') {
+                                            $statusClass = 'bg-red-500 text-white font-bold';
+                                            $statusLabel = 'RETIDO (Falta)';
+                                        } elseif ($currentStatus === 'paid' || $currentStatus === 'completed') {
+                                            $statusClass = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
+                                            $statusLabel = 'Pago';
+                                        } elseif ($currentStatus === 'partial') {
+                                            $statusClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
+                                            $statusLabel = 'Parcial';
+                                        } elseif ($isOverdue) {
+                                            // NOVO STATUS: ATRASADO (vermelho pulsante)
+                                            $statusClass = 'bg-red-700 text-white font-bold animate-pulse shadow-xl'; 
+                                            $statusLabel = 'ATRASADO';
+                                        } else {
+                                            // Pendente/Unpaid normal (ainda futuro ou dentro do horário)
+                                            $statusClass = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+                                            $statusLabel = 'Pendente';
+                                        }
 
                                         // Destaque para a linha quando vier do dashboard
                                         $rowHighlight = (isset($highlightReservaId) && $reserva->id == $highlightReservaId) 
@@ -164,6 +188,7 @@
                                             </div>
                                         </td>
                                         <td class="px-4 py-4 whitespace-nowrap">
+                                            {{-- APLICANDO A CLASSE E O TEXTO DO NOVO STATUS --}}
                                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $statusClass }}">
                                                 {{ $statusLabel }}
                                             </span>
@@ -262,7 +287,7 @@
                                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:text-white font-bold text-lg">
                         </div>
 
-                         {{-- 🎯 SINAL JÁ PAGO (Display) --}}
+                        {{-- 🎯 SINAL JÁ PAGO (Display) --}}
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sinal Recebido (R$)</label>
                             <span id="modalSignalAmount" class="text-xl font-extrabold text-indigo-900 dark:text-indigo-200 mt-1 block">R$ 0,00</span>
@@ -289,7 +314,7 @@
                 </div>
                 <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                     <button type="submit" id="submitPaymentBtn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
-                         <span id="submitPaymentText">Confirmar Recebimento</span>
+                        <span id="submitPaymentText">Confirmar Recebimento</span>
                         <svg id="submitPaymentSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -349,7 +374,7 @@
                     </div>
                     <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                         <button type="submit" id="submitNoShowBtn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
-                             <span id="submitNoShowText">Confirmar Falta</span>
+                               <span id="submitNoShowText">Confirmar Falta</span>
                             <svg id="submitNoShowSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -521,12 +546,12 @@
                 })
             })
             .then(response => {
-                 if (!response.ok) {
-                    return response.json().then(data => {
-                        throw new Error(data.message || 'Erro de processamento.');
-                    });
-                }
-                return response.json();
+                   if (!response.ok) {
+                        return response.json().then(data => {
+                            throw new Error(data.message || 'Erro de processamento.');
+                        });
+                    }
+                    return response.json();
             })
             .then(data => {
                 if(data.success) {
