@@ -78,9 +78,9 @@
 
                                 <div class="flex items-end space-x-1 h-[42px]">
                                     <button type="submit"
-                                            class="bg-indigo-600 hover:bg-indigo-700 text-white h-full p-2 rounded-lg shadow-md transition duration-150 flex-shrink-0 flex items-center justify-center"
-                                            title="Buscar">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg>
+                                                class="bg-indigo-600 hover:bg-indigo-700 text-white h-full p-2 rounded-lg shadow-md transition duration-150 flex-shrink-0 flex items-center justify-center"
+                                                title="Buscar">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg>
                                     </button>
 
                                     @if (isset($search) && $search || $startDate || $endDate)
@@ -105,6 +105,9 @@
                                 <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider min-w-[120px]">Data/Hora</th>
                                 <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Cliente/Reserva</th>
                                 <th class="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider min-w-[90px]">Preço</th>
+                                {{-- COLUNA DE STATUS DE PAGAMENTO --}}
+                                <th class="px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider min-w-[100px]">Pagamento</th>
+                                {{-- FIM NOVO --}}
                                 <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider min-w-[120px]">Criada Por</th>
                                 <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider min-w-[100px]">Ações</th>
                             </tr>
@@ -146,6 +149,51 @@
                                     <td class="px-4 py-3 whitespace-nowrap min-w-[90px] text-sm font-bold text-green-700 text-right">
                                         R$ {{ number_format($reserva->price ?? 0, 2, ',', '.') }}
                                     </td>
+                                    
+                                    {{-- CÉLULA DE STATUS DE PAGAMENTO COM LÓGICA DE ATRASO --}}
+                                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                                        @php
+                                            // Define a cor e o texto baseado no status do pagamento
+                                            $status = $reserva->payment_status; 
+                                            $badgeClass = '';
+                                            $badgeText = '';
+                                            $isOverdue = false;
+
+                                            // 1. Verificar se o status é de não pago (pending/unpaid)
+                                            if (in_array($status, ['pending', 'unpaid'])) {
+                                                // 2. Criar a string de Data e Hora Corretamente (CORREÇÃO APLICADA AQUI)
+                                                // Garante que pegamos apenas o YYYY-MM-DD para evitar a dupla especificação de tempo.
+                                                $dateTimeString = \Carbon\Carbon::parse($reserva->date)->format('Y-m-d') . ' ' . $reserva->end_time;
+                                                $reservaEndTime = \Carbon\Carbon::parse($dateTimeString);
+                                                
+                                                // 3. Checar se a hora de término da reserva já passou (em relação ao momento atual)
+                                                if ($reservaEndTime->lessThan(\Carbon\Carbon::now())) {
+                                                    $isOverdue = true;
+                                                }
+                                            }
+
+                                            // Lógica de exibição final
+                                            if ($status === 'paid' || $status === 'completed') {
+                                                $badgeClass = 'bg-green-100 text-green-800';
+                                                $badgeText = 'Pago';
+                                            } elseif ($status === 'partial') {
+                                                $badgeClass = 'bg-yellow-100 text-yellow-800';
+                                                $badgeText = 'Parcial (R$' . number_format($reserva->remaining_amount ?? 0, 2, ',', '.') . ' Restantes)';
+                                            } elseif ($isOverdue) {
+                                                // NOVO STATUS: ATRASADO (com animação)
+                                                $badgeClass = 'bg-red-700 text-white font-bold animate-pulse shadow-xl'; 
+                                                $badgeText = 'ATRASADO';
+                                            } else {
+                                                // Status pendente normal (ainda dentro do horário ou futuro)
+                                                $badgeClass = 'bg-red-100 text-red-800';
+                                                $badgeText = 'Aguardando Pagamento';
+                                            }
+                                        @endphp
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $badgeClass }}">
+                                            {{ $badgeText }}
+                                        </span>
+                                    </td>
+                                    {{-- FIM CÉLULA DE STATUS DE PAGAMENTO --}}
 
                                     <td class="px-4 py-3 text-left min-w-[120px]">
                                         @if ($reserva->manager)
@@ -173,7 +221,7 @@
                                                 'data_reserva' => \Carbon\Carbon::parse($reserva->date)->format('Y-m-d'),
                                                 'signal_value' => $reserva->signal_value ?? 0
                                             ]) }}"
-                                               class="inline-block w-full text-center bg-green-600 hover:bg-green-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                                                class="inline-block w-full text-center bg-green-600 hover:bg-green-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
                                                 Lançar no Caixa
                                             </a>
 
@@ -202,7 +250,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="px-6 py-8 whitespace-nowrap text-center text-base text-gray-500 italic">
+                                    <td colspan="6" class="px-6 py-8 whitespace-nowrap text-center text-base text-gray-500 italic">
                                         Nenhuma reserva confirmada encontrada
                                         @if (isset($search) && $search)
                                             para a busca por "{{ $search }}".
@@ -264,8 +312,8 @@
         let currentUrlBase = null;
 
         /**
-         * Abre o modal de cancelamento e configura os dados da reserva.
-         */
+        * Abre o modal de cancelamento e configura os dados da reserva.
+        */
         function openCancellationModal(reservaId, method, urlBase, message, buttonText) {
             currentReservaId = reservaId;
             currentMethod = method;
@@ -285,8 +333,8 @@
         }
 
         /**
-         * Fecha o modal.
-         */
+        * Fecha o modal.
+        */
         function closeCancellationModal() {
             document.getElementById('cancellation-modal-content').classList.add('opacity-0', 'scale-95');
             setTimeout(() => {
@@ -296,13 +344,15 @@
         }
 
         /**
-         * FUNÇÃO AJAX GENÉRICA PARA ENVIAR REQUISIÇÕES
-         */
+        * FUNÇÃO AJAX GENÉRICA PARA ENVIAR REQUISIÇÕES
+        */
         async function sendAjaxRequest(reservaId, method, urlBase, reason) {
             const url = urlBase.replace(':id', reservaId);
             
             if (!CSRF_TOKEN) {
                 console.error("CSRF Token not found. Please ensure <meta name='csrf-token'> exists.");
+                // Substituído alert() por uma mensagem na tela (melhor prática em ambientes iframes)
+                // Usando alert() aqui para simplificar, mas idealmente seria um modal customizado
                 alert("Erro de segurança: Token CSRF não encontrado.");
                 return;
             }
