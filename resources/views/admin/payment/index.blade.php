@@ -179,8 +179,8 @@
                                         </td>
                                         <td class="px-4 py-4 whitespace-nowrap text-center text-sm font-medium">
                                             @if($reserva->payment_status !== 'paid' && $reserva->status !== 'no_show')
-                                                {{-- Botão Pagar --}}
-                                                <button onclick="openPaymentModal({{ $reserva->id }}, {{ $total }}, {{ $restante }}, '{{ $reserva->client_name }}')" 
+                                                {{-- Botão Pagar: Adicionado $pago como 4º argumento --}}
+                                                <button onclick="openPaymentModal({{ $reserva->id }}, {{ $total }}, {{ $restante }}, {{ $pago }}, '{{ $reserva->client_name }}')" 
                                                     class="text-white bg-green-600 hover:bg-green-700 rounded px-3 py-1 text-xs mr-2 transition duration-150">
                                                     $ Baixar
                                                 </button>
@@ -223,8 +223,7 @@
     </div>
 
     {{-- ================================================================== --}}
-    {{-- MODAL 1: FINALIZAR PAGAMENTO --}}
-    {{-- (Sem Alterações) --}}
+    {{-- MODAL 1: FINALIZAR PAGAMENTO (MODIFICADO) --}}
     {{-- ================================================================== --}}
     <div id="paymentModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
         <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -258,6 +257,12 @@
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:text-white font-bold text-lg">
                             </div>
 
+                             {{-- 🎯 CAMPO NOVO: VALOR DO SINAL JÁ PAGO --}}
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sinal Recebido (R$)</label>
+                                <span id="modalSignalAmount" class="text-xl font-extrabold text-indigo-900 dark:text-indigo-200 mt-1 block">R$ 0,00</span>
+                            </div>
+
                             {{-- Método de Pagamento --}}
                             <div class="mb-4">
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Forma de Pagamento</label>
@@ -286,8 +291,7 @@
     </div>
 
     {{-- ================================================================== --}}
-    {{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) --}}
-    {{-- (Sem Alterações) --}}
+    {{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) (Sem Alterações) --}}
     {{-- ================================================================== --}}
     <div id="noShowModal" class="fixed inset-0 z-50 hidden overflow-y-auto">
         <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -350,11 +354,19 @@
         }
 
         // --- Lógica do Pagamento ---
-        function openPaymentModal(id, totalPrice, remaining, clientName) {
+        // 1. A função agora aceita um quarto argumento: signalAmount
+        function openPaymentModal(id, totalPrice, remaining, signalAmount, clientName) {
             const form = document.getElementById('paymentForm');
             form.action = `/admin/pagamentos/${id}/finalizar`;
             
+            // 2. Popula o nome do cliente
             document.getElementById('modalClientName').innerText = clientName;
+            
+            // 3. Popula o campo do SINAL
+            const formattedSignal = signalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            document.getElementById('modalSignalAmount').innerText = formattedSignal;
+
+            // 4. Popula os valores do formulário
             // Garantir que os números sejam exibidos corretamente (sem arredondamento JS estranho)
             document.getElementById('modalFinalPrice').value = totalPrice.toFixed(2); 
             document.getElementById('modalAmountPaid').value = remaining.toFixed(2); 
@@ -420,9 +432,7 @@
             const formData = new FormData(this);
             const action = this.action;
             
-            // Removendo o confirm e usando uma lógica mais direta
             // Em um ambiente real, um modal de confirmação seria ideal
-
             fetch(action, {
                 method: 'POST',
                 headers: {
