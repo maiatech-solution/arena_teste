@@ -14,6 +14,9 @@
                 {{-- Card de Filtro de Data --}}
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg p-4 flex flex-col justify-center border border-gray-200 dark:border-gray-700">
                     <form method="GET" action="{{ route('admin.payment.index') }}">
+                        {{-- Preserva o termo de pesquisa ao trocar a data --}}
+                        <input type="hidden" name="search" value="{{ request('search') }}">
+
                         <label for="date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filtrar Data:</label>
                         <div class="flex gap-2">
                             <input type="date" name="date" id="date" value="{{ $selectedDate }}" 
@@ -22,7 +25,7 @@
                             
                             {{-- Se estiver filtrando uma reserva específica, adicionamos um botão de reset --}}
                             @if(request()->has('reserva_id'))
-                                <a href="{{ route('admin.payment.index', ['date' => $selectedDate]) }}" 
+                                <a href="{{ route('admin.payment.index', ['date' => $selectedDate, 'search' => request('search')]) }}" 
                                    class="px-2 py-1 flex items-center justify-center text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400"
                                    title="Mostrar todas as reservas do dia">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -57,6 +60,34 @@
                     </div>
                 </div>
             </div>
+            
+            {{-- 1.5. BARRA DE PESQUISA (Nome/WhatsApp) --}}
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg p-4">
+                <form method="GET" action="{{ route('admin.payment.index') }}">
+                    {{-- Preserva a data ao fazer a pesquisa --}}
+                    <input type="hidden" name="date" value="{{ $selectedDate }}">
+                    
+                    <div class="flex items-end gap-3">
+                        <div class="flex-grow">
+                            <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar Cliente (Nome ou WhatsApp):</label>
+                            <input type="text" name="search" id="search" value="{{ request('search') }}" 
+                                placeholder="Digite o nome ou WhatsApp do cliente..."
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white">
+                        </div>
+                        <button type="submit" class="h-10 px-4 py-2 bg-indigo-600 text-white rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 flex items-center justify-center">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </button>
+                        @if(request()->has('search'))
+                            <a href="{{ route('admin.payment.index', ['date' => $selectedDate, 'reserva_id' => request('reserva_id')]) }}" 
+                               class="h-10 px-2 py-1 flex items-center justify-center text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 transition duration-150"
+                               title="Limpar pesquisa">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </a>
+                        @endif
+                    </div>
+                </form>
+            </div>
+
 
             {{-- 2. TABELA DE RESERVAS --}}
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg">
@@ -70,7 +101,7 @@
                         
                         {{-- Botão Voltar para a visão diária, se estiver no filtro de ID --}}
                         @if(request()->has('reserva_id'))
-                            <a href="{{ route('admin.payment.index', ['date' => $selectedDate]) }}" 
+                            <a href="{{ route('admin.payment.index', ['date' => $selectedDate, 'search' => request('search')]) }}" 
                                class="text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center">
                                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
                                 Ver Todas do Dia
@@ -86,7 +117,7 @@
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cliente</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status Fin.</th>
                                     <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Total (R$)</th>
-                                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Pago (R$)</th>
+                                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sinal (R$)</th>
                                     <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Restante</th>
                                     <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ações</th>
                                 </tr>
@@ -169,7 +200,7 @@
                                 @empty
                                     <tr>
                                         <td colspan="7" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                                            Nenhum agendamento encontrado para esta data.
+                                            Nenhum agendamento encontrado para esta data ou termo de pesquisa.
                                         </td>
                                     </tr>
                                 @endforelse
@@ -182,7 +213,7 @@
             {{-- 3. LINK DISCRETO PARA DASHBOARD NO FINAL DA PÁGINA --}}
             <div class="mt-8 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
                 <a href="{{ route('admin.financeiro.dashboard') }}" 
-                   class="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 transition duration-150">
+                    class="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 transition duration-150">
                     <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-8v8m-4-8v8M4 16h16a2 2 0 002-2V8a2 2 0 00-2-2H4a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
                     Ir para Relatórios
                 </a>
@@ -193,6 +224,7 @@
 
     {{-- ================================================================== --}}
     {{-- MODAL 1: FINALIZAR PAGAMENTO --}}
+    {{-- (Sem Alterações) --}}
     {{-- ================================================================== --}}
     <div id="paymentModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
         <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -255,6 +287,7 @@
 
     {{-- ================================================================== --}}
     {{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) --}}
+    {{-- (Sem Alterações) --}}
     {{-- ================================================================== --}}
     <div id="noShowModal" class="fixed inset-0 z-50 hidden overflow-y-auto">
         <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">

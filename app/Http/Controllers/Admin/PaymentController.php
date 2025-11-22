@@ -16,18 +16,20 @@ use App\Models\User;
 class PaymentController extends Controller
 {
     /**
-     * Exibe o Dashboard de Caixa e gerencia filtros de data e ID.
+     * Exibe o Dashboard de Caixa e gerencia filtros de data, ID e Pesquisa.
      */
     public function index(Request $request)
     {
         // 1. Definição da Data e ID da Reserva
         $selectedDateString = $request->input('data_reserva') 
-                            ?? $request->input('date') 
-                            ?? Carbon::today()->toDateString();
+                             ?? $request->input('date') 
+                             ?? Carbon::today()->toDateString();
         
         $dateObject = Carbon::parse($selectedDateString);
         // Captura o ID da reserva que pode ter vindo do dashboard
         $selectedReservaId = $request->input('reserva_id'); 
+        // 🎯 NOVO: Captura o termo de pesquisa
+        $searchTerm = $request->input('search');
 
         // =========================================================================
         // 1. CONSULTA REAL NO BANCO DE DADOS
@@ -35,7 +37,7 @@ class PaymentController extends Controller
         
         $query = Reserva::with('user'); // 🎯 Inicia a query e carrega os dados do cliente (User)
 
-        // --- LÓGICA DE FILTRO CONDICIONAL ---
+        // --- LÓGICA DE FILTRO DE DATA/ID ---
         if ($selectedReservaId) {
             // ✅ PRIORIDADE: Se um ID de reserva for fornecido (clique no dashboard),
             // filtra APENAS por ele.
@@ -43,6 +45,15 @@ class PaymentController extends Controller
         } else {
             // Caso contrário, filtra pela data (visão padrão do caixa diário).
             $query->whereDate('date', $dateObject);
+
+            // 🎯 NOVO: LÓGICA DE FILTRO POR PESQUISA (NOME OU WHATSAPP)
+            if ($searchTerm) {
+                $searchWildcard = '%' . $searchTerm . '%';
+                $query->where(function ($q) use ($searchWildcard) {
+                    $q->where('client_name', 'LIKE', $searchWildcard)
+                      ->orWhere('client_contact', 'LIKE', $searchWildcard);
+                });
+            }
         }
         
         // Filtros comuns (aplicados em ambos os casos para garantir que sejam reservas de cliente válidas)
@@ -55,8 +66,9 @@ class PaymentController extends Controller
                   Reserva::STATUS_PENDENTE,
                   'completed', 
                   'no_show'    
-              ]); 
-            
+              ])
+              ->orderBy('start_time', 'asc'); // ⚠️ Adicionado ordenação para garantir ordem cronológica
+              
         $reservas = $query->get();
 
         // 2. Cálculo dos Totais sobre a coleção de Reservas
@@ -69,7 +81,8 @@ class PaymentController extends Controller
         $totalReceived = $reservas->sum('total_paid');
         
         // Total Pendente (A Receber): Soma do que falta pagar (usando o accessor do modelo)
-        $totalPending = $reservas->sum('remaining_amount'); // Usando getRemainingAmountAttribute()
+        // OBS: Certifique-se de ter o accessor getRemainingAmountAttribute() no seu modelo Reserva!
+        $totalPending = $reservas->sum('remaining_amount'); 
         
         // Faltas (No-Show)
         $noShowCount = $reservas->where('status', 'no_show')->count();
@@ -99,9 +112,9 @@ class PaymentController extends Controller
 
         if ($request->amount_paid <= 0) {
              return response()->json([
-                'success' => false, 
-                'message' => 'O valor a ser recebido deve ser positivo.',
-            ], 422);
+                 'success' => false, 
+                 'message' => 'O valor a ser recebido deve ser positivo.',
+             ], 422);
         }
 
         try {
@@ -132,7 +145,7 @@ class PaymentController extends Controller
                 
                 // Se o pagamento estiver completo, marca a reserva como concluída
                 if ($paymentStatus === 'paid') {
-                     $reserva->status = 'completed'; 
+                       $reserva->status = 'completed'; 
                 }
                 
                 $reserva->save(); 
@@ -187,9 +200,9 @@ class PaymentController extends Controller
                 
                 // Mantém o pagamento retido, se houver sinal
                 if ($reserva->signal_value > 0) {
-                     $reserva->payment_status = 'retained'; 
+                       $reserva->payment_status = 'retained'; 
                 } else {
-                     $reserva->payment_status = 'unpaid'; 
+                       $reserva->payment_status = 'unpaid'; 
                 }
                 $reserva->save(); 
 
