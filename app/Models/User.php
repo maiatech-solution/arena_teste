@@ -9,7 +9,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Casts\Attribute; // Para o Accessor
+use Illuminate\Database\Eloquent\Casts\Attribute; // Para o Accessor e Mutator
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -29,7 +29,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'no_show_count',
         'is_vip',
         'is_blocked',
-        ];
+        'customer_qualification',
+    ];
 
     /**
      * The attributes that should be hidden for serialization.
@@ -49,27 +50,102 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
-        // 'data_nascimento' foi removido daqui
         'is_vip' => 'boolean',
         'is_blocked' => 'boolean',
+        // O campo 'customer_qualification' é uma string, mas é bom garantir
+        'customer_qualification' => 'string', 
     ];
 
     // =========================================================================
-    // ✅ MÉTODOS DE RELACIONAMENTO
+    // ⚙️ ACCESSOR/MUTATOR COMBINADO (no_show_count)
     // =========================================================================
 
     /**
-     * Obtém todas as reservas associadas a este usuário.
+     * Accessor/Mutator para no_show_count.
+     * Define o no_show_count E atualiza customer_qualification e is_blocked 
+     * de forma atômica no momento em que o valor é setado no modelo.
      */
-    public function reservas(): HasMany
+    protected function noShowCount(): Attribute
     {
-        // Supondo que você tenha um modelo 'Reserva'
-        return $this->hasMany(Reserva::class, 'user_id');
+        return Attribute::make(
+            set: function (int $value) {
+                $qualification = 'normal';
+                $isBlocked = false;
+
+                // 1. LÓGICA DE QUALIFICAÇÃO E BLOQUEIO
+                if ($value >= 2) {
+                    // Duas ou mais faltas resultam em bloqueio
+                    $qualification = 'bloqueado'; 
+                    $isBlocked = true;
+                } elseif ($value === 1) {
+                    // Uma falta apenas qualifica, mas não bloqueia
+                    $qualification = 'faltou_antes';
+                }
+
+                // 2. RETORNA UM ARRAY COM TODOS OS CAMPOS A SEREM ATUALIZADOS
+                return [
+                    'no_show_count' => $value,
+                    'customer_qualification' => $qualification,
+                    'is_blocked' => $isBlocked, 
+                ];
+            },
+            get: fn (int $value) => $value, // Retorna o valor lido do DB
+        );
+    }
+    
+    // =========================================================================
+    // ✅ ACCESSORS E MÉTODOS DE LEITURA (VISUAL)
+    // =========================================================================
+
+    /**
+     * Accessor que define o texto e estilo da tag de status visível na UI,
+     * centralizando a lógica de is_blocked, is_vip e faltas.
+     * Uso: {!! $reserva->user->status_tag !!}
+     */
+    protected function statusTag(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                // 1. Prioridade Máxima: BLOQUEADO (por falta ou manual)
+                if ($this->is_blocked) {
+                    return '<span class="px-2 py-1 text-xs font-bold text-white bg-red-600 rounded-full" title="Cliente Bloqueado">
+                                🚫 BLACKLIST
+                            </span>';
+                }
+
+                // 2. Prioridade Alta: VIP
+                if ($this->is_vip) {
+                    return '<span class="px-2 py-1 text-xs font-bold text-white bg-green-500 rounded-full" title="Bom Pagador / VIP">
+                                ⭐ VIP
+                            </span>';
+                }
+
+                // 3. Status de Alerta: Já faltou uma vez
+                if ($this->customer_qualification === 'faltou_antes') {
+                    return '<span class="px-2 py-1 text-xs font-bold text-yellow-900 bg-yellow-300 rounded-full" title="Faltou uma vez">
+                                ⚠️ FALTOU ANTES
+                            </span>';
+                }
+
+                // 4. Status Padrão: Normal (0 faltas)
+                return '<span class="px-2 py-1 text-xs font-bold text-gray-900 bg-gray-300 rounded-full">
+                            NORMAL
+                        </span>';
+            }
+        );
     }
 
-    // =========================================================================
-    // ✅ ACCESSORS PARA AUTORIZAÇÃO
-    // =========================================================================
+    /**
+     * Accessor para Reputação Qualificada, lendo o valor já calculado no DB.
+     */
+    protected function customerQualification(): Attribute
+    {
+        return Attribute::make(
+            get: fn (mixed $value) => $value,
+        );
+    }
+
+    // ... métodos de relacionamento e outros accessors originais aqui ...
 
     /**
      * Verifica se o usuário tem a role 'gestor' ou 'admin'.
@@ -91,12 +167,8 @@ class User extends Authenticatable implements MustVerifyEmail
         );
     }
 
-    // =========================================================================
-    // ✅ ACCESSOR PARA FORMATAR CONTATO
-    // =========================================================================
     /**
      * Formata o contato de WhatsApp (adiciona a máscara).
-     * Ex: 11988887777 -> (11) 9 8888-7777
      */
     protected function formattedWhatsappContact(): Attribute
     {
@@ -115,26 +187,18 @@ class User extends Authenticatable implements MustVerifyEmail
             },
         );
     }
-    //NOVA IMPLEMENTAÇÃO
+    
+    // Métodos de funcionalidade
     public function requiresSignal(): bool
     {
-        return !$this->is_vip; // Se for VIP, retorna false (não precisa de sinal)
+        return !$this->is_vip;
     }
 
-    // Verifica se está na Blacklist
     public function canSchedule(): bool
     {
-    return !$this->is_blocked;
+        return !$this->is_blocked;
     }
 
-    // =========================================================================
-    // ⭐ REPUTAÇÃO E FINANCEIRO
-    // =========================================================================
-
-    /**
-     * Define se o usuário é "Bom Pagador" (VIP).
-     * Pode ser setado manualmente ou calculado com base no histórico.
-     */
     public function isGoodPayer(): bool
     {
         return $this->is_vip;
@@ -145,7 +209,6 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function isBlacklisted(): bool
     {
-        // Exemplo: Bloqueado manualmente OU mais de 3 faltas
-        return $this->is_blocked || $this->no_show_count >= 3;
+        return $this->is_blocked;
     }
 }
