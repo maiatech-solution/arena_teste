@@ -223,84 +223,101 @@
     </div>
 
     {{-- ================================================================== --}}
-    {{-- MODAL 1: FINALIZAR PAGAMENTO (MODIFICADO) --}}
+    {{-- MODAL 1: FINALIZAR PAGAMENTO (CORRIGIDO: Estrutura Otimizada) --}}
     {{-- ================================================================== --}}
-    <div id="paymentModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closePaymentModal()"></div>
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            
-            <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full">
-                <form id="paymentForm" method="POST">
-                    @csrf
-                    <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                        <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="modal-title">
-                            Finalizar Pagamento
-                        </h3>
-                        <div class="mt-2">
-                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                                Cliente: <span id="modalClientName" class="font-bold"></span>
-                            </p>
+    {{-- A classe 'flex items-center justify-center p-4' no contêiner 'fixed' garante a centralização --}}
+    <div id="paymentModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        
+        {{-- 1. Overlay (Fixed para cobrir a tela) --}}
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closePaymentModal()"></div>
+        
+        {{-- 2. Modal Box (O conteúdo real, que é centralizado pelo pai flex) --}}
+        <div class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all max-w-lg w-full">
+            <form id="paymentForm">
+                @csrf
+                <!-- ID da Reserva Injetado via JS -->
+                <input type="hidden" name="reserva_id" id="modalReservaId"> 
+                
+                <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="modal-title">
+                        Finalizar Pagamento
+                    </h3>
+                    <div class="mt-2">
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                            Cliente: <span id="modalClientName" class="font-bold"></span>
+                        </p>
 
-                            {{-- Valor Final (Editável para Desconto) --}}
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor Total Acordado (R$)</label>
-                                <input type="number" step="0.01" name="final_price" id="modalFinalPrice" 
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:text-white">
-                                <p class="text-xs text-gray-500 mt-1">Edite este valor apenas se for aplicar um desconto no total.</p>
-                            </div>
+                        {{-- Valor Final (Editável para Desconto) --}}
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor Total Acordado (R$)</label>
+                            <input type="number" step="0.01" name="final_price" id="modalFinalPrice" 
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:text-white">
+                            <p class="text-xs text-gray-500 mt-1">Edite este valor apenas se for aplicar um desconto no total.</p>
+                        </div>
 
-                            {{-- Valor a Pagar Agora --}}
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor Recebido Agora (R$)</label>
-                                <input type="number" step="0.01" name="amount_paid" id="modalAmountPaid" required
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:text-white font-bold text-lg">
-                            </div>
+                        {{-- Valor a Pagar Agora --}}
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor Recebido Agora (R$)</label>
+                            <input type="number" step="0.01" name="amount_paid" id="modalAmountPaid" required
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:text-white font-bold text-lg">
+                        </div>
 
-                             {{-- 🎯 CAMPO NOVO: VALOR DO SINAL JÁ PAGO --}}
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sinal Recebido (R$)</label>
-                                <span id="modalSignalAmount" class="text-xl font-extrabold text-indigo-900 dark:text-indigo-200 mt-1 block">R$ 0,00</span>
-                            </div>
+                         {{-- 🎯 SINAL JÁ PAGO (Display) --}}
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sinal Recebido (R$)</label>
+                            <span id="modalSignalAmount" class="text-xl font-extrabold text-indigo-900 dark:text-indigo-200 mt-1 block">R$ 0,00</span>
+                        </div>
 
-                            {{-- Método de Pagamento --}}
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Forma de Pagamento</label>
-                                <select name="payment_method" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:text-white">
-                                    <option value="pix">Pix</option>
-                                    <option value="money">Dinheiro</option>
-                                    <option value="credit_card">Cartão de Crédito</option>
-                                    <option value="debit_card">Cartão de Débito</option>
-                                    <option value="transfer">Transferência</option>
-                                    <option value="other">Outro</option>
-                                </select>
-                            </div>
+                        {{-- Método de Pagamento (Forma de Pagamento) --}}
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Forma de Pagamento</label>
+                            <select name="payment_method" id="modalPaymentMethod" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:text-white">
+                                <option value="" disabled selected>Selecione a forma</option>
+                                <option value="pix">Pix</option>
+                                <option value="money">Dinheiro</option>
+                                <option value="credit_card">Cartão de Crédito</option>
+                                <option value="debit_card">Cartão de Débito</option>
+                                <option value="transfer">Transferência</option>
+                                <option value="other">Outro</option>
+                            </select>
                         </div>
                     </div>
-                    <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                        <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
-                            Confirmar Recebimento
-                        </button>
-                        <button type="button" onclick="closePaymentModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm dark:bg-gray-600 dark:text-white dark:hover:bg-gray-500">
-                            Cancelar
-                        </button>
-                    </div>
-                </form>
-            </div>
+                    
+                    {{-- Placeholder para Erros AJAX --}}
+                    <div id="payment-error-message" class="text-red-500 text-sm mt-3 hidden"></div>
+                    
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="submit" id="submitPaymentBtn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                         <span id="submitPaymentText">Confirmar Recebimento</span>
+                        <svg id="submitPaymentSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </button>
+                    <button type="button" onclick="closePaymentModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm dark:bg-gray-600 dark:text-white dark:hover:bg-gray-500">
+                        Cancelar
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
     {{-- ================================================================== --}}
-    {{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) (Sem Alterações) --}}
+    {{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) (CORRIGIDO: Estrutura Otimizada) --}}
     {{-- ================================================================== --}}
-    <div id="noShowModal" class="fixed inset-0 z-50 hidden overflow-y-auto">
-        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeNoShowModal()"></div>
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            
-            <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full">
-                <form id="noShowForm" method="POST">
+    {{-- A classe 'flex items-center justify-center p-4' no contêiner 'fixed' garante a centralização --}}
+    <div id="noShowModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
+        
+        {{-- 1. Overlay (Fixed para cobrir a tela) --}}
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeNoShowModal()"></div>
+        
+        {{-- 2. Modal Box (O conteúdo real, que é centralizado pelo pai flex) --}}
+        <div class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all max-w-lg w-full">
+                <form id="noShowForm">
                     @csrf
+                    <input type="hidden" name="reserva_id" id="noShowReservaId">
+
                     <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                         <h3 class="text-lg leading-6 font-medium text-red-600 dark:text-red-400" id="modal-title">
                             Registrar Falta (No-Show)
@@ -327,10 +344,16 @@
                                 <textarea name="notes" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-700 dark:text-white" placeholder="Motivo ou detalhes..."></textarea>
                             </div>
                         </div>
+                        {{-- Placeholder para Erros AJAX --}}
+                        <div id="noshow-error-message" class="text-red-500 text-sm mt-3 hidden"></div>
                     </div>
                     <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                        <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
-                            Confirmar Falta
+                        <button type="submit" id="submitNoShowBtn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                             <span id="submitNoShowText">Confirmar Falta</span>
+                            <svg id="submitNoShowSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
                         </button>
                         <button type="button" onclick="closeNoShowModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm dark:bg-gray-600 dark:text-white dark:hover:bg-gray-500">
                             Cancelar
@@ -338,62 +361,89 @@
                     </div>
                 </form>
             </div>
-        </div>
     </div>
 
-    {{-- SCRIPT PARA MODAIS (AJUSTES) --}}
+    {{-- SCRIPT PARA MODAIS --}}
     <script>
         // Função customizada para mostrar mensagem (substituindo o alert)
         function showMessage(message, isSuccess = true) {
-            // Implementação simples de console.log para evitar alert/confirm
             console.log(isSuccess ? 'SUCESSO: ' : 'ERRO: ', message);
-            
-            // Em um app real, você implementaria um Toast/Modal bonito aqui.
-            // Para este ambiente, vamos recarregar a página e exibir uma mensagem simples
-            // ou apenas confiar no reload para mostrar o novo estado.
         }
 
         // --- Lógica do Pagamento ---
-        // 1. A função agora aceita um quarto argumento: signalAmount
         function openPaymentModal(id, totalPrice, remaining, signalAmount, clientName) {
-            const form = document.getElementById('paymentForm');
-            form.action = `/admin/pagamentos/${id}/finalizar`;
             
-            // 2. Popula o nome do cliente
+            // 1. Popula dados e IDs
+            document.getElementById('modalReservaId').value = id;
             document.getElementById('modalClientName').innerText = clientName;
             
-            // 3. Popula o campo do SINAL
             const formattedSignal = signalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             document.getElementById('modalSignalAmount').innerText = formattedSignal;
 
-            // 4. Popula os valores do formulário
-            // Garantir que os números sejam exibidos corretamente (sem arredondamento JS estranho)
+            // 2. Popula os valores (garantindo 2 casas decimais)
             document.getElementById('modalFinalPrice').value = totalPrice.toFixed(2); 
             document.getElementById('modalAmountPaid').value = remaining.toFixed(2); 
             
+            // 3. Limpa estados
+            document.getElementById('payment-error-message').textContent = '';
+            document.getElementById('payment-error-message').classList.add('hidden');
+            document.getElementById('modalPaymentMethod').value = ''; // Resetar seleção de método
+
+            // 4. Exibe o modal
             document.getElementById('paymentModal').classList.remove('hidden');
+            document.getElementById('paymentModal').classList.add('flex');
         }
 
         function closePaymentModal() {
             document.getElementById('paymentModal').classList.add('hidden');
+            document.getElementById('paymentModal').classList.remove('flex');
         }
 
         // Handle Payment Submit via AJAX 
         document.getElementById('paymentForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            const formData = new FormData(this);
-            const action = this.action;
+            
+            const reservaId = document.getElementById('modalReservaId').value;
+            const finalPrice = document.getElementById('modalFinalPrice').value;
+            const amountPaid = document.getElementById('modalAmountPaid').value;
+            const paymentMethod = document.getElementById('modalPaymentMethod').value;
+            const csrfToken = document.querySelector('input[name="_token"]').value;
+            
+            const submitBtn = document.getElementById('submitPaymentBtn');
+            const submitText = document.getElementById('submitPaymentText');
+            const submitSpinner = document.getElementById('submitPaymentSpinner');
+            const errorMessageDiv = document.getElementById('payment-error-message');
 
-            fetch(action, {
+            // 1. Validação simples
+            if (paymentMethod === '') {
+                errorMessageDiv.textContent = 'Por favor, selecione a Forma de Pagamento.';
+                errorMessageDiv.classList.remove('hidden');
+                return;
+            }
+
+            // 2. Estado de Carregamento
+            submitBtn.disabled = true;
+            submitText.classList.add('hidden');
+            submitSpinner.classList.remove('hidden');
+            errorMessageDiv.classList.add('hidden');
+
+            // 3. Envio AJAX (Assumindo a rota POST /admin/pagamentos/{reserva}/finalizar)
+            fetch(`/admin/pagamentos/${reservaId}/finalizar`, {
                 method: 'POST',
                 headers: {
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
                     'Accept': 'application/json'
                 },
-                body: formData
+                body: JSON.stringify({
+                    reserva_id: reservaId,
+                    final_price: finalPrice, 
+                    amount_paid: amountPaid,
+                    payment_method: paymentMethod 
+                })
             })
             .then(response => {
-                if (response.status >= 400) {
+                if (!response.ok) {
                     return response.json().then(data => {
                         throw new Error(data.message || 'Erro de validação ou processamento.');
                     });
@@ -403,61 +453,103 @@
             .then(data => {
                 if(data.success) {
                     showMessage('Pagamento registrado com sucesso!');
-                    location.reload(); // Recarrega para atualizar tabela e KPIs
+                    location.reload(); 
                 } else {
-                    showMessage('Erro: ' + data.message, false);
+                    errorMessageDiv.textContent = data.message || 'Erro ao processar pagamento.';
+                    errorMessageDiv.classList.remove('hidden');
                 }
             })
             .catch(error => {
                 console.error('Erro:', error);
-                showMessage('Erro ao processar pagamento: ' + error.message, false);
+                errorMessageDiv.textContent = 'Erro ao processar pagamento: ' + error.message;
+                errorMessageDiv.classList.remove('hidden');
+            })
+            .finally(() => {
+                // 4. Resetar Estado
+                submitBtn.disabled = false;
+                submitText.classList.remove('hidden');
+                submitSpinner.classList.add('hidden');
             });
         });
 
         // --- Lógica do No-Show ---
         function openNoShowModal(id, clientName) {
-            const form = document.getElementById('noShowForm');
-            form.action = `/admin/pagamentos/${id}/falta`;
-            
+            document.getElementById('noShowReservaId').value = id;
             document.getElementById('noShowClientName').innerText = clientName;
+            
+            document.getElementById('noshow-error-message').textContent = '';
+            document.getElementById('noshow-error-message').classList.add('hidden');
+
             document.getElementById('noShowModal').classList.remove('hidden');
+            document.getElementById('noShowModal').classList.add('flex');
         }
 
         function closeNoShowModal() {
             document.getElementById('noShowModal').classList.add('hidden');
+            document.getElementById('noShowModal').classList.remove('flex');
         }
 
         document.getElementById('noShowForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            const formData = new FormData(this);
-            const action = this.action;
             
-            // Em um ambiente real, um modal de confirmação seria ideal
-            fetch(action, {
+            const reservaId = document.getElementById('noShowReservaId').value;
+            const notes = this.querySelector('textarea[name="notes"]').value;
+            const blockUser = this.querySelector('input[name="block_user"]').checked ? 1 : 0;
+            const csrfToken = document.querySelector('input[name="_token"]').value;
+
+            const submitBtn = document.getElementById('submitNoShowBtn');
+            const submitText = document.getElementById('submitNoShowText');
+            const submitSpinner = document.getElementById('submitNoShowSpinner');
+            const errorMessageDiv = document.getElementById('noshow-error-message');
+
+            submitBtn.disabled = true;
+            submitText.classList.add('hidden');
+            submitSpinner.classList.remove('hidden');
+            errorMessageDiv.classList.add('hidden');
+
+            // Envio AJAX (Assumindo a rota POST /admin/pagamentos/{reserva}/falta)
+            fetch(`/admin/pagamentos/${reservaId}/falta`, {
                 method: 'POST',
                 headers: {
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
                     'Accept': 'application/json'
                 },
-                body: formData
+                body: JSON.stringify({
+                    notes: notes,
+                    block_user: blockUser
+                })
             })
-            .then(response => response.json())
+            .then(response => {
+                 if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.message || 'Erro de processamento.');
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 if(data.success) {
                     showMessage('Falta registrada com sucesso.');
                     location.reload();
                 } else {
-                    showMessage('Erro: ' + data.message, false);
+                    errorMessageDiv.textContent = data.message || 'Erro ao registrar falta.';
+                    errorMessageDiv.classList.remove('hidden');
                 }
             })
             .catch(error => {
                 console.error('Erro:', error);
-                showMessage('Erro ao registrar falta.', false);
+                errorMessageDiv.textContent = 'Erro ao registrar falta: ' + error.message;
+                errorMessageDiv.classList.remove('hidden');
+            })
+            .finally(() => {
+                submitBtn.disabled = false;
+                submitText.classList.remove('hidden');
+                submitSpinner.classList.add('hidden');
             });
         });
         
         // --- Destaque de Linha (após o reload) ---
-        // Se houver um ID de reserva na URL, garante que a rolagem vá para a linha
         document.addEventListener('DOMContentLoaded', () => {
              const urlParams = new URLSearchParams(window.location.search);
              const reservaId = urlParams.get('reserva_id');
@@ -465,7 +557,6 @@
              if (reservaId) {
                  const highlightedRow = document.querySelector(`.bg-indigo-50`);
                  if (highlightedRow) {
-                     // Rola para a reserva destacada
                      highlightedRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
                  }
              }

@@ -6,12 +6,13 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth; // 🎯 Importado para capturar o ID do gestor
 use Carbon\Carbon;
 
 // Modelos do usuário
 use App\Models\Reserva;
 use App\Models\User;
-// ⚠️ Adicione o seu modelo de transações se for utilizá-lo (ex: use App\Models\FinancialTransaction;)
+use App\Models\FinancialTransaction; // Modelo de transações financeiras
 
 class PaymentController extends Controller
 {
@@ -104,10 +105,11 @@ class PaymentController extends Controller
      */
     public function processPayment(Request $request, $reservaId)
     {
+        // 1. Validação: Inclui 'payment_method'
         $request->validate([
             'final_price' => 'required|numeric|min:0',
             'amount_paid' => 'required|numeric|min:0',
-            'payment_method' => 'required|string|max:50',
+            'payment_method' => 'required|string|max:50', 
         ]);
 
         if ($request->amount_paid <= 0) {
@@ -122,9 +124,14 @@ class PaymentController extends Controller
             $paymentStatus = 'pending'; 
 
             DB::transaction(function () use ($request, $reserva, &$paymentStatus) {
+                
+                // Variáveis capturadas do Request
                 $finalPrice = (float) $request->final_price;
                 $amountPaid = (float) $request->amount_paid;
-                $paymentMethod = $request->payment_method;
+                $paymentMethod = $request->payment_method; 
+                
+                // Variável do contexto
+                $managerId = Auth::id(); // 🎯 Captura o ID do gestor autenticado
 
                 $previousPaid = (float) $reserva->total_paid;
                 $newTotalPaid = $previousPaid + $amountPaid;
@@ -145,22 +152,22 @@ class PaymentController extends Controller
                 
                 // Se o pagamento estiver completo, marca a reserva como concluída
                 if ($paymentStatus === 'paid') {
-                       $reserva->status = 'completed'; 
+                        $reserva->status = 'completed'; 
                 }
                 
                 $reserva->save(); 
                 
-                // ⚠️ Se você tiver uma tabela de transações, adicione o registro aqui:
-                /*
-                \App\Models\FinancialTransaction::create([
+                // 🎯 PASSO ESSENCIAL: Cria o registro da transação financeira, incluindo manager_id e payment_method
+                FinancialTransaction::create([
                     'reserva_id' => $reserva->id,
                     'user_id' => $reserva->user_id,
+                    'manager_id' => $managerId, // ✅ ID do gestor
                     'amount' => $amountPaid,
-                    'type' => 'payment',
-                    'method' => $paymentMethod,
-                    'notes' => 'Pagamento processado via dashboard de caixa.',
+                    'type' => 'payment', // Pode ser ajustado para 'remaining' ou 'full' se necessário.
+                    'payment_method' => $paymentMethod, // ✅ Forma de pagamento
+                    'description' => 'Pagamento da reserva ' . $reserva->id . ' registrado via caixa.',
+                    'paid_at' => Carbon::now(),
                 ]);
-                */
             });
 
             return response()->json([
@@ -171,9 +178,14 @@ class PaymentController extends Controller
 
         } catch (\Exception $e) {
             Log::error("Erro ao processar pagamento: {$e->getMessage()}", ['reserva_id' => $reservaId]);
+            // Em caso de erro, verifica se é um erro de autenticação ou de database
+            $errorMessage = $e instanceof \Illuminate\Auth\AuthenticationException ? 
+                            'Usuário não autenticado para registrar o pagamento.' : 
+                            'Erro interno ao processar o pagamento. Contate o suporte.';
+                            
             return response()->json([
                 'success' => false, 
-                'message' => 'Erro interno ao processar o pagamento. Contate o suporte.',
+                'message' => $errorMessage,
             ], 500);
         }
     }
@@ -200,9 +212,9 @@ class PaymentController extends Controller
                 
                 // Mantém o pagamento retido, se houver sinal
                 if ($reserva->signal_value > 0) {
-                       $reserva->payment_status = 'retained'; 
+                        $reserva->payment_status = 'retained'; 
                 } else {
-                       $reserva->payment_status = 'unpaid'; 
+                        $reserva->payment_status = 'unpaid'; 
                 }
                 $reserva->save(); 
 
