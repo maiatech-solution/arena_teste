@@ -11,6 +11,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ApiReservaController;
 use App\Http\Controllers\Admin\PaymentController;
+use App\Http\Controllers\FinanceiroController; // <--- NOVO: Importa o Controller de Finanças
 
 // -----------------------------------------------------------------------------------
 // 🏠 ROTA RAIZ (PÚBLICA) - Bem-vindo à Arena
@@ -181,9 +182,12 @@ Route::middleware(['auth', 'gestor'])->group(function () {
     Route::post('/admin/pagamentos/{reserva}/falta', [PaymentController::class, 'registerNoShow'])->name('admin.payment.noshow');
     
     // 📊 ROTAS DO DASHBOARD FINANCEIRO
-    Route::get('/admin/financeiro', [AdminController::class, 'dashboardFinanceiro'])->name('admin.financeiro.dashboard');
-    Route::get('/api/financeiro/resumo', [AdminController::class, 'getResumoFinanceiro'])->name('api.financeiro.resumo');
-    Route::get('/api/financeiro/pagamentos-pendentes', [AdminController::class, 'getPagamentosPendentes'])->name('api.financeiro.pagamentos-pendentes');
+    // CORRIGIDO: Aponta para o FinanceiroController
+    Route::get('/admin/financeiro', [FinanceiroController::class, 'index'])->name('admin.financeiro.dashboard');
+    // CORRIGIDO: Aponta para o FinanceiroController
+    Route::get('/api/financeiro/resumo', [FinanceiroController::class, 'getResumo'])->name('api.financeiro.resumo');
+    // CORRIGIDO: Aponta para o FinanceiroController
+    Route::get('/api/financeiro/pagamentos-pendentes', [FinanceiroController::class, 'getPagamentosPendentes'])->name('api.financeiro.pagamentos-pendentes');
 
     // FIM DO GRUPO DE ROTAS 'admin.'
     // ===============================================

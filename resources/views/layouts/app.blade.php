@@ -32,5 +32,8 @@
                 {{ $slot }}
             </main>
         </div>
+
+        <!-- 👇 ONDE O SEU JS ESTAVA FALTANDO! 👇 -->
+        @stack('scripts') 
     </body>
 </html>
