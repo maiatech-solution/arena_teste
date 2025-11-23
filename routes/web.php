@@ -85,6 +85,10 @@ Route::middleware(['auth', 'gestor'])->group(function () {
     Route::get('/api/clientes/search', [UserController::class, 'searchClients'])
         ->name('admin.api.search-clients');
 
+    // 🎯 NOVO: ROTA API PARA BUSCAR STATUS/REPUTAÇÃO DO CLIENTE PELO CONTATO
+    Route::get('/api/users/reputation/{contact}', [UserController::class, 'getReputation'])
+        ->name('api.users.reputation'); 
+
     // =========================================================================
     // 🗓️ ROTAS API PARA AGENDAMENTO RÁPIDO/RECORRENTE (DO DASHBOARD)
     // =========================================================================
@@ -177,7 +181,6 @@ Route::middleware(['auth', 'gestor'])->group(function () {
     Route::post('/admin/pagamentos/{reserva}/falta', [PaymentController::class, 'registerNoShow'])->name('admin.payment.noshow');
     
     // 📊 ROTAS DO DASHBOARD FINANCEIRO
-    Route::get('/admin/financeiro', [AdminController::class, 'financeiro'])->name('admin.financeiro');
     Route::get('/admin/financeiro', [AdminController::class, 'dashboardFinanceiro'])->name('admin.financeiro.dashboard');
     Route::get('/api/financeiro/resumo', [AdminController::class, 'getResumoFinanceiro'])->name('api.financeiro.resumo');
     Route::get('/api/financeiro/pagamentos-pendentes', [AdminController::class, 'getPagamentosPendentes'])->name('api.financeiro.pagamentos-pendentes');

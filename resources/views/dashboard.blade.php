@@ -95,6 +95,11 @@
             opacity: 0.8;
             transition: opacity 0.2s;
         }
+        
+        /* Estilo para o campo de sinal VIP */
+        #signal_value.bg-indigo-50 {
+             background-color: #eef2ff !important;
+        }
     </style>
 
     <div class="py-12">
@@ -340,14 +345,19 @@
                         <p id="whatsapp-error-message" class="text-xs text-red-600 mt-1 hidden font-semibold">
                             ⚠️ Por favor, insira exatamente 11 dígitos para o WhatsApp (Ex: 91985320997).
                         </p>
+                        
+                        {{-- ✅ NOVO: Onde a reputação será exibida --}}
+                        <div id="client-reputation-display" class="mt-2 text-sm">
+                            <!-- Status de Reputação e VIP será injetado aqui dinamicamente -->
+                        </div>
                     </div>
                 </div>
 
-                {{-- ✅ CAMPO: VALOR DO SINAL --}}
+                {{-- ✅ CAMPO: VALOR DO SINAL (Será ajustado pelo JS se for VIP) --}}
                 <div class="mb-4">
                     <label for="signal_value" class="block text-sm font-medium text-gray-700">Valor do Sinal/Entrada (R$)</label>
                     <input type="number" name="signal_value" id="signal_value" step="0.01" min="0" placeholder="0.00"
-                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500">
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 transition duration-150">
                     <p class="text-xs text-gray-500 mt-1">Opcional. Valor pago antecipadamente para confirmar a reserva.</p>
                 </div>
                 {{-- FIM DO CAMPO --}}
@@ -389,6 +399,10 @@
         const RESERVED_API_URL = '{{ route("api.reservas.confirmadas") }}';
         const AVAILABLE_API_URL = '{{ route("api.horarios.disponiveis") }}';
         const SHOW_RESERVA_URL = '{{ route("admin.reservas.show", ":id") }}';
+        
+        // 🎯 NOVA ROTA para buscar a reputação do cliente (o :contact será substituído pelo JS)
+        // Você deve garantir que esta rota esteja definida no seu Laravel (ex: Route::get('users/reputation/{contact}', 'UserController@getReputation')->name('api.users.reputation');)
+        const USER_REPUTATION_URL = '{{ route("api.users.reputation", ":contact") }}';
 
         // 🎯 ROTA PARA O CAIXA/PAGAMENTO
         const PAYMENT_INDEX_URL = '{{ route("admin.payment.index") }}';
@@ -417,11 +431,15 @@
         let currentMethod = null;
         let currentUrlBase = null;
         let globalExpiringSeries = [];
+        // Variável global para armazenar temporariamente o status VIP/Reputação
+        let currentClientStatus = { is_vip: false, reputation_tag: '' };
 
         // Elementos do Formulário
         const clientNameInput = () => document.getElementById('client_name');
         const clientContactInput = () => document.getElementById('client_contact');
         const whatsappError = () => document.getElementById('whatsapp-error-message');
+        const reputationDisplay = () => document.getElementById('client-reputation-display');
+        const signalValueInput = () => document.getElementById('signal_value');
 
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -490,11 +508,76 @@
         };
 
         // =========================================================
+        // ✅ FUNÇÃO NOVA: BUSCAR REPUTAÇÃO DO CLIENTE
+        // =========================================================
+
+        /**
+         * Busca a reputação do cliente via API e atualiza o modal.
+         */
+        async function fetchClientReputation(contact) {
+            const displayEl = reputationDisplay();
+            const signalInput = signalValueInput();
+            
+            // Limpa estados anteriores
+            displayEl.innerHTML = '<span class="text-xs text-gray-500">Buscando reputação...</span>';
+            signalInput.value = ''; // Limpa o sinal para reinicialização
+            signalInput.removeAttribute('title');
+            signalInput.classList.remove('bg-indigo-50', 'border-indigo-400', 'border-green-500', 'border-red-500');
+
+            if (contact.length !== 11) {
+                displayEl.innerHTML = '';
+                currentClientStatus = { is_vip: false, reputation_tag: '' };
+                return;
+            }
+
+            const url = USER_REPUTATION_URL.replace(':contact', contact);
+
+            try {
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP! status: ${response.status}`);
+                }
+                
+                // A API deve retornar um objeto como: { status_tag: '<span...>', is_vip: true/false }
+                const data = await response.json(); 
+                
+                currentClientStatus.is_vip = data.is_vip || false;
+                currentClientStatus.reputation_tag = data.status_tag || '';
+                
+                // 1. Exibe a tag de reputação
+                if (currentClientStatus.reputation_tag) {
+                    displayEl.innerHTML = `<p class="font-semibold text-gray-700 mb-1">Reputação:</p>${currentClientStatus.reputation_tag}`;
+                } else {
+                    displayEl.innerHTML = '<span class="text-sm text-gray-500 font-medium p-1 bg-green-50 rounded-lg">👍 Novo Cliente ou Reputação OK.</span>';
+                }
+
+                // 2. Atualiza o valor do sinal se for VIP
+                if (currentClientStatus.is_vip) {
+                    signalInput.value = '0.00';
+                    signalInput.setAttribute('title', 'Sinal zerado automaticamente para cliente VIP.');
+                    signalInput.classList.add('bg-indigo-50', 'border-indigo-400', 'text-indigo-800');
+                    displayEl.insertAdjacentHTML('beforeend', '<span class="text-xs ml-2 text-indigo-600 font-bold p-1 bg-indigo-100 rounded">✅ VIP DETECTADO</span>');
+                } else {
+                    signalInput.value = ''; // Mantém limpo para entrada manual
+                    signalInput.classList.remove('bg-indigo-50', 'border-indigo-400', 'text-indigo-800');
+                }
+
+            } catch (error) {
+                console.error('[Reputation Debug] Erro ao buscar reputação:', error);
+                displayEl.innerHTML = '<span class="text-xs text-red-500">Falha ao buscar reputação.</span>';
+                currentClientStatus = { is_vip: false, reputation_tag: '' };
+            }
+        }
+
+
+        // =========================================================
         // 🚨 FUNÇÃO DE VALIDAÇÃO WHATSAPP (11 DÍGITOS)
         // =========================================================
 
         /**
-         * Valida se o contato do cliente é um número de WhatsApp com 11 dígitos.
+         * Valida se o contato do cliente é um número de WhatsApp com 11 dígitos
+         * e dispara a busca de reputação se for válido.
          */
         function validateClientContact(contact) {
             const numbersOnly = contact.replace(/\D/g, '');
@@ -502,15 +585,22 @@
 
             const errorElement = whatsappError();
             const contactInputEl = clientContactInput();
+            const displayEl = reputationDisplay();
+
+            contactInputEl.classList.remove('border-red-500', 'border-green-500');
 
             if (isValid) {
                 errorElement.classList.add('hidden');
-                contactInputEl.classList.remove('border-red-500');
                 contactInputEl.classList.add('border-green-500');
+                // ✅ NOVO: Dispara a busca da reputação apenas com 11 dígitos
+                fetchClientReputation(numbersOnly);
             } else {
                 errorElement.classList.remove('hidden');
                 contactInputEl.classList.add('border-red-500');
-                contactInputEl.classList.remove('border-green-500');
+                // Limpa o display se não for válido
+                displayEl.innerHTML = '';
+                signalValueInput().value = '';
+                currentClientStatus = { is_vip: false, reputation_tag: '' };
             }
 
             return isValid;
@@ -526,8 +616,6 @@
             const clientName = clientNameInput().value.trim();
             const clientContact = clientContactInput().value.trim();
             
-            // O valor do sinal é capturado automaticamente pelo FormData.entries()
-
             if (!clientName) {
                 alert("Por favor, preencha o Nome Completo do Cliente.");
                 return;
@@ -904,7 +992,7 @@
                             </div>
                             <div class="mt-3 md:mt-0">
                                 <button onclick="handleRenewal(${item.master_id})"
-                                            class="renew-btn-${item.master_id} w-full md:w-auto px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg text-sm">
+                                                class="renew-btn-${item.master_id} w-full md:w-auto px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg text-sm">
                                     Renovar por 1 Ano
                                 </button>
                             </div>
@@ -1017,11 +1105,12 @@
             quickBookingForm.addEventListener('submit', handleQuickBookingSubmit);
 
             clientContactInputEl.addEventListener('input', function() {
+                // Remove todos os caracteres não numéricos e limita a 11
                 this.value = this.value.replace(/\D/g,'').substring(0, 11);
-                validateClientContact(this.value);
-            });
-            clientContactInputEl.addEventListener('change', function() {
-                validateClientContact(this.value);
+                const cleanedContact = this.value; 
+                
+                // A validação agora dispara a busca de reputação se o contato tiver 11 dígitos
+                validateClientContact(cleanedContact); 
             });
 
 
@@ -1144,13 +1233,19 @@
                         document.getElementById('quick-end-time').value = endTimeInput;
                         document.getElementById('quick-price').value = price;
 
+                        // Limpa/Reseta os campos do formulário
                         clientNameInput().value = '';
                         clientContactInput().value = '';
                         whatsappError().classList.add('hidden');
                         clientContactInput().classList.remove('border-red-500', 'border-green-500');
+                        reputationDisplay().innerHTML = ''; // Limpa a reputação anterior
+                        currentClientStatus = { is_vip: false, reputation_tag: '' }; // Reseta o status
 
                         // Inicializa o campo de sinal do agendamento rápido
-                        document.getElementById('signal_value').value = '';
+                        signalValueInput().value = '';
+                        signalValueInput().removeAttribute('title');
+                        signalValueInput().classList.remove('bg-indigo-50', 'border-indigo-400', 'text-indigo-800');
+
 
                         document.getElementById('notes').value = '';
                         document.getElementById('is-recurrent').checked = false;
