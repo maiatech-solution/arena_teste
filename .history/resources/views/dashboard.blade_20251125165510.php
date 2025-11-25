@@ -97,7 +97,7 @@
         }
 
         /* Estilo para o campo de sinal VIP */
-        #signal_value_quick.bg-indigo-50 {
+        #signal_value.bg-indigo-50 {
              background-color: #eef2ff !important;
         }
         /* Estilo para campos de moeda no modal rápido */
@@ -444,8 +444,7 @@
         const reputationDisplay = () => document.getElementById('client-reputation-display');
         const signalValueInputQuick = () => document.getElementById('signal_value_quick'); // ✅ NOVO NOME
 
-
-        // === FUNÇÃO PARA FORMATAR MOEDA NO QUICK MODAL ===
+        // === NOVO: FUNÇÃO PARA FORMATAR MOEDA NO QUICK MODAL ===
         const formatMoneyQuick = (input) => {
             let value = input.value.replace(/\D/g, ''); // Remove tudo que não for dígito
             if (value.length === 0) return '0,00';
@@ -665,9 +664,12 @@
                 return;
             }
 
-            const form = document.getElementById('quick-booking-form');
+            const form = event.target;
             const formData = new FormData(form);
             const data = Object.fromEntries(formData.entries());
+
+            // ✅ CORREÇÃO CRÍTICA: Limpa e converte o valor do sinal, que agora vem formatado com vírgula (R$ 40,00)
+            const signalValueRaw = data.signal_value;
 
             // Função para limpar e converter string monetária (ex: "1.000,50" -> 1000.50)
             const cleanAndConvertForApi = (value) => {
@@ -677,10 +679,7 @@
                 return parseFloat(value) || 0.00;
             };
 
-            // ✅ CRÍTICO: Limpa e converte o valor do sinal antes de enviar
-            const signalValueRaw = data.signal_value;
             data.signal_value = cleanAndConvertForApi(signalValueRaw);
-
             // ⚠️ DEBUG CRÍTICO: Mostra os dados enviados.
             console.log("Dados enviados (signal_value limpo para API):", data.signal_value);
 
@@ -1255,14 +1254,6 @@
                     const extendedProps = event.extendedProps || {};
                     const status = extendedProps.status;
 
-                    // --- START DEBUG LOG ---
-                    console.log("--- Detalhes do Evento Clicado ---");
-                    console.log("ID da Reserva:", event.id);
-                    console.log("Extended Props:", extendedProps); // CRÍTICO: Verifique aqui o valor de signal_value
-                    console.log("----------------------------------");
-                    // --- END DEBUG LOG ---
-
-
                     if (status === 'pending') {
                         openPendingActionModal(event);
                         return;
@@ -1330,25 +1321,19 @@
                         const isRecurrent = extendedProps.is_recurrent;
                         // ✅ Pega o valor do sinal (já pago, se houver) da API do calendário
                         const signalValue = extendedProps.signal_value || 0;
-                        const price = extendedProps.price || 0; // Pega o preço total
-
 
                         const dateReservation = moment(startTime).format('YYYY-MM-DD');
                         const dateDisplay = moment(startTime).format('DD/MM/YYYY');
 
 
-                        // ✅ CORREÇÃO: Usando HH:mm para formato de 24 horas consistente
-                        let timeDisplay = moment(startTime).format('HH:mm');
+                        let timeDisplay = moment(startTime).format('H:i');
                         if (endTime) {
-                            timeDisplay += ' - ' + moment(endTime).format('HH:mm');
+                            timeDisplay += ' - ' + moment(endTime).format('H:i');
                         }
 
                         const titleParts = event.title.split(' - R$ ');
                         const title = titleParts[0];
-
-                        // ✅ CORREÇÃO: Usa extendedProps.price para o valor total
-                        const priceDisplayFormatted = parseFloat(price).toFixed(2).replace('.', ',');
-
+                        const priceDisplay = titleParts.length > 1 ? `R$ ${titleParts[1]}` : 'N/A';
 
                         let statusText = 'Confirmada';
 
@@ -1362,17 +1347,14 @@
                             '<p class="text-sm font-semibold text-fuchsia-600">Parte de uma Série Recorrente</p>' :
                             '<p class="text-sm font-semibold text-gray-500">Reserva Pontual</p>';
 
-                        // ✅ CORREÇÃO: Formata o valor do sinal para exibição
-                        const signalValueDisplay = parseFloat(signalValue).toFixed(2).replace('.', ',');
-
 
                         modalContent.innerHTML = `
                             <p class="font-semibold text-gray-900">${title}</p>
                             <p><strong>Status:</strong> <span class="uppercase font-bold text-sm text-indigo-600">${statusText}</span></p>
                             <p><strong>Data:</strong> ${dateDisplay}</p>
                             <p><strong>Horário:</strong> ${timeDisplay}</p>
-                            <p><strong>Valor:</strong> <span class="text-green-600 font-bold">R$ ${priceDisplayFormatted}</span></p>
-                            <p><strong>Sinal Pago:</strong> <span class="text-blue-600 font-bold">R$ ${signalValueDisplay}</span></p>
+                            <p><strong>Valor:</strong> <span class="text-green-600 font-bold">${priceDisplay}</span></p>
+                            <p><strong>Sinal Pago:</strong> <span class="text-blue-600 font-bold">R$ ${parseFloat(signalValue).toFixed(2).replace('.', ',')}</span></p>
                             ${recurrentStatus}
                         `;
 

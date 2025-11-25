@@ -97,11 +97,9 @@
         }
 
         /* Estilo para o campo de sinal VIP */
-        #signal_value_quick.bg-indigo-50 {
+        #signal_value.bg-indigo-50 {
              background-color: #eef2ff !important;
         }
-        /* Estilo para campos de moeda no modal rápido */
-        .input-money-quick { text-align: right; }
     </style>
 
     <div class="py-12">
@@ -355,15 +353,14 @@
                     </div>
                 </div>
 
-                {{-- ✅ CORREÇÃO CRÍTICA NO FRONTEND: MUDANDO DE TYPE="NUMBER" PARA TYPE="TEXT" --}}
+                {{-- ✅ CAMPO: VALOR DO SINAL (Será ajustado pelo JS se for VIP) --}}
                 <div class="mb-4">
-                    <label for="signal_value_quick" class="block text-sm font-medium text-gray-700">Valor do Sinal/Entrada (R$)</label>
-                    <input type="text" name="signal_value" id="signal_value_quick" value="0,00"
-                           placeholder="Ex: 40,00"
-                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 transition duration-150 input-money-quick">
+                    <label for="signal_value" class="block text-sm font-medium text-gray-700">Valor do Sinal/Entrada (R$)</label>
+                    <input type="number" name="signal_value" id="signal_value" step="0.01" min="0" placeholder="0.00"
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 transition duration-150">
                     <p class="text-xs text-gray-500 mt-1">Opcional. Valor pago antecipadamente para confirmar a reserva.</p>
                 </div>
-                {{-- FIM DO CAMPO CORRIGIDO --}}
+                {{-- FIM DO CAMPO --}}
 
                 {{-- CHECKBOX PARA RECORRÊNCIA --}}
                 <div class="mb-4 p-3 border border-indigo-200 rounded-lg bg-indigo-50">
@@ -442,29 +439,7 @@
         const clientContactInput = () => document.getElementById('client_contact');
         const whatsappError = () => document.getElementById('whatsapp-error-message');
         const reputationDisplay = () => document.getElementById('client-reputation-display');
-        const signalValueInputQuick = () => document.getElementById('signal_value_quick'); // ✅ NOVO NOME
-
-
-        // === FUNÇÃO PARA FORMATAR MOEDA NO QUICK MODAL ===
-        const formatMoneyQuick = (input) => {
-            let value = input.value.replace(/\D/g, ''); // Remove tudo que não for dígito
-            if (value.length === 0) return '0,00';
-
-            while (value.length < 3) {
-                value = '0' + value;
-            }
-
-            let integerPart = value.substring(0, value.length - 2);
-            let decimalPart = value.substring(value.length - 2);
-
-            integerPart = integerPart.replace(/^0+/, '');
-            if (integerPart.length === 0) integerPart = '0';
-
-            integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-
-            return `${integerPart},${decimalPart}`;
-        };
-        // ========================================================
+        const signalValueInput = () => document.getElementById('signal_value');
 
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -478,19 +453,6 @@
                     globalExpiringSeries = [];
                 }
             }
-
-            // Aplicar formatação nos inputs de moeda do modal rápido
-            document.querySelectorAll('.input-money-quick').forEach(input => {
-                input.value = formatMoneyQuick(input);
-
-                input.addEventListener('input', (e) => {
-                    e.target.value = formatMoneyQuick(e.target);
-                });
-
-                input.addEventListener('blur', (e) => {
-                    e.target.value = formatMoneyQuick(e.target);
-                });
-            });
         });
 
 
@@ -554,11 +516,11 @@
          */
         async function fetchClientReputation(contact) {
             const displayEl = reputationDisplay();
-            const signalInput = signalValueInputQuick();
+            const signalInput = signalValueInput();
 
             // Limpa estados anteriores
             displayEl.innerHTML = '<span class="text-xs text-gray-500">Buscando reputação...</span>';
-            // Deixamos o valor do sinal no formulário, mas limpamos o estilo
+            signalInput.value = ''; // Limpa o sinal para reinicialização
             signalInput.removeAttribute('title');
             signalInput.classList.remove('bg-indigo-50', 'border-indigo-400', 'text-indigo-800');
 
@@ -590,15 +552,14 @@
                     displayEl.innerHTML = '<span class="text-sm text-gray-500 font-medium p-1 bg-green-50 rounded-lg">👍 Novo Cliente ou Reputação OK.</span>';
                 }
 
-                // 2. Atualiza o valor do sinal se for VIP (seta para 0,00)
+                // 2. Atualiza o valor do sinal se for VIP
                 if (currentClientStatus.is_vip) {
-                    signalInput.value = '0,00';
+                    signalInput.value = '0.00';
                     signalInput.setAttribute('title', 'Sinal zerado automaticamente para cliente VIP.');
                     signalInput.classList.add('bg-indigo-50', 'border-indigo-400', 'text-indigo-800');
                     displayEl.insertAdjacentHTML('beforeend', '<span class="text-xs ml-2 text-indigo-600 font-bold p-1 bg-indigo-100 rounded">✅ VIP DETECTADO</span>');
                 } else {
-                    // Se não for VIP, restaura para 0,00 ou o valor inicial
-                    signalInput.value = '0,00';
+                    signalInput.value = ''; // Mantém limpo para entrada manual
                     signalInput.classList.remove('bg-indigo-50', 'border-indigo-400', 'text-indigo-800');
                 }
 
@@ -638,7 +599,7 @@
                 contactInputEl.classList.add('border-red-500');
                 // Limpa o display se não for válido
                 displayEl.innerHTML = '';
-                signalValueInputQuick().value = '0,00';
+                signalValueInput().value = '';
                 currentClientStatus = { is_vip: false, reputation_tag: '' };
             }
 
@@ -665,24 +626,16 @@
                 return;
             }
 
-            const form = document.getElementById('quick-booking-form');
+            const form = event.target;
             const formData = new FormData(form);
             const data = Object.fromEntries(formData.entries());
 
-            // Função para limpar e converter string monetária (ex: "1.000,50" -> 1000.50)
-            const cleanAndConvertForApi = (value) => {
-                if (!value) return 0.00;
-                value = value.replace('.', ''); // Remove separadores de milhar
-                value = value.replace(',', '.'); // Troca vírgula por ponto decimal
-                return parseFloat(value) || 0.00;
-            };
-
-            // ✅ CRÍTICO: Limpa e converte o valor do sinal antes de enviar
-            const signalValueRaw = data.signal_value;
-            data.signal_value = cleanAndConvertForApi(signalValueRaw);
+            // ✅ CORREÇÃO CRÍTICA: Garante que signal_value é um float válido ou 0
+            // Isso previne que o valor chegue como string vazia no PHP, o que pode causar problemas
+            data.signal_value = parseFloat(data.signal_value) || 0;
 
             // ⚠️ DEBUG CRÍTICO: Mostra os dados enviados.
-            console.log("Dados enviados (signal_value limpo para API):", data.signal_value);
+            console.log("Dados enviados (incluindo signal_value):", data);
 
             const isRecurrent = document.getElementById('is-recurrent').checked;
             const targetUrl = isRecurrent ? RECURRENT_STORE_URL : QUICK_STORE_URL;
@@ -1255,14 +1208,6 @@
                     const extendedProps = event.extendedProps || {};
                     const status = extendedProps.status;
 
-                    // --- START DEBUG LOG ---
-                    console.log("--- Detalhes do Evento Clicado ---");
-                    console.log("ID da Reserva:", event.id);
-                    console.log("Extended Props:", extendedProps); // CRÍTICO: Verifique aqui o valor de signal_value
-                    console.log("----------------------------------");
-                    // --- END DEBUG LOG ---
-
-
                     if (status === 'pending') {
                         openPendingActionModal(event);
                         return;
@@ -1304,9 +1249,9 @@
                         currentClientStatus = { is_vip: false, reputation_tag: '' }; // Reseta o status
 
                         // Inicializa o campo de sinal do agendamento rápido
-                        signalValueInputQuick().value = '0,00';
-                        signalValueInputQuick().removeAttribute('title');
-                        signalValueInputQuick().classList.remove('bg-indigo-50', 'border-indigo-400', 'text-indigo-800');
+                        signalValueInput().value = '';
+                        signalValueInput().removeAttribute('title');
+                        signalValueInput().classList.remove('bg-indigo-50', 'border-indigo-400', 'text-indigo-800');
 
 
                         document.getElementById('notes').value = '';
@@ -1330,25 +1275,20 @@
                         const isRecurrent = extendedProps.is_recurrent;
                         // ✅ Pega o valor do sinal (já pago, se houver) da API do calendário
                         const signalValue = extendedProps.signal_value || 0;
-                        const price = extendedProps.price || 0; // Pega o preço total
 
-
-                        const dateReservation = moment(startTime).format('YYYY-MM-DD');
                         const dateDisplay = moment(startTime).format('DD/MM/YYYY');
 
+                        const dateReservation = moment(startTime).format('YYYY-MM-DD');
 
-                        // ✅ CORREÇÃO: Usando HH:mm para formato de 24 horas consistente
-                        let timeDisplay = moment(startTime).format('HH:mm');
+
+                        let timeDisplay = moment(startTime).format('H:i');
                         if (endTime) {
-                            timeDisplay += ' - ' + moment(endTime).format('HH:mm');
+                            timeDisplay += ' - ' + moment(endTime).format('H:i');
                         }
 
                         const titleParts = event.title.split(' - R$ ');
                         const title = titleParts[0];
-
-                        // ✅ CORREÇÃO: Usa extendedProps.price para o valor total
-                        const priceDisplayFormatted = parseFloat(price).toFixed(2).replace('.', ',');
-
+                        const priceDisplay = titleParts.length > 1 ? `R$ ${titleParts[1]}` : 'N/A';
 
                         let statusText = 'Confirmada';
 
@@ -1362,17 +1302,14 @@
                             '<p class="text-sm font-semibold text-fuchsia-600">Parte de uma Série Recorrente</p>' :
                             '<p class="text-sm font-semibold text-gray-500">Reserva Pontual</p>';
 
-                        // ✅ CORREÇÃO: Formata o valor do sinal para exibição
-                        const signalValueDisplay = parseFloat(signalValue).toFixed(2).replace('.', ',');
-
 
                         modalContent.innerHTML = `
                             <p class="font-semibold text-gray-900">${title}</p>
                             <p><strong>Status:</strong> <span class="uppercase font-bold text-sm text-indigo-600">${statusText}</span></p>
                             <p><strong>Data:</strong> ${dateDisplay}</p>
                             <p><strong>Horário:</strong> ${timeDisplay}</p>
-                            <p><strong>Valor:</strong> <span class="text-green-600 font-bold">R$ ${priceDisplayFormatted}</span></p>
-                            <p><strong>Sinal Pago:</strong> <span class="text-blue-600 font-bold">R$ ${signalValueDisplay}</span></p>
+                            <p><strong>Valor:</strong> <span class="text-green-600 font-bold">${priceDisplay}</span></p>
+                            <p><strong>Sinal Pago:</strong> <span class="text-blue-600 font-bold">R$ ${parseFloat(signalValue).toFixed(2).replace('.', ',')}</span></p>
                             ${recurrentStatus}
                         `;
 

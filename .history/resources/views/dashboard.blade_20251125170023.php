@@ -1337,10 +1337,9 @@
                         const dateDisplay = moment(startTime).format('DD/MM/YYYY');
 
 
-                        // ✅ CORREÇÃO: Usando HH:mm para formato de 24 horas consistente
-                        let timeDisplay = moment(startTime).format('HH:mm');
+                        let timeDisplay = moment(startTime).format('H:i');
                         if (endTime) {
-                            timeDisplay += ' - ' + moment(endTime).format('HH:mm');
+                            timeDisplay += ' - ' + moment(endTime).format('H:i');
                         }
 
                         const titleParts = event.title.split(' - R$ ');

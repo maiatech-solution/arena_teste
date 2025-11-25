@@ -278,7 +278,7 @@ class AdminController extends Controller
                 'manager_id' => $managerId,
             ]);
             $canceledCount++;
-
+            
             Log::info("Reserva ID: {$conflictingReserva->id} cancelada automaticamente devido à confirmação da reserva ID: {$reserva->id}");
         }
 
@@ -318,9 +318,9 @@ class AdminController extends Controller
     } catch (\Exception $e) {
         DB::rollBack();
         Log::error("Erro ao confirmar reserva ID: {$reserva->id}: " . $e->getMessage());
-
+        
         $errorMessage = 'Erro interno ao confirmar reserva: ' . $e->getMessage();
-
+        
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json(['success' => false, 'message' => $errorMessage], 500);
         }
