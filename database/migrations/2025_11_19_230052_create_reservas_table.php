@@ -39,6 +39,7 @@ return new class extends Migration
             $table->unsignedBigInteger('user_id')->nullable()->index('reservas_user_id_foreign');
 
             $table->foreign(['manager_id'])->references(['id'])->on('users')->onUpdate('restrict')->onDelete('restrict');
+            $table->foreignId('fixed_slot_id')->nullable()->constrained('reservas')->onDelete('set null');
             //$table->foreign(['schedule_id'])->references(['id'])->on('schedules')->onUpdate('restrict')->onDelete('set null');
             $table->foreign(['user_id'])->references(['id'])->on('users')->onUpdate('restrict')->onDelete('set null');
             $table->timestamps();

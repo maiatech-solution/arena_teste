@@ -1035,16 +1035,46 @@ class ReservaController extends Controller
                 'data_nascimento' => null,
             ]);
 
-            // === 3. Checagem de Conflito FINAL (CRÍTICO) ===
-            if ($this->checkOverlap($date, $startTime, $endTime, false, $scheduleId)) {
+            // === 3. Checagem de Conflito FINAL (CRÍTICO) AJUSTADA 24/11/25 ===
+            /*if ($this->checkOverlap($date, $startTime, $endTime, false, $scheduleId)) {
                 DB::rollBack();
                 // A checagem falhou: há uma reserva REAL (não o slot fixo) em conflito.
                 $conflictingIds = $this->getConflictingReservaIds($date, $startTime, $endTime, $scheduleId);
                 $validator->errors()->add('reserva_conflito_id', "ERRO: Este horário acabou de ser reservado ou está em conflito. IDs: ({$conflictingIds})");
                 throw new ValidationException($validator);
-            }
+            } */
+                   // === 3. 🛑 NOVA VALIDAÇÃO: BLOQUEIO DE MÚLTIPLAS SOLICITAÇÕES DO MESMO CLIENTE ===
+        $existingReservation = Reserva::where('user_id', $clientUser->id)
+            ->where('date', $date)
+            ->where('start_time', $startTimeNormalized)
+            ->where('end_time', $endTimeNormalized)
+            ->where('is_fixed', false)
+            ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+            ->first();
 
-            // 4. Limpa o slot fixo (evento verde)
+        if ($existingReservation) {
+            DB::rollBack();
+            
+            $statusMessage = $existingReservation->status === Reserva::STATUS_PENDENTE 
+                ? 'aguardando aprovação da administração' 
+                : 'já foi aprovada';
+                
+            $validator->errors()->add('reserva_duplicada', 
+                "Você já solicitou reserva para este horário e ela está {$statusMessage}. " .
+                "Aguarde o contato da nossa equipe."
+            );
+            
+            Log::warning("Tentativa de reserva duplicada - Cliente: {$clientUser->name}, Data: {$date}, Horário: {$startTimeNormalized}-{$endTimeNormalized}, Status: {$existingReservation->status}");
+            
+            throw new ValidationException($validator);
+        }
+
+            
+            // === 4. 🛑 MUDANÇA CRÍTICA: NÃO FAZER CHECAGEM DE CONFLITO PARA RESERVAS PENDENTES ===
+        // Permite múltiplas pré-reservas no mesmo horário (de clientes diferentes)
+        // A checagem de conflito só será feita na confirmação pelo admin
+
+        // 5. Limpa o slot fixo (evento verde)
             $fixedSlot = Reserva::where('id', $scheduleId)
                 ->where('is_fixed', true)
                 ->where('status', 'free')
@@ -1056,10 +1086,10 @@ class ReservaController extends Controller
                 $validator->errors()->add('schedule_id', 'O slot selecionado não existe mais.');
                 throw new ValidationException($validator);
             }
-            $fixedSlot->delete();
+            //$fixedSlot->delete();
 
 
-            // 5. Criação da Reserva Real (Status Pendente)
+            // 6. Criação da Reserva Real (Status Pendente)
             $reserva = Reserva::create([
                 'user_id' => $clientUser->id,
                 'date' => $date,
@@ -1077,11 +1107,13 @@ class ReservaController extends Controller
                 'status' => 'pending',
                 'is_fixed' => false,
                 'is_recurrent' => false,
+                // 🆕 NOVO: Campo para identificar qual slot fixo foi selecionado
+                'fixed_slot_id' => $scheduleId,
             ]);
 
             DB::commit();
 
-            // 6. Mensagem de Sucesso e Link do WhatsApp
+            // 7. Mensagem de Sucesso e Link do WhatsApp
             $successMessage = 'Pré-reserva registrada com sucesso! Seu cadastro de cliente foi atualizado ou criado automaticamente. Aguarde a confirmação.';
 
             // Adaptação da mensagem do WhatsApp para incluir o sinal
@@ -1092,10 +1124,11 @@ class ReservaController extends Controller
 
 
             $messageText = "🚨 NOVA PRÉ-RESERVA PENDENTE\n\n" .
-                "Cliente: {$reserva->client_name}\n" .
-                "Data/Hora: {$data} às {$hora}\n" .
-                "Valor Total: R$ " . number_format($reserva->price, 2, ',', '.') . "\n" .
-                "{$valorSinal}\n";
+            "Cliente: {$reserva->client_name}\n" .
+            "Data/Hora: {$data} às {$hora}\n" .
+            "Valor Total: R$ " . number_format($reserva->price, 2, ',', '.') . "\n" .
+            "{$valorSinal}\n" .
+            "Status: AGUARDANDO CONFIRMAÇÃO";
 
             $whatsappLink = "https://api.whatsapp.com/send?phone={$whatsappNumber}&text=" . urlencode($messageText);
 

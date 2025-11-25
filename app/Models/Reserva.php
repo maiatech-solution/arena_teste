@@ -96,6 +96,10 @@ class Reserva extends Model
     {
         return $this->belongsTo(User::class, 'user_id');
     }
+    public function fixedSlot()
+    {
+        return $this->belongsTo(Reserva::class, 'fixed_slot_id');
+    }
 
     /**
      * Relação com o Gestor que manipulou ou criou a reserva (se houver)
@@ -115,7 +119,7 @@ class Reserva extends Model
     protected function statusText(): Attribute
     {
         return Attribute::make(
-            get: fn () => match ($this->status) {
+            get: fn() => match ($this->status) {
                 self::STATUS_FREE => 'Livre (Slot)', // ✅ NOVO
                 self::STATUS_PENDENTE => 'Pendente',
                 self::STATUS_CONFIRMADA => 'Confirmada',
@@ -133,7 +137,7 @@ class Reserva extends Model
     protected function criadoPorLabel(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->manager?->name ?? 'Cliente via Web',
+            get: fn() => $this->manager?->name ?? 'Cliente via Web',
         );
     }
 

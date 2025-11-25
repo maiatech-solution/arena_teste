@@ -219,77 +219,113 @@ class AdminController extends Controller
     public function confirmarReserva(Request $request, Reserva $reserva)
     {
         // 1. Validação de Status
-        if ($reserva->status !== Reserva::STATUS_PENDENTE) {
-            // Se a requisição for via AJAX, retorna JSON. Se for via form (Blade), retorna redirect.
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json(['success' => false, 'message' => 'A reserva não está pendente.'], 400);
-            }
-            return redirect()->back()->with('error', 'A reserva não está mais pendente.');
+    if ($reserva->status !== Reserva::STATUS_PENDENTE) {
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json(['success' => false, 'message' => 'A reserva não está pendente.'], 400);
+        }
+        return redirect()->back()->with('error', 'A reserva não está mais pendente.');
+    }
+
+    // 2. Validação do Input (Sinal)
+    $validated = $request->validate([
+        'signal_value' => 'nullable|numeric|min:0',
+    ]);
+
+    $sinal = (float)($validated['signal_value'] ?? 0.00);
+    $managerId = Auth::id();
+    $price = (float)$reserva->price;
+
+    DB::beginTransaction();
+    try {
+        // 3. Atualiza a Reserva
+        $reserva->status = Reserva::STATUS_CONFIRMADA;
+        $reserva->manager_id = $managerId;
+        $reserva->signal_value = $sinal;
+        $reserva->total_paid = $sinal;
+
+        // Calcular status de pagamento
+        if ($sinal > 0) {
+            $reserva->payment_status = ($sinal >= $price) ? 'paid' : 'partial';
+        } else {
+            $reserva->payment_status = 'pending';
         }
 
-        // 2. Validação do Input (Sinal)
-        $validated = $request->validate([
-            'signal_value' => 'nullable|numeric|min:0',
-        ]);
+        $reserva->save();
 
-        $sinal = $validated['signal_value'] ?? 0.00;
-        $managerId = Auth::id();
-
-        DB::beginTransaction();
-        try {
-            // 3. Atualiza a Reserva
-            $reserva->status = Reserva::STATUS_CONFIRMADA;
-            $reserva->manager_id = $managerId;
-
-            // Salva o valor do sinal exigido/pago na reserva
-            $reserva->signal_value = $sinal;
-
-            // Atualiza o total pago e o status financeiro
-            if ($sinal > 0) {
-                $reserva->total_paid = $reserva->total_paid + $sinal;
-
-                // Se o total pago for >= preço, marca como 'paid', senão 'partial'
-                $reserva->payment_status = ($reserva->total_paid >= $reserva->price) ? 'paid' : 'partial';
-            } else {
-                // Sem sinal: continua pendente de pagamento, mas confirmada na agenda
-                $reserva->payment_status = 'pending';
+        // 4. 🛑 CONSUMIR O SLOT FIXO (remover do calendário público)
+        if ($reserva->fixed_slot_id) {
+            $fixedSlot = Reserva::find($reserva->fixed_slot_id);
+            if ($fixedSlot && $fixedSlot->is_fixed && $fixedSlot->status === 'free') {
+                $fixedSlot->delete();
+                Log::info("Slot fixo ID: {$reserva->fixed_slot_id} consumido ao confirmar reserva ID: {$reserva->id}");
             }
-
-            $reserva->save();
-
-            // 4. Gera a Transação Financeira (Entrada no Caixa)
-            // Isso é crucial para o seu relatório financeiro do dia
-            if ($sinal > 0) {
-                \App\Models\FinancialTransaction::create([
-                    'reserva_id' => $reserva->id,
-                    'user_id' => $reserva->user_id,
-                    'manager_id' => $managerId,
-                    'amount' => $sinal,
-                    'type' => 'signal', // Tipo: Sinal
-                    'payment_method' => 'pix', // Padrão assumido ou adicione select no form se quiser
-                    'description' => 'Sinal recebido na confirmação do agendamento',
-                    'paid_at' => \Carbon\Carbon::now(),
-                ]);
-            }
-
-            DB::commit();
-            Log::info("Reserva ID: {$reserva->id} confirmada por Gestor ID: {$managerId}. Sinal: R$ {$sinal}");
-
-            // Resposta compatível com AJAX e Blade
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json(['success' => true, 'message' => 'Reserva confirmada com sucesso!'], 200);
-            }
-
-            return redirect()->back()->with('success', 'Reserva confirmada e sinal de R$ ' . number_format($sinal, 2, ',', '.') . ' registrado com sucesso!');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("Erro ao confirmar reserva ID: {$reserva->id}.", ['exception' => $e]);
-
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json(['success' => false, 'message' => 'Erro interno ao confirmar a reserva.'], 500);
-            }
-            return redirect()->back()->with('error', 'Erro interno ao confirmar reserva. Tente novamente.');
         }
+
+        // 5. 🛑 CANCELAR AUTOMATICAMENTE OUTRAS PRÉ-RESERVAS NO MESMO HORÁRIO
+        $conflictingPendingReservas = Reserva::where('id', '!=', $reserva->id)
+            ->where('date', $reserva->date)
+            ->where('start_time', $reserva->start_time)
+            ->where('end_time', $reserva->end_time)
+            ->where('status', 'pending')
+            ->where('is_fixed', false)
+            ->get();
+
+        $canceledCount = 0;
+        foreach ($conflictingPendingReservas as $conflictingReserva) {
+            $conflictingReserva->update([
+                'status' => 'cancelled',
+                'cancellation_reason' => 'Cancelado automaticamente - Horário confirmado para outro cliente (Reserva ID: ' . $reserva->id . ')',
+                'manager_id' => $managerId,
+            ]);
+            $canceledCount++;
+            
+            Log::info("Reserva ID: {$conflictingReserva->id} cancelada automaticamente devido à confirmação da reserva ID: {$reserva->id}");
+        }
+
+        // 6. Gera a Transação Financeira (Entrada no Caixa)
+        if ($sinal > 0) {
+            FinancialTransaction::create([
+                'reserva_id' => $reserva->id,
+                'user_id' => $reserva->user_id,
+                'manager_id' => $managerId,
+                'amount' => $sinal,
+                'type' => 'signal',
+                'payment_method' => 'pix',
+                'description' => 'Sinal recebido na confirmação do agendamento',
+                'paid_at' => Carbon::now(),
+            ]);
+        }
+
+        DB::commit();
+
+        $message = "Reserva confirmada com sucesso!";
+        if ($sinal > 0) {
+            $message .= " Sinal de R$ " . number_format($sinal, 2, ',', '.') . " registrado.";
+        }
+        if ($canceledCount > 0) {
+            $message .= " {$canceledCount} outra(s) pré-reserva(s) no mesmo horário foi/foram cancelada(s) automaticamente.";
+        }
+
+        Log::info("Reserva ID: {$reserva->id} confirmada por Gestor ID: {$managerId}. Sinal: R$ {$sinal}, Canceladas: {$canceledCount}");
+
+        // Resposta compatível com AJAX e Blade
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json(['success' => true, 'message' => $message], 200);
+        }
+
+        return redirect()->back()->with('success', $message);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error("Erro ao confirmar reserva ID: {$reserva->id}: " . $e->getMessage());
+        
+        $errorMessage = 'Erro interno ao confirmar reserva: ' . $e->getMessage();
+        
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json(['success' => false, 'message' => $errorMessage], 500);
+        }
+        return redirect()->back()->with('error', $errorMessage);
+    }
     }
 
     /**
