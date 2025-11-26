@@ -287,8 +287,6 @@
                         {{-- O campo amount_paid será preenchido automaticamente, mas é mantido como input para permitir ajuste fino --}}
                         <input type="number" step="0.01" name="amount_paid" id="modalAmountPaid" required
                             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:text-white font-bold text-lg">
-                        {{-- NOVO: Mensagem de Troco --}}
-                        <div id="trocoMessage" class="text-yellow-600 dark:text-yellow-400 text-sm mt-1 hidden font-semibold"></div>
                     </div>
 
                     {{-- 🎯 SINAL JÁ PAGO (Display) --}}
@@ -402,92 +400,28 @@
     }
 
     /**
-     * Calcula o valor restante a ser pago AGORA (Valor Total Acordado - Sinal Recebido).
-     * Esta função só lida com o cálculo automático na abertura/desconto.
+     * Calcula o valor restante a ser pago agora (Valor Total Acordado - Sinal Recebido).
      */
     function calculateAmountDue() {
         const finalPriceEl = document.getElementById('modalFinalPrice');
         const signalRawEl = document.getElementById('modalSignalAmountRaw');
         const amountPaidEl = document.getElementById('modalAmountPaid');
-        const trocoMessageEl = document.getElementById('trocoMessage');
 
-        // 1. Limpar estados de sobrepagamento
-        trocoMessageEl.classList.add('hidden');
-        amountPaidEl.classList.remove('focus:border-yellow-500');
-        amountPaidEl.classList.add('focus:border-green-500');
-
-
-        // 2. Converter valores para float
+        // 1. Converter valores para float
         const finalPrice = parseFloat(finalPriceEl.value) || 0;
         const signalAmount = parseFloat(signalRawEl.value) || 0;
 
-        // 3. Calcular o restante a ser pago (ou o troco gerado por desconto)
-        let remainingOrChange = finalPrice - signalAmount;
+        // 2. Calcular o restante
+        let amountDue = finalPrice - signalAmount;
 
-        // 4. Se o restante for negativo, é troco devido a desconto (Situação 1)
-        if (remainingOrChange < 0) {
-            const trocoAmount = Math.abs(remainingOrChange);
-
-            // Define o valor a ser recebido AGORA como 0.00
-            amountPaidEl.value = (0).toFixed(2);
-
-            // Exibir mensagem de troco
-            trocoMessageEl.textContent = `🚨 ATENÇÃO: Troco a Devolver: R$ ${trocoAmount.toFixed(2).replace('.', ',')}`;
-            trocoMessageEl.classList.remove('hidden');
-
-            // Destaque visual
-            amountPaidEl.classList.remove('focus:border-green-500');
-            amountPaidEl.classList.add('focus:border-yellow-500');
-
-        } else {
-            // Caso normal: há valor restante a ser pago. Define o valor padrão para o input.
-            amountPaidEl.value = remainingOrChange.toFixed(2);
-            // Chama o checkManualOverpayment para garantir que a cor e mensagem estejam corretas após o set
-            checkManualOverpayment();
+        // 3. Garantir que o valor devido não seja negativo (pode ocorrer se o sinal for maior que o preço final)
+        if (amountDue < 0) {
+            amountDue = 0;
         }
+
+        // 4. Atualizar o campo "Valor Recebido Agora (R$)"
+        amountPaidEl.value = amountDue.toFixed(2);
     }
-
-    /**
-     * Verifica se o valor digitado manualmente no campo 'Valor Recebido Agora'
-     * causa um sobrepagamento e exibe o troco. (Situação 2)
-     */
-    function checkManualOverpayment() {
-        const finalPrice = parseFloat(document.getElementById('modalFinalPrice').value) || 0;
-        const signalAmount = parseFloat(document.getElementById('modalSignalAmountRaw').value) || 0;
-        const amountPaidNow = parseFloat(document.getElementById('modalAmountPaid').value) || 0;
-
-        const amountPaidEl = document.getElementById('modalAmountPaid');
-        const trocoMessageEl = document.getElementById('trocoMessage');
-
-        // Total já recebido (Sinal) + Total a ser recebido AGORA (Input Manual)
-        const totalReceived = signalAmount + amountPaidNow;
-
-        // 1. Calcular o sobrepagamento (Troco)
-        let overpayment = totalReceived - finalPrice;
-
-        // 2. Limpa estados
-        trocoMessageEl.classList.add('hidden');
-        amountPaidEl.classList.remove('focus:border-yellow-500');
-        amountPaidEl.classList.add('focus:border-green-500');
-
-        if (overpayment > 0.005) { // Usamos margem de 0.005 para lidar com erros de ponto flutuante
-
-            // Exibir mensagem de troco
-            trocoMessageEl.textContent = `🚨 ATENÇÃO: Troco a Devolver: R$ ${overpayment.toFixed(2).replace('.', ',')}`;
-            trocoMessageEl.classList.remove('hidden');
-
-            // Destaque visual
-            amountPaidEl.classList.remove('focus:border-green-500');
-            amountPaidEl.classList.add('focus:border-yellow-500');
-        } else {
-            // Se o valor digitado for menor ou igual ao devido (ou se o troco foi gerado pelo desconto)
-            // Se a dívida era 0 (devido a desconto), não queremos limpar o troco do desconto.
-            if (finalPrice - signalAmount < 0) {
-                 calculateAmountDue(); // Recalcula para reexibir a mensagem de troco por desconto, se aplicável
-            }
-        }
-    }
-
 
     // --- Lógica do Pagamento ---
     function openPaymentModal(id, totalPrice, remaining, signalAmount, clientName) {
@@ -504,8 +438,9 @@
 
         // 2. Popula os valores
         document.getElementById('modalFinalPrice').value = totalPrice.toFixed(2);
+        // document.getElementById('modalAmountPaid').value = remaining.toFixed(2); // REMOVIDO: Será calculado
 
-        // 3. Executar o cálculo inicial (que agora lida com o troco gerado por desconto)
+        // 3. Executar o cálculo inicial
         calculateAmountDue();
 
         // 4. Limpa estados
@@ -598,12 +533,8 @@
 
     // --- Listener de Recálculo ---
     document.addEventListener('DOMContentLoaded', () => {
-        // Recalcula o restante quando o preço final for alterado (para descontos - Situação 1)
+        // Adiciona o listener para recalcular quando o preço final for alterado (para descontos)
         document.getElementById('modalFinalPrice').addEventListener('input', calculateAmountDue);
-
-        // Verifica o sobrepagamento quando o valor a ser pago for alterado (overpayment manual - Situação 2)
-        document.getElementById('modalAmountPaid').addEventListener('input', checkManualOverpayment);
-
 
         // --- Destaque de Linha (após o reload) ---
         const urlParams = new URLSearchParams(window.location.search);
