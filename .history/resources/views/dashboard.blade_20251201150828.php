@@ -1,12 +1,5 @@
 <x-app-layout>
 
-    @php
-        // A declaração 'use' foi movida para fora do bloco @php para evitar o erro de sintaxe do Blade/PHP.
-        // Classes como Carbon devem ser declaradas no escopo do arquivo PHP, não dentro de um bloco de execução.
-        // A importação via 'use' é mantida aqui para compatibilidade com o ambiente Blade.
-        // use Carbon\Carbon; // Removido daqui
-    @endphp
-
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
             {{ __('Dashboard | Calendário de Reservas') }}
@@ -15,7 +8,7 @@
 
     {{-- GARANTIA DE VARIÁVEIS: Define valores padrão para evitar 'Undefined Variable' se o Controller falhar --}}
     @php
-        // A classe Carbon deve estar disponível no escopo do template devido à correção acima.
+        use Carbon\Carbon;
         $pendingReservationsCount = $pendingReservationsCount ?? 0;
         $expiringSeriesCount = $expiringSeriesCount ?? 0;
         $expiringSeries = $expiringSeries ?? [];

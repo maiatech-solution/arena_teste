@@ -1,5 +1,4 @@
 <x-app-layout>
-
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
             📋 Reservas Pendentes de Aprovação
@@ -53,7 +52,7 @@
                                     {{-- Horário --}}
                                     <td class="px-4 py-4 whitespace-nowrap text-sm font-bold">
                                         {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }} - {{ \Carbon\Carbon::parse($reserva->end_time)->format('H:i') }}
-
+                                                                            
                                         {{-- 🆕 Mostrar quantas pré-reservas existem no mesmo horário --}}
                                         @php
                                         $sameTimeReservasCount = \App\Models\Reserva::where('id', '!=', $reserva->id)
@@ -93,54 +92,38 @@
 
                                     {{-- FORMULÁRIO UNIFICADO DE CONFIRMAÇÃO + SINAL e AÇÕES --}}
                                     <td class="px-4 py-4 whitespace-nowrap text-right">
-                                        <div class="flex flex-col space-y-2">
+                                        <form action="{{ route('admin.reservas.confirmar', $reserva->id) }}" method="POST" class="flex items-center space-x-2 justify-end">
+                                            @csrf
+                                            @method('PATCH')
 
-                                            <form action="{{ route('admin.reservas.confirmar', $reserva->id) }}" method="POST" class="flex flex-col space-y-2 items-end">
-                                                @csrf
-                                                @method('PATCH')
+                                            {{-- Input do Sinal --}}
+                                            <div class="relative w-24">
+                                                <span class="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400 text-xs">R$</span>
+                                                <input type="number" name="signal_value" step="0.01" min="0" placeholder="0.00"
+                                                    class="w-full pl-6 text-sm rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                    value="{{ ($reserva->user && $reserva->user->is_vip) ? '0.00' : '' }}">
+                                            </div>
 
-                                                {{-- ✅ CORREÇÃO: Adicionado o campo hidden para garantir que 'is_recurrent' seja enviado --}}
-                                                <div class="flex items-center space-x-2 w-full justify-end">
-                                                    <input type="hidden" name="is_recurrent" value="0">
-                                                    <input type="checkbox" name="is_recurrent" id="is-recurrent-{{ $reserva->id }}" value="1"
-                                                        class="h-4 w-4 text-fuchsia-600 border-gray-300 rounded focus:ring-fuchsia-500 dark:bg-gray-700 dark:border-gray-600">
-                                                    <label for="is-recurrent-{{ $reserva->id }}" class="text-xs font-semibold text-fuchsia-700 dark:text-fuchsia-400 select-none cursor-pointer">
-                                                        Recorrente (+6m)
-                                                    </label>
-                                                </div>
-                                                {{-- Fim do Checkbox Recorrente --}}
+                                            {{-- Botão Confirmar --}}
+                                            <button type="submit" title="Confirmar e Registrar Sinal"
+                                                class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-xs font-bold transition shadow-sm flex items-center">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                Confirmar
+                                            </button>
+                                        </form>
 
-                                                <div class="flex items-center space-x-2 justify-end w-full">
-                                                    {{-- Input do Sinal --}}
-                                                    <div class="relative w-24">
-                                                        <span class="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400 text-xs">R$</span>
-                                                        <input type="number" name="signal_value" step="0.01" min="0" placeholder="0.00"
-                                                            class="w-full pl-6 text-sm rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                                            value="{{ ($reserva->user && $reserva->user->is_vip) ? '0.00' : '' }}">
-                                                    </div>
-
-                                                    {{-- Botão Confirmar --}}
-                                                    <button type="submit" title="Confirmar e Registrar Sinal"
-                                                        class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-xs font-bold transition shadow-sm flex items-center">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                                        </svg>
-                                                        Confirmar
-                                                    </button>
-                                                </div>
-                                            </form>
-
-                                            {{-- Botão Rejeitar (Separado do form de confirmação) --}}
-                                            <form action="{{ route('admin.reservas.rejeitar', $reserva->id) }}" method="POST" class="w-full text-right">
-                                                @csrf
-                                                @method('PATCH')
-                                                {{-- ATENÇÃO: É ALTAMENTE RECOMENDÁVEL SUBSTITUIR 'onclick="return confirm(...)"' POR UM MODAL CUSTOMIZADO, POIS O CONFIRM DO NAVEGADOR É BLOQUEANTE E TEM MÁ EXPERIÊNCIA. --}}
-                                                <button type="submit" title="Rejeitar Agendamento" onclick="return confirm('Tem certeza que deseja rejeitar? O cliente será notificado.')"
-                                                    class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-600 text-xs underline">
-                                                    Rejeitar
-                                                </button>
-                                            </form>
-                                        </div>
+                                        {{-- Botão Rejeitar (Separado do form de confirmação) --}}
+                                        <form action="{{ route('admin.reservas.rejeitar', $reserva->id) }}" method="POST" class="inline-block mt-1">
+                                            @csrf
+                                            @method('PATCH')
+                                            {{-- ATENÇÃO: É ALTAMENTE RECOMENDÁVEL SUBSTITUIR 'onclick="return confirm(...)"' POR UM MODAL CUSTOMIZADO, POIS O CONFIRM DO NAVEGADOR É BLOQUEANTE E TEM MÁ EXPERIÊNCIA. --}}
+                                            <button type="submit" title="Rejeitar Agendamento" onclick="return confirm('Tem certeza que deseja rejeitar? O cliente será notificado.')"
+                                                class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-600 text-xs underline ml-1">
+                                                Rejeitar
+                                            </button>
+                                        </form>
                                     </td>
                                 </tr>
                                 @empty

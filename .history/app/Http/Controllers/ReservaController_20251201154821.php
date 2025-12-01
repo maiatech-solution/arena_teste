@@ -722,21 +722,11 @@ class ReservaController extends Controller
             // 5. ✅ LÓGICA CRÍTICA: CRIAÇÃO DA SÉRIE RECORRENTE (6 meses)
             if ($isRecurrent) { // SÓ EXECUTA SE O CHECKBOX ESTIVER MARCADO
                 $masterReserva = $reserva;
-
-                // Garante que a data de início é um objeto Carbon para manipulação segura
-                // ✅ NOVA CORREÇÃO: Usa Carbon::parse diretamente na propriedade da reserva para ser mais robusto.
-                $masterDate = Carbon::parse($masterReserva->date);
+                $currentMaxDate = $masterReserva->date;
 
                 // 5.1. Definir a janela de renovação: Da próxima semana até 6 meses
-                $startDate = $masterDate->copy()->addWeek();
-                $endDate = $masterDate->copy()->addMonths(6); // 6 meses a partir da data da reserva mestra
-
-                // Adicionando um subDay para garantir que o último dia dos 6 meses seja incluído no loop.
-                // Na versão anterior estava usando addMonths(6), que era o correto, a remoção da linha abaixo é
-                // para evitar problemas de arredondamento de meses.
-                //$endDate = $masterDate->copy()->addMonths(6)->subDay();
-
-                Log::info("Criando série recorrente Master ID {$masterReserva->id}: Início ({$startDate->toDateString()}) - Fim ({$endDate->toDateString()}).");
+                $startDate = Carbon::parse($currentMaxDate)->addWeek();
+                $endDate = Carbon::parse($currentMaxDate)->addMonths(6); // 6 meses a partir da data da reserva mestra
 
                 // Parâmetros da série
                 $dayOfWeek = $masterReserva->day_of_week;
@@ -759,7 +749,6 @@ class ReservaController extends Controller
                     $isConflict = false;
 
                     // Checagem de Conflito (Outros Clientes: confirmed/pending)
-                    // Esta é a única checagem necessária, pois garantimos que o horário é livre para aluguel.
                     $isOccupiedByOtherCustomer = Reserva::whereDate('date', $dateString)
                         ->where('start_time', '<', $endTime)
                         ->where('end_time', '>', $startTime)
@@ -772,10 +761,9 @@ class ReservaController extends Controller
                         Log::warning("Conflito com OUTRO CLIENTE durante a repetição da série #{$masterId} na data {$dateString}. Slot pulado.");
                     }
 
-                    // 🛑 NOVO FLUXO: Busca o slot fixo, se existir, para DELETAR (consumir), mas NÃO USA ISSO COMO CONFLITO.
+                    // Busca o slot fixo, se existir, para DELETAR (consumir)
                     $fixedSlot = null;
                     if (!$isConflict) {
-                        // Busca o slot fixo (se existir) para DELETAR, mas a criação procede mesmo que ele não exista.
                         $fixedSlot = Reserva::where('is_fixed', true)
                             ->whereDate('date', $dateString)
                             ->where('start_time', $startTime)
@@ -784,7 +772,7 @@ class ReservaController extends Controller
                             ->first();
                     }
 
-                    // Cria a nova reserva se não houver conflito real (confirmado/pendente por outro cliente)
+                    // Cria a nova reserva se não houver conflito
                     if (!$isConflict) {
                         $newReservasToCreate[] = [
                             'user_id' => $userId,

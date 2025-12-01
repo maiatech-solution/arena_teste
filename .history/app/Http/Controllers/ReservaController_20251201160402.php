@@ -722,9 +722,7 @@ class ReservaController extends Controller
             // 5. ✅ LÓGICA CRÍTICA: CRIAÇÃO DA SÉRIE RECORRENTE (6 meses)
             if ($isRecurrent) { // SÓ EXECUTA SE O CHECKBOX ESTIVER MARCADO
                 $masterReserva = $reserva;
-
                 // Garante que a data de início é um objeto Carbon para manipulação segura
-                // ✅ NOVA CORREÇÃO: Usa Carbon::parse diretamente na propriedade da reserva para ser mais robusto.
                 $masterDate = Carbon::parse($masterReserva->date);
 
                 // 5.1. Definir a janela de renovação: Da próxima semana até 6 meses

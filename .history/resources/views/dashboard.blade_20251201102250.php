@@ -1,12 +1,5 @@
 <x-app-layout>
 
-    @php
-        // A declaração 'use' foi movida para fora do bloco @php para evitar o erro de sintaxe do Blade/PHP.
-        // Classes como Carbon devem ser declaradas no escopo do arquivo PHP, não dentro de um bloco de execução.
-        // A importação via 'use' é mantida aqui para compatibilidade com o ambiente Blade.
-        // use Carbon\Carbon; // Removido daqui
-    @endphp
-
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
             {{ __('Dashboard | Calendário de Reservas') }}
@@ -15,7 +8,6 @@
 
     {{-- GARANTIA DE VARIÁVEIS: Define valores padrão para evitar 'Undefined Variable' se o Controller falhar --}}
     @php
-        // A classe Carbon deve estar disponível no escopo do template devido à correção acima.
         $pendingReservationsCount = $pendingReservationsCount ?? 0;
         $expiringSeriesCount = $expiringSeriesCount ?? 0;
         $expiringSeries = $expiringSeries ?? [];
@@ -162,36 +154,18 @@
                 @if ($expiringSeriesCount > 0)
                     <div id="renewal-alert-container" data-series='@json($expiringSeries)' data-count="{{ $expiringSeriesCount }}"
                         class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-lg shadow-md flex flex-col items-start transition-all duration-300 transform hover:scale-[1.005]" role="alert">
-
-                        <div class="flex items-start w-full">
+                        <div class="flex items-start mb-2">
                             <svg class="h-6 w-6 flex-shrink-0 mt-0.5 mr-3 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                             </svg>
-                            <div class="w-full">
-                                <p class="font-bold text-lg">ALERTA DE RENOVAÇÃO ({{ $expiringSeriesCount }} Série{{ $expiringSeriesCount > 1 ? 's' : '' }} Expira{{ $expiringSeriesCount > 1 ? 'm' : '' }} em Breve)</p>
-                                <p id="renewal-message" class="mt-1 text-sm mb-3">
+                            <div>
+                                <p class="font-bold text-lg">ALERTA DE RENOVAÇÃO</p>
+                                <p id="renewal-message" class="mt-1 text-sm">
                                     <span class="font-extrabold text-yellow-900">{{ $expiringSeriesCount }}</span> série(s) de agendamento recorrente de clientes está(ão) prestes a expirar nos próximos 30 dias.
                                 </p>
-
-                                {{-- NOVO: DETALHES DE EXPIRAÇÃO NO ALERTA (6 MESES) --}}
-                                <div class="space-y-2 p-3 bg-yellow-50 rounded border border-yellow-200">
-                                    <p class="font-semibold text-sm text-yellow-800">Detalhes para Renovação (Sugestão: +6 meses):</p>
-                                    @foreach ($expiringSeries as $seriesItem)
-                                        @php
-                                            $lastDate = Carbon::parse($seriesItem['last_date']);
-                                            $suggestedNewDate = $lastDate->copy()->addMonths(6); // ✅ MUDANÇA AQUI: +6 meses
-                                        @endphp
-                                        <div class="text-xs text-gray-700">
-                                            <strong>{{ $seriesItem['client_name'] }}</strong> ({{ $seriesItem['slot_time'] }}) expira em {{ $lastDate->format('d/m/Y') }}.
-                                            <span class="font-bold text-green-600">Renovação sugerida até {{ $suggestedNewDate->format('d/m/Y') }}.</span>
-                                        </div>
-                                    @endforeach
-                                </div>
-                                {{-- FIM NOVO DETALHE --}}
                             </div>
                         </div>
-
-                        <button onclick="openRenewalModal()" class="mt-4 bg-yellow-600 hover:bg-yellow-700 active:bg-yellow-800 text-white font-bold py-2 px-6 rounded-lg text-sm transition duration-150 ease-in-out shadow-lg">
+                        <button onclick="openRenewalModal()" class="mt-2 bg-yellow-600 hover:bg-yellow-700 active:bg-yellow-800 text-white font-bold py-2 px-6 rounded-lg text-sm transition duration-150 ease-in-out shadow-lg">
                             Revisar Renovações
                         </button>
                     </div>
@@ -680,8 +654,7 @@
             const clientContact = clientContactInput().value.trim();
 
             if (!clientName) {
-                // Substituindo alert por mensagem no console ou outro modal, mas mantendo a lógica simples aqui
-                console.error("Por favor, preencha o Nome Completo do Cliente.");
+                alert("Por favor, preencha o Nome Completo do Cliente.");
                 return;
             }
 
@@ -733,12 +706,12 @@
                 } catch (e) {
                     const errorText = await response.text();
                     console.error("Falha ao ler JSON de resposta (Pode ser 500).", errorText);
-                    // alert(`Erro do Servidor (${response.status}). Verifique o console.`); // Substituído por log
+                    alert(`Erro do Servidor (${response.status}). Verifique o console.`);
                     return;
                 }
 
                 if (response.ok && result.success) {
-                    // alert(result.message); // Substituído por log/sucesso
+                    alert(result.message);
                     document.getElementById('quick-booking-modal').classList.add('hidden');
                     // Recarrega o calendário para mostrar o novo evento (com status parcial e signal_value)
                     setTimeout(() => {
@@ -747,16 +720,14 @@
 
                 } else if (response.status === 422 && result.errors) {
                     const errors = Object.values(result.errors).flat().join('\n');
-                    // alert(`ERRO DE VALIDAÇÃO:\n${errors}`); // Substituído por log
-                    console.error(`ERRO DE VALIDAÇÃO:\n${errors}`);
+                    alert(`ERRO DE VALIDAÇÃO:\n${errors}`);
                 } else {
-                    // alert(result.message || `Erro desconhecido. Status: ${response.status}.`); // Substituído por log
-                    console.error(result.message || `Erro desconhecido. Status: ${response.status}.`);
+                    alert(result.message || `Erro desconhecido. Status: ${response.status}.`);
                 }
 
             } catch (error) {
                 console.error('Erro de Rede:', error);
-                // alert("Erro de Rede. Tente novamente."); // Substituído por log
+                alert("Erro de Rede. Tente novamente.");
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Confirmar Agendamento';
@@ -834,7 +805,7 @@
                 const reason = reasonInput.value.trim();
 
                 if (reason.length < 5) {
-                    console.error("Por favor, forneça um motivo de rejeição com pelo menos 5 caracteres.");
+                    alert("Por favor, forneça um motivo de rejeição com pelo menos 5 caracteres.");
                     return;
                 }
 
@@ -875,27 +846,25 @@
                 } catch (e) {
                     const errorText = await response.text();
                     console.error("Falha ao ler JSON de resposta.", errorText);
-                    // alert(`Erro do Servidor (${response.status}). Verifique o console.`); // Substituído por log
+                    alert(`Erro do Servidor (${response.status}). Verifique o console.`);
                     return;
                 }
 
                 if (response.ok && result.success) {
-                    // alert(result.message); // Substituído por log/sucesso
+                    alert(result.message);
                     closePendingActionModal();
                     setTimeout(() => window.location.reload(), 50);
 
                 } else if (response.status === 422 && result.errors) {
                     const errors = Object.values(result.errors).flat().join('\n');
-                    // alert(`ERRO DE VALIDAÇÃO:\n${errors}`); // Substituído por log
-                    console.error(`ERRO DE VALIDAÇÃO:\n${errors}`);
+                    alert(`ERRO DE VALIDAÇÃO:\n${errors}`);
                 } else {
-                    // alert(result.message || `Erro desconhecido. Status: ${response.status}.`); // Substituído por log
-                    console.error(result.message || `Erro desconhecido. Status: ${response.status}.`);
+                    alert(result.message || `Erro desconhecido. Status: ${response.status}.`);
                 }
 
             } catch (error) {
                 console.error('Erro de Rede:', error);
-                // alert("Erro de Rede. Tente novamente."); // Substituído por log
+                alert("Erro de Rede. Tente novamente.");
             } finally {
                 submitBtn.disabled = false;
                 rejectBtn.disabled = false;
@@ -971,7 +940,7 @@
                 }
 
                 if (response.ok && result.success) {
-                    // alert(result.message || "Ação realizada com sucesso. O calendário será atualizado."); // Substituído por log/sucesso
+                    alert(result.message || "Ação realizada com sucesso. O calendário será atualizado.");
                     closeCancellationModal();
                     setTimeout(() => {
                         window.location.reload();
@@ -979,16 +948,14 @@
 
                 } else if (response.status === 422 && result.errors) {
                     const reasonError = result.errors.cancellation_reason ? result.errors.cancellation_reason.join(', ') : 'Erro de validação desconhecido.';
-                    // alert(`ERRO DE VALIDAÇÃO: ${reasonError}`); // Substituído por log
-                    console.error(`ERRO DE VALIDAÇÃO: ${reasonError}`);
+                    alert(`ERRO DE VALIDAÇÃO: ${reasonError}`);
                 } else {
-                    // alert(result.error || result.message || `Erro desconhecido ao processar a ação. Status: ${response.status}.`); // Substituído por log
-                    console.error(result.error || result.message || `Erro desconhecido ao processar a ação. Status: ${response.status}.`);
+                    alert(result.error || result.message || `Erro desconhecido ao processar a ação. Status: ${response.status}.`);
                 }
 
             } catch (error) {
                 console.error('Erro de Rede/Comunicação:', error);
-                // alert("Erro de conexão. Tente novamente."); // Substituído por log
+                alert("Erro de conexão. Tente novamente.");
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Confirmar Ação';
@@ -999,16 +966,14 @@
             const reason = document.getElementById('cancellation-reason-input').value.trim();
 
             if (reason.length < 5) {
-                // alert("Por favor, forneça um motivo de cancelamento com pelo menos 5 caracteres."); // Substituído por log
-                console.error("Por favor, forneça um motivo de cancelamento com pelo menos 5 caracteres.");
+                alert("Por favor, forneça um motivo de cancelamento com pelo menos 5 caracteres.");
                 return;
             }
 
             if (currentReservaId && currentMethod && currentUrlBase) {
                 sendCancellationRequest(currentReservaId, currentMethod, currentUrlBase, reason);
             } else {
-                // alert("Erro: Dados da reserva não configurados corretamente."); // Substituído por log
-                console.error("Erro: Dados da reserva não configurados corretamente.");
+                alert("Erro: Dados da reserva não configurados corretamente.");
             }
         });
 
@@ -1079,7 +1044,7 @@
                             </div>
                             <div class="mt-3 md:mt-0">
                                 <button onclick="handleRenewal(${item.master_id})"
-                                                class="renew-btn-${item.master_id} w-full md:w-auto px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg text-sm">
+                                            class="renew-btn-${item.master_id} w-full md:w-auto px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg text-sm">
                                     Renovar por 6 Meses
                                 </button>
                             </div>
@@ -1151,8 +1116,8 @@
                     updateMainAlert();
 
                     if (document.getElementById('renewal-list').children.length === 0) {
-                                 document.getElementById('renewal-list').innerHTML = '<p class="text-gray-500 italic text-center p-4">Nenhuma série a ser renovada no momento. Bom trabalho!</p>';
-                                 setTimeout(() => closeRenewalModal(), 3000);
+                             document.getElementById('renewal-list').innerHTML = '<p class="text-gray-500 italic text-center p-4">Nenhuma série a ser renovada no momento. Bom trabalho!</p>';
+                             setTimeout(() => closeRenewalModal(), 3000);
                     }
 
                     setTimeout(() => {

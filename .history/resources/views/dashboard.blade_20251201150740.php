@@ -1,12 +1,5 @@
 <x-app-layout>
 
-    @php
-        // A declaração 'use' foi movida para fora do bloco @php para evitar o erro de sintaxe do Blade/PHP.
-        // Classes como Carbon devem ser declaradas no escopo do arquivo PHP, não dentro de um bloco de execução.
-        // A importação via 'use' é mantida aqui para compatibilidade com o ambiente Blade.
-        // use Carbon\Carbon; // Removido daqui
-    @endphp
-
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
             {{ __('Dashboard | Calendário de Reservas') }}
@@ -15,7 +8,7 @@
 
     {{-- GARANTIA DE VARIÁVEIS: Define valores padrão para evitar 'Undefined Variable' se o Controller falhar --}}
     @php
-        // A classe Carbon deve estar disponível no escopo do template devido à correção acima.
+        use Carbon\Carbon;
         $pendingReservationsCount = $pendingReservationsCount ?? 0;
         $expiringSeriesCount = $expiringSeriesCount ?? 0;
         $expiringSeries = $expiringSeries ?? [];
@@ -162,7 +155,7 @@
                 @if ($expiringSeriesCount > 0)
                     <div id="renewal-alert-container" data-series='@json($expiringSeries)' data-count="{{ $expiringSeriesCount }}"
                         class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-lg shadow-md flex flex-col items-start transition-all duration-300 transform hover:scale-[1.005]" role="alert">
-
+                        
                         <div class="flex items-start w-full">
                             <svg class="h-6 w-6 flex-shrink-0 mt-0.5 mr-3 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
@@ -172,7 +165,7 @@
                                 <p id="renewal-message" class="mt-1 text-sm mb-3">
                                     <span class="font-extrabold text-yellow-900">{{ $expiringSeriesCount }}</span> série(s) de agendamento recorrente de clientes está(ão) prestes a expirar nos próximos 30 dias.
                                 </p>
-
+                                
                                 {{-- NOVO: DETALHES DE EXPIRAÇÃO NO ALERTA (6 MESES) --}}
                                 <div class="space-y-2 p-3 bg-yellow-50 rounded border border-yellow-200">
                                     <p class="font-semibold text-sm text-yellow-800">Detalhes para Renovação (Sugestão: +6 meses):</p>
@@ -182,7 +175,7 @@
                                             $suggestedNewDate = $lastDate->copy()->addMonths(6); // ✅ MUDANÇA AQUI: +6 meses
                                         @endphp
                                         <div class="text-xs text-gray-700">
-                                            <strong>{{ $seriesItem['client_name'] }}</strong> ({{ $seriesItem['slot_time'] }}) expira em {{ $lastDate->format('d/m/Y') }}.
+                                            <strong>{{ $seriesItem['client_name'] }}</strong> ({{ $seriesItem['slot_time'] }}) expira em {{ $lastDate->format('d/m/Y') }}. 
                                             <span class="font-bold text-green-600">Renovação sugerida até {{ $suggestedNewDate->format('d/m/Y') }}.</span>
                                         </div>
                                     @endforeach

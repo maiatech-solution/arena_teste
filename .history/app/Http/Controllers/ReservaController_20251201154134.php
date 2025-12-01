@@ -722,21 +722,11 @@ class ReservaController extends Controller
             // 5. ✅ LÓGICA CRÍTICA: CRIAÇÃO DA SÉRIE RECORRENTE (6 meses)
             if ($isRecurrent) { // SÓ EXECUTA SE O CHECKBOX ESTIVER MARCADO
                 $masterReserva = $reserva;
-
-                // Garante que a data de início é um objeto Carbon para manipulação segura
-                // ✅ NOVA CORREÇÃO: Usa Carbon::parse diretamente na propriedade da reserva para ser mais robusto.
-                $masterDate = Carbon::parse($masterReserva->date);
+                $currentMaxDate = $masterReserva->date;
 
                 // 5.1. Definir a janela de renovação: Da próxima semana até 6 meses
-                $startDate = $masterDate->copy()->addWeek();
-                $endDate = $masterDate->copy()->addMonths(6); // 6 meses a partir da data da reserva mestra
-
-                // Adicionando um subDay para garantir que o último dia dos 6 meses seja incluído no loop.
-                // Na versão anterior estava usando addMonths(6), que era o correto, a remoção da linha abaixo é
-                // para evitar problemas de arredondamento de meses.
-                //$endDate = $masterDate->copy()->addMonths(6)->subDay();
-
-                Log::info("Criando série recorrente Master ID {$masterReserva->id}: Início ({$startDate->toDateString()}) - Fim ({$endDate->toDateString()}).");
+                $startDate = Carbon::parse($currentMaxDate)->addWeek();
+                $endDate = Carbon::parse($currentMaxDate)->addMonths(6); // 6 meses a partir da data da reserva mestra
 
                 // Parâmetros da série
                 $dayOfWeek = $masterReserva->day_of_week;
@@ -759,7 +749,6 @@ class ReservaController extends Controller
                     $isConflict = false;
 
                     // Checagem de Conflito (Outros Clientes: confirmed/pending)
-                    // Esta é a única checagem necessária, pois garantimos que o horário é livre para aluguel.
                     $isOccupiedByOtherCustomer = Reserva::whereDate('date', $dateString)
                         ->where('start_time', '<', $endTime)
                         ->where('end_time', '>', $startTime)
@@ -772,10 +761,9 @@ class ReservaController extends Controller
                         Log::warning("Conflito com OUTRO CLIENTE durante a repetição da série #{$masterId} na data {$dateString}. Slot pulado.");
                     }
 
-                    // 🛑 NOVO FLUXO: Busca o slot fixo, se existir, para DELETAR (consumir), mas NÃO USA ISSO COMO CONFLITO.
+                    // Busca o slot fixo, se existir, para DELETAR (consumir)
                     $fixedSlot = null;
                     if (!$isConflict) {
-                        // Busca o slot fixo (se existir) para DELETAR, mas a criação procede mesmo que ele não exista.
                         $fixedSlot = Reserva::where('is_fixed', true)
                             ->whereDate('date', $dateString)
                             ->where('start_time', $startTime)
@@ -784,7 +772,7 @@ class ReservaController extends Controller
                             ->first();
                     }
 
-                    // Cria a nova reserva se não houver conflito real (confirmado/pendente por outro cliente)
+                    // Cria a nova reserva se não houver conflito
                     if (!$isConflict) {
                         $newReservasToCreate[] = [
                             'user_id' => $userId,
@@ -1328,7 +1316,9 @@ class ReservaController extends Controller
                 'data_nascimento' => null,
             ]);
 
-            // === 3. Nova Validação: BLOQUEIO DE MÚLTIPLAS SOLICITAÇÕES DO MESMO CLIENTE ===
+            // === 3. Checagem de Conflito FINAL (CRÍTICO) AJUSTADA 24/11/25 ===
+
+            // === 3. 🛑 NOVA VALIDAÇÃO: BLOQUEIO DE MÚLTIPLAS SOLICITAÇÕES DO MESMO CLIENTE ===
             $existingReservation = Reserva::where('user_id', $clientUser->id)
                 ->where('date', $date)
                 ->where('start_time', $startTimeNormalized)
@@ -1354,26 +1344,11 @@ class ReservaController extends Controller
                 throw new ValidationException($validator);
             }
 
-            // === 4. 🛑 CORREÇÃO CRÍTICA: BLOQUEIO CONTRA RESERVAS JÁ CONFIRMADAS ===
-            // Uma nova pré-reserva (pending) não pode ser feita em um horário que já está CONFIRMADO por outro cliente.
-            $confirmedConflict = Reserva::where('date', $date)
-                ->where('is_fixed', false) // Apenas reservas de clientes (não slots fixos)
-                ->where('status', 'confirmed') // CRÍTICO: Checa contra confirmadas
-                ->where('start_time', '<', $endTimeNormalized)
-                ->where('end_time', '>', $startTimeNormalized)
-                ->exists();
+            // === 4. 🛑 MUDANÇA CRÍTICA: NÃO FAZER CHECAGEM DE CONFLITO PARA RESERVAS PENDENTES ===
+            // Permite múltiplas pré-reservas no mesmo horário (de clientes diferentes)
+            // A checagem de conflito só será feita na confirmação pelo admin
 
-            if ($confirmedConflict) {
-                 DB::rollBack();
-                 $validator->errors()->add('confirmed_conflict', 'Este horário já está confirmado e indisponível para pré-reserva. Por favor, selecione outro slot livre.');
-                 // Força o erro de validação para a tela pública
-                 throw new ValidationException($validator);
-            }
-            // === FIM DA VALIDAÇÃO DE CONFLITO CONFIRMADO ===
-
-            // === 5. Mudança Crítica: Não fazer checagem de conflito para outras reservas PENDENTES (Permite fila de espera) ===
-
-            // 6. Limpa o slot fixo (evento verde)
+            // 5. Limpa o slot fixo (evento verde)
             $fixedSlot = Reserva::where('id', $scheduleId)
                 ->where('is_fixed', true)
                 ->where('status', 'free')
@@ -1388,7 +1363,7 @@ class ReservaController extends Controller
             //$fixedSlot->delete();
 
 
-            // 7. Criação da Reserva Real (Status Pendente)
+            // 6. Criação da Reserva Real (Status Pendente)
             $reserva = Reserva::create([
                 'user_id' => $clientUser->id,
                 'date' => $date,
@@ -1412,7 +1387,7 @@ class ReservaController extends Controller
 
             DB::commit();
 
-            // 8. Mensagem de Sucesso e Link do WhatsApp
+            // 7. Mensagem de Sucesso e Link do WhatsApp
             $successMessage = 'Pré-reserva registrada com sucesso! Seu cadastro de cliente foi atualizado ou criado automaticamente. Aguarde a confirmação.';
 
             // Adaptação da mensagem do WhatsApp para incluir o sinal

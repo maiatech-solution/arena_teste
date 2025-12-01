@@ -1,4 +1,8 @@
 <x-app-layout>
+    @php
+        // A declaração 'use' deve ser feita no topo do arquivo PHP/Blade
+        use Carbon\Carbon;
+    @endphp
 
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
@@ -47,12 +51,12 @@
 
                                     {{-- Data --}}
                                     <td class="px-4 py-4 whitespace-nowrap text-sm">
-                                        {{ \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') }}
+                                        {{ Carbon::parse($reserva->date)->format('d/m/Y') }}
                                     </td>
 
                                     {{-- Horário --}}
                                     <td class="px-4 py-4 whitespace-nowrap text-sm font-bold">
-                                        {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }} - {{ \Carbon\Carbon::parse($reserva->end_time)->format('H:i') }}
+                                        {{ Carbon::parse($reserva->start_time)->format('H:i') }} - {{ Carbon::parse($reserva->end_time)->format('H:i') }}
 
                                         {{-- 🆕 Mostrar quantas pré-reservas existem no mesmo horário --}}
                                         @php
@@ -99,9 +103,8 @@
                                                 @csrf
                                                 @method('PATCH')
 
-                                                {{-- ✅ CORREÇÃO: Adicionado o campo hidden para garantir que 'is_recurrent' seja enviado --}}
+                                                {{-- ✅ NOVO: Checkbox Recorrente (6 meses) --}}
                                                 <div class="flex items-center space-x-2 w-full justify-end">
-                                                    <input type="hidden" name="is_recurrent" value="0">
                                                     <input type="checkbox" name="is_recurrent" id="is-recurrent-{{ $reserva->id }}" value="1"
                                                         class="h-4 w-4 text-fuchsia-600 border-gray-300 rounded focus:ring-fuchsia-500 dark:bg-gray-700 dark:border-gray-600">
                                                     <label for="is-recurrent-{{ $reserva->id }}" class="text-xs font-semibold text-fuchsia-700 dark:text-fuchsia-400 select-none cursor-pointer">
