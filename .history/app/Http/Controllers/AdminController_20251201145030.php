@@ -553,62 +553,6 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Cria uma nova reserva recorrente para um cliente.
-     * Rota: admin.reservas.make_recurrent
-     *
-     * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function makeRecurrent(Request $request)
-    {
-        // Limite máximo de 6 meses (26 semanas) a partir da data de início da série
-        // Usamos a data de hoje como âncora para o limite.
-        $maxDate = Carbon::today()->addMonths(6)->toDateString();
-
-        // 1. Validação CRÍTICA: Enforça o limite de 6 meses na data final.
-        $validated = $request->validate([
-            'reserva_id' => 'required|exists:reservas,id',
-            'start_date' => 'required|date|after_or_equal:today',
-            // CRÍTICO: Limita a data final para 6 meses no futuro
-            'end_date' => 'required|date|before_or_equal:' . $maxDate,
-            'fixed_price' => 'required|numeric|min:0',
-        ], [
-            // Mensagem de erro customizada para o limite
-            'end_date.before_or_equal' => "A série recorrente não pode exceder 6 meses (data máxima: {$maxDate}). Por favor, escolha uma data final anterior.",
-        ]);
-
-        try {
-            // 2. Delega a criação da série de reservas para o ReservaController
-            // (O ReservaController deve ter o método processRecurrentCreation que contém a lógica de loop)
-            $result = $this->reservaController->processRecurrentCreation(
-                $validated['reserva_id'],
-                $validated['start_date'],
-                $validated['end_date'],
-                $validated['fixed_price']
-            );
-
-            // 3. Retorno de sucesso (usando a mensagem do helper)
-            return response()->json([
-                'success' => true,
-                'message' => $result['message'] ?? 'Série recorrente criada com sucesso (limitada a 6 meses).',
-            ]);
-
-        } catch (ValidationException $e) {
-             // 4. Exceções de Validação são relançadas para serem tratadas pelo handler do Laravel (ex: erro 422)
-            throw $e;
-
-        } catch (\Exception $e) {
-            Log::error("Erro ao criar série recorrente (AdminController::makeRecurrent): " . $e->getMessage(), ['request' => $request->all()]);
-
-            // 5. Tratamento de erro geral
-            return response()->json([
-                'success' => false,
-                'message' => 'Erro interno ao criar série recorrente. Verifique as datas e o log: ' . $e->getMessage(),
-            ], 500);
-        }
-    }
-
 
     /**
      * Cancela uma reserva PONTUAL confirmada (PATCH /admin/reservas/{reserva}/cancelar).
