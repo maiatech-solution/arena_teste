@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB; // Necessário para a função DB::raw()
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Carbon\Carbon; // Necessário para Carbon::today()
+use Carbon\Carbon;       // Necessário para Carbon::today()
 use Illuminate\Validation\Rule;
 use Carbon\CarbonPeriod;
 use Illuminate\Validation\ValidationException;
@@ -478,78 +478,6 @@ class AdminController extends Controller
             DB::rollBack();
             Log::error("Erro ao reativar reserva ID: {$reserva->id}.", ['exception' => $e]);
             return response()->json(['success' => false, 'message' => 'Erro interno ao reativar a reserva: ' . $e->getMessage()], 500);
-        }
-    }
-
-    /**
-     * Atualiza o preço de uma reserva específica via requisição AJAX (PATCH).
-     *
-     * Esta ação é usada para alterar o preço de um slot (livre ou reservado)
-     * por motivo de feriado, promoção ou desconto, mantendo o histórico de
-     * auditoria através da justificativa.
-     *
-     * @param \Illuminate\Http\Request $request
-     * @param \App\Models\Reserva $reserva
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function updatePrice(Request $request, Reserva $reserva)
-    {
-        // 1. Validação dos dados
-        $validated = $request->validate([
-            'new_price' => 'required|numeric|min:0',
-            'justification' => 'required|string|min:5',
-        ], [
-            'new_price.required' => 'O novo preço é obrigatório.',
-            'new_price.numeric' => 'O preço deve ser um valor numérico.',
-            'new_price.min' => 'O preço não pode ser negativo.',
-            'justification.required' => 'A justificativa para alteração de preço é obrigatória.',
-            'justification.min' => 'A justificativa deve ter pelo menos 5 caracteres.',
-        ]);
-
-        try {
-            // 2. Garante que a reserva existe e está no estado correto para alteração de preço
-            // Embora o Laravel já faça o Model Binding, é bom verificar o estado.
-
-            // 3. Verifica se o preço realmente mudou
-            $oldPrice = $reserva->price;
-            $newPrice = $validated['new_price'];
-            $justification = $validated['justification'];
-
-            if ((float)$oldPrice == (float)$newPrice) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'O preço não foi alterado. O valor novo é igual ao valor antigo.',
-                ], 400);
-            }
-
-            // 4. Atualiza o preço na reserva
-            $reserva->price = $newPrice;
-            $reserva->save();
-
-            // 5. Opcional: Registrar a auditoria da mudança de preço, incluindo a justificativa
-            // Você precisará de um sistema de logs ou de eventos/model observers para isto.
-            Log::info("Preço da Reserva ID {$reserva->id} alterado de R$ {$oldPrice} para R$ {$newPrice} por " . auth()->user()->name . ". Justificativa: {$justification}");
-
-            return response()->json([
-                'success' => true,
-                'message' => "Preço atualizado para R$ " . number_format($newPrice, 2, ',', '.') . " com sucesso. A tela será recarregada.",
-            ]);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            // Se a validação falhar, o Laravel cuida do erro 422 automaticamente no AJAX.
-            // Apenas para fins de robustez, o catch genérico é bom.
-            return response()->json([
-                'success' => false,
-                'message' => 'Erro de validação: ' . $e->getMessage(),
-                'errors' => $e->errors(),
-            ], 422);
-
-        } catch (\Exception $e) {
-            // Erro geral do servidor
-            return response()->json([
-                'success' => false,
-                'message' => 'Erro ao processar a alteração de preço: ' . $e->getMessage(),
-            ], 500);
         }
     }
 

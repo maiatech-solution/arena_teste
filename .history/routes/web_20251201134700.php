@@ -151,11 +151,7 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::patch('{reserva}/confirmar', [AdminController::class, 'confirmarReserva'])->name('confirmar');
             Route::patch('{reserva}/rejeitar', [AdminController::class, 'rejeitarReserva'])->name('rejeitar');
 
-            // 🆕 ROTA CRÍTICA: ALTERAÇÃO DE PREÇO (PATCH)
-            // Esta rota foi adicionada para suportar a funcionalidade solicitada.
-            Route::patch('{reserva}/update-price', [AdminController::class, 'updatePrice'])->name('update_price');
-
-            // ✅ Rota de Reativação
+            // ✅ NOVO: Rota de Reativação
             Route::patch('{reserva}/reativar', [AdminController::class, 'reativar'])->name('reativar');
 
             // ROTAS DE CANCELAMENTO AJAX (RESTful)

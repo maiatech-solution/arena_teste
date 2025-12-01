@@ -288,15 +288,6 @@
                                                 @endif
 
                                             @elseif (in_array($reserva->status, ['confirmed', 'pending']))
-
-                                                {{-- Botão ALTERAR PREÇO (Para reservas de cliente ativas) --}}
-                                                @if (!$reserva->is_fixed)
-                                                <button onclick="openPriceUpdateModal({{ $reserva->id }}, {{ $reserva->price ?? 0 }}, '{{ $reserva->client_name ?? 'Reserva' }}')"
-                                                    class="inline-block w-full text-center bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
-                                                    Alterar Preço
-                                                </button>
-                                                @endif
-
                                                 {{-- Ações para reservas ATIVAS de cliente --}}
                                                 <a href="{{ route('admin.payment.index', [
                                                     'reserva_id' => $reserva->id,
@@ -325,25 +316,19 @@
                                                             Cancelar
                                                     </button>
                                                 @endif
-
-                                            @elseif ($reserva->is_fixed && $reserva->status === 'free')
-
-                                                {{-- Botão ALTERAR PREÇO (Para slots fixos 'Livre') --}}
-                                                <button onclick="openPriceUpdateModal({{ $reserva->id }}, {{ $reserva->price ?? 0 }}, 'Slot Fixo')"
-                                                    class="inline-block w-full text-center bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
-                                                    Alterar Preço
-                                                </button>
-
+                                            @elseif ($reserva->is_fixed)
                                                 {{-- Ações para SLOTS FIXOS (Manutenção/Livre) --}}
-                                                <button onclick="handleFixedSlotToggle({{ $reserva->id }}, 'cancelled')"
-                                                     class="inline-block w-full text-center bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
-                                                     Manutenção
-                                                </button>
-                                            @elseif ($reserva->is_fixed && $reserva->status === 'maintenance')
+                                                @if ($reserva->status === 'maintenance')
                                                 <button onclick="handleFixedSlotToggle({{ $reserva->id }}, 'confirmed')"
                                                      class="inline-block w-full text-center bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
                                                      Disponibilizar
                                                 </button>
+                                                @elseif ($reserva->status === 'free')
+                                                <button onclick="handleFixedSlotToggle({{ $reserva->id }}, 'cancelled')"
+                                                     class="inline-block w-full text-center bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                                                     Manutenção
+                                                </button>
+                                                @endif
                                             @endif
 
                                         </div>
@@ -441,50 +426,6 @@
         </div>
     </div>
 
-    {{-- 🆕 NOVO MODAL DE ALTERAÇÃO DE PREÇO --}}
-    <div id="price-update-modal" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden items-center justify-center z-50 transition-opacity duration-300">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 m-4 transform transition-transform duration-300 scale-95 opacity-0" id="price-update-modal-content" onclick="event.stopPropagation()">
-            <h3 class="text-xl font-bold text-blue-700 mb-4 border-b pb-2">Alterar Preço da Reserva/Slot</h3>
-
-            <p class="text-gray-700 mb-4">
-                Você está alterando o preço para: <span id="price-update-target-name" class="font-bold text-indigo-600"></span>.
-            </p>
-
-            <div class="mb-4">
-                <label for="current-price-display" class="block text-sm font-medium text-gray-700 mb-1">Preço Atual (R$):</label>
-                <span id="current-price-display" class="text-2xl font-extrabold text-green-700">R$ 0,00</span>
-            </div>
-
-            <div class="mb-6">
-                <label for="new-price-input" class="block text-sm font-medium text-gray-700 mb-2">
-                    Novo Preço (R$): <span class="text-red-500">*</span>
-                </label>
-                <input type="number" step="0.01" min="0" id="new-price-input"
-                       class="w-full p-2 text-lg border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                       placeholder="Ex: 150.00">
-            </div>
-
-            <div class="mb-6">
-                <label for="price-justification-input" class="block text-sm font-medium text-gray-700 mb-2">
-                    Motivo da Alteração: <span class="text-red-500">*</span>
-                </label>
-                <textarea id="price-justification-input" rows="3"
-                          class="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="Obrigatório, descreva o motivo (Ex: Feriado, Promoção, Desconto Especial)... (mínimo 5 caracteres)"></textarea>
-                <p id="price-justification-error" class="text-xs text-red-500 mt-1 hidden">Por favor, insira uma justificativa válida (mínimo 5 caracteres).</p>
-            </div>
-
-            <div class="flex justify-end space-x-3">
-                <button onclick="closePriceUpdateModal()" type="button" class="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition duration-150">
-                    Cancelar
-                </button>
-                <button id="confirm-price-update-btn" type="button" class="px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition duration-150">
-                    Confirmar Preço
-                </button>
-            </div>
-        </div>
-    </div>
-
     {{-- SCRIPTS DE AÇÃO AJAX --}}
     <script>
         // Variáveis de Rota e Token
@@ -496,9 +437,8 @@
         const CANCEL_PADRAO_URL = '{{ route("admin.reservas.cancelar", ":id") }}';
         const REACTIVATE_URL = '{{ route("admin.reservas.reativar", ":id") }}';
         const UPDATE_SLOT_STATUS_URL = '{{ route("admin.config.update_status", ":id") }}';
+        // Rota de registro de Falta (No Show)
         const REGISTER_NOSHOW_URL = '{{ route("admin.payment.noshow", ":id") }}';
-        // 🆕 ROTA DE ATUALIZAÇÃO DE PREÇO
-        const UPDATE_PRICE_URL = '{{ route("admin.reservas.update_price", ":id") }}';
 
 
         let currentReservaId = null;
@@ -627,75 +567,6 @@
         });
 
 
-        // --- LÓGICA DE ALTERAÇÃO DE PREÇO ---
-
-        /**
-         * Abre o modal de alteração de preço.
-         */
-        function openPriceUpdateModal(reservaId, currentPrice, targetName) {
-            currentReservaId = reservaId;
-            currentMethod = 'PATCH';
-            currentUrlBase = UPDATE_PRICE_URL;
-
-            // Limpa e popula dados
-            document.getElementById('price-update-target-name').textContent = targetName;
-            document.getElementById('current-price-display').textContent = `R$ ${currentPrice.toFixed(2).replace('.', ',')}`;
-            document.getElementById('new-price-input').value = currentPrice.toFixed(2);
-            document.getElementById('price-justification-input').value = '';
-            document.getElementById('price-justification-error').classList.add('hidden');
-
-            document.getElementById('price-update-modal').classList.remove('hidden');
-            document.getElementById('price-update-modal').classList.add('flex');
-
-            setTimeout(() => {
-                document.getElementById('price-update-modal-content').classList.remove('opacity-0', 'scale-95');
-                document.getElementById('new-price-input').focus();
-            }, 10);
-        }
-
-        /**
-         * Fecha o modal de alteração de preço.
-         */
-        function closePriceUpdateModal() {
-            document.getElementById('price-update-modal-content').classList.add('opacity-0', 'scale-95');
-            setTimeout(() => {
-                document.getElementById('price-update-modal').classList.remove('flex');
-                document.getElementById('price-update-modal').classList.add('hidden');
-            }, 300);
-        }
-
-        /**
-         * Listener para Confirmação da Alteração de Preço
-         */
-        document.getElementById('confirm-price-update-btn').addEventListener('click', function() {
-            const newPrice = parseFloat(document.getElementById('new-price-input').value);
-            const justification = document.getElementById('price-justification-input').value.trim();
-            const justificationError = document.getElementById('price-justification-error');
-
-            // Validações
-            if (isNaN(newPrice) || newPrice < 0) {
-                alert("Por favor, insira um preço válido (número maior ou igual a zero).");
-                document.getElementById('new-price-input').focus();
-                return;
-            }
-            if (justification.length < 5) {
-                justificationError.textContent = 'Por favor, forneça um motivo de alteração com pelo menos 5 caracteres.';
-                justificationError.classList.remove('hidden');
-                document.getElementById('price-justification-input').focus();
-                return;
-            }
-            justificationError.classList.add('hidden');
-
-            if (currentReservaId) {
-                // Envia a requisição AJAX para alteração de preço
-                sendAjaxRequest(currentReservaId, 'PATCH', UPDATE_PRICE_URL, justification, { new_price: newPrice });
-            } else {
-                alert("Erro: Dados da reserva para alteração de preço não configurados corretamente.");
-            }
-        });
-
-        // --- FUNÇÕES GERAIS ---
-
         /**
          * FUNÇÃO PARA ALTERNAR STATUS DE SLOT FIXO (Manutenção <-> Livre)
          */
@@ -712,7 +583,7 @@
 
 
         /**
-         * FUNÇÃO AJAX GENÉRICA PARA ENVIAR REQUISIÇÕES (Unificada para Cancelamento, Reativação, Falta, Preço e Slots Fixos)
+         * FUNÇÃO AJAX GENÉRICA PARA ENVIAR REQUISIÇÕES (Unificada para Cancelamento, Reativação, Falta e Slots Fixos)
          */
         async function sendAjaxRequest(reservaId, method, urlBase, reason = null, extraData = {}) {
             const url = urlBase.replace(':id', reservaId);
@@ -724,11 +595,9 @@
 
             // Monta o body da requisição
             const bodyData = {
-                // reason é usado para justificativa de cancelamento ou alteração de preço
                 cancellation_reason: reason,
-                justification: reason, // Mapeia para o campo que o controller de preço espera
                 _token: CSRF_TOKEN,
-                ...extraData, // Permite injetar status: 'confirmed', new_price, etc.
+                ...extraData, // Permite injetar status: 'confirmed' ou status: 'noshow'
             };
 
             // Se o método lógico for PATCH ou DELETE, adicionamos o campo _method
@@ -752,11 +621,9 @@
                 body: JSON.stringify(bodyData)
             };
 
-            // Identifica o botão de submissão do modal ativo (Cancelamento, Reativação, Falta ou Preço)
             const submitBtn = document.getElementById('confirm-cancellation-btn') ||
                               document.getElementById('confirm-reactivation-btn') ||
-                              document.getElementById('confirm-noshow-btn') ||
-                              document.getElementById('confirm-price-update-btn');
+                              document.getElementById('confirm-noshow-btn'); // NOVO BOTÃO DE FALTA
 
             if (submitBtn) {
                 submitBtn.disabled = true;
@@ -780,26 +647,18 @@
                     alert(result.message || "Ação realizada com sucesso. A lista será atualizada.");
                     closeCancellationModal();
                     closeReactivationModal();
-                    closeNoShowModal();
-                    closePriceUpdateModal(); // Fecha o modal de preço
+                    closeNoShowModal(); // Fecha o modal de falta
 
-                    // ✅ Recarrega a página após o sucesso em qualquer ação AJAX
+                    // ✅ CORREÇÃO: Recarrega a página após o sucesso em qualquer ação AJAX
                     setTimeout(() => {
                         window.location.reload();
                     }, 50);
 
                 } else if (response.status === 422 && result.errors) {
-                    // Lidar com erro de validação (Motivo muito curto ou validação do novo preço)
-                    const errorField = result.errors.cancellation_reason || result.errors.status || result.errors.justification || result.errors.new_price;
+                    // Lidar com erro de validação (Motivo muito curto)
+                    const errorField = result.errors.cancellation_reason || result.errors.status;
                     const errorMsg = errorField ? errorField.join(', ') : 'Erro de validação desconhecida.';
                     alert(`ERRO DE VALIDAÇÃO: ${errorMsg}`);
-
-                    // Se o erro for do modal de preço, mostra na mensagem de erro do modal
-                    if (document.getElementById('price-update-modal').classList.contains('flex')) {
-                        document.getElementById('price-justification-error').textContent = errorMsg;
-                        document.getElementById('price-justification-error').classList.remove('hidden');
-                    }
-
                 } else {
                     alert(result.error || result.message || `Erro desconhecido ao processar a ação. Status: ${response.status}.`);
                 }
@@ -815,10 +674,8 @@
                         submitBtn.textContent = 'Confirmar Cancelamento';
                     } else if (submitBtn.getAttribute('id') === 'confirm-reactivation-btn') {
                         submitBtn.textContent = 'Reativar Reserva';
-                    } else if (submitBtn.getAttribute('id') === 'confirm-noshow-btn') {
+                    } else if (submitBtn.getAttribute('id') === 'confirm-noshow-btn') { // NOVO
                          submitBtn.textContent = 'Confirmar Falta (No Show)';
-                    } else if (submitBtn.getAttribute('id') === 'confirm-price-update-btn') { // NOVO
-                         submitBtn.textContent = 'Confirmar Preço';
                     }
                 }
             }
