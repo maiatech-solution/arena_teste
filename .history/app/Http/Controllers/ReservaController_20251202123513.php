@@ -158,7 +158,7 @@ class ReservaController extends Controller
                 'is_recurrent' => $reserva->is_recurrent, // Mantém a natureza de recorrência
                 'client_name' => 'Slot Fixo', // Placeholder para colunas NOT NULL
                 'client_contact' => 'N/A',  // Placeholder para colunas NOT NULL
-                'user_id' => null,           // Deve ser NULL
+                'user_id' => null,          // Deve ser NULL
             ]);
             Log::info("Slot fixo recriado para {$reserva->date} {$reserva->start_time}.");
         } else {
@@ -527,10 +527,10 @@ class ReservaController extends Controller
 
             // 2. Busca o slot fixo ATIVO (free) para esta data/hora
             $fixedSlotQuery = Reserva::where('is_fixed', true)
-                                     ->whereDate('date', $dateString)
-                                     ->where('start_time', $startTimeNormalized)
-                                     ->where('end_time', $endTimeNormalized)
-                                     ->where('status', Reserva::STATUS_FREE); // ✅ PADRONIZADO
+                                         ->whereDate('date', $dateString)
+                                         ->where('start_time', $startTimeNormalized)
+                                         ->where('end_time', $endTimeNormalized)
+                                         ->where('status', Reserva::STATUS_FREE); // ✅ PADRONIZADO
 
             if ($isFirstDate) {
                 $fixedSlotQuery->where('id', $scheduleId);
@@ -549,19 +549,6 @@ class ReservaController extends Controller
                 // Se não há conflito nem ausência do slot fixo, podemos agendar
                 $fixedSlotsToDelete[] = $fixedSlot->id; // Marca para consumo
 
-                // 🛑 LÓGICA DE PAGAMENTO CONDICIONAL
-                if ($isFirstDate) {
-                    // Mestra: Mantém os valores de pagamento originais (que incluem o sinal)
-                    $slotSignal = $signalValue;
-                    $slotPaid = $totalPaid;
-                    $slotPaymentStatus = $paymentStatus;
-                } else {
-                    // Cópias futuras: Zera o pagamento para forçar a cobrança integral
-                    $slotSignal = 0.00;
-                    $slotPaid = 0.00;
-                    $slotPaymentStatus = 'pending';
-                }
-
                 $reservasToCreate[] = [
                     'user_id' => $userId, // ✅ Usa o ID do cliente sincronizado/criado
                     'manager_id' => Auth::id(), // Adicionado o manager_id
@@ -570,11 +557,10 @@ class ReservaController extends Controller
                     'start_time' => $startTimeNormalized,
                     'end_time' => $endTimeNormalized,
                     'price' => $price,
-                    // ✅ CORREÇÃO APLICADA AQUI
-                    'signal_value' => $slotSignal,
-                    'total_paid' => $slotPaid,
-                    'payment_status' => $slotPaymentStatus,
-                    // FIM CORREÇÃO
+                    // ✅ Adicionado: Valor do Sinal, Total Pago e Status de Pagamento
+                    'signal_value' => $signalValue,
+                    'total_paid' => $totalPaid,
+                    'payment_status' => $paymentStatus,
                     'client_name' => $clientName,
                     'client_contact' => $clientContact,
                     'notes' => $validated['notes'] ?? null,
@@ -845,11 +831,9 @@ class ReservaController extends Controller
                             'start_time' => $startTime,
                             'end_time' => $endTime,
                             'price' => $price,
-                            // ✅ CORREÇÃO: Zerado para slots futuros.
                             'signal_value' => 0.00,
                             'total_paid' => 0.00,
                             'payment_status' => 'pending',
-                            // FIM CORREÇÃO
                             'client_name' => $clientName,
                             'client_contact' => $clientContact,
                             'status' => Reserva::STATUS_CONFIRMADA, // ✅ PADRONIZADO
@@ -1008,11 +992,9 @@ class ReservaController extends Controller
                         'start_time' => $startTime,
                         'end_time' => $endTime,
                         'price' => $price,
-                        // ✅ CORREÇÃO: Zerado para slots futuros.
                         'signal_value' => 0.00,
                         'total_paid' => 0.00,
                         'payment_status' => 'pending',
-                        // FIM CORREÇÃO
                         'client_name' => $clientName,
                         'client_contact' => $clientContact,
                         'status' => Reserva::STATUS_CONFIRMADA, // ✅ PADRONIZADO
