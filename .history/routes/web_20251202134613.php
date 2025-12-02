@@ -110,12 +110,11 @@ Route::middleware(['auth', 'gestor'])->group(function () {
     Route::get('/admin/reservas/pendentes', [AdminController::class, 'indexReservas'])
         ->name('admin.reservas.pendentes');
 
-    // 🐛 CORREÇÃO FINAL: Rotas de Confirmar e Rejeitar ajustadas para ter o {reserva} no final,
-    // correspondendo ao formato que o seu browser está reportando na URL.
-    Route::patch('/admin/reservas/confirmar/{reserva}', [ReservaController::class, 'confirmar'])
+    // Rotas de Confirmar e Rejeitar
+    Route::patch('/admin/reservas/{reserva}/confirmar', [ReservaController::class, 'confirmar'])
         ->name('admin.reservas.confirmar');
 
-    Route::patch('/admin/reservas/rejeitar/{reserva}', [ReservaController::class, 'rejeitar'])
+    Route::patch('/admin/reservas/{reserva}/rejeitar', [ReservaController::class, 'rejeitar'])
         ->name('admin.reservas.rejeitar');
     // =========================================================================
 
@@ -137,6 +136,7 @@ Route::middleware(['auth', 'gestor'])->group(function () {
 
             // Rotas de Listagem (EXCETO PENDENTES, que foi movida)
             Route::get('/', [AdminController::class, 'indexReservasDashboard'])->name('index');
+            // Route::get('pendentes', [AdminController::class, 'indexReservas'])->name('pendentes'); ❌ REMOVIDA DAQUI
             Route::get('confirmadas', [AdminController::class, 'confirmed_index'])->name('confirmadas');
             Route::get('todas', [AdminController::class, 'indexTodas'])->name('todas');
             Route::get('rejeitadas', [AdminController::class, 'indexReservasRejeitadas'])->name('rejeitadas');

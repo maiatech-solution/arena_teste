@@ -1,11 +1,10 @@
 <x-app-layout>
 
     @php
-        // Corrigido: Removida a declaração 'use' do bloco @php para evitar erro de sintaxe.
-        // O Laravel agora usará o nome de classe totalmente qualificado (\Carbon\Carbon::)
-        $pendingReservationsCount = $pendingReservationsCount ?? 0;
-        $expiringSeriesCount = $expiringSeriesCount ?? 0;
-        $expiringSeries = $expiringSeries ?? [];
+        // A declaração 'use' foi movida para fora do bloco @php para evitar o erro de sintaxe do Blade/PHP.
+        // Classes como Carbon devem ser declaradas no escopo do arquivo PHP, não dentro de um bloco de execução.
+        // A importação via 'use' é mantida aqui para compatibilidade com o ambiente Blade.
+        // use Carbon\Carbon; // Removido daqui
     @endphp
 
     <x-slot name="header">
@@ -13,6 +12,14 @@
             {{ __('Dashboard | Calendário de Reservas') }}
         </h2>
     </x-slot>
+
+    {{-- GARANTIA DE VARIÁVEIS: Define valores padrão para evitar 'Undefined Variable' se o Controller falhar --}}
+    @php
+        // A classe Carbon deve estar disponível no escopo do template devido à correção acima.
+        $pendingReservationsCount = $pendingReservationsCount ?? 0;
+        $expiringSeriesCount = $expiringSeriesCount ?? 0;
+        $expiringSeries = $expiringSeries ?? [];
+    @endphp
 
     {{-- IMPORTAÇÕES (Mantidas) --}}
     <link href='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/main.min.css' rel='stylesheet' />
@@ -62,9 +69,7 @@
             color: white !important;
             padding: 2px 5px;
             border-radius: 4px;
-            /* Garante que o texto dentro do evento seja branco e negrito */
-            font-weight: 700 !important;
-            color: #ffffff !important;
+            font-weight: bold;
         }
 
         /* Estilo para Eventos AVULSOS/RÁPIDOS (Indigo/Azul) */
@@ -143,6 +148,7 @@
                                 </div>
                             </div>
                             <div class="mt-4 sm:mt-0 sm:ml-6">
+                                {{-- ✅ CORREÇÃO: Aponta diretamente para a lista de pendentes --}}
                                 <a href="{{ route('admin.reservas.pendentes') }}" class="inline-block bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white font-bold py-2 px-6 rounded-lg text-sm transition duration-150 ease-in-out shadow-lg">
                                     Revisar Pendências
                                 </a>
@@ -172,7 +178,7 @@
                                     <p class="font-semibold text-sm text-yellow-800">Detalhes para Renovação (Sugestão: +6 meses):</p>
                                     @foreach ($expiringSeries as $seriesItem)
                                         @php
-                                            $lastDate = \Carbon\Carbon::parse($seriesItem['last_date']);
+                                            $lastDate = Carbon::parse($seriesItem['last_date']);
                                             $suggestedNewDate = $lastDate->copy()->addMonths(6); // ✅ MUDANÇA AQUI: +6 meses
                                         @endphp
                                         <div class="text-xs text-gray-700">
@@ -201,13 +207,13 @@
                         <span class="inline-block w-4 h-4 rounded-full bg-indigo-600 mr-2"></span>
                         <span>Reservado Avulso (Rápido)</span>
                     </div>
-                    <!--<div class="flex items-center p-2 bg-orange-50 rounded-lg shadow-sm">
+                    <div class="flex items-center p-2 bg-orange-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-orange-500 mr-2"></span>
                         <span>Pré-Reserva Pendente</span>
-                    </div> -->
+                    </div>
                     <div class="flex items-center p-2 bg-green-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-green-500 mr-2"></span>
-                        <span>Disponível (Horários Abiertos)</span>
+                        <span>Disponível (Horários Abertos)</span>
                     </div>
                 </div>
 
@@ -808,7 +814,6 @@
                 const url = CONFIRM_PENDING_URL.replace(':id', reservaId);
                 const data = {
                     signal_value: signalValueFinal, // Usa o valor corrigido
-                    is_recurrent: false, // O modal de pendência não tem recorrência. Isso é feito via view de pendentes.
                     _token: csrfToken,
                     _method: 'PATCH',
                 };
@@ -1074,7 +1079,7 @@
                             </div>
                             <div class="mt-3 md:mt-0">
                                 <button onclick="handleRenewal(${item.master_id})"
-                                            class="renew-btn-${item.master_id} w-full md:w-auto px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg text-sm">
+                                                class="renew-btn-${item.master_id} w-full md:w-auto px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg text-sm">
                                     Renovar por 6 Meses
                                 </button>
                             </div>
@@ -1146,8 +1151,8 @@
                     updateMainAlert();
 
                     if (document.getElementById('renewal-list').children.length === 0) {
-                        document.getElementById('renewal-list').innerHTML = '<p class="text-gray-500 italic text-center p-4">Nenhuma série a ser renovada no momento. Bom trabalho!</p>';
-                        setTimeout(() => closeRenewalModal(), 3000);
+                                 document.getElementById('renewal-list').innerHTML = '<p class="text-gray-500 italic text-center p-4">Nenhuma série a ser renovada no momento. Bom trabalho!</p>';
+                                 setTimeout(() => closeRenewalModal(), 3000);
                     }
 
                     setTimeout(() => {
@@ -1279,27 +1284,6 @@
                 editable: false,
                 initialDate: new Date().toISOString().slice(0, 10),
 
-                // ✅ HOOK ATUALIZADO: Lógica unificada para mostrar APENAS O NOME (limpando o prefixo RECORRENTE)
-                eventDidMount: function(info) {
-                    const event = info.event;
-                    const titleEl = info.el.querySelector('.fc-event-title');
-
-                    // Apenas processa eventos reservados (não os disponíveis)
-                    if (!titleEl || event.classNames.includes('fc-event-available')) return;
-
-                    let currentTitle = titleEl.textContent;
-
-                    // 1. Limpeza agressiva do prefixo 'RECORR.:' para o formato exato que você viu.
-                    // Captura e remove "RECORR" + ".:" (opcional) + qualquer espaço.
-                    currentTitle = currentTitle.replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '').trim();
-
-                    // 2. Remove o sufixo de preço ' - R$ XX.XX' e qualquer texto após ele (aplica a TODOS reservados)
-                    currentTitle = currentTitle.split(' - R$ ')[0].trim();
-
-                    // 3. O resultado final é APENAS O NOME DO CLIENTE.
-                    titleEl.textContent = currentTitle;
-                },
-
                 eventClick: function(info) {
                     const event = info.event;
                     const isAvailable = event.classNames.includes('fc-event-available');
@@ -1394,17 +1378,20 @@
                             timeDisplay += ' - ' + moment(endTime).format('HH:mm');
                         }
 
-                        // O título do evento deve estar no formato "Nome do Cliente - R$ 123.45"
-                        // Para exibir apenas o nome do cliente no modal:
                         const titleParts = event.title.split(' - R$ ');
-                        const clientName = titleParts[0];
+                        const title = titleParts[0];
+
+                        // ✅ CORREÇÃO: Usa extendedProps.price para o valor total
+                        const priceDisplayFormatted = parseFloat(price).toFixed(2).replace('.', ',');
+
+
+                        let statusText = 'Confirmada';
+
+                        const showUrl = SHOW_RESERVA_URL.replace(':id', reservaId);
 
                         // ✅ ATUALIZADO: Incluir a data E o valor do sinal na URL do Caixa
                         // Isso permite que o Controller de Pagamentos pré-preencha o campo Pago
                         const paymentUrl = `${PAYMENT_INDEX_URL}?reserva_id=${reservaId}&data_reserva=${dateReservation}&signal_value=${signalValue}`;
-                        const showUrl = SHOW_RESERVA_URL.replace(':id', reservaId);
-
-                        let statusText = 'Confirmada';
 
                         let recurrentStatus = isRecurrent ?
                             '<p class="text-sm font-semibold text-fuchsia-600">Parte de uma Série Recorrente</p>' :
@@ -1412,11 +1399,10 @@
 
                         // ✅ CORREÇÃO: Formata o valor do sinal para exibição
                         const signalValueDisplay = parseFloat(signalValue).toFixed(2).replace('.', ',');
-                        const priceDisplayFormatted = parseFloat(price).toFixed(2).replace('.', ',');
 
 
                         modalContent.innerHTML = `
-                            <p class="font-semibold text-gray-900">${clientName}</p>
+                            <p class="font-semibold text-gray-900">${title}</p>
                             <p><strong>Status:</strong> <span class="uppercase font-bold text-sm text-indigo-600">${statusText}</span></p>
                             <p><strong>Data:</strong> ${dateDisplay}</p>
                             <p><strong>Horário:</strong> ${timeDisplay}</p>

@@ -1289,6 +1289,12 @@
 
                     let currentTitle = titleEl.textContent;
 
+                    // --- DEBUG CRÍTICO: Registra o título bruto no console ---
+                    if (event.classNames.includes('fc-event-recurrent')) {
+                        console.log("DEBUG: Título Recorrente BRUTO:", currentTitle);
+                    }
+                    // --------------------------------------------------------
+
                     // 1. Limpeza agressiva do prefixo 'RECORR.:' para o formato exato que você viu.
                     // Captura e remove "RECORR" + ".:" (opcional) + qualquer espaço.
                     currentTitle = currentTitle.replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '').trim();

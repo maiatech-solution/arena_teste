@@ -106,7 +106,7 @@
                         </a>
                         {{-- NOVO BOTÃO DE PAGAMENTO: Leva o usuário ao módulo de pagamento --}}
                         <a href="{{ route('admin.payment.index', ['reserva_id' => $reserva->id]) }}"
-                           class="ml-2 inline-block text-center bg-green-500 hover:bg-green-600 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                           class="ml-2 inline-block text-center bg-gree-500 hover:bg-green-600 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
                             Pagar
                         </a>
                     </td>

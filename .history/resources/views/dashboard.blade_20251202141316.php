@@ -201,10 +201,10 @@
                         <span class="inline-block w-4 h-4 rounded-full bg-indigo-600 mr-2"></span>
                         <span>Reservado Avulso (Rápido)</span>
                     </div>
-                    <!--<div class="flex items-center p-2 bg-orange-50 rounded-lg shadow-sm">
+                    <div class="flex items-center p-2 bg-orange-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-orange-500 mr-2"></span>
                         <span>Pré-Reserva Pendente</span>
-                    </div> -->
+                    </div>
                     <div class="flex items-center p-2 bg-green-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-green-500 mr-2"></span>
                         <span>Disponível (Horários Abiertos)</span>
@@ -1279,25 +1279,26 @@
                 editable: false,
                 initialDate: new Date().toISOString().slice(0, 10),
 
-                // ✅ HOOK ATUALIZADO: Lógica unificada para mostrar APENAS O NOME (limpando o prefixo RECORRENTE)
+                // ✅ HOOK ATUALIZADO: Lógica unificada para o novo formato 'HH NOME'
                 eventDidMount: function(info) {
                     const event = info.event;
                     const titleEl = info.el.querySelector('.fc-event-title');
 
-                    // Apenas processa eventos reservados (não os disponíveis)
                     if (!titleEl || event.classNames.includes('fc-event-available')) return;
 
                     let currentTitle = titleEl.textContent;
 
-                    // 1. Limpeza agressiva do prefixo 'RECORR.:' para o formato exato que você viu.
-                    // Captura e remove "RECORR" + ".:" (opcional) + qualquer espaço.
-                    currentTitle = currentTitle.replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '').trim();
+                    // 1. Limpeza de PREFIXOS (Recorrente: 'RECORRE.: ', Preço: ' - R$ XX.XX')
+                    currentTitle = currentTitle.replace(/^RECORRE\.:\s*/i, '');
+                    currentTitle = currentTitle.split(' - R$ ')[0].trim(); // Remove o preço e o traço
 
-                    // 2. Remove o sufixo de preço ' - R$ XX.XX' e qualquer texto após ele (aplica a TODOS reservados)
-                    currentTitle = currentTitle.split(' - R$ ')[0].trim();
+                    // 2. Extração e formatação da hora de início
+                    const timeStart = moment(event.start).format('HH'); // Apenas a HORA
 
-                    // 3. O resultado final é APENAS O NOME DO CLIENTE.
-                    titleEl.textContent = currentTitle;
+                    // 3. Aplicação do novo formato: "HH NOME"
+                    const finalTitle = `${timeStart} ${currentTitle}`;
+
+                    titleEl.textContent = finalTitle;
                 },
 
                 eventClick: function(info) {

@@ -18,10 +18,12 @@ use Carbon\CarbonPeriod;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 use App\Http\Controllers\AdminController;
-use App\Models\FinancialTransaction; // ✅ NOVO: Importa o modelo de transações
 
 class ReservaController extends Controller
 {
+    // O seu código não tinha constantes, então assumi as constantes padrão do Modelo Reserva.
+    // Para fins de clareza nas correções, usarei as strings literais que você usou.
+
     /**
      * Exibe a página pública de agendamento (que carrega os slots via API).
      */
@@ -80,7 +82,7 @@ class ReservaController extends Controller
 
         if ($checkActiveOnly) {
             // Checa apenas status que indicam ocupação real
-            $query->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE]); // ✅ PADRONIZADO
+            $query->whereIn('status', ['confirmed', 'pending']);
         }
 
         if ($excludeReservaId) {
@@ -97,12 +99,12 @@ class ReservaController extends Controller
     protected function getConflictingReservaIds(string $date, string $startTime, string $endTime, ?int $ignoreReservaId = null)
     {
         // Apenas 'confirmed' e 'pending' causam conflito
-        $activeStatuses = [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA]; // ✅ PADRONIZADO
+        $activeStatuses = ['pending', 'confirmed'];
 
         // Normaliza as horas para garantir que a consulta SQL seja precisa
         try {
              $startTimeNormalized = Carbon::createFromFormat('G:i', $startTime)->format('H:i:s');
-             $endTimeNormalized = Carbon::parse($endTime)->format('H:i:s');
+             $endTimeNormalized = Carbon::createFromFormat('G:i', $endTime)->format('H:i:s');
         } catch (\Exception $e) {
              $startTimeNormalized = Carbon::parse($startTime)->format('H:i:s');
              $endTimeNormalized = Carbon::parse($endTime)->format('H:i:s');
@@ -153,19 +155,19 @@ class ReservaController extends Controller
                 'start_time' => $reserva->start_time,
                 'end_time' => $reserva->end_time,
                 'price' => $reserva->price, // Mantém o preço original para o slot
-                'status' => Reserva::STATUS_FREE, // ✅ PADRONIZADO
+                'status' => 'free', // Status Livre (verde no calendário)
                 'is_fixed' => true,
                 'is_recurrent' => $reserva->is_recurrent, // Mantém a natureza de recorrência
                 'client_name' => 'Slot Fixo', // Placeholder para colunas NOT NULL
-                'client_contact' => 'N/A',  // Placeholder para colunas NOT NULL
-                'user_id' => null,          // Deve ser NULL
+                'client_contact' => 'N/A',   // Placeholder para colunas NOT NULL
+                'user_id' => null,           // Deve ser NULL
             ]);
             Log::info("Slot fixo recriado para {$reserva->date} {$reserva->start_time}.");
         } else {
             // Se o slot existir, mas estiver em 'maintenance', mantém.
             // Se estiver em outro status (tipo 'pending' ou 'confirmed' por erro), força para 'free'.
-            if (!in_array($existingFixedSlot->status, [Reserva::STATUS_FREE, Reserva::STATUS_MAINTENANCE])) { // ✅ PADRONIZADO
-                 $existingFixedSlot->update(['status' => Reserva::STATUS_FREE]); // ✅ PADRONIZADO
+            if (!in_array($existingFixedSlot->status, ['free', 'maintenance'])) {
+                 $existingFixedSlot->update(['status' => 'free']);
                  Log::warning("Slot fixo existente para {$reserva->date} foi corrigido para FREE.");
             }
         }
@@ -192,7 +194,7 @@ class ReservaController extends Controller
             ->where('date', $reserva->date)
             ->where('start_time', $reserva->start_time)
             ->where('end_time', $reserva->end_time)
-            ->whereIn('status', [Reserva::STATUS_FREE, Reserva::STATUS_MAINTENANCE]) // ✅ PADRONIZADO
+            ->whereIn('status', ['free', 'maintenance'])
             ->first();
 
         if ($fixedSlot) {
@@ -329,7 +331,7 @@ class ReservaController extends Controller
         $oldReserva = Reserva::find($reservaIdToUpdate);
 
         // 1. Checagens de Segurança
-        if (!$oldReserva || !$oldReserva->is_fixed || $oldReserva->status !== Reserva::STATUS_FREE) { // ✅ PADRONIZADO
+        if (!$oldReserva || !$oldReserva->is_fixed || $oldReserva->status !== 'free') {
             return response()->json(['success' => false, 'message' => 'O slot selecionado não é um horário fixo disponível.'], 409);
         }
 
@@ -384,7 +386,7 @@ class ReservaController extends Controller
                 'client_name' => $clientName,
                 'client_contact' => $clientContact,
                 'notes' => $validated['notes'] ?? null,
-                'status' => Reserva::STATUS_CONFIRMADA, // ✅ PADRONIZADO
+                'status' => 'confirmed', // Reserva de cliente confirmada pelo Admin
                 'is_fixed' => false,
                 'is_recurrent' => false,
                 'manager_id' => Auth::id(),
@@ -470,7 +472,7 @@ class ReservaController extends Controller
 
         // Define a janela de agendamento (Exatamente 6 meses a partir da data inicial)
         // 🛑 CORREÇÃO AQUI: De addYear() para addMonths(6)
-        $endDate = $initialDate->copy()->addMonths(6); // ✅ CORRIGIDO
+        $endDate = $initialDate->copy()->addMonths(6)->subDay();
 
 
         // 1. Processamento do Cliente (NOVA LÓGICA)
@@ -517,7 +519,7 @@ class ReservaController extends Controller
             // 1. Checa conflito contra reservas *reais* de outros clientes
             $overlapWithReal = Reserva::whereDate('date', $dateString)
                 ->where('is_fixed', false) // CRÍTICO: Somente reservas de cliente
-                ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE]) // ✅ PADRONIZADO
+                ->whereIn('status', ['confirmed', 'pending'])
                 ->where(function ($q) use ($startTimeNormalized, $endTimeNormalized) {
                     $q->where('start_time', '<', $endTimeNormalized)
                         ->where('end_time', '>', $startTimeNormalized);
@@ -530,7 +532,7 @@ class ReservaController extends Controller
                                          ->whereDate('date', $dateString)
                                          ->where('start_time', $startTimeNormalized)
                                          ->where('end_time', $endTimeNormalized)
-                                         ->where('status', Reserva::STATUS_FREE); // ✅ PADRONIZADO
+                                         ->where('status', 'free');
 
             if ($isFirstDate) {
                 $fixedSlotQuery->where('id', $scheduleId);
@@ -551,7 +553,6 @@ class ReservaController extends Controller
 
                 $reservasToCreate[] = [
                     'user_id' => $userId, // ✅ Usa o ID do cliente sincronizado/criado
-                    'manager_id' => Auth::id(), // Adicionado o manager_id
                     'date' => $dateString,
                     'day_of_week' => $dayOfWeek,
                     'start_time' => $startTimeNormalized,
@@ -564,10 +565,11 @@ class ReservaController extends Controller
                     'client_name' => $clientName,
                     'client_contact' => $clientContact,
                     'notes' => $validated['notes'] ?? null,
-                    'status' => Reserva::STATUS_CONFIRMADA, // ✅ PADRONIZADO
+                    'status' => 'confirmed',
                     'is_fixed' => false,
                     'is_recurrent' => true,
-                    // 'recurrent_series_id' será adicionado após a criação da mestra
+                    'manager_id' => Auth::id(),
+                    // Campos para mass insert
                     'created_at' => Carbon::now(),
                     'updated_at' => Carbon::now(),
                 ];
@@ -598,7 +600,6 @@ class ReservaController extends Controller
         try {
             // 5. Deleta todos os slots fixos válidos
             Reserva::whereIn('id', $fixedSlotsToDelete)->delete();
-            Log::info("Slots fixos IDs: " . implode(', ', $fixedSlotsToDelete) . " consumidos/deletados para série recorrente.");
 
             // 6. Cria a série de reservas reais
             $reservasWithMasterId = [];
@@ -624,21 +625,6 @@ class ReservaController extends Controller
 
             $newReservasCount = count($reservasWithMasterId) + 1; // +1 para a mestra
 
-            // 7. ✅ NOVO: GERA TRANSAÇÃO FINANCEIRA (SINAL)
-            if ($signalValue > 0) {
-                FinancialTransaction::create([
-                    'reserva_id' => $masterReservaId,
-                    'user_id' => $userId,
-                    'manager_id' => Auth::id(),
-                    'amount' => $signalValue,
-                    'type' => 'signal',
-                    'payment_method' => 'pix', // Assumindo PIX no quick add
-                    'description' => 'Sinal recebido na criação da série recorrente (API Dashboard)',
-                    'paid_at' => Carbon::now(),
-                ]);
-                Log::info("Transação de Sinal (R$ {$signalValue}) registrada para Master ID {$masterReservaId}.");
-            }
-
             DB::commit();
 
             $message = "Série recorrente de {$clientName} criada com sucesso! Total de {$newReservasCount} reservas agendadas até " . $endDate->format('d/m/Y') . ".";
@@ -656,12 +642,6 @@ class ReservaController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            // Tenta recriar o slot fixo original se a transação falhar (o slot inicial já foi deletado)
-            $oldReserva = Reserva::find($scheduleId);
-            if (!$oldReserva) {
-                $oldReserva = new Reserva(['date' => $validated['date'], 'start_time' => $startTimeNormalized, 'end_time' => $endTimeNormalized, 'is_fixed' => false, 'day_of_week' => $dayOfWeek, 'price' => $price]);
-                $this->recreateFixedSlot($oldReserva);
-            }
             Log::error("Erro ao criar série recorrente: " . $e->getMessage(), ['exception' => $e]);
 
             return response()->json(['success' => false, 'message' => 'Erro interno ao criar série recorrente: Transação falhou. ' . $e->getMessage()], 500);
@@ -670,41 +650,29 @@ class ReservaController extends Controller
 
 
     /**
-     * ✅ NOVO MÉTODO: Confirmação de Reserva Pendente.
-     * Este método agora verifica se deve criar uma série recorrente (6 meses) e registra a Transação Financeira.
+     * ✅ NOVO MÉTODO (ou ausente anteriormente): Confirmação de Reserva Pendente.
+     * Este método agora verifica se deve criar uma série recorrente (6 meses).
      *
      * @param \Illuminate\Http\Request $request
      * @param \App\Models\Reserva $reserva A reserva pendente a ser confirmada.
      */
     public function confirmar(Request $request, Reserva $reserva)
     {
-        // 🛑 DIAGNÓSTICO DE INPUT: Loga o input de recorrência
-        Log::debug("Input 'is_recurrent' RAW: " . print_r($request->input('is_recurrent'), true));
-
         // 1. Validação
         $validated = $request->validate([
             'signal_value' => 'nullable|numeric|min:0',
-            // O Laravel/PHP, ao ver múltiplos inputs com o mesmo nome (hidden + checkbox),
-            // pode receber uma string com o último valor OU um array ['0', '1'].
-            'is_recurrent' => ['nullable', 'sometimes'], // Remove in:0,1 da validação para aceitar array
+            // O frontend já garante que é '1' ou '0' via hidden field/checkbox
+            'is_recurrent' => 'nullable|in:0,1',
         ], [
             'signal_value.numeric' => 'O valor do sinal deve ser um número.',
             'signal_value.min' => 'O valor do sinal não pode ser negativo.',
         ]);
 
-        if ($reserva->status !== Reserva::STATUS_PENDENTE) { // ✅ PADRONIZADO
+        if ($reserva->status !== 'pending') {
             return redirect()->back()->with('error', 'Esta reserva já foi processada.');
         }
 
-        // 🛑 LÓGICA FINAL: Checagem robusta contra string ou array
-        // Força o input para array e usa array_filter para checar se o valor '1' está presente.
-        $isRecurrent = count(array_filter((array)$request->input('is_recurrent'), function($value) {
-            return $value === '1' || $value === true; // Adiciona check para bool true
-        })) > 0;
-
-        // 🛑 DIAGNÓSTICO: Loga o resultado da variável de controle
-        Log::debug("isRecurrent (Flag de controle): " . ($isRecurrent ? 'TRUE' : 'FALSE'));
-
+        $isRecurrent = (bool)($validated['is_recurrent'] ?? false);
         $signalValue = (float)($validated['signal_value'] ?? 0.00);
 
         // 2. Checagem de Conflito (Contra outras reservas ativas, exceto a própria reserva que está sendo confirmada)
@@ -718,7 +686,7 @@ class ReservaController extends Controller
             $originalFixedSlotId = $reserva->fixed_slot_id;
 
             // 3. Atualiza a reserva atual para 'confirmed'
-            $reserva->status = Reserva::STATUS_CONFIRMADA; // ✅ PADRONIZADO
+            $reserva->status = 'confirmed';
             $reserva->signal_value = $signalValue;
             $reserva->total_paid = $signalValue;
             $reserva->is_recurrent = $isRecurrent; // <--- DEFINIDO DINAMICAMENTE AQUI
@@ -742,37 +710,31 @@ class ReservaController extends Controller
                 $reserva->save();
             }
 
-            // Log de INFO original do usuário (para aparecer no log)
-            Log::info("Reserva ID: {$reserva->id} confirmada por Gestor ID: " . Auth::id() . ". Sinal: R$ " . number_format($signalValue, 2, ',', '.') . ", Recorrente: " . ($isRecurrent ? 'Sim' : 'Não'));
-
-
             // 4. Consome o slot fixo original (se existir)
             if ($originalFixedSlotId) {
-                Reserva::where('id', $originalFixedSlotId)
-                    ->where('is_fixed', true)
-                    ->where('status', Reserva::STATUS_FREE) // ✅ PADRONIZADO
-                    ->delete();
+                Reserva::where('id', $originalFixedSlotId)->where('is_fixed', true)->delete();
                 Log::info("Slot fixo ID {$originalFixedSlotId} consumido/deletado.");
             }
 
             $successMessage = "Reserva de {$reserva->client_name} confirmada com sucesso!";
             $recurrentCount = 0;
-            $conflictedOrSkippedCount = 0;
 
             // 5. ✅ LÓGICA CRÍTICA: CRIAÇÃO DA SÉRIE RECORRENTE (6 meses)
             if ($isRecurrent) { // SÓ EXECUTA SE O CHECKBOX ESTIVER MARCADO
-                // Adicionando um log para confirmar que entramos neste bloco
-                Log::info("Iniciando a lógica de criação de série recorrente para Master ID {$reserva->id}.");
-
                 $masterReserva = $reserva;
 
                 // Garante que a data de início é um objeto Carbon para manipulação segura
-                // ✅ NOVA CORREÇÃO: Força a conversão para string antes do parse para total segurança
-                $masterDate = Carbon::parse($masterReserva->date->format('Y-m-d'));
+                // ✅ NOVA CORREÇÃO: Usa Carbon::parse diretamente na propriedade da reserva para ser mais robusto.
+                $masterDate = Carbon::parse($masterReserva->date);
 
                 // 5.1. Definir a janela de renovação: Da próxima semana até 6 meses
                 $startDate = $masterDate->copy()->addWeek();
                 $endDate = $masterDate->copy()->addMonths(6); // 6 meses a partir da data da reserva mestra
+
+                // Adicionando um subDay para garantir que o último dia dos 6 meses seja incluído no loop.
+                // Na versão anterior estava usando addMonths(6), que era o correto, a remoção da linha abaixo é
+                // para evitar problemas de arredondamento de meses.
+                //$endDate = $masterDate->copy()->addMonths(6)->subDay();
 
                 Log::info("Criando série recorrente Master ID {$masterReserva->id}: Início ({$startDate->toDateString()}) - Fim ({$endDate->toDateString()}).");
 
@@ -784,10 +746,11 @@ class ReservaController extends Controller
                 $clientName = $masterReserva->client_name;
                 $clientContact = $masterReserva->client_contact;
                 $userId = $masterReserva->user_id;
-                $masterId = $reserva->id; // Usa o ID já salvo da mestra
+                $masterId = $masterReserva->id;
                 $managerId = Auth::id();
 
                 $newReservasToCreate = [];
+                $conflictedOrSkippedCount = 0;
 
                 $currentDate = $startDate->copy();
 
@@ -801,7 +764,7 @@ class ReservaController extends Controller
                         ->where('start_time', '<', $endTime)
                         ->where('end_time', '>', $startTime)
                         ->where('is_fixed', false)
-                        ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE]) // ✅ PADRONIZADO
+                        ->whereIn('status', ['confirmed', 'pending'])
                         ->exists();
 
                     if ($isOccupiedByOtherCustomer) {
@@ -817,7 +780,7 @@ class ReservaController extends Controller
                             ->whereDate('date', $dateString)
                             ->where('start_time', $startTime)
                             ->where('end_time', $endTime)
-                            ->where('status', Reserva::STATUS_FREE) // ✅ PADRONIZADO
+                            ->where('status', 'free')
                             ->first();
                     }
 
@@ -836,7 +799,7 @@ class ReservaController extends Controller
                             'payment_status' => 'pending',
                             'client_name' => $clientName,
                             'client_contact' => $clientContact,
-                            'status' => Reserva::STATUS_CONFIRMADA, // ✅ PADRONIZADO
+                            'status' => 'confirmed',
                             'is_fixed' => false,
                             'is_recurrent' => true,
                             'recurrent_series_id' => $masterId,
@@ -846,11 +809,6 @@ class ReservaController extends Controller
 
                         if ($fixedSlot) {
                             $fixedSlot->delete(); // Consome o slot verde/FREE
-                            // 🛑 NOVO LOG: Confirma a exclusão do slot fixo para diagnóstico
-                            Log::debug("Slot fixo ID {$fixedSlot->id} consumido para data recorrente {$dateString} em série {$masterId}.");
-                        } else {
-                            // 🛑 NOVO LOG: Alerta se não encontrar o slot fixo
-                            Log::warning("Nenhum slot fixo encontrado para consumir para data recorrente {$dateString} em série {$masterId}.");
                         }
                     } else {
                         $conflictedOrSkippedCount++;
@@ -861,34 +819,15 @@ class ReservaController extends Controller
 
                 if (!empty($newReservasToCreate)) {
                     Reserva::insert($newReservasToCreate);
-                    // 🛑 NOVO LOG: Confirma a inserção em massa
-                    Log::info("Inserção em massa concluída: " . count($newReservasToCreate) . " reservas recorrentes criadas para série {$masterId}.");
-
                     $recurrentCount = count($newReservasToCreate);
                 }
 
-                $successMessage .= " Série recorrente de " . ($recurrentCount + 1) . " reservas (incluindo a mestra) adicionada até " . $endDate->format('d/m/Y') . ".";
+                $successMessage .= " Série recorrente de {$recurrentCount} reservas adicionais criada até " . $endDate->format('d/m/Y') . ".";
                 if ($conflictedOrSkippedCount > 0) {
                     $successMessage .= " Atenção: {$conflictedOrSkippedCount} slots foram pulados devido a conflitos.";
                 }
             }
             // FIM DA LÓGICA DE RECORRÊNCIA
-
-            // 6. ✅ NOVO: GERA TRANSAÇÃO FINANCEIRA (SINAL)
-            if ($signalValue > 0) {
-                FinancialTransaction::create([
-                    'reserva_id' => $reserva->id,
-                    'user_id' => $reserva->user_id,
-                    'manager_id' => Auth::id(),
-                    'amount' => $signalValue,
-                    'type' => 'signal',
-                    'payment_method' => 'pix', // Assumindo PIX na confirmação manual
-                    'description' => 'Sinal recebido na confirmação da reserva/série',
-                    'paid_at' => Carbon::now(),
-                ]);
-                Log::info("Transação de Sinal (R$ {$signalValue}) registrada para Master ID {$reserva->id}.");
-            }
-
 
             DB::commit();
 
@@ -906,139 +845,6 @@ class ReservaController extends Controller
         }
     }
 
-    /**
-     * ✅ NOVO MÉTODO: Converte uma reserva PONTUAL CONFIRMADA em uma série recorrente (Mestra) e cria as cópias futuras (6 meses).
-     * @param \Illuminate\Http\Request $request
-     * @param \App\Models\Reserva $reserva A reserva pontual confirmada a ser convertida.
-     */
-    public function convertPunctualToRecurrent(Request $request, Reserva $reserva)
-    {
-        // 1. Checagens iniciais
-        if ($reserva->is_fixed || $reserva->is_recurrent) {
-            return redirect()->back()->with('error', 'Esta reserva já é um slot fixo ou já faz parte de uma série recorrente.');
-        }
-
-        if ($reserva->status !== Reserva::STATUS_CONFIRMADA) { // ✅ PADRONIZADO
-            return redirect()->back()->with('error', 'Apenas reservas com status CONFIRMADO podem ser convertidas em séries.');
-        }
-
-        DB::beginTransaction();
-        try {
-            // 2. Transforma a reserva atual em Mestra da Série
-            $masterId = $reserva->id;
-            $reserva->is_recurrent = true;
-            $reserva->recurrent_series_id = $masterId;
-            $reserva->manager_id = Auth::id();
-            $reserva->save();
-
-            Log::info("Reserva ID {$masterId} convertida em série MESTRA.");
-
-            // 3. Define a janela de agendamento (Da próxima semana até 6 meses)
-            $masterDate = Carbon::parse($reserva->date->format('Y-m-d'));
-            $startDate = $masterDate->copy()->addWeek();
-            $endDate = $masterDate->copy()->addMonths(6); // ✅ CORRIGIDO
-
-            Log::info("Iniciando a criação das cópias: Início ({$startDate->toDateString()}) - Fim ({$endDate->toDateString()}).");
-
-
-            // Parâmetros da série
-            $dayOfWeek = $reserva->day_of_week;
-            $startTime = $reserva->start_time;
-            $endTime = $reserva->end_time;
-            $price = $reserva->price;
-            $clientName = $reserva->client_name;
-            $clientContact = $reserva->client_contact;
-            $userId = $reserva->user_id;
-            $managerId = Auth::id();
-
-            $newReservasToCreate = [];
-            $conflictedOrSkippedCount = 0;
-            $currentDate = $startDate->copy();
-
-            while ($currentDate->lessThanOrEqualTo($endDate)) {
-                $dateString = $currentDate->toDateString();
-                $isConflict = false;
-
-                // Checagem de Conflito (Outros Clientes: confirmed/pending)
-                $isOccupiedByOtherCustomer = Reserva::whereDate('date', $dateString)
-                    ->where('start_time', '<', $endTime)
-                    ->where('end_time', '>', $startTime)
-                    ->where('is_fixed', false)
-                    ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE]) // ✅ PADRONIZADO
-                    ->exists();
-
-                if ($isOccupiedByOtherCustomer) {
-                    $isConflict = true;
-                    Log::warning("Conflito com OUTRO CLIENTE durante a repetição da série #{$masterId} na data {$dateString}. Slot pulado.");
-                }
-
-                // Busca e deleta o slot fixo, se existir
-                $fixedSlot = null;
-                if (!$isConflict) {
-                    $fixedSlot = Reserva::where('is_fixed', true)
-                        ->whereDate('date', $dateString)
-                        ->where('start_time', $startTime)
-                        ->where('end_time', $endTime)
-                        ->where('status', Reserva::STATUS_FREE) // ✅ PADRONIZADO
-                        ->first();
-                }
-
-                if (!$isConflict) {
-                    $newReservasToCreate[] = [
-                        'user_id' => $userId,
-                        'manager_id' => $managerId,
-                        'date' => $dateString,
-                        'day_of_week' => $dayOfWeek,
-                        'start_time' => $startTime,
-                        'end_time' => $endTime,
-                        'price' => $price,
-                        'signal_value' => 0.00,
-                        'total_paid' => 0.00,
-                        'payment_status' => 'pending',
-                        'client_name' => $clientName,
-                        'client_contact' => $clientContact,
-                        'status' => Reserva::STATUS_CONFIRMADA, // ✅ PADRONIZADO
-                        'is_fixed' => false,
-                        'is_recurrent' => true,
-                        'recurrent_series_id' => $masterId,
-                        'created_at' => Carbon::now(),
-                        'updated_at' => Carbon::now(),
-                    ];
-
-                    if ($fixedSlot) {
-                        $fixedSlot->delete();
-                        Log::debug("Slot fixo ID {$fixedSlot->id} consumido para data recorrente {$dateString} em série {$masterId}.");
-                    }
-                } else {
-                    $conflictedOrSkippedCount++;
-                }
-
-                $currentDate->addWeek();
-            }
-
-            if (!empty($newReservasToCreate)) {
-                Reserva::insert($newReservasToCreate);
-                Log::info("Inserção em massa concluída: " . count($newReservasToCreate) . " reservas recorrentes criadas para série {$masterId}.");
-            }
-
-            DB::commit();
-
-            $totalCreated = count($newReservasToCreate) + 1; // +1 para a mestra
-            $successMessage = "Conversão concluída! A reserva ID {$masterId} agora é a Mestra, e {$totalCreated} reservas foram agendadas até " . $endDate->format('d/m/Y') . ".";
-
-            if ($conflictedOrSkippedCount > 0) {
-                $successMessage .= " Atenção: {$conflictedOrSkippedCount} slots foram pulados devido a conflitos.";
-            }
-
-            return redirect()->back()->with('success', $successMessage);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("Erro fatal ao converter para recorrente (ID: {$masterId}): " . $e->getMessage(), ['exception' => $e]);
-            return redirect()->back()->with('error', 'Erro interno ao converter a reserva para série: ' . $e->getMessage());
-        }
-    }
-
 
     /**
      * ✅ NOVO MÉTODO: Rejeita uma reserva pendente.
@@ -1053,13 +859,13 @@ class ReservaController extends Controller
             'rejection_reason' => 'nullable|string|max:255',
         ]);
 
-        if ($reserva->status !== Reserva::STATUS_PENDENTE) { // ✅ PADRONIZADO
+        if ($reserva->status !== 'pending') {
             return redirect()->back()->with('error', 'Esta reserva já foi processada.');
         }
 
         DB::beginTransaction();
         try {
-            $reserva->status = Reserva::STATUS_REJEITADA; // ✅ PADRONIZADO
+            $reserva->status = 'rejected';
             $reserva->cancellation_reason = $validated['rejection_reason'] ?? 'Rejeitada pela administração.';
             $reserva->manager_id = Auth::id();
             $reserva->save();
@@ -1072,7 +878,7 @@ class ReservaController extends Controller
                 ->where('start_time', $reserva->start_time)
                 ->where('end_time', $reserva->end_time)
                 ->where('id', '!=', $reserva->id)
-                ->where('status', Reserva::STATUS_PENDENTE) // ✅ PADRONIZADO
+                ->where('status', 'pending')
                 ->delete();
             Log::info("Reservas pendentes conflitantes deletadas após rejeição da Reserva ID: {$reserva->id}.");
 
@@ -1104,7 +910,7 @@ class ReservaController extends Controller
              })
              ->where('is_recurrent', true)
              ->where('is_fixed', false)
-             ->where('status', Reserva::STATUS_CONFIRMADA) // ✅ PADRONIZADO
+             ->where('status', 'confirmed')
              ->max('date');
 
         return $maxDate ? Carbon::parse($maxDate) : null;
@@ -1121,7 +927,7 @@ class ReservaController extends Controller
         $latestReservations = Reserva::selectRaw('recurrent_series_id, MAX(date) as last_date, MIN(date) as first_date, MIN(start_time) as slot_time, MAX(price) as slot_price, day_of_week, client_name')
             ->where('is_recurrent', true)
             ->where('is_fixed', false)
-            ->where('status', Reserva::STATUS_CONFIRMADA) // ✅ PADRONIZADO
+            ->where('status', 'confirmed')
             ->groupBy('recurrent_series_id', 'day_of_week', 'client_name')
             ->get();
 
@@ -1183,7 +989,7 @@ class ReservaController extends Controller
         $startDate = $currentMaxDate->copy()->addWeek();
 
         // 🛑 CORREÇÃO AQUI: De addYear() para addMonths(6)
-        $endDate = $currentMaxDate->copy()->addMonths(6); // ✅ CORRIGIDO
+        $endDate = $currentMaxDate->copy()->addMonths(6);
 
         if ($startDate->greaterThan($endDate)) {
             return response()->json(['success' => false, 'message' => 'A série já está totalmente coberta até ' . $endDate->format('d/m/Y') . '.'], 400);
@@ -1203,9 +1009,9 @@ class ReservaController extends Controller
         // ---------------------------------------------------------------------
         // ✅ Mantém os valores de pagamento da série mestra para as novas cópias
         // ---------------------------------------------------------------------
-        // *Nota: Na renovação, o sinal/pagamento total deve ser tratado como um novo pagamento,
-        // mas as cópias individuais não levam o sinal, apenas o status de pagamento individual é 'pending'.
-        // Se a lógica for de FATURA GLOBAL, é melhor manter signal_value e total_paid em 0.00 para as cópias.*
+        $signalValue = $masterReserva->signal_value ?? 0.00;
+        $totalPaid = $masterReserva->total_paid ?? 0.00;
+        $paymentStatus = $masterReserva->payment_status ?? 'pending';
         // ---------------------------------------------------------------------
 
         $newReservasCount = 0;
@@ -1226,7 +1032,7 @@ class ReservaController extends Controller
                     ->where('end_time', $endTime)
                     ->where('recurrent_series_id', $masterId)
                     ->where('is_fixed', false)
-                    ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE]) // ✅ PADRONIZADO
+                    ->whereIn('status', ['confirmed', 'pending'])
                     ->exists();
 
                 if ($isDuplicate) {
@@ -1241,7 +1047,7 @@ class ReservaController extends Controller
                         ->where('end_time', '>', $startTime)
                         ->where('is_fixed', false)
                         ->where('recurrent_series_id', '!=', $masterId)
-                        ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE]) // ✅ PADRONIZADO
+                        ->whereIn('status', ['confirmed', 'pending'])
                         ->exists();
 
                     if ($isOccupiedByRealCustomer) {
@@ -1257,7 +1063,7 @@ class ReservaController extends Controller
                         ->whereDate('date', $dateString)
                         ->where('start_time', $startTime)
                         ->where('end_time', $endTime)
-                        ->where('status', Reserva::STATUS_FREE) // ✅ PADRONIZADO
+                        ->where('status', 'free')
                         ->first();
                 }
 
@@ -1271,14 +1077,14 @@ class ReservaController extends Controller
                         'start_time' => $startTime,
                         'end_time' => $endTime,
                         'price' => $price,
-                        // ✅ Mantido 0.00 para novos slots individuais da série
-                        'signal_value' => 0.00,
-                        'total_paid' => 0.00,
-                        'payment_status' => 'pending',
+                        // ✅ Adicionado: Valores de Pagamento (iguais aos da mestra)
+                        'signal_value' => 0.00, // Sinal só é pago uma vez na série mestra
+                        'total_paid' => 0.00, // O pagamento é gerenciado na mestra/fatura
+                        'payment_status' => 'pending', // Pagamento individual é pending
                         // ---------------------------------------------------------------------
                         'client_name' => $clientName,
                         'client_contact' => $clientContact,
-                        'status' => Reserva::STATUS_CONFIRMADA, // ✅ PADRONIZADO
+                        'status' => 'confirmed',
                         'is_fixed' => false,
                         'is_recurrent' => true,
                         'recurrent_series_id' => $masterId,
@@ -1367,7 +1173,7 @@ class ReservaController extends Controller
         }
 
         // Checa status
-        if ($reserva->status === Reserva::STATUS_CANCELADA || $reserva->status === Reserva::STATUS_REJEITADA) { // ✅ PADRONIZADO
+        if ($reserva->status === 'cancelled' || $reserva->status === 'rejected') {
             return response()->json(['message' => 'Esta reserva já está cancelada ou rejeitada.'], 400);
         }
 
@@ -1425,7 +1231,7 @@ class ReservaController extends Controller
         if (!$reserva->is_recurrent) {
             DB::beginTransaction();
             try {
-                $reserva->status = Reserva::STATUS_CANCELADA; // ✅ PADRONIZADO
+                $reserva->status = 'cancelled';
                 $reserva->cancellation_reason = '[Cliente] ' . $reason;
                 $reserva->save();
 
@@ -1458,8 +1264,7 @@ class ReservaController extends Controller
             'hora_inicio' => ['required', 'date_format:G:i'],
             'hora_fim' => ['required', 'date_format:G:i', 'after:hora_inicio'],
             'price' => ['required', 'numeric', 'min:0'],
-            // ✅ PADRONIZADO: Busca apenas status FREE e is_fixed=true
-            'schedule_id' => ['required', 'integer', 'exists:reservas,id,is_fixed,1,status,' . Reserva::STATUS_FREE],
+            'schedule_id' => ['required', 'integer', 'exists:reservas,id,is_fixed,1,status,free'],
             'reserva_conflito_id' => 'nullable',
 
             // Validação de formato/presença do cliente, SEM 'unique'
@@ -1529,13 +1334,13 @@ class ReservaController extends Controller
                 ->where('start_time', $startTimeNormalized)
                 ->where('end_time', $endTimeNormalized)
                 ->where('is_fixed', false)
-                ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA]) // ✅ PADRONIZADO
+                ->whereIn('status', ['pending', 'confirmed'])
                 ->first();
 
             if ($existingReservation) {
                 DB::rollBack();
 
-                $statusMessage = $existingReservation->status === Reserva::STATUS_PENDENTE // ✅ PADRONIZADO
+                $statusMessage = $existingReservation->status === 'pending'
                     ? 'aguardando aprovação da administração'
                     : 'já foi aprovada';
 
@@ -1553,7 +1358,7 @@ class ReservaController extends Controller
             // Uma nova pré-reserva (pending) não pode ser feita em um horário que já está CONFIRMADO por outro cliente.
             $confirmedConflict = Reserva::where('date', $date)
                 ->where('is_fixed', false) // Apenas reservas de clientes (não slots fixos)
-                ->where('status', Reserva::STATUS_CONFIRMADA) // ✅ PADRONIZADO
+                ->where('status', 'confirmed') // CRÍTICO: Checa contra confirmadas
                 ->where('start_time', '<', $endTimeNormalized)
                 ->where('end_time', '>', $startTimeNormalized)
                 ->exists();
@@ -1571,7 +1376,7 @@ class ReservaController extends Controller
             // 6. Limpa o slot fixo (evento verde)
             $fixedSlot = Reserva::where('id', $scheduleId)
                 ->where('is_fixed', true)
-                ->where('status', Reserva::STATUS_FREE) // ✅ PADRONIZADO
+                ->where('status', 'free')
                 ->first();
 
             if (!$fixedSlot) {
@@ -1580,8 +1385,7 @@ class ReservaController extends Controller
                 $validator->errors()->add('schedule_id', 'O slot selecionado não existe mais.');
                 throw new ValidationException($validator);
             }
-            // O slot fixo é consumido/removido na CONFIRMAÇÃO pelo Admin.
-            // Aqui, na pré-reserva, apenas a reserva PENDENTE é criada.
+            //$fixedSlot->delete();
 
 
             // 7. Criação da Reserva Real (Status Pendente)
@@ -1599,7 +1403,7 @@ class ReservaController extends Controller
                 'client_name' => $clientUser->name,
                 'client_contact' => $clientUser->whatsapp_contact,
                 'notes' => $validated['notes'] ?? null,
-                'status' => Reserva::STATUS_PENDENTE, // ✅ PADRONIZADO
+                'status' => 'pending',
                 'is_fixed' => false,
                 'is_recurrent' => false,
                 // 🆕 NOVO: Campo para identificar qual slot fixo foi selecionado
@@ -1649,7 +1453,7 @@ class ReservaController extends Controller
      */
     public function countPending()
     {
-        $futureOrTodayCount = Reserva::where('status', Reserva::STATUS_PENDENTE) // ✅ PADRONIZADO
+        $futureOrTodayCount = Reserva::where('status', 'pending')
             ->count();
 
         return response()->json(['count' => $futureOrTodayCount], 200);
@@ -1670,7 +1474,7 @@ class ReservaController extends Controller
         }
 
         $validated = $request->validate([
-            'status' => ['required', Rule::in([Reserva::STATUS_FREE, Reserva::STATUS_MAINTENANCE])], // ✅ PADRONIZADO
+            'status' => ['required', Rule::in(['free', 'maintenance'])],
         ]);
 
         // 2. Checa se o status atual já é o solicitado (evita escrita desnecessária)
@@ -1680,13 +1484,13 @@ class ReservaController extends Controller
         }
 
         // 3. Checagem de integridade (Não pode sair de maintenance/free se houver conflito de cliente)
-        if ($validated['status'] === Reserva::STATUS_FREE) { // ✅ PADRONIZADO
+        if ($validated['status'] === 'free') {
             // Ao tentar retornar para FREE, verifica se há algum cliente com pending/confirmed
             $overlap = Reserva::where('date', $reserva->date)
                 ->where('start_time', $reserva->start_time)
                 ->where('end_time', $reserva->end_time)
                 ->where('is_fixed', false)
-                ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE]) // ✅ PADRONIZADO
+                ->whereIn('status', ['confirmed', 'pending'])
                 ->exists();
 
             if ($overlap) {
@@ -1703,7 +1507,7 @@ class ReservaController extends Controller
 
             DB::commit();
 
-            $message = $reserva->status === Reserva::STATUS_FREE ? 'Slot fixo disponibilizado (Livre) com sucesso.' : 'Slot fixo marcado como Manutenção (Indisponível) com sucesso.';
+            $message = $reserva->status === 'free' ? 'Slot fixo disponibilizado (Livre) com sucesso.' : 'Slot fixo marcado como Manutenção (Indisponível) com sucesso.';
 
             Log::info("Slot fixo ID: {$reserva->id} alterado para status: {$reserva->status} por Gestor ID: " . Auth::id());
 

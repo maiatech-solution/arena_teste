@@ -11,7 +11,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ApiReservaController;
 use App\Http\Controllers\Admin\PaymentController;
-use App\Http\Controllers\FinanceiroController;
+use App\Http\Controllers\FinanceiroController; // <--- NOVO: Importa o Controller de Finanças
 
 // -----------------------------------------------------------------------------------
 // 🏠 ROTA RAIZ (PÚBLICA) - Bem-vindo à Arena
@@ -48,16 +48,21 @@ Route::get('/api/reservas/confirmadas', [ApiReservaController::class, 'getConfir
 // ===============================================
 Route::name('customer.')->group(function () {
 
-    // Login e Registro para Clientes
+    // 🚨 CRÍTICO: Mudei o URI de 'register' para 'customer-register'
     Route::get('customer-register', [CustomerController::class, 'showRegistrationForm'])->name('register');
     Route::post('customer-register', [CustomerController::class, 'register']);
+
+    // Login (Path renomeado para evitar conflito com auth.php)
     Route::get('client-login', [CustomerController::class, 'showLoginForm'])->name('login');
     Route::post('client-login', [CustomerController::class, 'login']);
+
+    // Logout (Path renomeado)
     Route::post('client-logout', [CustomerController::class, 'logout'])->middleware('auth')->name('logout');
 
     // ✅ HISTÓRICO DE RESERVAS DO CLIENTE (Protegido por 'auth')
     Route::middleware('auth')->group(function () {
         Route::get('/minhas-reservas', [CustomerController::class, 'reservationHistory'])->name('reservations.history');
+
         // Rota AJAX para Cancelamento pelo Cliente
         Route::post('/minhas-reservas/{reserva}/cancelar', [ReservaController::class, 'cancelByCustomer'])->name('reservas.cancel_by_customer');
     });
@@ -96,28 +101,15 @@ Route::middleware(['auth', 'gestor'])->group(function () {
 
     // 🛑 ROTAS AJAX MOVIDAS PARA FORA DO PREFIXO ANINHADO PARA EVITAR ERRO DE ROTA
     Route::post('/admin/config/fixed-reserva/{id}/price', [ConfigurationController::class, 'updateFixedReservaPrice'])->name('admin.config.update_price');
+
+    // ✅ CORREÇÃO CRÍTICA: Rota AJAX para alternar status entre Livre/Manutenção.
+    // Agora usa {reserva} e aponta para ReservaController (método unificado).
     Route::post('/admin/config/fixed-reserva/{reserva}/status', [ReservaController::class, 'toggleFixedReservaStatus'])->name('admin.config.update_status');
 
     // Rotas AJAX de Exclusão/Gerenciamento de Configuração Recorrente (Com Justificativa)
     Route::post('/admin/config/delete-slot-config', [ConfigurationController::class, 'deleteSlotConfig'])->name('admin.config.delete_slot_config');
     Route::post('/admin/config/delete-day-config', [ConfigurationController::class, 'deleteDayConfig'])->name('admin.config.delete_day_config');
     // FIM DAS ROTAS MOVIDAS
-
-    // =========================================================================
-    // ✅ ROTAS CRÍTICAS DE AÇÃO DE RESERVA (MOVEMOS PARA CÁ PARA MAIOR PRECEDÊNCIA)
-    // =========================================================================
-    // Rota de listagem de Pendentes (MOVEMOS para garantir precedência sobre rotas com curingas)
-    Route::get('/admin/reservas/pendentes', [AdminController::class, 'indexReservas'])
-        ->name('admin.reservas.pendentes');
-
-    // 🐛 CORREÇÃO FINAL: Rotas de Confirmar e Rejeitar ajustadas para ter o {reserva} no final,
-    // correspondendo ao formato que o seu browser está reportando na URL.
-    Route::patch('/admin/reservas/confirmar/{reserva}', [ReservaController::class, 'confirmar'])
-        ->name('admin.reservas.confirmar');
-
-    Route::patch('/admin/reservas/rejeitar/{reserva}', [ReservaController::class, 'rejeitar'])
-        ->name('admin.reservas.rejeitar');
-    // =========================================================================
 
 
     // ===============================================
@@ -135,23 +127,35 @@ Route::middleware(['auth', 'gestor'])->group(function () {
         // =========================================================================
         Route::prefix('reservas')->name('reservas.')->group(function () {
 
-            // Rotas de Listagem (EXCETO PENDENTES, que foi movida)
-            Route::get('/', [AdminController::class, 'indexReservasDashboard'])->name('index');
-            Route::get('confirmadas', [AdminController::class, 'confirmed_index'])->name('confirmadas');
+            // Rota principal para o dashboard de botões: /admin/reservas
+            Route::get('/', [AdminController::class, 'indexReservasDashboard'])->name('index'); // Painel de botões
+
+            // Rotas de Listagem de Status
+            Route::get('pendentes', [AdminController::class, 'indexReservas'])->name('pendentes'); // Lista de Pendentes (Era index)
+            Route::get('confirmadas', [AdminController::class, 'confirmed_index'])->name('confirmadas'); // Lista de Confirmadas
+
+            // ✅ NOVO: Rota de Listagem de Todas as Reservas
             Route::get('todas', [AdminController::class, 'indexTodas'])->name('todas');
+            // 📋 ROTA PARA RESERVAS REJEITADAS
             Route::get('rejeitadas', [AdminController::class, 'indexReservasRejeitadas'])->name('rejeitadas');
 
 
             // --- ROTAS DE AÇÕES E CRIAÇÃO ---
-            // Rota Show (usa {reserva}) - Fica abaixo de 'pendentes' (agora fora)
             Route::get('{reserva}/show', [AdminController::class, 'showReserva'])->name('show');
-
             Route::get('create', [AdminController::class, 'createUser'])->name('create');
             Route::post('/', [AdminController::class, 'storeReserva'])->name('store');
             Route::post('tornar-fixo', [AdminController::class, 'makeRecurrent'])->name('make_recurrent');
 
-            // Rotas de Modificação
+            // AÇÕES (STATUS E EXCLUSÃO)
+            Route::patch('{reserva}/update-status', [AdminController::class, 'updateStatusReserva'])->name('updateStatus');
+            Route::patch('{reserva}/confirmar', [AdminController::class, 'confirmarReserva'])->name('confirmar');
+            Route::patch('{reserva}/rejeitar', [AdminController::class, 'rejeitarReserva'])->name('rejeitar');
+
+            // 🆕 ROTA CRÍTICA: ALTERAÇÃO DE PREÇO (PATCH)
+            // Esta rota foi adicionada para suportar a funcionalidade solicitada.
             Route::patch('{reserva}/update-price', [AdminController::class, 'updatePrice'])->name('update_price');
+
+            // ✅ Rota de Reativação
             Route::patch('{reserva}/reativar', [AdminController::class, 'reativar'])->name('reativar');
 
             // ROTAS DE CANCELAMENTO AJAX (RESTful)
@@ -174,7 +178,7 @@ Route::middleware(['auth', 'gestor'])->group(function () {
         Route::get('users/create', [AdminController::class, 'createUser'])->name('users.create');
         Route::post('users', [AdminController::class, 'storeUser'])->name('users.store');
 
-        // ✅ ROTAS PARA EDIÇÃO, ATUALIZAÇÃO E EXCLUSÃO
+        // ✅ NOVAS ROTAS PARA EDIÇÃO, ATUALIZAÇÃO E EXCLUSÃO
         Route::get('users/{user}/edit', [AdminController::class, 'editUser'])->name('users.edit');
         Route::put('users/{user}', [AdminController::class, 'updateUser'])->name('users.update');
         Route::delete('users/{user}', [AdminController::class, 'destroyUser'])->name('users.destroy');
@@ -183,16 +187,24 @@ Route::middleware(['auth', 'gestor'])->group(function () {
         Route::get('users/{user}/reservas', [AdminController::class, 'clientReservations'])->name('users.reservas');
     });
 
-    //ROTAS DE PAGAMENTOS
+    //ROTAS DE PAGAMENTOS (Corrigido os métodos do Controller)
     // 💰 Módulo Financeiro / Pagamentos
     Route::get('/admin/pagamentos', [PaymentController::class, 'index'])->name('admin.payment.index');
+    // Finalizar: Aponta para processPayment e rota renomeada para 'process'
     Route::post('/admin/pagamentos/{reserva}/finalizar', [PaymentController::class, 'processPayment'])->name('admin.payment.process');
+    // Falta: Aponta para registerNoShow
     Route::post('/admin/pagamentos/{reserva}/falta', [PaymentController::class, 'registerNoShow'])->name('admin.payment.noshow');
 
     // 📊 ROTAS DO DASHBOARD FINANCEIRO
+    // CORRIGIDO: Aponta para o FinanceiroController
     Route::get('/admin/financeiro', [FinanceiroController::class, 'index'])->name('admin.financeiro.dashboard');
+    // CORRIGIDO: Aponta para o FinanceiroController
     Route::get('/api/financeiro/resumo', [FinanceiroController::class, 'getResumo'])->name('api.financeiro.resumo');
+    // CORRIGIDO: Aponta para o FinanceiroController
     Route::get('/api/financeiro/pagamentos-pendentes', [FinanceiroController::class, 'getPagamentosPendentes'])->name('api.financeiro.pagamentos-pendentes');
+
+    // FIM DO GRUPO DE ROTAS 'admin.'
+    // ===============================================
 
 });
 // FIM DO GRUPO DE ROTAS PROTEGIDAS PELO MIDDLEWARE 'gestor'

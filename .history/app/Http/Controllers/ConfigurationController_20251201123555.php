@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Validator;
 
 class ConfigurationController extends Controller
 {
+    // O construtor com middleware foi removido, confiando na proteção do web.php (como combinado).
+
     /**
      * Checa se há reservas reais de clientes (is_fixed=false) conflitantes
      * para uma configuração recorrente (dia da semana e faixa de tempo).
@@ -136,39 +138,31 @@ class ConfigurationController extends Controller
                         $crossMidnightA = $startA->greaterThan($endA);
                         $crossMidnightB = $startB->greaterThan($endB);
 
-                        // Não ajustamos aqui o dia para evitar conflito na validação.
-                        // A validação de sobreposição deve ser feita em um plano de 24h.
-                        // Corrigindo a verificação de Horário de Fim anterior ou igual ao Horário de Início
+                        if ($crossMidnightA) {
+                            $endA->addDay();
+                        }
+                        if ($crossMidnightB) {
+                            $endB->addDay();
+                        }
 
-                        $dayName = \App\Models\ArenaConfiguration::DAY_NAMES[$dayOfWeek] ?? 'Dia Desconhecido';
-
-                        // Checagem de duração
-                        if ($startA->copy()->addMinute()->gt($endA) && !$crossMidnightA) {
+                        // Slot A
+                        if ($endA->isSameDay($startA) && $endA->lte($startA) && !$endA->isMidnight()) {
+                            $dayName = \App\Models\ArenaConfiguration::DAY_NAMES[$dayOfWeek] ?? 'Dia Desconhecido';
                             $slotNumber = $i + 1;
                             $validator->errors()->add("configs.{$dayOfWeek}", "O Horário de Fim ({$slotA['end_time']}) é anterior ou igual ao Horário de Início ({$slotA['start_time']}) para o Slot {$slotNumber} no {$dayName}.");
                             return;
                         }
 
-                        if ($startB->copy()->addMinute()->gt($endB) && !$crossMidnightB) {
+                        // Slot B
+                        if ($endB->isSameDay($startB) && $endB->lte($startB) && !$endB->isMidnight()) {
+                            $dayName = \App\Models\ArenaConfiguration::DAY_NAMES[$dayOfWeek] ?? 'Dia Desconhecido';
                             $slotNumber = $j + 1;
                             $validator->errors()->add("configs.{$dayOfWeek}", "O Horário de Fim ({$slotB['end_time']}) é anterior ou igual ao Horário de Início ({$slotB['start_time']}) para o Slot {$slotNumber} no {$dayName}.");
                             return;
                         }
 
-
-                        // Lógica de sobreposição (incluindo cruzamento de meia-noite)
-                        // Para checar sobreposição no mesmo dia, precisamos normalizar o tempo para um único dia
-                        // se houver cruzamento de meia-noite, ajustamos a hora final para o dia seguinte para o cálculo.
-
-                        // Normalização para o cálculo de sobreposição
-                        $endA_calc = $endA->copy();
-                        if ($crossMidnightA) $endA_calc->addDay();
-
-                        $endB_calc = $endB->copy();
-                        if ($crossMidnightB) $endB_calc->addDay();
-
                         // Lógica de sobreposição: (A_start < B_end) AND (B_start < A_end)
-                        if ($startA->lt($endB_calc) && $startB->lt($endA_calc)) {
+                        if ($startA->lt($endB) && $startB->lt($endA)) {
                             $dayName = \App\Models\ArenaConfiguration::DAY_NAMES[$dayOfWeek] ?? 'Dia Desconhecido';
                             $errorMsg = "As faixas de horário ({$slotA['start_time']} - {$slotA['end_time']}) e ({$slotB['start_time']} - {$slotB['end_time']}) se **sobrepõem** no {$dayName}. Por favor, corrija.";
                             $validator->errors()->add("configs.{$dayOfWeek}", $errorMsg);
@@ -189,7 +183,7 @@ class ConfigurationController extends Controller
 
             foreach ($errors->keys() as $key) {
                 if (strpos($key, 'configs.') === 0) {
-                    if (str_contains($errors->first($key), 'sobrepõem') || str_contains($errors->first($key), 'anterior ou igual')) {
+                    if (str_contains($errors->first($key), 'sobrepõem')) {
                         $customOverlapError = $errors->first($key);
                         break;
                     }
@@ -200,7 +194,7 @@ class ConfigurationController extends Controller
                 return redirect()->back()->withInput()->with('error', 'ERRO DE CONFLITO: ' . $customOverlapError);
             }
 
-            return redirect()->back()->withInput()->withErrors($e->errors())->with('error', 'Houve um erro na validação dos dados. Verifique se todos os campos (Início, Fim, Preço) estão preenchidos para os dias ativos, ou se o Horário de Fim é posterior ao de Início.');
+            return redirect()->back()->withInput()->withErrors($e->errors())->with('error', 'Houve um erro na validação dos dados. Verifique se todos os campos (Início, Fim, Preço) estão preenchidos para os dias ativos, ou se o Horário de Fim é posterior ao ao de Início.');
         }
 
         $dayStatus = $validated['day_status'] ?? [];
@@ -217,7 +211,7 @@ class ConfigurationController extends Controller
                 $activeSlots = collect($slotsForDay)
                     ->filter(function ($slot) {
                         $isActive = isset($slot['is_active']) && (bool)$slot['is_active'];
-                        $hasData = !empty($slot['start_time']) && !empty($slot['end_time']) && (isset($slot['default_price']) && is_numeric($slot['default_price']));
+                        $hasData = !empty($slot['start_time']) && !empty($slot['end_time']) && !empty($slot['default_price']);
                         return $isActive && $hasData;
                     })
                     ->map(function ($slot) {
@@ -237,7 +231,6 @@ class ConfigurationController extends Controller
 
                 $config->is_active = $finalIsActive;
                 $config->config_data = $finalIsActive ? $activeSlots : [];
-                $config->default_price = $finalIsActive ? collect($activeSlots)->max('default_price') : 0.00;
 
                 $config->save();
             }
@@ -245,8 +238,7 @@ class ConfigurationController extends Controller
             DB::commit();
 
             // 🛑 CRÍTICO: Chama o generateFixedReservas passando o número de meses no Request
-            // Passamos o Request original, pois ele contém 'recurrent_months'.
-            $generateResult = $this->generateFixedReservas($request);
+            $generateResult = $this->generateFixedReservas(new Request(['recurrent_months' => $recurrentMonths]));
 
             return $generateResult;
 
@@ -259,35 +251,29 @@ class ConfigurationController extends Controller
 
     /**
      * Limpa e Recria TODAS as FixedReservas com base na ArenaConfiguration.
-     * 🐛 CORRIGIDO: Agora apaga todos os slots fixos FREE/MANUTENCAO futuros (independente do client_name).
      */
     public function generateFixedReservas(Request $request)
     {
-        // 1. Definição da janela de geração
         $today = Carbon::today();
+
         // 🛑 CRÍTICO: Lê o número de meses do Request (padrão 6) e calcula a data final.
         $recurrentMonths = (int) $request->input('recurrent_months', 6);
-        $endDate = $today->copy()->addMonths($recurrentMonths);
+        $endDate = $today->copy()->addMonths($recurrentMonths); // Agora usa a variável de meses
 
-        Log::info("Iniciando Geração de Slots Fixos. Janela: {$today->toDateString()} até {$endDate->toDateString()}. Meses: {$recurrentMonths}");
+        // Limpa APENAS os FixedReservas futuras que são slots GENÉRICOS
+        Reserva::where('is_fixed', true)
+            ->where('client_name', 'Slot Fixo de 1h')
+            ->where('date', '>=', $today->toDateString())
+            // 🛑 ATENÇÃO: Limpamos slots FREE E MANUTENÇÃO, pois são slots que o sistema pode recriar.
+            ->whereIn('status', [Reserva::STATUS_FREE, Reserva::STATUS_MANUTENCAO])
+            ->delete();
+
+        $activeConfigs = ArenaConfiguration::where('is_active', true)->get();
+        $newReservasCount = 0;
 
         DB::beginTransaction();
         try {
-            // 2. 🛑 CORREÇÃO CRÍTICA: Limpeza Segura
-            // Apaga todos os FixedReservas futuros (FREE/MANUTENCAO)
-            // Slots de cliente (is_fixed=false) são preservados.
-            $deletedCount = Reserva::where('is_fixed', true)
-                ->where('date', '>=', $today->toDateString())
-                ->whereIn('status', [Reserva::STATUS_FREE, Reserva::STATUS_MAINTENANCE]) // ✅ Usa STATUS_MAINTENANCE (assumindo que o Modelo foi corrigido)
-                ->delete();
-
-            Log::info("Limpeza: {$deletedCount} slots fixos futuros (FREE/MANUTENCAO) deletados antes da recriação.");
-
-            $activeConfigs = ArenaConfiguration::where('is_active', true)->get();
-            $reservasToInsert = [];
-            $newReservasCount = 0;
-
-            // 3. Loop de geração: vai do dia de hoje até a data final calculada
+            // Loop de geração: vai do dia de hoje até a data final calculada
             for ($date = $today->copy(); $date->lessThan($endDate); $date->addDay()) {
                 $dayOfWeek = $date->dayOfWeek;
 
@@ -296,92 +282,92 @@ class ConfigurationController extends Controller
                 if ($config && $config->is_active && !empty($config->config_data)) {
 
                     foreach ($config->config_data as $slot) {
-                        // 🛑 NOTA: As horas no config_data já estão em H:i:s (salvas no store)
-                        $startTime = Carbon::createFromFormat('H:i:s', $slot['start_time']);
-                        $endTime = Carbon::createFromFormat('H:i:s', $slot['end_time']);
+                        $startTime = Carbon::parse($slot['start_time']);
+                        $endTime = Carbon::parse($slot['end_time']);
                         $price = $slot['default_price'];
 
                         // Lógica para slots que cruzam a meia-noite (ex: 23:00-00:00)
-                        // A hora de fim deve ser considerada no dia seguinte para o loop
-                        $endTimeOnDay = $endTime->copy();
-                        if ($startTime->greaterThanOrEqualTo($endTime)) {
-                            $endTimeOnDay->addDay();
+                        $crossesMidnight = $startTime->greaterThanOrEqualTo($endTime);
+
+                        if ($crossesMidnight) {
+                            $endTimeOnDay = $endTime->copy()->addDay();
+                        } else {
+                            $endTimeOnDay = $endTime->copy();
                         }
+
 
                         $currentSlotTime = $startTime->copy();
 
-                        // O loop subdivide a faixa de horário em slots de 1 hora
+                        // O loop deve ir até o final da faixa de horário (EndTimeOnDay)
                         while ($currentSlotTime->lessThan($endTimeOnDay)) {
                             $nextSlotTime = $currentSlotTime->copy()->addHour();
 
-                            // 🛑 CRÍTICO: Ajusta o fim do slot para não exceder o limite da faixa
+                            // 🛑 CRÍTICO: Se o próximo slot exceder o limite (e não for meia-noite), para
                             if ($nextSlotTime->greaterThan($endTimeOnDay)) {
                                 break;
                             }
 
                             $currentDateString = $date->toDateString();
 
-                            // Ajuste da data de fim, se for meia-noite (00:00:00)
+                            // O final do slot pode ser no dia seguinte (meia-noite)
                             $currentSlotEndTimeObject = $nextSlotTime;
 
                             if ($currentSlotEndTimeObject->day > $currentSlotTime->day) {
-                                // Se o slot termina no próximo dia, a hora de fim é 00:00:00
                                 $currentSlotEndTime = '00:00:00';
                             } else {
-                                $currentSlotEndTime = $nextSlotTime->format('H:i:s');
+                                $currentSlotEndTime = $currentSlotTime->copy()->addHour()->format('H:i:s');
                             }
 
                             $currentSlotStartTime = $currentSlotTime->format('H:i:s');
 
-                            // 4. Checagem de Conflito: Evita recriar slot FREE onde há Reserva de Cliente REAL.
-                            $isOccupiedByCustomer = Reserva::where('date', $currentDateString)
-                                ->where('is_fixed', false) // Apenas reservas de cliente
-                                ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
-                                ->where(function ($q) use ($currentSlotStartTime, $currentSlotEndTime) {
-                                    $q->where('start_time', '<', $currentSlotEndTime)
-                                      ->where('end_time', '>', $currentSlotStartTime);
+                            // Checagem de Conflito CRÍTICA
+                            $isOccupied = Reserva::isOccupied($currentDateString, $currentSlotStartTime, $currentSlotEndTime)
+                                ->where(function ($query) {
+                                    $query->where('is_fixed', false) // Reserva de cliente REAL
+                                        ->orWhere(function($q) {
+                                            // Slot fixo editado que foi PRESERVADO acima
+                                            $q->where('is_fixed', true)
+                                                ->where('client_name', '!=', 'Slot Fixo de 1h');
+                                        });
+                                })
+                                // FILTRO: Adiciona a checagem de slots fixos em MANUTENÇÃO ou CANCELADOS por outros motivos (se houver)
+                                ->orWhere(function ($query) use ($currentDateString, $currentSlotStartTime, $currentSlotEndTime) {
+                                    $query->where('is_fixed', true)
+                                        ->where('date', $currentDateString)
+                                        // 🛑 Incluindo STATUS_MANUTENCAO
+                                        ->whereIn('status', [Reserva::STATUS_CANCELADA, Reserva::STATUS_MANUTENCAO])
+                                        ->where('start_time', $currentSlotStartTime)
+                                        ->where('end_time', $currentSlotEndTime);
                                 })
                                 ->exists();
 
-                            if (!$isOccupiedByCustomer) {
-                                // Cria o slot fixo FREE
-                                $reservasToInsert[] = [
-                                    'date' => $currentDateString,
-                                    'day_of_week' => $dayOfWeek,
-                                    'start_time' => $currentSlotStartTime,
-                                    'end_time' => $currentSlotEndTime,
-                                    'price' => $price,
-                                    'client_name' => 'Slot Fixo de 1h', // Nome genérico para slots recém-criados
-                                    'client_contact' => 'N/A',
-                                    'notes' => null,
-                                    'status' => Reserva::STATUS_FREE,
-                                    'is_fixed' => true,
-                                    'is_recurrent' => false,
-                                    'created_at' => Carbon::now(),
-                                    'updated_at' => Carbon::now(),
-                                ];
-                                $newReservasCount++;
-                            } else {
-                                Log::debug("Slot ({$currentSlotStartTime}-{$currentSlotEndTime}) em {$currentDateString} pulado por conflito de cliente.");
+                            if ($isOccupied) {
+                                $currentSlotTime->addHour();
+                                continue;
                             }
+
+                            // Cria o slot fixo
+                            Reserva::create([
+                                'date' => $currentDateString,
+                                'day_of_week' => $dayOfWeek,
+                                'start_time' => $currentSlotStartTime,
+                                'end_time' => $currentSlotEndTime,
+                                'price' => $price,
+                                'client_name' => 'Slot Fixo de 1h',
+                                'client_contact' => 'N/A',
+                                'status' => Reserva::STATUS_FREE,
+                                'is_fixed' => true,
+                            ]);
+                            $newReservasCount++;
 
                             $currentSlotTime->addHour();
                         }
                     }
                 }
             }
-
-            // 5. Inserção em Massa para performance
-            if (!empty($reservasToInsert)) {
-                Reserva::insert($reservasToInsert);
-            }
-
             DB::commit();
 
-            $message = "Configuração salva e **{$newReservasCount} reservas fixas** geradas com sucesso para os próximos **{$recurrentMonths} meses**. O processo agora é automático após o salvamento.";
-            Log::info("Geração de Slots Concluída. Total gerado: {$newReservasCount}.");
-
-            return redirect()->route('admin.config.index')->with('success', $message);
+            return redirect()->route('admin.config.index')->with('success', "Configuração salva e **{$newReservasCount} reservas fixas** geradas com sucesso para os próximos **{$recurrentMonths} meses**. O processo agora é automático após o salvamento.");
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -412,9 +398,8 @@ class ConfigurationController extends Controller
             }
 
             // 🛑 NOVO: Impede a edição de preço em slots de manutenção
-            // ✅ Usa STATUS_MAINTENANCE (assumindo que o Modelo foi corrigido)
-            if ($reserva->status === Reserva::STATUS_MAINTENANCE) {
-                return response()->json(['success' => false, 'error' => 'Não é possível editar o preço de um slot em manutenção. Primeiro, disponibilize-o.'], 403);
+            if ($reserva->status === Reserva::STATUS_MANUTENCAO) {
+                 return response()->json(['success' => false, 'error' => 'Não é possível editar o preço de um slot em manutenção. Primeiro, disponibilize-o.'], 403);
             }
 
             if ($reserva->client_name === 'Slot Fixo de 1h') {
@@ -427,10 +412,10 @@ class ConfigurationController extends Controller
 
             return response()->json(['success' => true, 'message' => 'Preço atualizado com sucesso.']);
         } catch (ValidationException $e) {
-            return response()->json(['success' => false, 'error' => $e->getMessage()], 422);
+             return response()->json(['success' => false, 'error' => $e->getMessage()], 422);
         } catch (\Exception $e) {
-            Log::error("Erro fatal ao atualizar preço da reserva fixa #{$id}: " . $e->getMessage());
-            return response()->json(['success' => false, 'error' => 'Erro interno do servidor.'], 500);
+             Log::error("Erro fatal ao atualizar preço da reserva fixa #{$id}: " . $e->getMessage());
+             return response()->json(['success' => false, 'error' => 'Erro interno do servidor.'], 500);
         }
     }
 
@@ -459,7 +444,7 @@ class ConfigurationController extends Controller
             $isFixedSlot = $reserva->is_fixed;
 
             if (!$isFixedSlot && !$isClientReservationActive) {
-                return response()->json(['success' => false, 'error' => 'Ação de manutenção permitida apenas em slots fixos ou reservas ativas de clientes.'], 403);
+                 return response()->json(['success' => false, 'error' => 'Ação de manutenção permitida apenas em slots fixos ou reservas ativas de clientes.'], 403);
             }
 
             // 🛑 CRÍTICO: Mapeamento de Status
@@ -471,8 +456,7 @@ class ConfigurationController extends Controller
                     $action = 'disponibilizado';
                 } else {
                     // Se JS envia 'cancelled', salva como MAINTENANCE no DB.
-                    // ✅ Usa STATUS_MAINTENANCE (assumindo que o Modelo foi corrigido)
-                    $finalStatus = Reserva::STATUS_MAINTENANCE;
+                    $finalStatus = Reserva::STATUS_MANUTENCAO;
                     $action = 'marcado como indisponível (manutenção)';
                 }
 
@@ -486,24 +470,16 @@ class ConfigurationController extends Controller
                 if ($newStatus === 'cancelled') {
                     $finalStatus = Reserva::STATUS_CANCELADA; // Cancela a reserva do cliente
                     $reserva->cancellation_reason = 'Cancelamento forçado pelo gestor via tela de Configuração/Manutenção.';
-                    // 🐛 Adicionando a recriação do slot fixo após o cancelamento do cliente
-                    // O slot fixo será recriado, mas apenas se a lógica de generateFixedReservas não o fizer logo em seguida.
-                    // Melhor garantir a recriação.
-
-                    // 🛑 Nota: Esta lógica deve ser movida para o ReservaController
-                    // Mas para manter a funcionalidade aqui, usamos a lógica do ReservaController
-                    // if (method_exists(app(\App\Http\Controllers\ReservaController::class), 'recreateFixedSlot')) {
-                    //    app(\App\Http\Controllers\ReservaController::class)->recreateFixedSlot($reserva);
-                    // }
-
                     $action = 'cancelado para manutenção';
                 } else {
                     // Se o JS enviou 'confirmed', mas é uma reserva de cliente,
                     // não faz sentido disponibilizar o slot (ele já está ocupado/disponível).
+                    // Mantemos o status existente e emitimos um aviso.
                     $finalStatus = $reserva->status;
                     return response()->json(['success' => true, 'message' => "Reserva de cliente não foi alterada. Use a ação 'Indisponível' para cancelar o agendamento."], 200);
                 }
             }
+
 
             $reserva->manager_id = Auth::id();
             $reserva->status = $finalStatus;
@@ -513,8 +489,8 @@ class ConfigurationController extends Controller
             return response()->json(['success' => true, 'message' => "Slot $action com sucesso. O calendário público será atualizado."], 200);
 
         } catch (ValidationException $e) {
-            // Retorna a exceção de validação no formato JSON 422
-            return response()->json(['success' => false, 'error' => $e->getMessage()], 422);
+             // Retorna a exceção de validação no formato JSON 422
+             return response()->json(['success' => false, 'error' => $e->getMessage()], 422);
         } catch (\Exception $e) {
             // 🛑 NOVO: Bloco catch de último recurso para garantir o retorno JSON 500
             Log::error("Erro fatal ao alternar status da reserva #{$id}: " . $e->getMessage());
@@ -604,8 +580,8 @@ class ConfigurationController extends Controller
                 ->where('start_time', $startTime)
                 ->where('end_time', $endTime)
                 ->whereDate('date', '>=', Carbon::today()->toDateString())
-                // 🛑 ATENÇÃO: Incluímos MAINTENANCE na exclusão
-                ->whereIn('status', [Reserva::STATUS_FREE, Reserva::STATUS_MAINTENANCE])
+                // 🛑 ATENÇÃO: Incluímos MANUTENCAO na exclusão
+                ->whereIn('status', [Reserva::STATUS_FREE, Reserva::STATUS_MANUTENCAO])
                 ->delete();
 
             // 5. Remove o slot da configuração e salva
@@ -694,8 +670,8 @@ class ConfigurationController extends Controller
             Reserva::where('is_fixed', true)
                 ->where('day_of_week', $dayOfWeek)
                 ->whereDate('date', '>=', Carbon::today()->toDateString())
-                // 🛑 ATENÇÃO: Excluímos slots FREE e MAINTENANCE
-                ->whereIn('status', [Reserva::STATUS_FREE, Reserva::STATUS_MAINTENANCE])
+                // 🛑 ATENÇÃO: Excluímos slots FREE e MANUTENCAO
+                ->whereIn('status', [Reserva::STATUS_FREE, Reserva::STATUS_MANUTENCAO])
                 ->delete();
 
             // 4. Desativa a configuração do dia

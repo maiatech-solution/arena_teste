@@ -201,10 +201,10 @@
                         <span class="inline-block w-4 h-4 rounded-full bg-indigo-600 mr-2"></span>
                         <span>Reservado Avulso (Rápido)</span>
                     </div>
-                    <!--<div class="flex items-center p-2 bg-orange-50 rounded-lg shadow-sm">
+                    <div class="flex items-center p-2 bg-orange-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-orange-500 mr-2"></span>
                         <span>Pré-Reserva Pendente</span>
-                    </div> -->
+                    </div>
                     <div class="flex items-center p-2 bg-green-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-green-500 mr-2"></span>
                         <span>Disponível (Horários Abiertos)</span>
@@ -1289,11 +1289,12 @@
 
                     let currentTitle = titleEl.textContent;
 
-                    // 1. Limpeza agressiva do prefixo 'RECORR.:' para o formato exato que você viu.
-                    // Captura e remove "RECORR" + ".:" (opcional) + qualquer espaço.
-                    currentTitle = currentTitle.replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '').trim();
+                    // 1. Limpeza do prefixo 'RECORRE.: ' (mais robusta contra variações de espaço/pontuação)
+                    // Esta regex cobre: "RECORRE.: NOME", "RECORRE: NOME", "RECORRE NOME", etc.
+                    currentTitle = currentTitle.replace(/^RECORRE[\.:\s]*\s*/i, '');
 
-                    // 2. Remove o sufixo de preço ' - R$ XX.XX' e qualquer texto após ele (aplica a TODOS reservados)
+                    // 2. Remove o sufixo de preço ' - R$ XX.XX' e qualquer texto após ele
+                    // Nota: O título está vindo como "Nome do Cliente - R$ XX.XX"
                     currentTitle = currentTitle.split(' - R$ ')[0].trim();
 
                     // 3. O resultado final é APENAS O NOME DO CLIENTE.

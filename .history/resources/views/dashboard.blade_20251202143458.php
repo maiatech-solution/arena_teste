@@ -201,10 +201,10 @@
                         <span class="inline-block w-4 h-4 rounded-full bg-indigo-600 mr-2"></span>
                         <span>Reservado Avulso (Rápido)</span>
                     </div>
-                    <!--<div class="flex items-center p-2 bg-orange-50 rounded-lg shadow-sm">
+                    <div class="flex items-center p-2 bg-orange-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-orange-500 mr-2"></span>
                         <span>Pré-Reserva Pendente</span>
-                    </div> -->
+                    </div>
                     <div class="flex items-center p-2 bg-green-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-green-500 mr-2"></span>
                         <span>Disponível (Horários Abiertos)</span>
@@ -1288,6 +1288,12 @@
                     if (!titleEl || event.classNames.includes('fc-event-available')) return;
 
                     let currentTitle = titleEl.textContent;
+
+                    // --- DEBUG CRÍTICO: Registra o título bruto no console ---
+                    if (event.classNames.includes('fc-event-recurrent')) {
+                        console.log("DEBUG: Título Recorrente BRUTO:", currentTitle);
+                    }
+                    // --------------------------------------------------------
 
                     // 1. Limpeza agressiva do prefixo 'RECORR.:' para o formato exato que você viu.
                     // Captura e remove "RECORR" + ".:" (opcional) + qualquer espaço.

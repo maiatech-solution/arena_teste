@@ -201,10 +201,10 @@
                         <span class="inline-block w-4 h-4 rounded-full bg-indigo-600 mr-2"></span>
                         <span>Reservado Avulso (Rápido)</span>
                     </div>
-                    <!--<div class="flex items-center p-2 bg-orange-50 rounded-lg shadow-sm">
+                    <div class="flex items-center p-2 bg-orange-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-orange-500 mr-2"></span>
                         <span>Pré-Reserva Pendente</span>
-                    </div> -->
+                    </div>
                     <div class="flex items-center p-2 bg-green-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-green-500 mr-2"></span>
                         <span>Disponível (Horários Abiertos)</span>
@@ -1279,27 +1279,30 @@
                 editable: false,
                 initialDate: new Date().toISOString().slice(0, 10),
 
-                // ✅ HOOK ATUALIZADO: Lógica unificada para mostrar APENAS O NOME (limpando o prefixo RECORRENTE)
+                // ✅ HOOK ATUALIZADO: Lógica unificada para mostrar APENAS O NOME
                 eventDidMount: function(info) {
                     const event = info.event;
                     const titleEl = info.el.querySelector('.fc-event-title');
-
+                    
                     // Apenas processa eventos reservados (não os disponíveis)
                     if (!titleEl || event.classNames.includes('fc-event-available')) return;
-
+                    
                     let currentTitle = titleEl.textContent;
-
-                    // 1. Limpeza agressiva do prefixo 'RECORR.:' para o formato exato que você viu.
-                    // Captura e remove "RECORR" + ".:" (opcional) + qualquer espaço.
-                    currentTitle = currentTitle.replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '').trim();
-
-                    // 2. Remove o sufixo de preço ' - R$ XX.XX' e qualquer texto após ele (aplica a TODOS reservados)
+                    
+                    // 1. Limpeza de PREFIXOS e SUFIXOS
+                    // Remove o prefixo 'RECORRE.: ' (para recorrentes)
+                    currentTitle = currentTitle.replace(/^RECORRE\.:\s*/i, '');
+                    
+                    // Remove o sufixo de preço ' - R$ XX.XX' e qualquer texto após ele
                     currentTitle = currentTitle.split(' - R$ ')[0].trim();
-
-                    // 3. O resultado final é APENAS O NOME DO CLIENTE.
-                    titleEl.textContent = currentTitle;
+                    
+                    // 2. Aplicação do novo formato: "NOME" (Apenas o que restou)
+                    // O `currentTitle` agora contém apenas o nome do cliente.
+                    const finalTitle = currentTitle;
+                    
+                    titleEl.textContent = finalTitle;
                 },
-
+                
                 eventClick: function(info) {
                     const event = info.event;
                     const isAvailable = event.classNames.includes('fc-event-available');
@@ -1403,9 +1406,9 @@
                         // Isso permite que o Controller de Pagamentos pré-preencha o campo Pago
                         const paymentUrl = `${PAYMENT_INDEX_URL}?reserva_id=${reservaId}&data_reserva=${dateReservation}&signal_value=${signalValue}`;
                         const showUrl = SHOW_RESERVA_URL.replace(':id', reservaId);
-
+                        
                         let statusText = 'Confirmada';
-
+                        
                         let recurrentStatus = isRecurrent ?
                             '<p class="text-sm font-semibold text-fuchsia-600">Parte de uma Série Recorrente</p>' :
                             '<p class="text-sm font-semibold text-gray-500">Reserva Pontual</p>';

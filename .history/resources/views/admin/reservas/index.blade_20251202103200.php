@@ -18,19 +18,6 @@
                     </div>
                     @endif
 
-                    {{-- Mensagens de Erro/Aviso (caso o Controller retorne erros, eles aparecerão aqui) --}}
-                    @if (session('error'))
-                    <div class="mb-4 p-4 bg-red-100 text-red-700 rounded-md border border-red-400">
-                        {{ session('error') }}
-                    </div>
-                    @endif
-
-                    @if ($errors->any())
-                        <div class="mb-4 p-4 bg-red-100 text-red-700 rounded-md border border-red-400">
-                            <strong>Erro de Validação:</strong> Por favor, verifique o formulário.
-                        </div>
-                    @endif
-
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-700">
@@ -45,7 +32,7 @@
                                     <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Reputação</th>
 
                                     {{-- Coluna mesclada para Sinal e Ações --}}
-                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-1/4">Ações</th>
+                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-1/4">Sinal e Ações</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -69,9 +56,10 @@
 
                                         {{-- 🆕 Mostrar quantas pré-reservas existem no mesmo horário --}}
                                         @php
-                                        // Usando o Scope isOccupied para uma checagem mais robusta (exclui a própria reserva)
                                         $sameTimeReservasCount = \App\Models\Reserva::where('id', '!=', $reserva->id)
-                                        ->isOccupied($reserva->date, $reserva->start_time, $reserva->end_time) // ✅ Reutiliza o scope
+                                        ->where('date', $reserva->date)
+                                        ->where('start_time', $reserva->start_time)
+                                        ->where('end_time', $reserva->end_time)
                                         ->where('status', 'pending')
                                         ->count();
                                         @endphp
@@ -91,50 +79,67 @@
                                         </span>
                                     </td>
 
-                                    {{-- ✅ Reputação --}}
+                                    {{-- ✅ NOVO CÓDIGO para Reputação: Apenas chama o Accessor --}}
                                     <td class="px-4 py-4 whitespace-nowrap text-center">
                                         @if($reserva->user)
-                                        {{-- Assumindo que o Accessor status_tag retorna o HTML completo da tag. --}}
+                                        {{-- O Accessor status_tag retorna o HTML completo da tag. --}}
+                                        {{-- Usamos {!! !!} para renderizar o HTML da string. --}}
                                         {!! $reserva->user->status_tag !!}
                                         @else
                                         <span class="text-xs text-gray-400">N/A</span>
                                         @endif
                                     </td>
+                                    {{-- Fim do bloco de Reputação --}}
 
-                                    {{-- 🛑 NOVO BLOCO DE AÇÕES (Botões que chamam o Modal) --}}
+                                    {{-- FORMULÁRIO UNIFICADO DE CONFIRMAÇÃO + SINAL e AÇÕES --}}
                                     <td class="px-4 py-4 whitespace-nowrap text-right">
-                                        <div class="flex flex-col space-y-2 items-end">
+                                        <div class="flex flex-col space-y-2">
 
-                                            {{-- 1. BOTÃO CONFIRMAR (Chama o modal) --}}
-                                            <button type="button"
-                                                onclick="openConfirmModal(
-                                                    '{{ $reserva->id }}',
-                                                    '{{ $reserva->client_name }}',
-                                                    '{{ \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') }} às {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }}',
-                                                    '{{ $reserva->price }}'
-                                                )"
-                                                title="Abrir formulário de Confirmação, Sinal e Recorrência"
-                                                class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-xs font-bold transition shadow-md w-full sm:w-auto flex items-center justify-center">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                                </svg>
-                                                Confirmar
-                                            </button>
-
-                                            {{-- 2. BOTÃO REJEITAR (Manteve o form de Rejeição, mas com modal placeholder) --}}
-                                            <form action="{{ route('admin.reservas.rejeitar', $reserva->id) }}" method="POST" class="w-full text-right">
+                                            <form action="{{ route('admin.reservas.confirmar', $reserva->id) }}" method="POST" class="flex flex-col space-y-2 items-end">
                                                 @csrf
                                                 @method('PATCH')
 
-                                                <input type="hidden" name="rejection_reason" value="Rejeitada pela administração - Por favor, refaça o agendamento em um slot livre.">
+                                                {{-- ✅ CORREÇÃO: Adicionado o campo hidden para garantir que 'is_recurrent' seja enviado --}}
+                                                <div class="flex items-center space-x-2 w-full justify-end">
+                                                    <input type="hidden" name="is_recurrent" value="0">
+                                                    <input type="checkbox" name="is_recurrent" id="is-recurrent-{{ $reserva->id }}" value="1"
+                                                        class="h-4 w-4 text-fuchsia-600 border-gray-300 rounded focus:ring-fuchsia-500 dark:bg-gray-700 dark:border-gray-600">
+                                                    <label for="is-recurrent-{{ $reserva->id }}" class="text-xs font-semibold text-fuchsia-700 dark:text-fuchsia-400 select-none cursor-pointer">
+                                                        Recorrente (+6m)
+                                                    </label>
+                                                </div>
+                                                {{-- Fim do Checkbox Recorrente --}}
 
-                                                <button type="submit" title="Rejeitar Agendamento"
-                                                    onclick="return confirm('Tem certeza que deseja rejeitar esta PRÉ-RESERVA? O cliente será notificado e o horário voltará a ser livre.')"
-                                                    class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-600 text-xs underline mt-1">
+                                                <div class="flex items-center space-x-2 justify-end w-full">
+                                                    {{-- Input do Sinal --}}
+                                                    <div class="relative w-24">
+                                                        <span class="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400 text-xs">R$</span>
+                                                        <input type="number" name="signal_value" step="0.01" min="0" placeholder="0.00"
+                                                            class="w-full pl-6 text-sm rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                            value="{{ ($reserva->user && $reserva->user->is_vip) ? '0.00' : '' }}">
+                                                    </div>
+
+                                                    {{-- Botão Confirmar --}}
+                                                    <button type="submit" title="Confirmar e Registrar Sinal"
+                                                        class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-xs font-bold transition shadow-sm flex items-center">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                        Confirmar
+                                                    </button>
+                                                </div>
+                                            </form>
+
+                                            {{-- Botão Rejeitar (Separado do form de confirmação) --}}
+                                            <form action="{{ route('admin.reservas.rejeitar', $reserva->id) }}" method="POST" class="w-full text-right">
+                                                @csrf
+                                                @method('PATCH')
+                                                {{-- ATENÇÃO: É ALTAMENTE RECOMENDÁVEL SUBSTITUIR 'onclick="return confirm(...)"' POR UM MODAL CUSTOMIZADO, POIS O CONFIRM DO NAVEGADOR É BLOQUEANTE E TEM MÁ EXPERIÊNCIA. --}}
+                                                <button type="submit" title="Rejeitar Agendamento" onclick="return confirm('Tem certeza que deseja rejeitar? O cliente será notificado.')"
+                                                    class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-600 text-xs underline">
                                                     Rejeitar
                                                 </button>
                                             </form>
-
                                         </div>
                                     </td>
                                 </tr>
@@ -158,8 +163,4 @@
             </div>
         </div>
     </div>
-
-    <!-- 🛑 INCLUSÃO DO MODAL DE CONFIRMAÇÃO (CHAVE PARA O OBJETIVO) -->
-    @include('admin.reservas.confirmation_modal')
-
 </x-app-layout>

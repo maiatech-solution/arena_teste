@@ -105,17 +105,12 @@ Route::middleware(['auth', 'gestor'])->group(function () {
 
     // =========================================================================
     // ✅ ROTAS CRÍTICAS DE AÇÃO DE RESERVA (MOVEMOS PARA CÁ PARA MAIOR PRECEDÊNCIA)
+    // Usam o prefixo completo 'admin/reservas' e o nome 'admin.reservas.'
     // =========================================================================
-    // Rota de listagem de Pendentes (MOVEMOS para garantir precedência sobre rotas com curingas)
-    Route::get('/admin/reservas/pendentes', [AdminController::class, 'indexReservas'])
-        ->name('admin.reservas.pendentes');
-
-    // 🐛 CORREÇÃO FINAL: Rotas de Confirmar e Rejeitar ajustadas para ter o {reserva} no final,
-    // correspondendo ao formato que o seu browser está reportando na URL.
-    Route::patch('/admin/reservas/confirmar/{reserva}', [ReservaController::class, 'confirmar'])
+    Route::patch('/admin/reservas/{reserva}/confirmar', [ReservaController::class, 'confirmar'])
         ->name('admin.reservas.confirmar');
 
-    Route::patch('/admin/reservas/rejeitar/{reserva}', [ReservaController::class, 'rejeitar'])
+    Route::patch('/admin/reservas/{reserva}/rejeitar', [ReservaController::class, 'rejeitar'])
         ->name('admin.reservas.rejeitar');
     // =========================================================================
 
@@ -135,20 +130,24 @@ Route::middleware(['auth', 'gestor'])->group(function () {
         // =========================================================================
         Route::prefix('reservas')->name('reservas.')->group(function () {
 
-            // Rotas de Listagem (EXCETO PENDENTES, que foi movida)
+            // Rotas de Listagem
             Route::get('/', [AdminController::class, 'indexReservasDashboard'])->name('index');
+            Route::get('pendentes', [AdminController::class, 'indexReservas'])->name('pendentes');
             Route::get('confirmadas', [AdminController::class, 'confirmed_index'])->name('confirmadas');
             Route::get('todas', [AdminController::class, 'indexTodas'])->name('todas');
             Route::get('rejeitadas', [AdminController::class, 'indexReservasRejeitadas'])->name('rejeitadas');
 
 
             // --- ROTAS DE AÇÕES E CRIAÇÃO ---
-            // Rota Show (usa {reserva}) - Fica abaixo de 'pendentes' (agora fora)
             Route::get('{reserva}/show', [AdminController::class, 'showReserva'])->name('show');
-
             Route::get('create', [AdminController::class, 'createUser'])->name('create');
             Route::post('/', [AdminController::class, 'storeReserva'])->name('store');
             Route::post('tornar-fixo', [AdminController::class, 'makeRecurrent'])->name('make_recurrent');
+
+            // ❌ ROTAS DE CONFIRMAR/REJEITAR REMOVIDAS DAQUI PARA EVITAR CONFLITO DE PREFIXO/ORDEM
+            // Route::patch('{reserva}/confirmar', [ReservaController::class, 'confirmar'])->name('confirmar');
+            // Route::patch('{reserva}/rejeitar', [ReservaController::class, 'rejeitar'])->name('rejeitar');
+
 
             // Rotas de Modificação
             Route::patch('{reserva}/update-price', [AdminController::class, 'updatePrice'])->name('update_price');

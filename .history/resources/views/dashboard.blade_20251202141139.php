@@ -201,10 +201,10 @@
                         <span class="inline-block w-4 h-4 rounded-full bg-indigo-600 mr-2"></span>
                         <span>Reservado Avulso (Rápido)</span>
                     </div>
-                    <!--<div class="flex items-center p-2 bg-orange-50 rounded-lg shadow-sm">
+                    <div class="flex items-center p-2 bg-orange-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-orange-500 mr-2"></span>
                         <span>Pré-Reserva Pendente</span>
-                    </div> -->
+                    </div>
                     <div class="flex items-center p-2 bg-green-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-green-500 mr-2"></span>
                         <span>Disponível (Horários Abiertos)</span>
@@ -1279,24 +1279,36 @@
                 editable: false,
                 initialDate: new Date().toISOString().slice(0, 10),
 
-                // ✅ HOOK ATUALIZADO: Lógica unificada para mostrar APENAS O NOME (limpando o prefixo RECORRENTE)
+                // ✅ HOOK ATUALIZADO: Lógica unificada para Recorrente, Pontual e Pendente
                 eventDidMount: function(info) {
                     const event = info.event;
+                    const extendedProps = event.extendedProps || {};
                     const titleEl = info.el.querySelector('.fc-event-title');
 
-                    // Apenas processa eventos reservados (não os disponíveis)
-                    if (!titleEl || event.classNames.includes('fc-event-available')) return;
+                    if (!titleEl) return;
 
                     let currentTitle = titleEl.textContent;
 
-                    // 1. Limpeza agressiva do prefixo 'RECORR.:' para o formato exato que você viu.
-                    // Captura e remove "RECORR" + ".:" (opcional) + qualquer espaço.
-                    currentTitle = currentTitle.replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '').trim();
+                    // 1. LIMPEZA DE PREFIXO RECORRENTE (Fúcsia)
+                    if (event.classNames.includes('fc-event-recurrent')) {
+                        // Remove o prefixo 'RECORRE.: ' que vem do backend
+                        currentTitle = currentTitle.replace(/^RECORRE\.:\s*/i, '');
+                    }
 
-                    // 2. Remove o sufixo de preço ' - R$ XX.XX' e qualquer texto após ele (aplica a TODOS reservados)
-                    currentTitle = currentTitle.split(' - R$ ')[0].trim();
+                    // 2. NORMALIZAÇÃO DE HORÁRIO (Aplicada a todas as RESERVAS)
+                    // Se o evento é uma reserva (não um slot disponível), garante o prefixo de hora
+                    if (!event.classNames.includes('fc-event-available')) {
+                        const timeStart = moment(event.start).format('HH:mm');
+                        const timeEnd = moment(event.end).format('HH:mm');
+                        const timeDisplay = `${timeStart}-${timeEnd}: `;
 
-                    // 3. O resultado final é APENAS O NOME DO CLIENTE.
+                        // Adiciona o horário se ele ainda não estiver lá (prevenindo duplicação, ex: se a API já formatou)
+                        if (!currentTitle.startsWith(timeStart)) {
+                             currentTitle = timeDisplay + currentTitle;
+                        }
+                    }
+
+                    // Aplica o título final limpo/formatado
                     titleEl.textContent = currentTitle;
                 },
 
