@@ -25,7 +25,6 @@ class Reserva extends Model
     public const STATUS_EXPIRADA = 'expired';
     public const STATUS_MAINTENANCE = 'maintenance'; // ✅ Corrigido para MAINTENANCE
     public const STATUS_LANCADA_CAIXA = 'paid_to_cashier'; // 🆕 Adicionado: Para fluxo financeiro
-    public const STATUS_CONCLUIDA = 'completed'; // 🆕 NOVO: Status para reservas concluídas e pagas
 
     /**
      * Os atributos que são mass assignable.
@@ -46,11 +45,11 @@ class Reserva extends Model
         'fixed_slot_id', // ID do slot fixo consumido pela reserva
 
         // --- Campos para Recorrência ---
-        'is_fixed', 			// Grade de slots fixos gerada pelo ConfigController
-        'day_of_week', 			// Dia da semana para filtros (0=Dom, 1=Seg, ...)
+        'is_fixed',          // Grade de slots fixos gerada pelo ConfigController
+        'day_of_week',       // Dia da semana para filtros (0=Dom, 1=Seg, ...)
 
-        'is_recurrent', 		// Flag para saber se é parte de uma série de cliente fixo
-        'recurrent_series_id', 	// ID do primeiro slot da série (mestre)
+        'is_recurrent',      // Flag para saber se é parte de uma série de cliente fixo
+        'recurrent_series_id', // ID do primeiro slot da série (mestre)
 
         // --- Campos Financeiros ---
         'final_price', // Preço final ajustado (se houver)
@@ -148,7 +147,6 @@ class Reserva extends Model
                 self::STATUS_EXPIRADA => 'Expirada',
                 self::STATUS_MAINTENANCE => 'Manutenção', // ✅ Corrigido
                 self::STATUS_LANCADA_CAIXA => 'Lançada no Caixa', // ✅ Adicionado
-                self::STATUS_CONCLUIDA => 'Concluída', // 🆕 Adicionado
                 default => 'Desconhecido',
             },
         );

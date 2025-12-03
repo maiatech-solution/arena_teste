@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ArenaConfiguration;
 use App\Models\Reserva;
 use App\Models\User;
+use App\Http\Requests\UpdateReservaStatusRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
@@ -12,8 +14,10 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use App\Http\Controllers\AdminController;
 use App\Models\FinancialTransaction; // Importa o modelo de transações
 
 class ReservaController extends Controller
@@ -254,7 +258,7 @@ class ReservaController extends Controller
 
 
     // -------------------------------------------------------------------------
-    // 🗓️ MÉTODOS API PARA O DASHBOARD (AGENDAMENTO RÁPIDO)
+    // 🗓️ MÉTODOS API PARA O DASHBOARD (AGENDAMENTO RÁPIDO) - CORRIGIDOS
     // -------------------------------------------------------------------------
 
     /**
@@ -677,21 +681,9 @@ class ReservaController extends Controller
      * Finaliza o pagamento de uma reserva e, opcionalmente, atualiza o preço de reservas futuras da série.
      * Rota: POST /admin/pagamentos/{reserva}/finalizar
      */
-    public function finalizarPagamento(Request $request, $reservaId)
+    public function finalizarPagamento(Request $request, Reserva $reserva)
     {
-        // 1. Busca a Reserva manualmente
-        $reserva = Reserva::find($reservaId);
-
-        if (!$reserva) {
-             Log::error("Reserva não encontrada para o ID {$reservaId} durante finalizarPagamento.");
-             return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404);
-        }
-
-        // LOG DE DIAGNÓSTICO: Mostra TODO o request, incluindo o apply_to_series
-        Log::debug('finalizarPagamento Request Data: ' . json_encode($request->all()));
-        Log::debug('apply_to_series flag value (boolean): ' . ($request->boolean('apply_to_series') ? 'TRUE' : 'FALSE'));
-
-        // 2. Validação dos dados de entrada
+        // 1. Validação dos dados de entrada
         $request->validate([
             'final_price' => 'required|numeric|min:0',
             'amount_paid' => 'required|numeric|min:0',
@@ -728,11 +720,7 @@ class ReservaController extends Controller
                 'payment_status' => $paymentStatus,
                 'payment_method' => $request->payment_method, // Método de pagamento final
                 'manager_id' => Auth::id(),
-                'status' => Reserva::STATUS_CONCLUIDA, // NOVO: Marca como CONCLUÍDA ao finalizar o pagamento
             ]);
-
-            Log::info("Reserva ID {$reserva->id} paga e concluída. Final Price: R$ {$finalPrice}, Total Paid: R$ {$newTotalPaid}.");
-
 
             // 2.1. NOVO: GERA TRANSAÇÃO FINANCEIRA (Pagamento do Restante)
             if ($amountPaidNow > 0) {
@@ -753,65 +741,45 @@ class ReservaController extends Controller
             // --- 3. Lógica para Recorrência: PROPAGAÇÃO DE PREÇO ---
             if ($request->boolean('apply_to_series') && $reserva->is_recurrent) {
 
-                Log::info('*** INICIANDO PROPAGAÇÃO DE PREÇO PARA SÉRIE RECORRENTE ***');
-
+                // O novo preço de base para as futuras reservas será o final_price desta reserva.
                 $newPriceForSeries = $finalPrice;
+
+                // O masterId deve ser obtido de forma robusta.
                 $masterId = $reserva->recurrent_series_id ?? $reserva->id;
-                // Deve usar o objeto Carbon para extrair o dateString
+
+                // A data de corte é a data da reserva PAGA.
                 $reservaDate = Carbon::parse($reserva->date)->toDateString();
 
-                Log::debug("Propagação Detalhes: Master ID {$masterId}, Data de Corte {$reservaDate}, Novo Preço R$ {$newPriceForSeries}");
+                // CRÍTICO: Atualiza todas as reservas futuras (data estritamente MAIOR)
+                $updatedCount = Reserva::where(function ($query) use ($masterId) {
+                       // Target the entire series (master and copies)
+                       $query->where('recurrent_series_id', $masterId)
+                             ->orWhere('id', $masterId);
+                   })
+                   // CRÍTICO: Pega todas as reservas com data ESTREITAMENTE MAIOR que a data atual
+                   ->whereDate('date', '>', $reservaDate)
+                   // NOVO: Adiciona filtro de horário para garantir que é o slot semanal correto
+                   ->where('start_time', $reserva->start_time)
+                   ->where('end_time', $reserva->end_time)
+                   ->where('is_fixed', false)
+                   // Inclui o status PARTIAL para atingir reservas futuras com sinal pago, mas com preço desatualizado.
+                   ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, Reserva::STATUS_PARTIAL])
+                   ->update([
+                       // Atualiza o preço base (price) e o preço final (final_price)
+                       'price' => $newPriceForSeries,
+                       'final_price' => $newPriceForSeries,
+                       'manager_id' => Auth::id(),
+                   ]);
 
-                // CRÍTICO: Identifica todas as reservas futuras elegíveis que PRECISAM de atualização
-                try {
-                    $updatedCount = Reserva::where(function ($query) use ($masterId) {
-                           // Atinge a série inteira (mestra e cópias)
-                           $query->where('recurrent_series_id', $masterId)
-                                 ->orWhere('id', $masterId);
-                       })
-                       // CRÍTICO: Pega todas as reservas com data ESTREITAMENTE MAIOR que a data atual
-                       ->whereDate('date', '>', $reservaDate)
-                       // Filtra por horário, garantindo o slot semanal correto
-                       ->where('start_time', $reserva->start_time)
-                       ->where('end_time', $reserva->end_time)
-                       ->where('is_fixed', false) // Apenas reservas de cliente
-                       // CORREÇÃO CRÍTICA: Alvo: APENAS reservas ATIVAS (Confirmadas)
-                       // Reservas ativas recorrentes têm status 'confirmed'
-                       ->where('status', Reserva::STATUS_CONFIRMADA)
-                       // APENAS ATUALIZA SE O PREÇO ATUAL FOR DIFERENTE DO NOVO PREÇO
-                       ->where('price', '!=', $newPriceForSeries)
-                       ->update([
-                           // Atualiza o preço base (price) e o preço final (final_price)
-                           'price' => $newPriceForSeries,
-                           'final_price' => $newPriceForSeries,
-                           'manager_id' => Auth::id(),
-                       ]);
-
-                    if ($updatedCount > 0) {
-                        Log::info("Preço de série recorrente (ID {$masterId}) atualizado para R$ {$newPriceForSeries} em {$updatedCount} reservas futuras.");
-                        $message = "Pagamento finalizado e preço da série atualizado com sucesso! ({$updatedCount} reservas alteradas)";
-                    } else {
-                         Log::info("Propagação executada, mas 0 reservas futuras atualizadas. Motivo: Preço já estava R$ {$newPriceForSeries} ou não houve reservas futuras elegíveis.");
-                         $message = "Pagamento finalizado. Preço da série recorrente já estava atualizado ou nenhuma reserva futura elegível encontrada.";
-                    }
-
-                } catch (\Exception $e) {
-                    // Log de erro específico para a query de update
-                    Log::error("Erro na query de propagação de preço para Master ID {$masterId}: " . $e->getMessage());
-                    throw $e; // Re-lança para que o rollback ocorra
-                }
-            } else {
-                 $message = "Pagamento finalizado com sucesso!";
+                Log::info("Preço de série recorrente (ID {$masterId}) atualizado para R$ {$newPriceForSeries} em {$updatedCount} reservas futuras. Por Gestor ID: " . Auth::id());
             }
 
             DB::commit();
 
-            return response()->json(['success' => true, 'message' => $message]);
+            return response()->json(['success' => true, 'message' => 'Pagamento finalizado e preço da série atualizado com sucesso!']);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            // Adiciona log de erro detalhado da propagação
-            Log::error("Erro no processo de finalizarPagamento (ID: {$reservaId}): " . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'success' => false,
                 'message' => 'Erro ao finalizar pagamento: ' . $e->getMessage()
@@ -914,12 +882,12 @@ class ReservaController extends Controller
 
                 $masterReserva = $reserva;
 
-                // CORREÇÃO CRÍTICA: Obtém a data da reserva mestra como objeto Carbon
-                // Usamos ->date diretamente pois o Laravel já deve ter castado para Carbon
-                $masterDate = $masterReserva->date;
+                // Garante que a data de início é um objeto Carbon para manipulação segura
+                // NOVA CORREÇÃO: Força a conversão para string antes do parse para total segurança
+                $masterDate = Carbon::parse($masterReserva->date->format('Y-m-d'));
 
                 // 5.1. Definir a janela de renovação: Da próxima semana até 6 meses
-                $startDate = $masterDate->copy()->addWeek(); // Começa na próxima semana
+                $startDate = $masterDate->copy()->addWeek();
                 $endDate = $masterDate->copy()->addMonths(6); // 6 meses a partir da data da reserva mestra
 
                 Log::info("Criando série recorrente Master ID {$reserva->id}: Início ({$startDate->toDateString()}) - Fim ({$endDate->toDateString()}).");
@@ -939,12 +907,12 @@ class ReservaController extends Controller
 
                 $currentDate = $startDate->copy();
 
-                // Garante que o loop só comece APÓS a data da reserva mestra
                 while ($currentDate->lessThanOrEqualTo($endDate)) {
                     $dateString = $currentDate->toDateString();
                     $isConflict = false;
 
                     // Checagem de Conflito (Outros Clientes: confirmed/pending)
+                    // Esta é a única checagem necessária, pois garantimos que o horário é livre para aluguel.
                     $isOccupiedByOtherCustomer = Reserva::whereDate('date', $dateString)
                         ->where('start_time', '<', $endTime)
                         ->where('end_time', '>', $startTime)
@@ -957,9 +925,10 @@ class ReservaController extends Controller
                         Log::warning("Conflito com OUTRO CLIENTE durante a repetição da série #{$masterId} na data {$dateString}. Slot pulado.");
                     }
 
-                    // NOVO FLUXO: Busca o slot fixo, se existir, para DELETAR (consumir)
+                    // NOVO FLUXO: Busca o slot fixo, se existir, para DELETAR (consumir), mas NÃO USA ISSO COMO CONFLITO.
                     $fixedSlot = null;
                     if (!$isConflict) {
+                        // Busca o slot fixo (se existir) para DELETAR, mas a criação procede mesmo que ele não exista.
                         $fixedSlot = Reserva::where('is_fixed', true)
                             ->whereDate('date', $dateString)
                             ->where('start_time', $startTime)
@@ -968,7 +937,7 @@ class ReservaController extends Controller
                             ->first();
                     }
 
-                    // Cria a nova reserva se não houver conflito real
+                    // Cria a nova reserva se não houver conflito real (confirmado/pendente por outro cliente)
                     if (!$isConflict) {
                         $newReservasToCreate[] = [
                             'user_id' => $userId,
@@ -997,8 +966,10 @@ class ReservaController extends Controller
 
                         if ($fixedSlot) {
                             $fixedSlot->delete(); // Consome o slot verde/FREE
+                            // NOVO LOG: Confirma a exclusão do slot fixo para diagnóstico
                             Log::debug("Slot fixo ID {$fixedSlot->id} consumido para data recorrente {$dateString} em série {$masterId}.");
                         } else {
+                            // NOVO LOG: Alerta se não encontrar o slot fixo
                             Log::warning("Nenhum slot fixo encontrado para consumir para data recorrente {$dateString} em série {$masterId}.");
                         }
                     } else {
@@ -1010,6 +981,7 @@ class ReservaController extends Controller
 
                 if (!empty($newReservasToCreate)) {
                     Reserva::insert($newReservasToCreate);
+                    // NOVO LOG: Confirma a inserção em massa
                     Log::info("Inserção em massa concluída: " . count($newReservasToCreate) . " reservas recorrentes criadas para série {$masterId}.");
 
                     $recurrentCount = count($newReservasToCreate);
@@ -1080,8 +1052,7 @@ class ReservaController extends Controller
             Log::info("Reserva ID {$masterId} convertida em série MESTRA.");
 
             // 3. Define a janela de agendamento (Da próxima semana até 6 meses)
-            // CORREÇÃO CRÍTICA: Obtém a data da reserva mestra como objeto Carbon
-            $masterDate = $reserva->date; // Assume que o Laravel fez o cast
+            $masterDate = Carbon::parse($reserva->date->format('Y-m-d'));
             $startDate = $masterDate->copy()->addWeek();
             $endDate = $masterDate->copy()->addMonths(6); // CORRIGIDO
 
@@ -1237,7 +1208,6 @@ class ReservaController extends Controller
 
     /**
      * Atualiza o status de um slot fixo de inventário (usado na view de Todas as Reservas).
-     * Permite alternar entre 'free' e 'maintenance'.
      */
     public function toggleFixedReservaStatus(Request $request, Reserva $reserva)
     {
@@ -1290,6 +1260,126 @@ class ReservaController extends Controller
             DB::rollBack();
             Log::error("Erro ao alterar status do slot fixo ID: {$reserva->id}.", ['exception' => $e]);
             return response()->json(['success' => false, 'message' => 'Erro interno ao alterar status: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * MÉTODO ADAPTADO: Atualiza o preço de UMA RESERVA e, opcionalmente, de TODAS as futuras da série recorrente.
+     */
+    public function updatePriceAndSeries(Request $request, Reserva $reserva)
+    {
+        // 1. Validação dos dados. ADICIONADA A FLAG 'apply_to_series' PARA CONTROLE DE ATUALIZAÇÃO RECORRENTE.
+        $validated = $request->validate([
+            'new_price' => 'required|numeric|min:0',
+            'justification' => 'required|string|min:5',
+            // Flag que indica se a mudança deve ser propagada para a série.
+            'apply_to_series' => 'nullable|boolean',
+        ]);
+
+        $newPrice = (float)$validated['new_price']; // Converte para float para comparação segura
+        $justification = $validated['justification'];
+
+        // Determina se a mudança deve se aplicar à série (só relevante se for recorrente)
+        $applyToSeries = (bool)($validated['apply_to_series'] ?? false);
+
+        $oldPrice = (float)$reserva->price;
+        $isRecurrent = $reserva->is_recurrent;
+
+        // Determina o ID mestre da série
+        $masterId = $reserva->recurrent_series_id ?? $reserva->id;
+
+        // Checagem rápida para evitar escrita se o preço for o mesmo e não for série
+        if ((float)$oldPrice === $newPrice && (!$isRecurrent || !$applyToSeries)) {
+             return response()->json([
+                 'success' => true,
+                 'message' => 'O preço já está definido como R$ ' . number_format($newPrice, 2, ',', '.') . '. Nenhuma alteração foi necessária.',
+             ], 200);
+        }
+
+        DB::beginTransaction();
+        try {
+            $updatedCount = 0;
+            $message = '';
+
+            // =================================================================
+            // FLUXO 1: ATUALIZAÇÃO PARA SÉRIE RECORRENTE (A partir de hoje)
+            // =================================================================
+            if ($isRecurrent && $applyToSeries) {
+                $today = Carbon::today()->toDateString();
+
+                // Atualiza o preço para a reserva atual e TODAS as reservas futuras na série.
+                $slotsToUpdate = Reserva::where(function ($query) use ($masterId) {
+                       $query->where('recurrent_series_id', $masterId)
+                             ->orWhere('id', $masterId);
+                    })
+                    ->where('is_fixed', false)
+                    ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+                    ->whereDate('date', '>=', $today) // Aplica apenas para slots de hoje em diante
+                    ->get();
+
+                if ($slotsToUpdate->isEmpty()) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Nenhuma reserva futura ativa encontrada para esta série para aplicar a mudança. O preço não foi alterado.',
+                    ], 404);
+                }
+
+                foreach ($slotsToUpdate as $slot) {
+                    if ((float)$slot->price !== $newPrice) {
+                        $slot->price = $newPrice;
+                        $slot->final_price = $newPrice; // Atualiza também o final_price
+                        $slot->manager_id = Auth::id(); // Registra quem fez a mudança
+                        $slot->save();
+                        $updatedCount++;
+                    }
+                }
+
+                $message = "Preço atualizado para R$ " . number_format($newPrice, 2, ',', '.') . " em {$updatedCount} reservas futuras da série com sucesso. A tela será recarregada.";
+
+            } else {
+                // =================================================================
+                // FLUXO 2: ATUALIZAÇÃO DE SLOT ÚNICO
+                // =================================================================
+                if ((float)$oldPrice !== $newPrice) {
+                    $reserva->price = $newPrice;
+                    $reserva->final_price = $newPrice; // Atualiza também o final_price
+                    $reserva->manager_id = Auth::id(); // Registra quem fez a mudança
+                    $reserva->save();
+                    $updatedCount = 1;
+                    $message = "Preço atualizado apenas para esta reserva ID {$reserva->id} para R$ " . number_format($newPrice, 2, ',', '.') . ".";
+                } else {
+                    $message = "O preço desta reserva já é R$ " . number_format($newPrice, 2, ',', '.') . ". Nenhuma alteração foi aplicada.";
+                    // Se o preço não mudou, evite o commit se for a única operação.
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => true,
+                        'message' => $message
+                    ], 200);
+                }
+            }
+
+            if ($updatedCount > 0) {
+                // 3. Registrar a auditoria da mudança de preço
+                $logScope = $isRecurrent && $applyToSeries ? 'SERIES' : 'SINGLE_SLOT';
+                Log::info("[PRICE_UPDATE - {$logScope}] Preço da Reserva ID {$reserva->id} alterado de R$ {$oldPrice} para R$ {$newPrice} (em {$updatedCount} slots) por " . auth()->user()->name . ". Justificativa: {$justification}");
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            $logId = $isRecurrent ? "MASTER ID {$masterId}" : "ID {$reserva->id}";
+            Log::error("Erro ao processar a alteração de preço para {$logId}: " . $e->getMessage(), ['exception' => $e]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao processar a alteração de preço: ' . $e->getMessage(),
+            ], 500);
         }
     }
 
@@ -1536,6 +1626,9 @@ class ReservaController extends Controller
     }
 
 
+    // -------------------------------------------------------------------------
+    // CANCELAMENTO PELO CLIENTE (FRONT-END)
+    // -------------------------------------------------------------------------
     /**
      * Permite ao cliente cancelar uma reserva pontual ou solicitar o cancelamento de uma série recorrente.
      */
@@ -1850,5 +1943,62 @@ class ReservaController extends Controller
             ->count();
 
         return response()->json(['count' => $futureOrTodayCount], 200);
+    }
+
+    /**
+     * Atualiza o status de um slot fixo de inventário (usado na view de Todas as Reservas).
+     */
+    public function toggleFixedReservaStatus(Request $request, Reserva $reserva)
+    {
+        // 1. Validação básica para garantir que é um slot fixo
+        if (!$reserva->is_fixed) {
+            return response()->json(['success' => false, 'message' => 'Esta não é uma reserva de inventário fixo.'], 400);
+        }
+
+        $validated = $request->validate([
+            'status' => ['required', Rule::in([Reserva::STATUS_FREE, Reserva::STATUS_MAINTENANCE])], // PADRONIZADO
+        ]);
+
+        // 2. Checa se o status atual já é o solicitado (evita escrita desnecessária)
+        if ($reserva->status === $validated['status']) {
+            $message = 'O status já está definido como ' . $validated['status'];
+            return response()->json(['success' => false, 'message' => $message], 400);
+        }
+
+        // 3. Checagem de integridade (Não pode sair de maintenance/free se houver conflito de cliente)
+        if ($validated['status'] === Reserva::STATUS_FREE) { // PADRONIZADO
+            // Ao tentar retornar para FREE, verifica se há algum cliente com pending/confirmed
+            $overlap = Reserva::where('date', $reserva->date)
+                ->where('start_time', $reserva->start_time)
+                ->where('end_time', $reserva->end_time)
+                ->where('is_fixed', false)
+                ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE]) // PADRONIZADO
+                ->exists();
+
+            if ($overlap) {
+                return response()->json(['success' => false, 'message' => 'Impossível reverter para LIVRE. Há uma reserva de cliente (confirmada/pendente) ocupando este horário.'], 400);
+            }
+        }
+
+
+        DB::beginTransaction();
+        try {
+            $reserva->status = $validated['status'];
+            $reserva->manager_id = Auth::id(); // Registra quem mudou o status
+            $reserva->save();
+
+            DB::commit();
+
+            $message = $reserva->status === Reserva::STATUS_FREE ? 'Slot fixo disponibilizado (Livre) com sucesso.' : 'Slot fixo marcado como Manutenção (Indisponível) com sucesso.';
+
+            Log::info("Slot fixo ID: {$reserva->id} alterado para status: {$reserva->status} por Gestor ID: " . Auth::id());
+
+            return response()->json(['success' => true, 'message' => $message], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Erro ao alterar status do slot fixo ID: {$reserva->id}.", ['exception' => $e]);
+            return response()->json(['success' => false, 'message' => 'Erro interno ao alterar status: ' . $e->getMessage()], 500);
+        }
     }
 }

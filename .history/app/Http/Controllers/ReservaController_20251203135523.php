@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ArenaConfiguration;
 use App\Models\Reserva;
 use App\Models\User;
+use App\Http\Requests\UpdateReservaStatusRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
@@ -12,8 +14,10 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use App\Http\Controllers\AdminController;
 use App\Models\FinancialTransaction; // Importa o modelo de transações
 
 class ReservaController extends Controller
@@ -677,21 +681,13 @@ class ReservaController extends Controller
      * Finaliza o pagamento de uma reserva e, opcionalmente, atualiza o preço de reservas futuras da série.
      * Rota: POST /admin/pagamentos/{reserva}/finalizar
      */
-    public function finalizarPagamento(Request $request, $reservaId)
+    public function finalizarPagamento(Request $request, Reserva $reserva)
     {
-        // 1. Busca a Reserva manualmente
-        $reserva = Reserva::find($reservaId);
-
-        if (!$reserva) {
-             Log::error("Reserva não encontrada para o ID {$reservaId} durante finalizarPagamento.");
-             return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404);
-        }
-
         // LOG DE DIAGNÓSTICO: Mostra TODO o request, incluindo o apply_to_series
         Log::debug('finalizarPagamento Request Data: ' . json_encode($request->all()));
         Log::debug('apply_to_series flag value (boolean): ' . ($request->boolean('apply_to_series') ? 'TRUE' : 'FALSE'));
 
-        // 2. Validação dos dados de entrada
+        // 1. Validação dos dados de entrada
         $request->validate([
             'final_price' => 'required|numeric|min:0',
             'amount_paid' => 'required|numeric|min:0',
@@ -757,7 +753,6 @@ class ReservaController extends Controller
 
                 $newPriceForSeries = $finalPrice;
                 $masterId = $reserva->recurrent_series_id ?? $reserva->id;
-                // Deve usar o objeto Carbon para extrair o dateString
                 $reservaDate = Carbon::parse($reserva->date)->toDateString();
 
                 Log::debug("Propagação Detalhes: Master ID {$masterId}, Data de Corte {$reservaDate}, Novo Preço R$ {$newPriceForSeries}");
@@ -811,7 +806,7 @@ class ReservaController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             // Adiciona log de erro detalhado da propagação
-            Log::error("Erro no processo de finalizarPagamento (ID: {$reservaId}): " . $e->getMessage(), ['exception' => $e]);
+            Log::error("Erro no processo de finalizarPagamento (ID: {$reserva->id}): " . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'success' => false,
                 'message' => 'Erro ao finalizar pagamento: ' . $e->getMessage()

@@ -186,11 +186,7 @@ Route::middleware(['auth', 'gestor'])->group(function () {
     //ROTAS DE PAGAMENTOS
     // 💰 Módulo Financeiro / Pagamentos
     Route::get('/admin/pagamentos', [PaymentController::class, 'index'])->name('admin.payment.index');
-
-    // ✅ CORREÇÃO CRÍTICA AQUI: Aponta para ReservaController::finalizarPagamento
-    Route::post('/admin/pagamentos/{reserva}/finalizar', [ReservaController::class, 'finalizarPagamento'])->name('admin.payment.finalize');
-
-    // Mantenho as outras rotas do PaymentController como estavam, assumindo que estão corretas.
+    Route::post('/admin/pagamentos/{reserva}/finalizar', [PaymentController::class, 'processPayment'])->name('admin.payment.process');
     Route::post('/admin/pagamentos/{reserva}/falta', [PaymentController::class, 'registerNoShow'])->name('admin.payment.noshow');
 
     // 📊 ROTAS DO DASHBOARD FINANCEIRO

@@ -4,8 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Carbon\Carbon;
-use App\Models\Reserva;
-use App\Models\FinancialTransaction; // ✅ Importa o Model de Transações
+use App\Models\Reserva; // Usando o Model Reserva que você compartilhou
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -26,14 +25,14 @@ class FinanceiroController extends Controller
      */
     private function getDateRange(string $periodo): array
     {
-        $now = Carbon::now();
-        $start = $now->copy()->startOfDay();
+        $now = Carbon::now(); 
+        $start = $now->copy()->startOfDay(); 
         $end = $now->copy()->endOfDay();
 
         switch ($periodo) {
             case 'semana':
                 // Início da semana (Domingo) e Fim da semana (Sábado) - Ajuste se precisar de Segunda-feira
-                $start = $now->copy()->startOfWeek(Carbon::SUNDAY);
+                $start = $now->copy()->startOfWeek(Carbon::SUNDAY); 
                 $end = $now->copy()->endOfWeek(Carbon::SATURDAY);
                 break;
             case 'mes':
@@ -44,19 +43,24 @@ class FinanceiroController extends Controller
         }
 
         // Garante que a data final inclui todo o dia
-        $end = $end->endOfDay();
+        if ($periodo !== 'hoje') {
+             $end = $end->endOfDay();
+        }
 
         return [$start, $end];
     }
 
     /**
-     * Retorna os dados resumidos (Cards) para todos os períodos, AGORA USANDO FLUXO DE CAIXA REAL (Transações).
+     * Retorna os dados resumidos (Cards) para todos os períodos.
      */
     public function getResumo(Request $request)
     {
-        Log::info('FinanceiroController: getResumo iniciado (Baseado em FinancialTransactions).');
-
+        Log::info('FinanceiroController: getResumo iniciado.');
+        
         try {
+            // ✅ OTIMIZAÇÃO: Usando a constante diretamente do seu Model
+            $statusConfirmada = Reserva::STATUS_CONFIRMADA;
+            
             $periodos = ['hoje', 'semana', 'mes'];
             $resultados = [
                 'total_recebido' => [],
@@ -67,25 +71,20 @@ class FinanceiroController extends Controller
             foreach ($periodos as $periodo) {
                 list($start, $end) = $this->getDateRange($periodo);
 
-                // 1. Total Recebido (Soma de todos os valores na tabela de Transações)
-                $transacoesNoPeriodo = FinancialTransaction::query()
-                    // Filtra pela data/hora que o pagamento REALMENTE ocorreu
-                    ->whereBetween('paid_at', [$start, $end])
-                    ->whereIn('type', ['signal', 'payment_settlement']) // Apenas pagamentos de entrada
+                $reservasNoPeriodo = Reserva::query()
+                    ->where('status', $statusConfirmada)
+                    // Filtragem pela coluna 'date'
+                    ->whereBetween('date', [$start, $end]) 
                     ->get();
 
-                $totalRecebido = $transacoesNoPeriodo->sum('amount');
-
-                // 2. Total Sinais (Soma de transações do tipo 'signal')
-                $totalSinais = $transacoesNoPeriodo->where('type', 'signal')->sum('amount');
-
-                // 3. Contagem de Reservas CONFIRMADAS (Reservas que VÃO ACONTECER no período)
-                // Usamos a data da reserva aqui, não a data de pagamento, para prever a ocupação.
-                $countReservas = Reserva::query()
-                    ->where('status', Reserva::STATUS_CONFIRMADA)
-                    ->whereBetween('date', [$start, $end])
-                    ->where('is_fixed', false)
-                    ->count();
+                // Total Recebido = Dinheiro que realmente entrou (total_paid)
+                $totalRecebido = $reservasNoPeriodo->sum(function ($reserva) {
+                    return $reserva->total_paid ?? 0;
+                });
+                
+                // Total Sinais = Soma dos valores de sinal
+                $totalSinais = $reservasNoPeriodo->sum('signal_value');
+                $countReservas = $reservasNoPeriodo->count();
 
                 $resultados['total_recebido'][$periodo] = (float) $totalRecebido;
                 $resultados['sinais'][$periodo] = (float) $totalSinais;
@@ -115,38 +114,36 @@ class FinanceiroController extends Controller
     public function getPagamentosPendentes()
     {
         Log::info('FinanceiroController: getPagamentosPendentes iniciado.');
-
+        
         try {
             // ✅ OTIMIZAÇÃO: Usando as constantes diretamente do seu Model
             $statusPendente = Reserva::STATUS_PENDENTE;
             $statusConfirmada = Reserva::STATUS_CONFIRMADA;
 
             $reservasPendentes = Reserva::query()
-                // Apenas reservas pendentes ou confirmadas (que podem ter pagamentos parciais)
+                // Apenas reservas pendentes ou confirmadas (não canceladas, rejeitadas, etc.)
                 ->whereIn('status', [$statusPendente, $statusConfirmada])
-                ->where('is_fixed', false) // Apenas reservas de clientes
                 ->where(function ($query) {
                     // Seleciona reservas onde (total_paid < preço final/original) OU (total_paid é nulo/zero)
-                    // 🛑 CORREÇÃO APLICADA: Assume que o campo 'price' é o valor total acordado.
-                    $query->whereRaw('COALESCE(total_paid, 0) < price')
+                    $query->whereRaw('total_paid < COALESCE(final_price, price)') 
                           ->orWhereNull('total_paid');
                 })
-                // Apenas reservas futuras (a partir de hoje) ou no dia de hoje
-                ->where('date', '>=', Carbon::today()->toDateString())
+                // Apenas reservas futuras (a partir de hoje)
+                ->where('date', '>=', Carbon::today())
                 ->orderBy('date', 'asc')
                 ->orderBy('start_time', 'asc')
                 ->limit(30)
                 ->get();
 
             $pendentesFormatados = $reservasPendentes->map(function ($reserva) {
-
-                $valorTotalCobranca = $reserva->price; // O valor que deve ser cobrado
+                
+                $valorTotalCobranca = $reserva->final_price ?? $reserva->price;
                 $totalPago = $reserva->total_paid ?? 0;
                 $valorRestante = max(0, $valorTotalCobranca - $totalPago);
 
                 $corStatus = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
                 $statusTexto = 'Desconhecido';
-
+                
                 // Lógica de status de pagamento
                 if ($valorRestante <= 0) {
                     $statusTexto = 'Pago Integral';
@@ -166,22 +163,22 @@ class FinanceiroController extends Controller
 
                 return [
                     'id' => $reserva->id,
-                    'cliente' => $reserva->client_name,
-                    'contato' => $reserva->client_contact,
-                    'data' => Carbon::parse($reserva->date)->format('d/m/Y'),
-                    'horario' => Carbon::parse($reserva->start_time)->format('H:i'),
+                    'cliente' => $reserva->client_name, 
+                    'contato' => $reserva->client_contact, 
+                    'data' => Carbon::parse($reserva->date)->format('d/m/Y'), 
+                    'horario' => Carbon::parse($reserva->start_time)->format('H:i'), 
                     'valor_total' => (float) $valorTotalCobranca,
                     'sinal_pago' => (float) ($reserva->signal_value ?? 0),
                     'total_pago' => (float) $totalPago,
                     'valor_restante' => (float) $valorRestante,
                     'cor_status' => $corStatus,
                     'status_pagamento_texto' => $statusTexto,
-                    'link_acoes' => route('admin.reservas.show', $reserva->id),
+                    'link_acoes' => route('admin.reservas.show', $reserva->id), 
                 ];
             });
 
             Log::info('FinanceiroController: getPagamentosPendentes concluído com sucesso.');
-
+            
             return response()->json([
                 'success' => true,
                 'data' => $pendentesFormatados,

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ArenaConfiguration;
 use App\Models\Reserva;
 use App\Models\User;
+use App\Http\Requests\UpdateReservaStatusRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
@@ -12,8 +14,10 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use App\Http\Controllers\AdminController;
 use App\Models\FinancialTransaction; // Importa o modelo de transações
 
 class ReservaController extends Controller
@@ -677,21 +681,13 @@ class ReservaController extends Controller
      * Finaliza o pagamento de uma reserva e, opcionalmente, atualiza o preço de reservas futuras da série.
      * Rota: POST /admin/pagamentos/{reserva}/finalizar
      */
-    public function finalizarPagamento(Request $request, $reservaId)
+    public function finalizarPagamento(Request $request, Reserva $reserva)
     {
-        // 1. Busca a Reserva manualmente
-        $reserva = Reserva::find($reservaId);
-
-        if (!$reserva) {
-             Log::error("Reserva não encontrada para o ID {$reservaId} durante finalizarPagamento.");
-             return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404);
-        }
-
-        // LOG DE DIAGNÓSTICO: Mostra TODO o request, incluindo o apply_to_series
+        // NOVO LOG DE DIAGNÓSTICO: Mostra se a flag de série foi enviada
         Log::debug('finalizarPagamento Request Data: ' . json_encode($request->all()));
         Log::debug('apply_to_series flag value (boolean): ' . ($request->boolean('apply_to_series') ? 'TRUE' : 'FALSE'));
 
-        // 2. Validação dos dados de entrada
+        // 1. Validação dos dados de entrada
         $request->validate([
             'final_price' => 'required|numeric|min:0',
             'amount_paid' => 'required|numeric|min:0',
@@ -728,11 +724,7 @@ class ReservaController extends Controller
                 'payment_status' => $paymentStatus,
                 'payment_method' => $request->payment_method, // Método de pagamento final
                 'manager_id' => Auth::id(),
-                'status' => Reserva::STATUS_CONCLUIDA, // NOVO: Marca como CONCLUÍDA ao finalizar o pagamento
             ]);
-
-            Log::info("Reserva ID {$reserva->id} paga e concluída. Final Price: R$ {$finalPrice}, Total Paid: R$ {$newTotalPaid}.");
-
 
             // 2.1. NOVO: GERA TRANSAÇÃO FINANCEIRA (Pagamento do Restante)
             if ($amountPaidNow > 0) {
@@ -753,65 +745,49 @@ class ReservaController extends Controller
             // --- 3. Lógica para Recorrência: PROPAGAÇÃO DE PREÇO ---
             if ($request->boolean('apply_to_series') && $reserva->is_recurrent) {
 
+                // NOVO LOG DE DIAGNÓSTICO: Confirma que o bloco crítico de propagação foi atingido
                 Log::info('*** INICIANDO PROPAGAÇÃO DE PREÇO PARA SÉRIE RECORRENTE ***');
 
+                // O novo preço de base para as futuras reservas será o final_price desta reserva.
                 $newPriceForSeries = $finalPrice;
+
+                // O masterId deve ser obtido de forma robusta.
                 $masterId = $reserva->recurrent_series_id ?? $reserva->id;
-                // Deve usar o objeto Carbon para extrair o dateString
+
+                // A data de corte é a data da reserva PAGA.
+                // Usamos a data da reserva, convertida para string
                 $reservaDate = Carbon::parse($reserva->date)->toDateString();
 
-                Log::debug("Propagação Detalhes: Master ID {$masterId}, Data de Corte {$reservaDate}, Novo Preço R$ {$newPriceForSeries}");
+                // CRÍTICO: Atualiza todas as reservas futuras (data estritamente MAIOR)
+                $updatedCount = Reserva::where(function ($query) use ($masterId) {
+                       // Target the entire series (master and copies)
+                       $query->where('recurrent_series_id', $masterId)
+                             ->orWhere('id', $masterId);
+                   })
+                   // CRÍTICO: Pega todas as reservas com data ESTREITAMENTE MAIOR que a data atual
+                   ->whereDate('date', '>', $reservaDate)
+                   // NOVO: Adiciona filtro de horário para garantir que é o slot semanal correto
+                   ->where('start_time', $reserva->start_time)
+                   ->where('end_time', $reserva->end_time)
+                   ->where('is_fixed', false)
+                   // Inclui o status PARTIAL para atingir reservas futuras com sinal pago, mas com preço desatualizado.
+                   ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, Reserva::STATUS_PARTIAL])
+                   ->update([
+                       // Atualiza o preço base (price) e o preço final (final_price)
+                       'price' => $newPriceForSeries,
+                       'final_price' => $newPriceForSeries,
+                       'manager_id' => Auth::id(),
+                   ]);
 
-                // CRÍTICO: Identifica todas as reservas futuras elegíveis que PRECISAM de atualização
-                try {
-                    $updatedCount = Reserva::where(function ($query) use ($masterId) {
-                           // Atinge a série inteira (mestra e cópias)
-                           $query->where('recurrent_series_id', $masterId)
-                                 ->orWhere('id', $masterId);
-                       })
-                       // CRÍTICO: Pega todas as reservas com data ESTREITAMENTE MAIOR que a data atual
-                       ->whereDate('date', '>', $reservaDate)
-                       // Filtra por horário, garantindo o slot semanal correto
-                       ->where('start_time', $reserva->start_time)
-                       ->where('end_time', $reserva->end_time)
-                       ->where('is_fixed', false) // Apenas reservas de cliente
-                       // CORREÇÃO CRÍTICA: Alvo: APENAS reservas ATIVAS (Confirmadas)
-                       // Reservas ativas recorrentes têm status 'confirmed'
-                       ->where('status', Reserva::STATUS_CONFIRMADA)
-                       // APENAS ATUALIZA SE O PREÇO ATUAL FOR DIFERENTE DO NOVO PREÇO
-                       ->where('price', '!=', $newPriceForSeries)
-                       ->update([
-                           // Atualiza o preço base (price) e o preço final (final_price)
-                           'price' => $newPriceForSeries,
-                           'final_price' => $newPriceForSeries,
-                           'manager_id' => Auth::id(),
-                       ]);
-
-                    if ($updatedCount > 0) {
-                        Log::info("Preço de série recorrente (ID {$masterId}) atualizado para R$ {$newPriceForSeries} em {$updatedCount} reservas futuras.");
-                        $message = "Pagamento finalizado e preço da série atualizado com sucesso! ({$updatedCount} reservas alteradas)";
-                    } else {
-                         Log::info("Propagação executada, mas 0 reservas futuras atualizadas. Motivo: Preço já estava R$ {$newPriceForSeries} ou não houve reservas futuras elegíveis.");
-                         $message = "Pagamento finalizado. Preço da série recorrente já estava atualizado ou nenhuma reserva futura elegível encontrada.";
-                    }
-
-                } catch (\Exception $e) {
-                    // Log de erro específico para a query de update
-                    Log::error("Erro na query de propagação de preço para Master ID {$masterId}: " . $e->getMessage());
-                    throw $e; // Re-lança para que o rollback ocorra
-                }
-            } else {
-                 $message = "Pagamento finalizado com sucesso!";
+                Log::info("Preço de série recorrente (ID {$masterId}) atualizado para R$ {$newPriceForSeries} em {$updatedCount} reservas futuras. Por Gestor ID: " . Auth::id());
             }
 
             DB::commit();
 
-            return response()->json(['success' => true, 'message' => $message]);
+            return response()->json(['success' => true, 'message' => 'Pagamento finalizado e preço da série atualizado com sucesso!']);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            // Adiciona log de erro detalhado da propagação
-            Log::error("Erro no processo de finalizarPagamento (ID: {$reservaId}): " . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'success' => false,
                 'message' => 'Erro ao finalizar pagamento: ' . $e->getMessage()

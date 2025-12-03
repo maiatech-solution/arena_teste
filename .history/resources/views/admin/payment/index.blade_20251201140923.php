@@ -172,6 +172,7 @@
                                     $rowHighlight = (isset($highlightReservaId) && $reserva->id == $highlightReservaId)
                                         ? 'bg-indigo-50 dark:bg-indigo-900/20 border-l-4 border-indigo-500'
                                         : 'hover:bg-gray-50 dark:hover:bg-gray-700';
+
                                 @endphp
                                 <tr class="{{ $rowHighlight }} transition">
                                     <td class="px-4 py-4 whitespace-nowrap text-sm font-bold">
@@ -203,8 +204,8 @@
                                     </td>
                                     <td class="px-4 py-4 whitespace-nowrap text-center text-sm font-medium">
                                         @if($reserva->payment_status !== 'paid' && $reserva->status !== 'no_show')
-                                            {{-- Botão Pagar: Adicionado $pago como 4º argumento E is_recurrent como 6º --}}
-                                            <button onclick="openPaymentModal({{ $reserva->id }}, {{ $total }}, {{ $restante }}, {{ $pago }}, '{{ $reserva->client_name }}', {{ $reserva->is_recurrent ? 'true' : 'false' }})"
+                                            {{-- Botão Pagar: Adicionado $pago como 4º argumento --}}
+                                            <button onclick="openPaymentModal({{ $reserva->id }}, {{ $total }}, {{ $restante }}, {{ $pago }}, '{{ $reserva->client_name }}')"
                                                 class="text-white bg-green-600 hover:bg-green-700 rounded px-3 py-1 text-xs mr-2 transition duration-150">
                                                 $ Baixar
                                             </button>
@@ -278,20 +279,6 @@
                         <input type="number" step="0.01" name="final_price" id="modalFinalPrice"
                             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:text-white js-recalculate">
                         <p class="text-xs text-gray-500 mt-1">Edite este valor apenas se for aplicar um desconto no total.</p>
-                    </div>
-
-                    {{-- NOVO BLOCO: Opção Recorrente (Visibilidade controlada por JS) --}}
-                    <div id="recurrentOption" class="mb-4 hidden p-3 border border-indigo-200 dark:border-indigo-600 rounded-lg bg-indigo-50 dark:bg-indigo-900/30">
-                        <div class="flex items-center">
-                            {{-- O valor "1" aqui é ignorado no JS, pois estamos enviando um BOOLEAN na requisição AJAX --}}
-                            <input id="apply_to_series" name="apply_to_series" type="checkbox" value="1" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded dark:bg-gray-700 dark:border-gray-600">
-                            <label for="apply_to_series" class="ml-2 block text-sm font-medium text-gray-900 dark:text-gray-300">
-                                Aplicar este valor (R$ <span id="currentNewPrice" class="font-bold">0,00</span>) a TODAS as reservas futuras desta série.
-                            </label>
-                        </div>
-                        <p class="text-xs text-indigo-700 dark:text-indigo-400 mt-1 pl-6">
-                            Se desmarcado, o desconto/ajuste se aplicará apenas a esta reserva.
-                        </p>
                     </div>
 
                     {{-- Valor a Pagar Agora (Restante, calculado) --}}
@@ -417,18 +404,6 @@
     }
 
     /**
-     * Atualiza o valor do novo preço no texto da checkbox de recorrência.
-     */
-    function updateRecurrentTogglePrice(newPrice) {
-        const currentNewPriceEl = document.getElementById('currentNewPrice');
-        const newPriceFloat = parseFloat(newPrice) || 0;
-
-        // Exibe o preço atual do desconto no texto do checkbox
-        currentNewPriceEl.innerText = newPriceFloat.toFixed(2).replace('.', ',');
-    }
-
-
-    /**
      * Calcula o valor restante a ser pago AGORA (Valor Total Acordado - Sinal Recebido).
      * Esta função só lida com o cálculo automático na abertura/desconto.
      */
@@ -450,10 +425,6 @@
 
         // 3. Calcular o restante a ser pago (ou o troco gerado por desconto)
         let remainingOrChange = finalPrice - signalAmount;
-
-        // NOVO: Atualiza o preço no toggle recorrente
-        updateRecurrentTogglePrice(finalPrice);
-
 
         // 4. Se o restante for negativo, é troco devido a desconto (Situação 1)
         if (remainingOrChange < 0) {
@@ -490,9 +461,6 @@
         const amountPaidEl = document.getElementById('modalAmountPaid');
         const trocoMessageEl = document.getElementById('trocoMessage');
 
-        // NOVO: Atualiza o preço no toggle recorrente (caso o desconto tenha sido o input)
-        updateRecurrentTogglePrice(finalPrice);
-
         // Total já recebido (Sinal) + Total a ser recebido AGORA (Input Manual)
         const totalReceived = signalAmount + amountPaidNow;
 
@@ -524,7 +492,7 @@
 
 
     // --- Lógica do Pagamento ---
-    function openPaymentModal(id, totalPrice, remaining, signalAmount, clientName, isRecurrent = false) { // <-- Recebe a flag isRecurrent
+    function openPaymentModal(id, totalPrice, remaining, signalAmount, clientName) {
 
         // 1. Popula dados e IDs
         document.getElementById('modalReservaId').value = id;
@@ -538,17 +506,6 @@
 
         // 2. Popula os valores
         document.getElementById('modalFinalPrice').value = totalPrice.toFixed(2);
-
-        // NOVO: Popula o Recurrent Toggle
-        const recurrentOptionEl = document.getElementById('recurrentOption');
-        if (isRecurrent) {
-            recurrentOptionEl.classList.remove('hidden');
-            document.getElementById('apply_to_series').checked = true; // Padrão: aplica se for recorrente
-        } else {
-            recurrentOptionEl.classList.add('hidden');
-            document.getElementById('apply_to_series').checked = false; // Garante que esteja desmarcado/invisível
-        }
-
 
         // 3. Executar o cálculo inicial (que agora lida com o troco gerado por desconto)
         calculateAmountDue();
@@ -573,21 +530,9 @@
         e.preventDefault();
 
         const reservaId = document.getElementById('modalReservaId').value;
-        // *** CORREÇÃO: Garante o PONTO para o back-end ***
-        const finalPrice = parseFloat(document.getElementById('modalFinalPrice').value).toFixed(2);
-        const amountPaid = parseFloat(document.getElementById('modalAmountPaid').value).toFixed(2);
+        const finalPrice = document.getElementById('modalFinalPrice').value;
+        const amountPaid = document.getElementById('modalAmountPaid').value;
         const paymentMethod = document.getElementById('modalPaymentMethod').value;
-
-        // NOVO: Pega o estado da checkbox de série.
-        const recurrentOptionEl = document.getElementById('recurrentOption');
-        const isRecurrentVisible = !recurrentOptionEl.classList.contains('hidden');
-
-        // *** CORREÇÃO CRÍTICA AQUI: Enviar como BOOLEAN JS (true/false) ***
-        let applyToSeries = false;
-        if (isRecurrentVisible) {
-            applyToSeries = document.getElementById('apply_to_series').checked; // true ou false
-        }
-
         const csrfToken = document.querySelector('input[name="_token"]').value;
 
         const submitBtn = document.getElementById('submitPaymentBtn');
@@ -608,18 +553,6 @@
         submitSpinner.classList.remove('hidden');
         errorMessageDiv.classList.add('hidden');
 
-        // MONTANDO O PAYLOAD
-        const payload = {
-            reserva_id: reservaId,
-            final_price: finalPrice, // Garante que seja string com ponto (e.g., "150.00")
-            amount_paid: amountPaid, // Garante que seja string com ponto
-            payment_method: paymentMethod,
-            apply_to_series: applyToSeries // <-- AGORA É true ou false (JSON BOOL)
-        };
-
-        // LOG CRÍTICO PARA DEBUG NO BROWSER
-        console.log("AJAX Payload Enviado:", payload);
-
         // 3. Envio AJAX (Assumindo a rota POST /admin/pagamentos/{reserva}/finalizar)
         fetch(`/admin/pagamentos/${reservaId}/finalizar`, {
             method: 'POST',
@@ -628,13 +561,17 @@
                 'X-CSRF-TOKEN': csrfToken,
                 'Accept': 'application/json'
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({
+                reserva_id: reservaId,
+                final_price: finalPrice,
+                amount_paid: amountPaid,
+                payment_method: paymentMethod
+            })
         })
         .then(response => {
             if (!response.ok) {
-                // Se houver erro (incluindo validação 422), tenta ler a mensagem de erro
                 return response.json().then(data => {
-                    throw new Error(data.message || 'Erro de validação ou processamento no servidor.');
+                    throw new Error(data.message || 'Erro de validação ou processamento.');
                 });
             }
             return response.json();
@@ -744,12 +681,17 @@
                 showMessage('Falta registrada com sucesso. Redirecionando para a página anterior com atualização forçada.');
                 closeNoShowModal();
 
-                const referrer = window.location.href; // Usa a URL atual para manter os filtros
-                // Adiciona um parâmetro de no-cache para forçar a atualização da página de origem
-                let redirectUrl = referrer;
-                // Se já tiver query params, usa '&', senão usa '?'
-                redirectUrl += (referrer.includes('?') ? '&' : '?') + 'refreshed=' + Date.now();
-                window.location.href = redirectUrl;
+                const referrer = document.referrer;
+                if (referrer) {
+                    // Adiciona um parâmetro de no-cache para forçar a atualização da página de origem
+                    let redirectUrl = referrer;
+                    // Se já tiver query params, usa '&', senão usa '?'
+                    redirectUrl += (referrer.includes('?') ? '&' : '?') + 'refreshed=' + Date.now();
+                    window.location.href = redirectUrl;
+                } else {
+                    // Fallback para a lista principal, caso não haja referer (acesso direto)
+                    window.location.href = '{{ route('admin.reservas.todas') }}';
+                }
             } else {
                 errorMessageDiv.textContent = data.message || 'Erro ao registrar falta.';
                 errorMessageDiv.classList.remove('hidden');

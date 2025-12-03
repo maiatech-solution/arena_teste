@@ -283,7 +283,6 @@
                     {{-- NOVO BLOCO: Opção Recorrente (Visibilidade controlada por JS) --}}
                     <div id="recurrentOption" class="mb-4 hidden p-3 border border-indigo-200 dark:border-indigo-600 rounded-lg bg-indigo-50 dark:bg-indigo-900/30">
                         <div class="flex items-center">
-                            {{-- O valor "1" aqui é ignorado no JS, pois estamos enviando um BOOLEAN na requisição AJAX --}}
                             <input id="apply_to_series" name="apply_to_series" type="checkbox" value="1" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded dark:bg-gray-700 dark:border-gray-600">
                             <label for="apply_to_series" class="ml-2 block text-sm font-medium text-gray-900 dark:text-gray-300">
                                 Aplicar este valor (R$ <span id="currentNewPrice" class="font-bold">0,00</span>) a TODAS as reservas futuras desta série.
@@ -573,19 +572,16 @@
         e.preventDefault();
 
         const reservaId = document.getElementById('modalReservaId').value;
-        // *** CORREÇÃO: Garante o PONTO para o back-end ***
-        const finalPrice = parseFloat(document.getElementById('modalFinalPrice').value).toFixed(2);
-        const amountPaid = parseFloat(document.getElementById('modalAmountPaid').value).toFixed(2);
+        const finalPrice = document.getElementById('modalFinalPrice').value;
+        const amountPaid = document.getElementById('modalAmountPaid').value;
         const paymentMethod = document.getElementById('modalPaymentMethod').value;
 
         // NOVO: Pega o estado da checkbox de série.
         const recurrentOptionEl = document.getElementById('recurrentOption');
         const isRecurrentVisible = !recurrentOptionEl.classList.contains('hidden');
-
-        // *** CORREÇÃO CRÍTICA AQUI: Enviar como BOOLEAN JS (true/false) ***
-        let applyToSeries = false;
+        let applyToSeries = 0;
         if (isRecurrentVisible) {
-            applyToSeries = document.getElementById('apply_to_series').checked; // true ou false
+            applyToSeries = document.getElementById('apply_to_series').checked ? 1 : 0;
         }
 
         const csrfToken = document.querySelector('input[name="_token"]').value;
@@ -608,18 +604,6 @@
         submitSpinner.classList.remove('hidden');
         errorMessageDiv.classList.add('hidden');
 
-        // MONTANDO O PAYLOAD
-        const payload = {
-            reserva_id: reservaId,
-            final_price: finalPrice, // Garante que seja string com ponto (e.g., "150.00")
-            amount_paid: amountPaid, // Garante que seja string com ponto
-            payment_method: paymentMethod,
-            apply_to_series: applyToSeries // <-- AGORA É true ou false (JSON BOOL)
-        };
-
-        // LOG CRÍTICO PARA DEBUG NO BROWSER
-        console.log("AJAX Payload Enviado:", payload);
-
         // 3. Envio AJAX (Assumindo a rota POST /admin/pagamentos/{reserva}/finalizar)
         fetch(`/admin/pagamentos/${reservaId}/finalizar`, {
             method: 'POST',
@@ -628,13 +612,18 @@
                 'X-CSRF-TOKEN': csrfToken,
                 'Accept': 'application/json'
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({
+                reserva_id: reservaId,
+                final_price: finalPrice,
+                amount_paid: amountPaid,
+                payment_method: paymentMethod,
+                apply_to_series: applyToSeries // <-- NOVO PARÂMETRO ENVIADO AO BACK-END
+            })
         })
         .then(response => {
             if (!response.ok) {
-                // Se houver erro (incluindo validação 422), tenta ler a mensagem de erro
                 return response.json().then(data => {
-                    throw new Error(data.message || 'Erro de validação ou processamento no servidor.');
+                    throw new Error(data.message || 'Erro de validação ou processamento.');
                 });
             }
             return response.json();
@@ -744,12 +733,17 @@
                 showMessage('Falta registrada com sucesso. Redirecionando para a página anterior com atualização forçada.');
                 closeNoShowModal();
 
-                const referrer = window.location.href; // Usa a URL atual para manter os filtros
-                // Adiciona um parâmetro de no-cache para forçar a atualização da página de origem
-                let redirectUrl = referrer;
-                // Se já tiver query params, usa '&', senão usa '?'
-                redirectUrl += (referrer.includes('?') ? '&' : '?') + 'refreshed=' + Date.now();
-                window.location.href = redirectUrl;
+                const referrer = document.referrer;
+                if (referrer) {
+                    // Adiciona um parâmetro de no-cache para forçar a atualização da página de origem
+                    let redirectUrl = referrer;
+                    // Se já tiver query params, usa '&', senão usa '?'
+                    redirectUrl += (referrer.includes('?') ? '&' : '?') + 'refreshed=' + Date.now();
+                    window.location.href = redirectUrl;
+                } else {
+                    // Fallback para a lista principal, caso não haja referer (acesso direto)
+                    window.location.href = '{{ route('admin.reservas.todas') }}';
+                }
             } else {
                 errorMessageDiv.textContent = data.message || 'Erro ao registrar falta.';
                 errorMessageDiv.classList.remove('hidden');
