@@ -68,9 +68,6 @@
 
                     // Formatação
                     $priceDisplay = number_format($totalPrice, 2, ',', '.');
-
-                    // ✅ CRÍTICO: Obtém a data no formato YYYY-MM-DD para a URL
-                    $reservaDateUrl = $reservaDate->format('Y-m-d');
                 @endphp
                 <tr class="odd:bg-white even:bg-gray-50 hover:bg-gray-100 transition duration-150">
                     <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -104,12 +101,12 @@
                     </td>
                     <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
                         <a href="{{ route('admin.reservas.show', $reserva) }}"
-                            class="inline-block text-center bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                           class="inline-block text-center bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
                             Detalhes
                         </a>
-                        {{-- 🎯 CORREÇÃO CRÍTICA APLICADA AQUI: Adicionando o parâmetro 'date' --}}
-                        <a href="{{ route('admin.payment.index', ['reserva_id' => $reserva->id, 'date' => $reservaDateUrl]) }}"
-                            class="ml-2 inline-block text-center bg-green-500 hover:bg-green-600 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                        {{-- NOVO BOTÃO DE PAGAMENTO: Leva o usuário ao módulo de pagamento --}}
+                        <a href="{{ route('admin.payment.index', ['reserva_id' => $reserva->id]) }}"
+                           class="ml-2 inline-block text-center bg-green-500 hover:bg-green-600 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
                             Pagar
                         </a>
                     </td>
