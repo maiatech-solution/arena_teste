@@ -130,7 +130,8 @@
 
                                                 <button type="submit" title="Rejeitar Agendamento"
                                                     onclick="return confirm('Tem certeza que deseja rejeitar esta PRÉ-RESERVA? O cliente será notificado e o horário voltará a ser livre.')"
-                                                    class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-xs font-bold transition shadow-md w-full sm:w-auto">
+                                                    class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-xs font-bold transition shadow-md w-full sm:w-auto flex items-center justify-center">
+>
                                                     Rejeitar
                                                 </button>
                                             </form>

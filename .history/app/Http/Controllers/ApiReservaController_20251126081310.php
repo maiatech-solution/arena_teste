@@ -9,9 +9,6 @@ use Illuminate\Support\Facades\Log;
 
 class ApiReservaController extends Controller
 {
-    // Removendo a constante local STATUS_CONCLUIDA daqui, pois o código deve usar
-    // a constante definida no Modelo Reserva, seguindo o padrão dos outros métodos.
-
     // =========================================================================
     // ✅ MÉTODO 1: Reservas REAIS (Confirmadas/Pendentes) - FILTRA is_fixed=false
     // =========================================================================
@@ -29,9 +26,8 @@ class ApiReservaController extends Controller
             $end = Carbon::parse($request->input('end', Carbon::today()->addWeeks(6)->toDateString()));
 
             // Filtra por reservas de cliente (não fixas) com status de ocupação real
-            // CRÍTICO: Não buscar CONCLUIDA aqui, pois ela será buscada separadamente abaixo.
             $reservas = Reserva::where('is_fixed', false)
-                            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+                            ->where('status', Reserva::STATUS_CONFIRMADA) // APENAS CONFIRMADAS
                             ->whereDate('date', '>=', $start)
                             ->whereDate('date', '<=', $end)
                             ->get();
@@ -46,12 +42,6 @@ class ApiReservaController extends Controller
                     $className = 'fc-event-recurrent';
                 }
 
-                // Se for PENDENTE, aplica a classe Laranja
-                if ($reserva->status === Reserva::STATUS_PENDENTE) {
-                    $color = '#ff9800';
-                    $className = 'fc-event-pending';
-                }
-
                 $clientName = $reserva->user ? $reserva->user->name : ($reserva->client_name ?? 'Cliente');
 
                 $titlePrefix = '';
@@ -59,7 +49,7 @@ class ApiReservaController extends Controller
                     $titlePrefix = 'RECORR.: ';
                 }
 
-                $eventTitle = $titlePrefix . $clientName . ' - R$ ' . number_format((float)$reserva->price, 2, '.', ',');
+                $eventTitle = $titlePrefix . $clientName;
 
                 $startOutput = $reserva->date->format('Y-m-d') . 'T' . $reserva->start_time;
                 $endOutput = $reserva->date->format('Y-m-d') . 'T' . $reserva->end_time;
@@ -75,10 +65,10 @@ class ApiReservaController extends Controller
                         'status' => $reserva->status,
                         'price' => (float)$reserva->price, // Garantindo que seja float
 
+                        // ✅ CORREÇÃO CRÍTICA: Adicionando signal_value aqui
                         'signal_value' => (float)$reserva->signal_value,
+
                         'is_recurrent' => (bool)$reserva->is_recurrent,
-                        // ✅ CRÍTICO: Definido como false para evitar sumir do calendário
-                        'is_paid' => false,
                         'is_fixed' => false
                     ]
                 ];
@@ -91,78 +81,6 @@ class ApiReservaController extends Controller
             return response()->json(['error' => 'Erro interno ao carregar reservas. Detalhes: ' . $e->getMessage()], 500);
         }
     }
-
-    // =========================================================================
-    // ✅ NOVO MÉTODO 4: Reservas CONCLUÍDAS/PAGAS (As que estavam sumindo)
-    // =========================================================================
-    /**
-     * Busca as reservas CONCLUÍDAS/PAGAS para exibir no FullCalendar.
-     * * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function getConcludedReservas(Request $request)
-    {
-        // Obtém as datas de início e fim da requisição do FullCalendar
-        try {
-            // ✅ CORRIGIDO: Usando o mesmo método de parse e filtro do getConfirmedReservas
-            $start = Carbon::parse($request->input('start', Carbon::today()->toDateString()));
-            $end = Carbon::parse($request->input('end', Carbon::today()->addWeeks(6)->toDateString()));
-
-            \Log::info("FullCalendar - Buscando CONCLUÍDAS. Início: {$start}, Fim: {$end}");
-
-            // Busca APENAS as reservas com status 'concluida'
-            $concludedReservas = Reserva::query()
-                // 🎯 CORREÇÃO CRÍTICA: Busca por AMBOS STATUS de pagamento/conclusão
-                ->whereIn('status', [Reserva::STATUS_CONCLUIDA, Reserva::STATUS_LANCADA_CAIXA])
-                // ✅ CORRIGIDO: Usando a coluna 'date' para filtrar o range
-                ->whereDate('date', '>=', $start)
-                ->whereDate('date', '<=', $end)
-                ->where('is_fixed', false) // Apenas reservas de cliente
-                ->get();
-
-            // Mapeia para o formato FullCalendar.
-            $events = $concludedReservas->map(function ($reserva) {
-                // Monta o título: "PAGO: Nome do Cliente - R$ X.XX"
-                $clientName = $reserva->user ? $reserva->user->name : ($reserva->client_name ?? 'Cliente Desconhecido');
-
-                // 🎯 CORREÇÃO AQUI: Monta o título apenas com o prefixo PAGO e o nome,
-                // ignorando o prefixo RECORRENTE, para padronizar a exibição.
-                $eventTitle = 'PAGO: ' . $clientName . ' - R$ ' . number_format((float)$reserva->price, 2, '.', ',');
-
-                $startOutput = $reserva->date->format('Y-m-d') . 'T' . $reserva->start_time;
-                $endOutput = $reserva->date->format('Y-m-d') . 'T' . $reserva->end_time;
-
-                return [
-                    'id' => $reserva->id,
-                    'title' => $eventTitle, // Usando o título padronizado
-                    'start' => $startOutput,
-                    'end' => $endOutput,
-                    // A classe de opacidade 'fc-event-paid' será aplicada pelo front-end
-                    'className' => 'fc-event-paid ' . ((bool)$reserva->is_recurrent ? 'fc-event-recurrent' : 'fc-event-quick'),
-                    'extendedProps' => [
-                        'status' => $reserva->status,
-                        // ✅ CRÍTICO: Define como pago explicitamente para que o front-end aplique o estilo
-                        'is_paid' => true,
-                        'signal_value' => (float)$reserva->signal_value,
-                        'price' => (float)$reserva->price,
-                        'is_recurrent' => (bool)$reserva->is_recurrent,
-                        'is_fixed' => false
-                    ],
-                ];
-            });
-
-            \Log::info("Reservas concluídas encontradas: " . $events->count());
-            return response()->json($events);
-
-        } catch (\Exception $e) {
-            \Log::error("Erro CRÍTICO ao buscar reservas concluídas: " . $e->getMessage());
-            return response()->json([
-                'error' => 'Falha na API: ' . $e->getMessage(),
-                'message' => 'Erro interno ao processar a busca por reservas concluídas. Verifique o log do Laravel.'
-            ], 500);
-        }
-    }
-
 
     // =========================================================================
     // ✅ MÉTODO 2: Horários Disponíveis p/ Calendário (API)
@@ -180,11 +98,11 @@ class ApiReservaController extends Controller
             $endDate = Carbon::parse($request->input('end', Carbon::today()->addWeeks(6)->toDateString()));
 
             $allFixedSlots = Reserva::where('is_fixed', true)
-                                         ->whereDate('date', '>=', $startDate->toDateString())
-                                         ->whereDate('date', '<=', $endDate->toDateString())
-                                         // 🛑 CRÍTICO: Deve buscar STATUS_FREE para slots disponíveis
-                                         ->where('status', Reserva::STATUS_FREE) // CORRIGIDO
-                                         ->get();
+                                        ->whereDate('date', '>=', $startDate->toDateString())
+                                        ->whereDate('date', '<=', $endDate->toDateString())
+                                        // 🛑 CRÍTICO: Deve buscar STATUS_FREE para slots disponíveis
+                                        ->where('status', Reserva::STATUS_FREE) // CORRIGIDO
+                                        ->get();
 
             $events = [];
 
@@ -209,8 +127,8 @@ class ApiReservaController extends Controller
                 // Filtro de sobreposição remanescente (redundante, mas seguro)
                 $isOccupied = Reserva::where('is_fixed', false)
                 ->whereDate('date', $slotDateString)
-                // ✅ AGORA: Apenas CONFIRMADA e PENDENTE causam ocupação real
-                ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+                // ✅ AGORA: Apenas CONFIRMADA causa ocupação real
+                ->where('status', Reserva::STATUS_CONFIRMADA) // APENAS CONFIRMADAS BLOQUEIAM
                 ->where(function ($query) use ($slotStartTime, $slotEndTime) {
                     $query->where('start_time', '<', $slotEndTime)
                               ->where('end_time', '>', $slotStartTime);
@@ -263,16 +181,16 @@ class ApiReservaController extends Controller
         $now = Carbon::now();
 
         $allFixedSlots = Reserva::where('is_fixed', true)
-                                       ->whereDate('date', $dateString)
-                                       // 🛑 CRÍTICO: Deve buscar STATUS_FREE para slots disponíveis
-                                       ->where('status', Reserva::STATUS_FREE) // CORRIGIDO
-                                       ->get();
+                                   ->whereDate('date', $dateString)
+                                   // 🛑 CRÍTICO: Deve buscar STATUS_FREE para slots disponíveis
+                                   ->where('status', Reserva::STATUS_FREE) // CORRIGIDO
+                                   ->get();
 
         $occupiedReservas = Reserva::where('is_fixed', false)
-                                            ->whereDate('date', $dateString)
-                                            // Apenas CONFIRMADA e PENDENTE causam ocupação real
-                                            ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-                                            ->get();
+                                       ->whereDate('date', $dateString)
+                                       // Apenas CONFIRMADA e PENDENTE causam ocupação real
+                                       ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                       ->get();
 
         $availableTimes = [];
 

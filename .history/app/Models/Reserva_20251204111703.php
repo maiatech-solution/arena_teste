@@ -125,16 +125,15 @@ class ApiReservaController extends Controller
                 // Monta o título: "PAGO: Nome do Cliente - R$ X.XX"
                 $clientName = $reserva->user ? $reserva->user->name : ($reserva->client_name ?? 'Cliente Desconhecido');
 
-                // 🎯 CORREÇÃO AQUI: Monta o título apenas com o prefixo PAGO e o nome,
-                // ignorando o prefixo RECORRENTE, para padronizar a exibição.
-                $eventTitle = 'PAGO: ' . $clientName . ' - R$ ' . number_format((float)$reserva->price, 2, '.', ',');
+                $titlePrefix = ((bool)$reserva->is_recurrent) ? 'RECORR.: ' : '';
+                $eventTitle = $titlePrefix . $clientName . ' - R$ ' . number_format((float)$reserva->price, 2, '.', ',');
 
                 $startOutput = $reserva->date->format('Y-m-d') . 'T' . $reserva->start_time;
                 $endOutput = $reserva->date->format('Y-m-d') . 'T' . $reserva->end_time;
 
                 return [
                     'id' => $reserva->id,
-                    'title' => $eventTitle, // Usando o título padronizado
+                    'title' => 'PAGO: ' . $eventTitle,
                     'start' => $startOutput,
                     'end' => $endOutput,
                     // A classe de opacidade 'fc-event-paid' será aplicada pelo front-end

@@ -40,10 +40,6 @@ Route::get('/api/horarios/disponiveis', [ApiReservaController::class, 'getAvaila
 // 2. Reservas confirmadas/pendentes (Ocupados)
 Route::get('/api/reservas/confirmadas', [ApiReservaController::class, 'getConfirmedReservas'])
     ->name('api.reservas.confirmadas');
-
-// ✅ 3. RESERVAS CONCLUÍDAS/PAGAS (PARA EXIBIR NO CALENDÁRIO)
-Route::get('/api/reservas/concluidas', [ApiReservaController::class, 'getConcludedReservas'])
-    ->name('api.reservas.concluidas');
 // =========================================================================
 
 

@@ -9,8 +9,9 @@ use Illuminate\Support\Facades\Log;
 
 class ApiReservaController extends Controller
 {
-    // Removendo a constante local STATUS_CONCLUIDA daqui, pois o código deve usar
-    // a constante definida no Modelo Reserva, seguindo o padrão dos outros métodos.
+    // Presumindo que a constante STATUS_CONCLUIDA tem o valor 'concluida'.
+    // Se o seu modelo Reserva tiver um nome diferente, ajuste a linha 134.
+    const STATUS_CONCLUIDA = 'concluida'; // Valor de status após a baixa no caixa
 
     // =========================================================================
     // ✅ MÉTODO 1: Reservas REAIS (Confirmadas/Pendentes) - FILTRA is_fixed=false
@@ -112,8 +113,7 @@ class ApiReservaController extends Controller
 
             // Busca APENAS as reservas com status 'concluida'
             $concludedReservas = Reserva::query()
-                // 🎯 CORREÇÃO CRÍTICA: Busca por AMBOS STATUS de pagamento/conclusão
-                ->whereIn('status', [Reserva::STATUS_CONCLUIDA, Reserva::STATUS_LANCADA_CAIXA])
+                ->where('status', self::STATUS_CONCLUIDA)
                 // ✅ CORRIGIDO: Usando a coluna 'date' para filtrar o range
                 ->whereDate('date', '>=', $start)
                 ->whereDate('date', '<=', $end)
@@ -125,16 +125,15 @@ class ApiReservaController extends Controller
                 // Monta o título: "PAGO: Nome do Cliente - R$ X.XX"
                 $clientName = $reserva->user ? $reserva->user->name : ($reserva->client_name ?? 'Cliente Desconhecido');
 
-                // 🎯 CORREÇÃO AQUI: Monta o título apenas com o prefixo PAGO e o nome,
-                // ignorando o prefixo RECORRENTE, para padronizar a exibição.
-                $eventTitle = 'PAGO: ' . $clientName . ' - R$ ' . number_format((float)$reserva->price, 2, '.', ',');
+                $titlePrefix = ((bool)$reserva->is_recurrent) ? 'RECORR.: ' : '';
+                $eventTitle = $titlePrefix . $clientName . ' - R$ ' . number_format((float)$reserva->price, 2, '.', ',');
 
                 $startOutput = $reserva->date->format('Y-m-d') . 'T' . $reserva->start_time;
                 $endOutput = $reserva->date->format('Y-m-d') . 'T' . $reserva->end_time;
 
                 return [
                     'id' => $reserva->id,
-                    'title' => $eventTitle, // Usando o título padronizado
+                    'title' => 'PAGO: ' . $eventTitle,
                     'start' => $startOutput,
                     'end' => $endOutput,
                     // A classe de opacidade 'fc-event-paid' será aplicada pelo front-end

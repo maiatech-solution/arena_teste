@@ -222,7 +222,11 @@
                     </div>
                 </div>
 
-                {{-- BOTÃO TEMPORÁRIO DE DEBUG REMOVIDO --}}
+                {{-- BOTÃO TEMPORÁRIO DE DEBUG --}}
+                <button onclick="debugApiData()" class="mt-4 mb-6 px-4 py-2 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition duration-150 text-sm shadow-md">
+                    Diagnóstico de Dados da API (Ver Console)
+                </button>
+                {{-- FIM BOTÃO TEMPORÁRIO --}}
 
                 <div class="calendar-container">
                     <div id='calendar'></div>
@@ -763,6 +767,9 @@
             const signalValueRaw = data.signal_value;
             data.signal_value = cleanAndConvertForApi(signalValueRaw);
 
+            // ⚠️ DEBUG CRÍTICO: Mostra os dados enviados.
+            console.log("Dados enviados (signal_value limpo para API):", data.signal_value);
+
             const isRecurrent = document.getElementById('is-recurrent').checked;
             const targetUrl = isRecurrent ? RECURRENT_STORE_URL : QUICK_STORE_URL;
 
@@ -816,8 +823,53 @@
         }
 
         // =========================================================
-        // FUNÇÃO CRÍTICA DE DEBUG: Busca dados brutos da API (REMOVIDA)
+        // FUNÇÃO CRÍTICA DE DEBUG: Busca dados brutos da API
         // =========================================================
+        async function debugApiData() {
+            console.log("--- INÍCIO DEBUG API (Reservas Confirmadas e Concluídas) ---");
+
+            // ✅ TESTE DE CONFIRMADAS/PENDENTES
+            let confirmedUrl = CONFIRMED_API_URL + '?start=' + moment().startOf('month').format('YYYY-MM-DD') + '&end=' + moment().endOf('month').format('YYYY-MM-DD');
+            console.log(`URL 1 (Confirmadas/Pendentes): ${confirmedUrl}`);
+
+            // ✅ TESTE DE CONCLUÍDAS/PAGAS
+            let concludedUrl = CONCLUDED_API_URL + '?start=' + moment().startOf('month').format('YYYY-MM-DD') + '&end=' + moment().endOf('month').format('YYYY-MM-DD');
+            console.log(`URL 2 (Concluídas/Pagas): ${concludedUrl}`);
+
+            try {
+                // 1. Fetch Confirmadas/Pendentes
+                let response = await fetch(confirmedUrl);
+                if (!response.ok) throw new Error(`Erro HTTP (Confirmadas): ${response.status}`);
+                let data = await response.json();
+
+                console.log("\n--- DADOS CONFIRMADAS/PENDENTES ---");
+                console.log("Dados Brutos Recebidos:", data);
+                data.filter(e => e.extendedProps.status !== 'free').forEach(event => {
+                    const props = event.extendedProps || {};
+                    console.log(`CONFIRMED/PENDING ID: ${event.id}, Status: ${props.status}, Paid: ${props.is_paid}`);
+                });
+
+                // 2. Fetch Concluídas/Pagas
+                response = await fetch(concludedUrl);
+                if (!response.ok) throw new Error(`Erro HTTP (Concluídas): ${response.status}`);
+                data = await response.json();
+
+                console.log("\n--- DADOS CONCLUÍDAS/PAGAS ---");
+                console.log("Dados Brutos Recebidos:", data);
+                data.filter(e => e.extendedProps.status !== 'free').forEach(event => {
+                    const props = event.extendedProps || {};
+                    console.log(`CONCLUDED/PAID ID: ${event.id}, Status: ${props.status}, Paid: ${props.is_paid}`);
+                });
+
+                console.log("Verifique se os IDs dos pagos aparecem no DADOS CONCLUÍDAS/PAGAS.");
+
+            } catch (error) {
+                console.error('Falha ao buscar dados brutos da API:', error);
+                showDashboardMessage("Falha no diagnóstico da API. Verifique o console.", 'error');
+            }
+            console.log("--- FIM DEBUG API ---");
+        }
+
 
         // =========================================================
         // FLUXO DE AÇÕES PENDENTES, CANCELAMENTO E RENOVAÇÃO
@@ -833,8 +885,7 @@
             const dateDisplay = moment(event.start).format('DD/MM/YYYY');
             const timeDisplay = moment(event.start).format('HH:mm') + ' - ' + moment(event.end).format('HH:mm');
             const priceDisplay = parseFloat(extendedProps.price || 0).toFixed(2).replace('.', ',');
-            // ✅ CORRIGIDO: O título já está limpo (apenas nome) graças ao eventDidMount, mas garantimos
-            const clientName = event.title.replace(/^(PAGO)[\.:\s]*\s*/i, '').replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '').split(' - R$ ')[0].trim().replace(/^\(PAGO\)\s*/i, '');
+            const clientName = event.title.split(' - R$ ')[0];
 
             document.getElementById('pending-reserva-id').value = reservaId;
 
@@ -869,7 +920,7 @@
 
             // ✅ CORRIGIDO: Usa a função de limpeza e conversão de moeda
             const signalValueFinal = cleanAndConvertForApi(confirmationValue);
-            // console.log("Confirmando com valor convertido:", signalValueFinal); // DEBUG REMOVIDO
+            console.log("Confirmando com valor convertido:", signalValueFinal);
 
 
             if (form.reportValidity()) {
@@ -1373,7 +1424,7 @@
                 editable: false,
                 initialDate: new Date().toISOString().slice(0, 10),
 
-                // ✅ HOOK CRÍTICO PARA ESTILIZAÇÃO
+                // ✅ HOOK CRÍTICO PARA DEBUG E ESTILIZAÇÃO
                 eventDidMount: function(info) {
                     const event = info.event;
                     const titleEl = info.el.querySelector('.fc-event-title');
@@ -1381,7 +1432,8 @@
                     // Ajuste para aceitar explicitamente true ou 1 (booleano ou numérico)
                     const isPaidFlag = extendedProps.is_paid === true || extendedProps.is_paid === 1 || info.el.classList.contains('fc-event-paid'); // Novo check se veio da fonte de pagos
 
-                    // console.log(`[DEBUG EVENT MOUNT] Processando evento ID: ${event.id}, Status: ${extendedProps.status}, Paid: ${extendedProps.is_paid}, IsPaidFlag: ${isPaidFlag}`); // LOG REMOVIDO
+                    // LOG DE DEBUG PARA VOCÊ VERIFICAR
+                    console.log(`[DEBUG EVENT MOUNT] Processando evento ID: ${event.id}, Status: ${extendedProps.status}, Paid: ${extendedProps.is_paid}, IsPaidFlag: ${isPaidFlag}`);
 
                     // Apenas processa eventos reservados (não os disponíveis)
                     if (!titleEl || event.classNames.includes('fc-event-available')) return;
@@ -1414,7 +1466,13 @@
                     const extendedProps = event.extendedProps || {};
                     const status = extendedProps.status;
 
-                    // --- LOGS DE DEBUG REMOVIDOS ---
+                    // --- START DEBUG LOG ---
+                    console.log("--- Detalhes do Evento Clicado ---");
+                    console.log("ID da Reserva:", event.id);
+                    console.log("Extended Props:", extendedProps); // CRÍTICO: Verifique aqui o valor de signal_value
+                    console.log("----------------------------------");
+                    // --- END DEBUG LOG ---
+
 
                     if (status === 'pending') {
                         openPendingActionModal(event);
@@ -1497,9 +1555,10 @@
                             timeDisplay += ' - ' + moment(endTime).format('HH:mm');
                         }
 
-                        // O título do evento deve estar no formato "(PAGO) Nome do Cliente"
-                        // Para exibir apenas o nome do cliente no modal, removemos o prefixo (PAGO) e o preço
-                        let clientName = event.title.replace(/^\(PAGO\)\s*/i, '').split(' - R$ ')[0].trim();
+                        // O título do evento deve estar no formato "Nome do Cliente - R$ 123.45"
+                        // Para exibir apenas o nome do cliente no modal:
+                        const titleParts = event.title.split(' - R$ ');
+                        const clientName = titleParts[0];
 
                         // ✅ ATUALIZADO: Incluir a data E o valor do sinal na URL do Caixa
                         // Isso permite que o Controller de Pagamentos pré-preencha o campo Pago
@@ -1606,7 +1665,7 @@
 
             calendar.render();
             window.calendar = calendar;
-            // window.debugApiData = debugApiData; // EXPOSIÇÃO DA FUNÇÃO DE DEBUG REMOVIDA
+            window.debugApiData = debugApiData; // Expõe a função para o botão
 
             setInterval(() => {
                 // Refazendo a busca de slots disponíveis periodicamente

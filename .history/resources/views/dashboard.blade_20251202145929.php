@@ -1,7 +1,8 @@
 <x-app-layout>
 
     @php
-        // Garantindo que as variáveis existam, se não forem passadas
+        // Corrigido: Removida a declaração 'use' do bloco @php para evitar erro de sintaxe.
+        // O Laravel agora usará o nome de classe totalmente qualificado (\Carbon\Carbon::)
         $pendingReservationsCount = $pendingReservationsCount ?? 0;
         $expiringSeriesCount = $expiringSeriesCount ?? 0;
         $expiringSeries = $expiringSeries ?? [];
@@ -85,12 +86,6 @@
             font-style: italic;
         }
 
-        /* ✅ CRÍTICO: Estilo para Eventos PAGOS/Baixados (Faded/Apagado) */
-        .fc-event-paid {
-            opacity: 0.5 !important; /* FORÇADO a opacidade para garantir a prioridade */
-            filter: grayscale(40%); /* Fica um pouco cinza */
-        }
-
 
         /* Estilo para Eventos Disponíveis (Verde) */
         .fc-event-available {
@@ -106,39 +101,33 @@
 
         /* Estilo para o campo de sinal VIP */
         #signal_value_quick.bg-indigo-50 {
-            background-color: #eef2ff !important;
+             background-color: #eef2ff !important;
         }
         /* Estilo para campos de moeda no modal rápido */
         .input-money-quick { text-align: right; }
-        /* Estilo para campo de confirmação no modal de pendência */
-        #confirmation-value { text-align: right; }
     </style>
 
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg p-6">
 
-                {{-- Contêiner para Mensagens Dinâmicas (Substituindo Session Flash messages via JS) --}}
-                <div id="dashboard-message-container">
-                    {{-- Mensagens de sessão (mantidas para a primeira carga do Blade) --}}
-                    @if (session('success'))
-                        <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4 rounded" role="alert">
-                            <p>{{ session('success') }}</p>
-                        </div>
-                    @endif
+                @if (session('success'))
+                    <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4 rounded" role="alert">
+                        <p>{{ session('success') }}</p>
+                    </div>
+                @endif
 
-                    @if (session('warning'))
-                        <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded" role="alert">
-                            <p>{{ session('warning') }}</p>
-                        </div>
-                    @endif
+                @if (session('warning'))
+                    <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded" role="alert">
+                        <p>{{ session('warning') }}</p>
+                    </div>
+                @endif
 
-                    @if (session('error'))
-                        <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded" role="alert">
-                            <p>{{ session('error') }}</p>
-                        </div>
-                    @endif
-                </div>
+                @if (session('error'))
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded" role="alert">
+                        <p>{{ session('error') }}</p>
+                    </div>
+                @endif
 
                 {{-- ALERTA DE PENDÊNCIA RENDERIZADO PELO SERVIDOR (COM VERIFICAÇÃO DE SEGURANÇA) --}}
                 <div id="pending-alert-container">
@@ -202,7 +191,7 @@
                     </div>
                 @endif
 
-                {{-- Legenda ATUALIZADA para incluir status Pago --}}
+                {{-- Legenda --}}
                 <div class="flex flex-wrap gap-4 mb-4 text-sm font-medium">
                     <div class="flex items-center p-2 bg-fuchsia-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-fuchsia-700 mr-2"></span>
@@ -212,17 +201,15 @@
                         <span class="inline-block w-4 h-4 rounded-full bg-indigo-600 mr-2"></span>
                         <span>Reservado Avulso (Rápido)</span>
                     </div>
-                    <div class="flex items-center p-2 bg-gray-100 rounded-lg shadow-sm">
-                        <span class="inline-block w-4 h-4 rounded-full bg-gray-400 mr-2 opacity-50"></span>
-                        <span class="italic text-gray-600">Reservado PAGO (Faded)</span>
-                    </div>
+                    <!--<div class="flex items-center p-2 bg-orange-50 rounded-lg shadow-sm">
+                        <span class="inline-block w-4 h-4 rounded-full bg-orange-500 mr-2"></span>
+                        <span>Pré-Reserva Pendente</span>
+                    </div> -->
                     <div class="flex items-center p-2 bg-green-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-green-500 mr-2"></span>
                         <span>Disponível (Horários Abiertos)</span>
                     </div>
                 </div>
-
-                {{-- BOTÃO TEMPORÁRIO DE DEBUG REMOVIDO --}}
 
                 <div class="calendar-container">
                     <div id='calendar'></div>
@@ -272,9 +259,7 @@
 
                 <div id="confirmation-value-area" class="mb-4">
                     <label for="confirmation-value" class="block text-sm font-medium text-gray-700 mb-1">Valor do Sinal/Confirmação (R$):</label>
-                    {{-- ✅ CORRIGIDO: Alterado para type="text" e adicionada a classe de formatação --}}
-                    <input type="text" name="confirmation_value" id="confirmation-value" value="0,00" required
-                        class="w-full p-2 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 input-money-quick">
+                    <input type="number" step="0.01" name="confirmation_value" id="confirmation-value" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500">
                     <p class="text-xs text-gray-500 mt-1">Este valor é opcional, mas define a confirmação da reserva.</p>
                 </div>
 
@@ -433,10 +418,7 @@
     <script>
         // === CONFIGURAÇÕES E ROTAS ===
         const PENDING_API_URL = '{{ route("api.reservas.pendentes.count") }}';
-        // CORREÇÃO: RESERVED_API_URL renomeado para maior clareza, buscando Confirmadas (não pagas)
-        const CONFIRMED_API_URL = '{{ route("api.reservas.confirmadas") }}';
-        // ✅ NOVO: Endpoint para buscar as reservas que foram CONCLUÍDAS/PAGAS e estavam sumindo
-        const CONCLUDED_API_URL = '{{ route("api.reservas.concluidas") }}';
+        const RESERVED_API_URL = '{{ route("api.reservas.confirmadas") }}';
         const AVAILABLE_API_URL = '{{ route("api.horarios.disponiveis") }}';
         const SHOW_RESERVA_URL = '{{ route("admin.reservas.show", ":id") }}';
 
@@ -478,11 +460,10 @@
         const clientContactInput = () => document.getElementById('client_contact');
         const whatsappError = () => document.getElementById('whatsapp-error-message');
         const reputationDisplay = () => document.getElementById('client-reputation-display');
-        const signalValueInputQuick = () => document.getElementById('signal_value_quick');
-        const confirmationValueInput = () => document.getElementById('confirmation-value'); // Novo elemento
+        const signalValueInputQuick = () => document.getElementById('signal_value_quick'); // ✅ NOVO NOME
 
 
-        // === FUNÇÃO PARA FORMATAR MOEDA NO QUICK MODAL E PENDENTE MODAL ===
+        // === FUNÇÃO PARA FORMATAR MOEDA NO QUICK MODAL ===
         const formatMoneyQuick = (input) => {
             let value = input.value.replace(/\D/g, ''); // Remove tudo que não for dígito
             if (value.length === 0) return '0,00';
@@ -501,15 +482,6 @@
 
             return `${integerPart},${decimalPart}`;
         };
-
-        // Função para limpar e converter string monetária (ex: "1.000,50" -> 1000.50)
-        const cleanAndConvertForApi = (value) => {
-            if (!value) return 0.00;
-            // Remove separadores de milhar (ponto) e troca vírgula por ponto decimal
-            value = value.replace(/\./g, '');
-            value = value.replace(',', '.');
-            return parseFloat(value) || 0.00;
-        };
         // ========================================================
 
 
@@ -525,7 +497,7 @@
                 }
             }
 
-            // Aplicar formatação nos inputs de moeda (agora incluindo o modal de pendência)
+            // Aplicar formatação nos inputs de moeda do modal rápido
             document.querySelectorAll('.input-money-quick').forEach(input => {
                 input.value = formatMoneyQuick(input);
 
@@ -539,50 +511,6 @@
             });
         });
 
-
-        /**
-         * FUNÇÃO PARA EXIBIR MENSAGENS NO DASHBOARD (Substitui alerts e session flashes via JS)
-         */
-        function showDashboardMessage(message, type = 'success') {
-            const container = document.getElementById('dashboard-message-container');
-            let bgColor, borderColor, textColor;
-
-            switch (type) {
-                case 'error':
-                    bgColor = 'bg-red-100';
-                    borderColor = 'border-red-500';
-                    textColor = 'text-red-700';
-                    break;
-                case 'warning':
-                    bgColor = 'bg-yellow-100';
-                    borderColor = 'border-yellow-500';
-                    textColor = 'text-yellow-700';
-                    break;
-                case 'success':
-                default:
-                    bgColor = 'bg-green-100';
-                    borderColor = 'border-green-500';
-                    textColor = 'text-green-700';
-            }
-
-            const alertHtml = `
-                <div class="${bgColor} border-l-4 ${borderColor} ${textColor} p-4 mb-4 rounded transition-opacity duration-300 opacity-0" role="alert">
-                    <p>${message}</p>
-                </div>
-            `;
-
-            container.insertAdjacentHTML('afterbegin', alertHtml);
-            const newAlert = container.firstChild;
-
-            // Fade in
-            setTimeout(() => newAlert.classList.remove('opacity-0'), 10);
-
-            // Fade out and remove after 5 seconds
-            setTimeout(() => {
-                newAlert.classList.add('opacity-0');
-                setTimeout(() => newAlert.remove(), 300);
-            }, 5000);
-        }
 
         /**
          * FUNÇÃO PARA CHECAR AS RESERVAS PENDENTES EM TEMPO REAL (PERIÓDICO)
@@ -636,7 +564,7 @@
         };
 
         // =========================================================
-        // FUNÇÃO PARA BUSCAR REPUTAÇÃO DO CLIENTE
+        // ✅ FUNÇÃO NOVA: BUSCAR REPUTAÇÃO DO CLIENTE
         // =========================================================
 
         /**
@@ -701,7 +629,7 @@
 
 
         // =========================================================
-        // FUNÇÃO DE VALIDAÇÃO WHATSAPP (11 DÍGITOS)
+        // 🚨 FUNÇÃO DE VALIDAÇÃO WHATSAPP (11 DÍGITOS)
         // =========================================================
 
         /**
@@ -746,7 +674,8 @@
             const clientContact = clientContactInput().value.trim();
 
             if (!clientName) {
-                showDashboardMessage("Por favor, preencha o Nome Completo do Cliente.", 'error');
+                // Substituindo alert por mensagem no console ou outro modal, mas mantendo a lógica simples aqui
+                console.error("Por favor, preencha o Nome Completo do Cliente.");
                 return;
             }
 
@@ -759,9 +688,20 @@
             const formData = new FormData(form);
             const data = Object.fromEntries(formData.entries());
 
+            // Função para limpar e converter string monetária (ex: "1.000,50" -> 1000.50)
+            const cleanAndConvertForApi = (value) => {
+                if (!value) return 0.00;
+                value = value.replace('.', ''); // Remove separadores de milhar
+                value = value.replace(',', '.'); // Troca vírgula por ponto decimal
+                return parseFloat(value) || 0.00;
+            };
+
             // ✅ CRÍTICO: Limpa e converte o valor do sinal antes de enviar
             const signalValueRaw = data.signal_value;
             data.signal_value = cleanAndConvertForApi(signalValueRaw);
+
+            // ⚠️ DEBUG CRÍTICO: Mostra os dados enviados.
+            console.log("Dados enviados (signal_value limpo para API):", data.signal_value);
 
             const isRecurrent = document.getElementById('is-recurrent').checked;
             const targetUrl = isRecurrent ? RECURRENT_STORE_URL : QUICK_STORE_URL;
@@ -787,28 +727,30 @@
                 } catch (e) {
                     const errorText = await response.text();
                     console.error("Falha ao ler JSON de resposta (Pode ser 500).", errorText);
-                    showDashboardMessage(`Erro do Servidor (${response.status}). Verifique o console.`, 'error');
+                    // alert(`Erro do Servidor (${response.status}). Verifique o console.`); // Substituído por log
                     return;
                 }
 
                 if (response.ok && result.success) {
-                    showDashboardMessage(result.message, 'success');
+                    // alert(result.message); // Substituído por log/sucesso
                     document.getElementById('quick-booking-modal').classList.add('hidden');
-                    // ✅ CORRIGIDO: Recarrega o calendário usando refetchEvents()
-                    if (calendar) calendar.refetchEvents();
+                    // Recarrega o calendário para mostrar o novo evento (com status parcial e signal_value)
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 50);
 
                 } else if (response.status === 422 && result.errors) {
                     const errors = Object.values(result.errors).flat().join('\n');
+                    // alert(`ERRO DE VALIDAÇÃO:\n${errors}`); // Substituído por log
                     console.error(`ERRO DE VALIDAÇÃO:\n${errors}`);
-                    showDashboardMessage(`ERRO DE VALIDAÇÃO: ${errors}`, 'warning');
                 } else {
+                    // alert(result.message || `Erro desconhecido. Status: ${response.status}.`); // Substituído por log
                     console.error(result.message || `Erro desconhecido. Status: ${response.status}.`);
-                    showDashboardMessage(result.message || `Erro desconhecido. Status: ${response.status}.`, 'error');
                 }
 
             } catch (error) {
                 console.error('Erro de Rede:', error);
-                showDashboardMessage("Erro de Rede. Tente novamente.", 'error');
+                // alert("Erro de Rede. Tente novamente."); // Substituído por log
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Confirmar Agendamento';
@@ -816,11 +758,7 @@
         }
 
         // =========================================================
-        // FUNÇÃO CRÍTICA DE DEBUG: Busca dados brutos da API (REMOVIDA)
-        // =========================================================
-
-        // =========================================================
-        // FLUXO DE AÇÕES PENDENTES, CANCELAMENTO E RENOVAÇÃO
+        // FLUXO DE AÇÕES PENDENTES, CANCELAMENTO E RENOVAÇÃO (MANTIDOS)
         // =========================================================
 
         function closeEventModal() {
@@ -833,14 +771,10 @@
             const dateDisplay = moment(event.start).format('DD/MM/YYYY');
             const timeDisplay = moment(event.start).format('HH:mm') + ' - ' + moment(event.end).format('HH:mm');
             const priceDisplay = parseFloat(extendedProps.price || 0).toFixed(2).replace('.', ',');
-            // ✅ CORRIGIDO: O título já está limpo (apenas nome) graças ao eventDidMount, mas garantimos
-            const clientName = event.title.replace(/^(PAGO)[\.:\s]*\s*/i, '').replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '').split(' - R$ ')[0].trim().replace(/^\(PAGO\)\s*/i, '');
+            const clientName = event.title.split(' - R$ ')[0];
 
             document.getElementById('pending-reserva-id').value = reservaId;
-
-            // ✅ CORREÇÃO: Inicializa o input com o valor formatado
-            const initialPriceFormatted = parseFloat(extendedProps.price || 0).toFixed(2).replace('.', ',');
-            confirmationValueInput().value = initialPriceFormatted;
+            document.getElementById('confirmation-value').value = extendedProps.price || '';
 
             document.getElementById('pending-modal-content').innerHTML = `
                 <p>O cliente **${clientName}** realizou uma pré-reserva.</p>
@@ -865,12 +799,10 @@
         document.getElementById('confirm-pending-btn').addEventListener('click', function() {
             const form = document.getElementById('pending-action-form');
             const reservaId = document.getElementById('pending-reserva-id').value;
-            let confirmationValue = confirmationValueInput().value;
+            let confirmationValue = document.getElementById('confirmation-value').value;
 
-            // ✅ CORRIGIDO: Usa a função de limpeza e conversão de moeda
-            const signalValueFinal = cleanAndConvertForApi(confirmationValue);
-            // console.log("Confirmando com valor convertido:", signalValueFinal); // DEBUG REMOVIDO
-
+            // ✅ CORREÇÃO CRÍTICA 2: Garante que o valor do sinal para confirmação é um float ou 0
+            const signalValueFinal = parseFloat(confirmationValue) || 0;
 
             if (form.reportValidity()) {
                 const url = CONFIRM_PENDING_URL.replace(':id', reservaId);
@@ -897,7 +829,7 @@
                 const reason = reasonInput.value.trim();
 
                 if (reason.length < 5) {
-                    showDashboardMessage("Por favor, forneça um motivo de rejeição com pelo menos 5 caracteres.", 'warning');
+                    console.error("Por favor, forneça um motivo de rejeição com pelo menos 5 caracteres.");
                     return;
                 }
 
@@ -938,29 +870,27 @@
                 } catch (e) {
                     const errorText = await response.text();
                     console.error("Falha ao ler JSON de resposta.", errorText);
-                    showDashboardMessage(`Erro do Servidor (${response.status}). Verifique o console.`, 'error');
+                    // alert(`Erro do Servidor (${response.status}). Verifique o console.`); // Substituído por log
                     return;
                 }
 
                 if (response.ok && result.success) {
-                    showDashboardMessage(result.message, 'success');
+                    // alert(result.message); // Substituído por log/sucesso
                     closePendingActionModal();
-                    // ✅ CORRIGIDO: Refetch para atualizar o calendário
-                    if (calendar) calendar.refetchEvents();
-
+                    setTimeout(() => window.location.reload(), 50);
 
                 } else if (response.status === 422 && result.errors) {
                     const errors = Object.values(result.errors).flat().join('\n');
+                    // alert(`ERRO DE VALIDAÇÃO:\n${errors}`); // Substituído por log
                     console.error(`ERRO DE VALIDAÇÃO:\n${errors}`);
-                    showDashboardMessage(`ERRO DE VALIDAÇÃO: ${errors}`, 'warning');
                 } else {
+                    // alert(result.message || `Erro desconhecido. Status: ${response.status}.`); // Substituído por log
                     console.error(result.message || `Erro desconhecido. Status: ${response.status}.`);
-                    showDashboardMessage(result.message || `Erro desconhecido. Status: ${response.status}.`, 'error');
                 }
 
             } catch (error) {
                 console.error('Erro de Rede:', error);
-                showDashboardMessage("Erro de Rede. Tente novamente.", 'error');
+                // alert("Erro de Rede. Tente novamente."); // Substituído por log
             } finally {
                 submitBtn.disabled = false;
                 rejectBtn.disabled = false;
@@ -971,6 +901,10 @@
             }
         }
 
+
+        function closeEventModal() {
+            document.getElementById('event-modal').classList.add('hidden');
+        }
 
         function openCancellationModal(reservaId, method, urlBase, message, buttonText) {
             closeEventModal();
@@ -1032,23 +966,24 @@
                 }
 
                 if (response.ok && result.success) {
-                    showDashboardMessage(result.message || "Ação realizada com sucesso. O calendário será atualizado.", 'success');
+                    // alert(result.message || "Ação realizada com sucesso. O calendário será atualizado."); // Substituído por log/sucesso
                     closeCancellationModal();
-                    // ✅ CORRIGIDO: Refetch para atualizar o calendário
-                    if (calendar) calendar.refetchEvents();
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 50);
 
                 } else if (response.status === 422 && result.errors) {
                     const reasonError = result.errors.cancellation_reason ? result.errors.cancellation_reason.join(', ') : 'Erro de validação desconhecido.';
+                    // alert(`ERRO DE VALIDAÇÃO: ${reasonError}`); // Substituído por log
                     console.error(`ERRO DE VALIDAÇÃO: ${reasonError}`);
-                    showDashboardMessage(`ERRO DE VALIDAÇÃO: ${reasonError}`, 'warning');
                 } else {
+                    // alert(result.error || result.message || `Erro desconhecido ao processar a ação. Status: ${response.status}.`); // Substituído por log
                     console.error(result.error || result.message || `Erro desconhecido ao processar a ação. Status: ${response.status}.`);
-                    showDashboardMessage(result.error || result.message || `Erro desconhecido ao processar a ação. Status: ${response.status}.`, 'error');
                 }
 
             } catch (error) {
                 console.error('Erro de Rede/Comunicação:', error);
-                showDashboardMessage("Erro de conexão. Tente novamente.", 'error');
+                // alert("Erro de conexão. Tente novamente."); // Substituído por log
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Confirmar Ação';
@@ -1059,15 +994,16 @@
             const reason = document.getElementById('cancellation-reason-input').value.trim();
 
             if (reason.length < 5) {
-                showDashboardMessage("Por favor, forneça um motivo de cancelamento com pelo menos 5 caracteres.", 'warning');
+                // alert("Por favor, forneça um motivo de cancelamento com pelo menos 5 caracteres."); // Substituído por log
+                console.error("Por favor, forneça um motivo de cancelamento com pelo menos 5 caracteres.");
                 return;
             }
 
             if (currentReservaId && currentMethod && currentUrlBase) {
                 sendCancellationRequest(currentReservaId, currentMethod, currentUrlBase, reason);
             } else {
+                // alert("Erro: Dados da reserva não configurados corretamente."); // Substituído por log
                 console.error("Erro: Dados da reserva não configurados corretamente.");
-                showDashboardMessage("Erro: Dados da reserva não configurados corretamente.", 'error');
             }
         });
 
@@ -1137,8 +1073,8 @@
                                 </p>
                             </div>
                             <div class="mt-3 md:mt-0">
-                                <button onclick="handleRenewal(${item.master_id}, '${item.client_name}')"
-                                        class="renew-btn-${item.master_id} w-full md:w-auto px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg text-sm">
+                                <button onclick="handleRenewal(${item.master_id})"
+                                            class="renew-btn-${item.master_id} w-full md:w-auto px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-lg text-sm">
                                     Renovar por 6 Meses
                                 </button>
                             </div>
@@ -1164,22 +1100,18 @@
         }
 
 
-        async function handleRenewal(masterId, clientName) {
+        async function handleRenewal(masterId) {
             const url = RENEW_SERIE_URL.replace(':masterReserva', masterId);
             const itemContainer = document.getElementById(`renewal-item-${masterId}`);
             const renewBtn = document.querySelector(`.renew-btn-${masterId}`);
 
-            // Usando uma confirmação visual rápida no modal
-            if (!itemContainer.getAttribute('data-confirm')) {
-                displayRenewalMessage(`Clique novamente em 'Renovar por 6 Meses' para confirmar a renovação de ${clientName}.`, 'warning');
-                itemContainer.setAttribute('data-confirm', 'true');
+            const seriesData = globalExpiringSeries.find(s => s.master_id === masterId);
+            const clientName = seriesData ? seriesData.client_name : 'Cliente Desconhecido';
+
+            // ATENÇÃO: Corrigido o texto da confirmação para 6 meses
+            if (!confirm(`Confirmar a renovação da série #${masterId} por mais 6 meses para ${clientName}?`)) {
                 return;
             }
-
-            // Resetando o estado de confirmação após o segundo clique
-            itemContainer.removeAttribute('data-confirm');
-            document.getElementById('renewal-message-box').classList.add('hidden');
-
 
             renewBtn.disabled = true;
             renewBtn.textContent = 'Processando...';
@@ -1215,16 +1147,17 @@
 
                     if (document.getElementById('renewal-list').children.length === 0) {
                         document.getElementById('renewal-list').innerHTML = '<p class="text-gray-500 italic text-center p-4">Nenhuma série a ser renovada no momento. Bom trabalho!</p>';
-                        // Não fechar o modal, apenas deixar a mensagem de sucesso
+                        setTimeout(() => closeRenewalModal(), 3000);
                     }
 
-                    // ✅ CORRIGIDO: Refetch para atualizar o calendário
-                    if (calendar) calendar.refetchEvents();
-
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 50);
 
                 } else {
                     displayRenewalMessage(`Falha na renovação: ${result.message || 'Erro desconhecido.'}`, false);
                     renewBtn.disabled = false;
+                    // Corrigido o texto do botão de erro para 6 Meses
                     renewBtn.textContent = 'Renovar por 6 Meses';
                     renewBtn.classList.remove('bg-gray-500');
                     renewBtn.classList.add('bg-green-600', 'hover:bg-green-700');
@@ -1233,6 +1166,7 @@
                 console.error('Erro de Rede:', error);
                 displayRenewalMessage("Erro de conexão ao tentar renovar.", false);
                 renewBtn.disabled = false;
+                // Corrigido o texto do botão de erro para 6 Meses
                 renewBtn.textContent = 'Renovar por 6 Meses';
                 renewBtn.classList.remove('bg-gray-500');
                 renewBtn.classList.add('bg-green-600', 'hover:bg-green-700');
@@ -1263,19 +1197,6 @@
                 validateClientContact(cleanedContact);
             });
 
-            // Aplica a formatação do input monetário ao carregar
-            if (confirmationValueInput()) {
-                confirmationValueInput().value = formatMoneyQuick(confirmationValueInput());
-
-                confirmationValueInput().addEventListener('input', (e) => {
-                    e.target.value = formatMoneyQuick(e.target);
-                });
-
-                confirmationValueInput().addEventListener('blur', (e) => {
-                    e.target.value = formatMoneyQuick(e.target);
-                });
-            }
-
 
             calendar = new FullCalendar.Calendar(calendarEl, {
                 locale: 'pt-br',
@@ -1289,37 +1210,22 @@
                     start: moment().format('YYYY-MM-DD')
                 },
 
-                // ✅ Múltiplas fontes de eventos para garantir que pagos não sejam filtrados
                 eventSources: [
                     {
-                        // 1. RESERVAS CONFIRMADAS/PENDENTES (AS QUE AINDA NÃO FORAM PAGAS)
-                        url: CONFIRMED_API_URL,
+                        url: RESERVED_API_URL,
                         method: 'GET',
                         failure: function() {
-                            console.error('Falha ao carregar reservas CONFIRMADAS/PENDENTES via API.');
+                            console.error('Falha ao carregar reservas confirmadas via API.');
                         },
-                        // Se o backend retorna slots disponíveis, filtramos aqui.
+                        textColor: 'white',
                         eventDataTransform: function(eventData) {
                             if (eventData.extendedProps && eventData.extendedProps.status === 'available') {
                                 return null;
                             }
-                            // Retorna o evento com suas classes padrões (Recorrente, Avulso, Pendente)
                             return eventData;
                         }
                     },
                     {
-                        // 2. RESERVAS CONCLUÍDAS/PAGAS (AS QUE ESTAVAM SUMINDO)
-                        id: 'concluded-slots-source-id',
-                        url: CONCLUDED_API_URL,
-                        method: 'GET',
-                        // Aplicamos a classe de fade diretamente na fonte para facilitar a diferenciação visual
-                        className: 'fc-event-paid',
-                        failure: function() {
-                            console.error('Falha ao carregar reservas CONCLUÍDAS/PAGAS via API.');
-                        },
-                    },
-                    {
-                        // 3. HORÁRIOS DISPONÍVEIS
                         id: 'available-slots-source-id',
                         className: 'fc-event-available',
                         display: 'block',
@@ -1373,38 +1279,24 @@
                 editable: false,
                 initialDate: new Date().toISOString().slice(0, 10),
 
-                // ✅ HOOK CRÍTICO PARA ESTILIZAÇÃO
+                // ✅ HOOK ATUALIZADO: Lógica unificada para mostrar APENAS O NOME (limpando o prefixo RECORRENTE)
                 eventDidMount: function(info) {
                     const event = info.event;
                     const titleEl = info.el.querySelector('.fc-event-title');
-                    const extendedProps = event.extendedProps || {};
-                    // Ajuste para aceitar explicitamente true ou 1 (booleano ou numérico)
-                    const isPaidFlag = extendedProps.is_paid === true || extendedProps.is_paid === 1 || info.el.classList.contains('fc-event-paid'); // Novo check se veio da fonte de pagos
-
-                    // console.log(`[DEBUG EVENT MOUNT] Processando evento ID: ${event.id}, Status: ${extendedProps.status}, Paid: ${extendedProps.is_paid}, IsPaidFlag: ${isPaidFlag}`); // LOG REMOVIDO
 
                     // Apenas processa eventos reservados (não os disponíveis)
                     if (!titleEl || event.classNames.includes('fc-event-available')) return;
 
                     let currentTitle = titleEl.textContent;
 
-                    // 1. Limpeza do prefixo 'RECORR.:' e outros
+                    // 1. Limpeza agressiva do prefixo 'RECORR.:' para o formato exato que você viu.
+                    // Captura e remove "RECORR" + ".:" (opcional) + qualquer espaço.
                     currentTitle = currentTitle.replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '').trim();
-                    currentTitle = currentTitle.replace(/^(PAGO)[\.:\s]*\s*/i, '').trim(); // Remove PAGO se já estiver no título
 
-                    // 2. Remove o sufixo de preço ' - R$ XX.XX'
+                    // 2. Remove o sufixo de preço ' - R$ XX.XX' e qualquer texto após ele (aplica a TODOS reservados)
                     currentTitle = currentTitle.split(' - R$ ')[0].trim();
 
-                    // 3. ✅ Lógica para eventos PAGOS/BAIXADOS
-                    if (isPaidFlag) {
-                         // Aplica o fade-out (opacity: 0.5) via CSS class .fc-event-paid (garante que não seja sobrescrito)
-                         info.el.classList.add('fc-event-paid');
-
-                         // Adiciona o indicador de pago no início do título
-                         currentTitle = `(PAGO) ${currentTitle}`;
-                    }
-
-                    // 4. O resultado final é aplicado ao elemento.
+                    // 3. O resultado final é APENAS O NOME DO CLIENTE.
                     titleEl.textContent = currentTitle;
                 },
 
@@ -1414,7 +1306,13 @@
                     const extendedProps = event.extendedProps || {};
                     const status = extendedProps.status;
 
-                    // --- LOGS DE DEBUG REMOVIDOS ---
+                    // --- START DEBUG LOG ---
+                    console.log("--- Detalhes do Evento Clicado ---");
+                    console.log("ID da Reserva:", event.id);
+                    console.log("Extended Props:", extendedProps); // CRÍTICO: Verifique aqui o valor de signal_value
+                    console.log("----------------------------------");
+                    // --- END DEBUG LOG ---
+
 
                     if (status === 'pending') {
                         openPendingActionModal(event);
@@ -1484,8 +1382,7 @@
                         // ✅ Pega o valor do sinal (já pago, se houver) da API do calendário
                         const signalValue = extendedProps.signal_value || 0;
                         const price = extendedProps.price || 0; // Pega o preço total
-                        // Ajuste para aceitar explicitamente true ou 1 (booleano ou numérico)
-                        const isPaid = extendedProps.is_paid === true || extendedProps.is_paid === 1;
+
 
                         const dateReservation = moment(startTime).format('YYYY-MM-DD');
                         const dateDisplay = moment(startTime).format('DD/MM/YYYY');
@@ -1497,9 +1394,10 @@
                             timeDisplay += ' - ' + moment(endTime).format('HH:mm');
                         }
 
-                        // O título do evento deve estar no formato "(PAGO) Nome do Cliente"
-                        // Para exibir apenas o nome do cliente no modal, removemos o prefixo (PAGO) e o preço
-                        let clientName = event.title.replace(/^\(PAGO\)\s*/i, '').split(' - R$ ')[0].trim();
+                        // O título do evento deve estar no formato "Nome do Cliente - R$ 123.45"
+                        // Para exibir apenas o nome do cliente no modal:
+                        const titleParts = event.title.split(' - R$ ');
+                        const clientName = titleParts[0];
 
                         // ✅ ATUALIZADO: Incluir a data E o valor do sinal na URL do Caixa
                         // Isso permite que o Controller de Pagamentos pré-preencha o campo Pago
@@ -1507,12 +1405,6 @@
                         const showUrl = SHOW_RESERVA_URL.replace(':id', reservaId);
 
                         let statusText = 'Confirmada';
-                        let statusColor = 'text-indigo-600';
-                        if (isPaid) {
-                            statusText = 'Baixada/Paga';
-                            statusColor = 'text-green-600'; // Destaca o status de pago
-                        }
-
 
                         let recurrentStatus = isRecurrent ?
                             '<p class="text-sm font-semibold text-fuchsia-600">Parte de uma Série Recorrente</p>' :
@@ -1525,7 +1417,7 @@
 
                         modalContent.innerHTML = `
                             <p class="font-semibold text-gray-900">${clientName}</p>
-                            <p><strong>Status:</strong> <span class="uppercase font-bold text-sm ${statusColor}">${statusText}</span></p>
+                            <p><strong>Status:</strong> <span class="uppercase font-bold text-sm text-indigo-600">${statusText}</span></p>
                             <p><strong>Data:</strong> ${dateDisplay}</p>
                             <p><strong>Horário:</strong> ${timeDisplay}</p>
                             <p><strong>Valor:</strong> <span class="text-green-600 font-bold">R$ ${priceDisplayFormatted}</span></p>
@@ -1533,45 +1425,15 @@
                             ${recurrentStatus}
                         `;
 
-                        // 🔄 Lógica de Ações de Botões (AJUSTADO)
-                        let paymentButton;
-                        let detailsButton;
-
-                        if (isPaid) {
-                            // Se PAGO, o foco é na visualização/detalhes
-                            detailsButton = `
-                                <a href="${showUrl}" class="w-full inline-block text-center mb-2 px-4 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition duration-150 text-md shadow-xl">
-                                    Ver Detalhes Completos / Gerenciar
-                                </a>
-                            `;
-                            paymentButton = `
-                                <a href="${paymentUrl}" class="w-full inline-block text-center mb-2 px-4 py-2 bg-gray-500 text-white font-medium rounded-lg hover:bg-gray-600 transition duration-150 text-sm shadow-md">
-                                    Ver Registro de Pagamento / Caixa
-                                </a>
-                            `;
-                        } else {
-                            // Se NÃO PAGO, o foco é no pagamento
-                            paymentButton = `
-                                <a href="${paymentUrl}" class="w-full inline-block text-center mb-2 px-4 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 text-md shadow-xl">
-                                    Registrar Pagamento / Acessar Caixa
-                                </a>
-                            `;
-                            detailsButton = `
-                                <a href="${showUrl}" class="w-full inline-block text-center mb-2 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition duration-150 text-sm">
-                                    Ver Detalhes da Reserva (Status, Notas)
-                                </a>
-                            `;
-                        }
-
-                        let actionButtons = '';
-                        if (isPaid) {
-                            actionButtons += detailsButton;
-                            actionButtons += paymentButton;
-                        } else {
-                            actionButtons += paymentButton;
-                            actionButtons += detailsButton;
-                        }
-
+                        // 🔄 BOTÕES DE AÇÃO: Priorizando o link para o Caixa
+                        let actionButtons = `
+                            <a href="${paymentUrl}" class="w-full inline-block text-center mb-2 px-4 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 text-md shadow-xl">
+                                Registrar Pagamento / Acessar Caixa
+                            </a>
+                            <a href="${showUrl}" class="w-full inline-block text-center mb-2 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition duration-150 text-sm">
+                                Ver Detalhes / Gerenciar (Status, Notas)
+                            </a>
+                        `;
 
                         if (isRecurrent) {
                             actionButtons += `
@@ -1606,12 +1468,10 @@
 
             calendar.render();
             window.calendar = calendar;
-            // window.debugApiData = debugApiData; // EXPOSIÇÃO DA FUNÇÃO DE DEBUG REMOVIDA
 
             setInterval(() => {
-                // Refazendo a busca de slots disponíveis periodicamente
                 calendar.getEventSourceById('available-slots-source-id')?.refetch();
-            }, 60000); // A cada 1 minuto
+            }, 60000);
         };
         // Expondo funções globais
         window.cancelarPontual = cancelarPontual;

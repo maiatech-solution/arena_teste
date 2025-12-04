@@ -87,7 +87,7 @@
 
         /* ✅ CRÍTICO: Estilo para Eventos PAGOS/Baixados (Faded/Apagado) */
         .fc-event-paid {
-            opacity: 0.5 !important; /* FORÇADO a opacidade para garantir a prioridade */
+            opacity: 0.5; /* Fica meio apagado */
             filter: grayscale(40%); /* Fica um pouco cinza */
         }
 
@@ -221,8 +221,6 @@
                         <span>Disponível (Horários Abiertos)</span>
                     </div>
                 </div>
-
-                {{-- BOTÃO TEMPORÁRIO DE DEBUG REMOVIDO --}}
 
                 <div class="calendar-container">
                     <div id='calendar'></div>
@@ -433,10 +431,7 @@
     <script>
         // === CONFIGURAÇÕES E ROTAS ===
         const PENDING_API_URL = '{{ route("api.reservas.pendentes.count") }}';
-        // CORREÇÃO: RESERVED_API_URL renomeado para maior clareza, buscando Confirmadas (não pagas)
-        const CONFIRMED_API_URL = '{{ route("api.reservas.confirmadas") }}';
-        // ✅ NOVO: Endpoint para buscar as reservas que foram CONCLUÍDAS/PAGAS e estavam sumindo
-        const CONCLUDED_API_URL = '{{ route("api.reservas.concluidas") }}';
+        const RESERVED_API_URL = '{{ route("api.reservas.confirmadas") }}';
         const AVAILABLE_API_URL = '{{ route("api.horarios.disponiveis") }}';
         const SHOW_RESERVA_URL = '{{ route("admin.reservas.show", ":id") }}';
 
@@ -763,6 +758,9 @@
             const signalValueRaw = data.signal_value;
             data.signal_value = cleanAndConvertForApi(signalValueRaw);
 
+            // ⚠️ DEBUG CRÍTICO: Mostra os dados enviados.
+            console.log("Dados enviados (signal_value limpo para API):", data.signal_value);
+
             const isRecurrent = document.getElementById('is-recurrent').checked;
             const targetUrl = isRecurrent ? RECURRENT_STORE_URL : QUICK_STORE_URL;
 
@@ -816,10 +814,6 @@
         }
 
         // =========================================================
-        // FUNÇÃO CRÍTICA DE DEBUG: Busca dados brutos da API (REMOVIDA)
-        // =========================================================
-
-        // =========================================================
         // FLUXO DE AÇÕES PENDENTES, CANCELAMENTO E RENOVAÇÃO
         // =========================================================
 
@@ -833,8 +827,7 @@
             const dateDisplay = moment(event.start).format('DD/MM/YYYY');
             const timeDisplay = moment(event.start).format('HH:mm') + ' - ' + moment(event.end).format('HH:mm');
             const priceDisplay = parseFloat(extendedProps.price || 0).toFixed(2).replace('.', ',');
-            // ✅ CORRIGIDO: O título já está limpo (apenas nome) graças ao eventDidMount, mas garantimos
-            const clientName = event.title.replace(/^(PAGO)[\.:\s]*\s*/i, '').replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '').split(' - R$ ')[0].trim().replace(/^\(PAGO\)\s*/i, '');
+            const clientName = event.title.split(' - R$ ')[0];
 
             document.getElementById('pending-reserva-id').value = reservaId;
 
@@ -869,7 +862,7 @@
 
             // ✅ CORRIGIDO: Usa a função de limpeza e conversão de moeda
             const signalValueFinal = cleanAndConvertForApi(confirmationValue);
-            // console.log("Confirmando com valor convertido:", signalValueFinal); // DEBUG REMOVIDO
+            console.log("Confirmando com valor convertido:", signalValueFinal);
 
 
             if (form.reportValidity()) {
@@ -1289,37 +1282,26 @@
                     start: moment().format('YYYY-MM-DD')
                 },
 
-                // ✅ Múltiplas fontes de eventos para garantir que pagos não sejam filtrados
                 eventSources: [
                     {
-                        // 1. RESERVAS CONFIRMADAS/PENDENTES (AS QUE AINDA NÃO FORAM PAGAS)
-                        url: CONFIRMED_API_URL,
+                        url: RESERVED_API_URL,
                         method: 'GET',
                         failure: function() {
-                            console.error('Falha ao carregar reservas CONFIRMADAS/PENDENTES via API.');
+                            console.error('Falha ao carregar reservas confirmadas via API.');
                         },
-                        // Se o backend retorna slots disponíveis, filtramos aqui.
+                        textColor: 'white',
                         eventDataTransform: function(eventData) {
+                            const status = eventData.extendedProps?.status;
+                            const isPaid = eventData.extendedProps?.is_paid;
+                            // console.log(`[DEBUG API] Processando evento ID: ${eventData.id}, Status: ${status}, Paid: ${isPaid}`);
+
                             if (eventData.extendedProps && eventData.extendedProps.status === 'available') {
                                 return null;
                             }
-                            // Retorna o evento com suas classes padrões (Recorrente, Avulso, Pendente)
                             return eventData;
                         }
                     },
                     {
-                        // 2. RESERVAS CONCLUÍDAS/PAGAS (AS QUE ESTAVAM SUMINDO)
-                        id: 'concluded-slots-source-id',
-                        url: CONCLUDED_API_URL,
-                        method: 'GET',
-                        // Aplicamos a classe de fade diretamente na fonte para facilitar a diferenciação visual
-                        className: 'fc-event-paid',
-                        failure: function() {
-                            console.error('Falha ao carregar reservas CONCLUÍDAS/PAGAS via API.');
-                        },
-                    },
-                    {
-                        // 3. HORÁRIOS DISPONÍVEIS
                         id: 'available-slots-source-id',
                         className: 'fc-event-available',
                         display: 'block',
@@ -1373,35 +1355,37 @@
                 editable: false,
                 initialDate: new Date().toISOString().slice(0, 10),
 
-                // ✅ HOOK CRÍTICO PARA ESTILIZAÇÃO
+                // ✅ HOOK CRÍTICO PARA DEBUG E ESTILIZAÇÃO
                 eventDidMount: function(info) {
                     const event = info.event;
                     const titleEl = info.el.querySelector('.fc-event-title');
                     const extendedProps = event.extendedProps || {};
-                    // Ajuste para aceitar explicitamente true ou 1 (booleano ou numérico)
-                    const isPaidFlag = extendedProps.is_paid === true || extendedProps.is_paid === 1 || info.el.classList.contains('fc-event-paid'); // Novo check se veio da fonte de pagos
+                    const isPaidFlag = extendedProps.is_paid; // Extrai o valor do flag
 
-                    // console.log(`[DEBUG EVENT MOUNT] Processando evento ID: ${event.id}, Status: ${extendedProps.status}, Paid: ${extendedProps.is_paid}, IsPaidFlag: ${isPaidFlag}`); // LOG REMOVIDO
+                    // LOG DE DEBUG PARA VOCÊ VERIFICAR
+                    console.log(`[DEBUG API] Processando evento ID: ${event.id}, Status: ${extendedProps.status}, Paid: ${isPaidFlag}`);
 
                     // Apenas processa eventos reservados (não os disponíveis)
                     if (!titleEl || event.classNames.includes('fc-event-available')) return;
 
                     let currentTitle = titleEl.textContent;
 
-                    // 1. Limpeza do prefixo 'RECORR.:' e outros
+                    // 1. Limpeza do prefixo 'RECORR.:'
                     currentTitle = currentTitle.replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '').trim();
-                    currentTitle = currentTitle.replace(/^(PAGO)[\.:\s]*\s*/i, '').trim(); // Remove PAGO se já estiver no título
 
                     // 2. Remove o sufixo de preço ' - R$ XX.XX'
                     currentTitle = currentTitle.split(' - R$ ')[0].trim();
 
                     // 3. ✅ Lógica para eventos PAGOS/BAIXADOS
                     if (isPaidFlag) {
-                         // Aplica o fade-out (opacity: 0.5) via CSS class .fc-event-paid (garante que não seja sobrescrito)
-                         info.el.classList.add('fc-event-paid');
+                         // Aplica o fade-out (opacity: 0.5) via CSS class .fc-event-paid
+                         // APENAS SE não for um evento concluído (que já tem sua própria cor verde e é mais visível)
+                        if (extendedProps.status !== 'concluida') {
+                            info.el.classList.add('fc-event-paid');
+                        }
 
-                         // Adiciona o indicador de pago no início do título
-                         currentTitle = `(PAGO) ${currentTitle}`;
+                        // Adiciona o indicador de pago no início do título
+                        currentTitle = `(PAGO) ${currentTitle}`;
                     }
 
                     // 4. O resultado final é aplicado ao elemento.
@@ -1414,7 +1398,13 @@
                     const extendedProps = event.extendedProps || {};
                     const status = extendedProps.status;
 
-                    // --- LOGS DE DEBUG REMOVIDOS ---
+                    // --- START DEBUG LOG ---
+                    console.log("--- Detalhes do Evento Clicado ---");
+                    console.log("ID da Reserva:", event.id);
+                    console.log("Extended Props:", extendedProps); // CRÍTICO: Verifique aqui o valor de signal_value
+                    console.log("----------------------------------");
+                    // --- END DEBUG LOG ---
+
 
                     if (status === 'pending') {
                         openPendingActionModal(event);
@@ -1484,8 +1474,7 @@
                         // ✅ Pega o valor do sinal (já pago, se houver) da API do calendário
                         const signalValue = extendedProps.signal_value || 0;
                         const price = extendedProps.price || 0; // Pega o preço total
-                        // Ajuste para aceitar explicitamente true ou 1 (booleano ou numérico)
-                        const isPaid = extendedProps.is_paid === true || extendedProps.is_paid === 1;
+                        const isPaid = extendedProps.is_paid || false; // ✅ NOVO: Flag de pago
 
                         const dateReservation = moment(startTime).format('YYYY-MM-DD');
                         const dateDisplay = moment(startTime).format('DD/MM/YYYY');
@@ -1497,9 +1486,10 @@
                             timeDisplay += ' - ' + moment(endTime).format('HH:mm');
                         }
 
-                        // O título do evento deve estar no formato "(PAGO) Nome do Cliente"
-                        // Para exibir apenas o nome do cliente no modal, removemos o prefixo (PAGO) e o preço
-                        let clientName = event.title.replace(/^\(PAGO\)\s*/i, '').split(' - R$ ')[0].trim();
+                        // O título do evento deve estar no formato "Nome do Cliente - R$ 123.45"
+                        // Para exibir apenas o nome do cliente no modal:
+                        const titleParts = event.title.split(' - R$ ');
+                        const clientName = titleParts[0];
 
                         // ✅ ATUALIZADO: Incluir a data E o valor do sinal na URL do Caixa
                         // Isso permite que o Controller de Pagamentos pré-preencha o campo Pago
@@ -1606,7 +1596,6 @@
 
             calendar.render();
             window.calendar = calendar;
-            // window.debugApiData = debugApiData; // EXPOSIÇÃO DA FUNÇÃO DE DEBUG REMOVIDA
 
             setInterval(() => {
                 // Refazendo a busca de slots disponíveis periodicamente
