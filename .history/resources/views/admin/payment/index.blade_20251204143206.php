@@ -200,7 +200,7 @@
                                         @if ($reserva->is_recurrent)
                                             <span class="font-semibold text-fuchsia-600">Recorrente</span>
                                         @else
-                                            <span class="font-semibold text-blue-600">Pontual</span>
+                                            Pontual
                                         @endif
                                     </td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-right">

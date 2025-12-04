@@ -306,10 +306,10 @@
         // Contadores para garantir índices únicos ao adicionar novos slots
         const nextIndex = {};
 
-        // Inicializa contadores de índice de 0 a 6 (Domingo a Sábado) para robustez no JS
-        for (let i = 0; i <= 6; i++) {
-            nextIndex[i] = document.querySelectorAll(`#slots-container-${i} .slot-item`).length;
-        }
+        // Inicializa contadores de índice
+        @foreach ($dayNames as $dayOfWeek => $dayName)
+            nextIndex[{{ $dayOfWeek }}] = document.querySelectorAll('#slots-container-{{ $dayOfWeek }} .slot-item').length;
+        @endforeach
 
 
         function updateRemoveButtonState(dayOfWeek) {
@@ -324,13 +324,10 @@
         function updateSlotInputsState(dayOfWeek, isDisabled) {
             const container = document.getElementById(`slots-container-${dayOfWeek}`);
 
-            // Verifica se o container existe antes de tentar buscar os inputs
-            if (!container) return;
-
             // Inputs de tempo, preço e checkboxes de slot ativo
             const inputs = container.querySelectorAll('input[type="time"], input[type="number"], .slot-active-checkbox');
 
-            // Botões de adicionar (localizado fora do container de slots) e remover (localizado dentro dos slots)
+            // Botões de adicionar e remover
             const addBtn = document.querySelector(`.add-slot-btn[data-day="${dayOfWeek}"]`);
             const deleteBtns = container.querySelectorAll('.slot-item button');
 
@@ -368,7 +365,6 @@
                     container.querySelectorAll('.slot-active-checkbox').forEach(cb => cb.checked = false);
                 }
 
-                // Habilita/desabilita os inputs e o botão de adicionar faixa
                 updateSlotInputsState(day, isDisabled);
                 updateRemoveButtonState(day);
             });
@@ -438,8 +434,7 @@
             const slotItem = buttonElement.closest('.slot-item');
             if (slotItem) {
                 // 🛑 NOVO: Antes de remover, pede confirmação simples (para evitar cliques acidentais)
-                // Usando alert() aqui temporariamente pois confirm() é desabilitado no ambiente.
-                if (window.confirm('Tem certeza que deseja remover esta faixa de horário do formulário? (Isto não cancela reservas futuras já criadas)')) {
+                if (confirm('Tem certeza que deseja remover esta faixa de horário do formulário? (Isto não cancela reservas futuras já criadas)')) {
                     const dayOfWeek = slotItem.dataset.day;
                     slotItem.remove();
                     updateRemoveButtonState(dayOfWeek);
@@ -501,7 +496,7 @@
             if (type === 'day') {
                 url = DELETE_DAY_CONFIG_URL;
             } else {
-                window.alert('Erro: Ação de exclusão desconhecida.');
+                alert('Erro: Ação de exclusão desconhecida.');
                 return;
             }
 
@@ -526,7 +521,7 @@
                     result = await response.json();
                 } catch (e) {
                      if (response.status === 401 || response.status === 403) {
-                         window.alert('⚠️ ERRO DE SESSÃO/AUTORIZAÇÃO: Você foi desconectado ou não tem permissão. Faça login novamente.');
+                         alert('⚠️ ERRO DE SESSÃO/AUTORIZAÇÃO: Você foi desconectado ou não tem permissão. Faça login novamente.');
                          window.location.reload();
                          return;
                      } else if (!response.ok) {
@@ -537,7 +532,7 @@
                 }
 
                 if (response.ok && result.success) {
-                    window.alert(result.message);
+                    alert(result.message);
                     closeDeleteConfigModal();
                     // Recarrega a página para refletir as mudanças no formulário
                     window.location.reload();
@@ -558,7 +553,7 @@
                         document.getElementById('justification-error').classList.remove('hidden');
                         document.getElementById('config-justification-input').focus();
                     } else {
-                        window.alert('Erro de Validação: ' + (result.message || 'Verifique o campo de justificativa.'));
+                        alert('Erro de Validação: ' + (result.message || 'Verifique o campo de justificativa.'));
                     }
 
                     // Se o erro foi na validação, mantém o modal aberto, mas reativa o botão
@@ -568,12 +563,12 @@
                 } else {
                     // Erro 404, 500, ou falha de validação do Controller
                     const finalErrorMsg = result.error || result.message || `Erro de servidor ou validação (Status: ${response.status}).`;
-                    window.alert('Erro ao excluir: ' + finalErrorMsg);
+                    alert('Erro ao excluir: ' + finalErrorMsg);
                     closeDeleteConfigModal();
                 }
             } catch (error) {
                 console.error('Erro de rede ao excluir:', error);
-                window.alert('ERRO DE CONEXÃO COM O SERVIDOR (Network Error): Falha ao comunicar com o backend. Verifique sua conexão e tente novamente.');
+                alert('ERRO DE CONEXÃO COM O SERVIDOR (Network Error): Falha ao comunicar com o backend. Verifique sua conexão e tente novamente.');
                 closeDeleteConfigModal();
             } finally {
                 confirmBtn.disabled = false;
@@ -639,15 +634,12 @@
             document.querySelectorAll('.day-toggle-master').forEach(attachMasterToggleListener);
             document.querySelectorAll('.add-slot-btn').forEach(attachAddSlotListener);
 
-            // Inicializa o estado dos inputs e botões (no carregamento da página) usando loop numérico (0 a 6)
-            for (let i = 0; i <= 6; i++) {
-                 const checkbox = document.getElementById(`day-active-${i}`);
-                 if (checkbox) {
-                    const isChecked = checkbox.checked;
-                    // Chamamos para garantir o estado inicial dos inputs e botões
-                    updateSlotInputsState(i, !isChecked);
-                 }
-            }
+            // Inicializa o estado dos inputs e botões (no carregamento da página)
+            @foreach ($dayNames as $dayOfWeek => $dayName)
+                 const isChecked = document.getElementById('day-active-{{ $dayOfWeek }}').checked;
+                 // Chamamos para garantir o estado inicial dos inputs e botões
+                 updateSlotInputsState({{ $dayOfWeek }}, !isChecked);
+            @endforeach
         });
 
     </script>

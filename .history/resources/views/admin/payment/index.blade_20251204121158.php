@@ -116,8 +116,6 @@
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Horário</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cliente</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status Fin.</th>
-                                {{-- ✅ NOVO: Coluna Tipo --}}
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tipo</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Total (R$)</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sinal (R$)</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Restante</th>
@@ -195,14 +193,6 @@
                                             {{ $statusLabel }}
                                         </span>
                                     </td>
-                                    {{-- ✅ NOVO: Célula Tipo --}}
-                                    <td class="px-4 py-4 whitespace-nowrap text-sm">
-                                        @if ($reserva->is_recurrent)
-                                            <span class="font-semibold text-fuchsia-600">Recorrente</span>
-                                        @else
-                                            <span class="font-semibold text-blue-600">Pontual</span>
-                                        @endif
-                                    </td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-right">
                                         {{ number_format($total, 2, ',', '.') }}
                                     </td>
@@ -234,8 +224,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    {{-- Colspan ajustado de 7 para 8 --}}
-                                    <td colspan="8" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                                    <td colspan="7" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                                         Nenhum agendamento encontrado para esta data ou termo de pesquisa.
                                     </td>
                                 </tr>
