@@ -163,9 +163,6 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::patch('{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('cancelar_pontual');
             Route::delete('{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('cancelar_serie');
 
-            // 🎯 ROTA DE REGISTRO DE FALTA (NO-SHOW) - Adicionada aqui.
-            Route::patch('{reserva}/no-show', [AdminController::class, 'registerNoShow'])->name('no_show');
-
             Route::delete('{reserva}', [AdminController::class, 'destroyReserva'])->name('destroy');
 
             // 🛑 ROTA DE RENOVAÇÃO

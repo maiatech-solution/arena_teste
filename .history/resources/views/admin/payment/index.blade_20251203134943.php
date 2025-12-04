@@ -150,9 +150,8 @@
                                     $statusLabel = '';
 
                                     if ($reserva->status === 'no_show') {
-                                        // 🎯 NOVO STATUS: FALTA / NO-SHOW
                                         $statusClass = 'bg-red-500 text-white font-bold';
-                                        $statusLabel = 'FALTA';
+                                        $statusLabel = 'RETIDO (Falta)';
                                     } elseif ($currentStatus === 'paid' || $currentStatus === 'completed') {
                                         $statusClass = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
                                         $statusLabel = 'Pago';
@@ -210,8 +209,8 @@
                                                 $ Baixar
                                             </button>
 
-                                            {{-- Botão Falta: AGORA passando o valor total pago ($pago) --}}
-                                            <button onclick="openNoShowModal({{ $reserva->id }}, '{{ $reserva->client_name }}', {{ $pago }})"
+                                            {{-- Botão Falta --}}
+                                            <button onclick="openNoShowModal({{ $reserva->id }}, '{{ $reserva->client_name }}')"
                                                 class="text-white bg-red-600 hover:bg-red-700 rounded px-3 py-1 text-xs transition duration-150">
                                                 X Falta
                                             </button>
@@ -349,7 +348,7 @@
 </div>
 
 {{-- ================================================================== --}}
-{{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) (ATUALIZADO com Estorno/Retenção) --}}
+{{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) (CORRIGIDO: Estrutura Otimizada) --}}
 {{-- ================================================================== --}}
 {{-- A classe 'flex items-center justify-center p-4' no contêiner 'fixed' garante a centralização --}}
 <div id="noShowModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
@@ -362,8 +361,6 @@
         <form id="noShowForm">
             @csrf
             <input type="hidden" name="reserva_id" id="noShowReservaId">
-            {{-- NOVO: Campo escondido para o valor pago --}}
-            <input type="hidden" name="paid_amount" id="noShowPaidAmount">
 
             <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <h3 class="text-lg leading-6 font-medium text-red-600 dark:text-red-400" id="modal-title">
@@ -373,24 +370,9 @@
                     <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
                         Você está registrando que <span id="noShowClientName" class="font-bold"></span> faltou ao horário agendado.
                     </p>
-
-                    {{-- 🎯 BLOCO CRÍTICO: GESTÃO FINANCEIRA DE FALTA --}}
-                    <div id="financialNoShowBlock" class="p-4 mb-4 border border-red-300 rounded-lg bg-red-50 dark:bg-red-900/30">
-                        <div class="text-sm font-semibold text-red-700 dark:text-red-300 mb-2">
-                            Gestão de Pagamento <span id="noShowAmountDisplay" class="font-extrabold">R$ 0,00</span>
-                        </div>
-                        <p id="noShowInitialWarning" class="text-xs text-gray-700 dark:text-gray-400 mb-3"></p>
-
-                        {{-- Opção de Estorno/Retenção --}}
-                        <div id="refundControls" class="mt-2">
-                            <label for="should_refund" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ação sobre o valor pago:</label>
-                            <select name="should_refund" id="should_refund" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-700 dark:text-white">
-                                <option value="false" selected>Reter o valor pago (Sem estorno)</option>
-                                <option value="true">Estornar/Devolver o valor pago (Saída de caixa)</option>
-                            </select>
-                        </div>
-                    </div>
-                    {{-- FIM DO BLOCO CRÍTICO --}}
+                    <p class="text-sm text-red-500 font-bold mb-4">
+                        O status mudará para "Falta" e o sinal pago (se houver) será retido pela casa.
+                    </p>
 
                     {{-- Bloquear Cliente --}}
                     <div class="flex items-center mb-4">
@@ -400,10 +382,10 @@
                         </label>
                     </div>
 
-                    {{-- Motivo da Falta --}}
+                    {{-- Observações --}}
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Motivo da Falta (Obrigatório)</label>
-                        <textarea name="no_show_reason" rows="2" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-700 dark:text-white" placeholder="Detalhes do no-show..."></textarea>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Observações</label>
+                        <textarea name="notes" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-700 dark:text-white" placeholder="Motivo ou detalhes..."></textarea>
                     </div>
                 </div>
                 {{-- Placeholder para Erros AJAX --}}
@@ -411,11 +393,11 @@
             </div>
             <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                 <button type="submit" id="submitNoShowBtn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
-                                         <span id="submitNoShowText">Confirmar Falta</span>
-                                     <svg id="submitNoShowSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                     </svg>
+                                <span id="submitNoShowText">Confirmar Falta</span>
+                            <svg id="submitNoShowSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
                 </button>
                 <button type="button" onclick="closeNoShowModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm dark:bg-gray-600 dark:text-white dark:hover:bg-gray-500">
                     Cancelar
@@ -701,37 +683,12 @@
     });
 
     // --- Lógica do No-Show ---
-    // ATUALIZADA para receber o valor pago
-    function openNoShowModal(id, clientName, paidAmount) {
+    function openNoShowModal(id, clientName) {
         document.getElementById('noShowReservaId').value = id;
         document.getElementById('noShowClientName').innerText = clientName;
 
-        // NOVO: Define o valor pago nos campos hidden e display
-        document.getElementById('noShowPaidAmount').value = paidAmount.toFixed(2);
-        const paidAmountFormatted = paidAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        document.getElementById('noShowAmountDisplay').innerText = paidAmountFormatted;
-
-        // NOVO: Atualiza a mensagem de aviso inicial
-        const initialWarningEl = document.getElementById('noShowInitialWarning');
-        const refundControlsEl = document.getElementById('refundControls'); // <--- NOVO: Referência ao bloco de controle de estorno
-
-        if (paidAmount > 0) {
-            initialWarningEl.innerHTML = `O cliente já pagou <span class="font-bold">${paidAmountFormatted}</span>. Escolha abaixo se este valor será retido (padrão) ou estornado.`;
-            // Reseta para 'Reter' como padrão
-            document.getElementById('should_refund').value = 'false';
-            refundControlsEl.classList.remove('hidden'); // Mostra os controles
-        } else {
-            initialWarningEl.textContent = `Nenhum valor foi pago. Marcar como falta apenas registrará o status.`;
-            document.getElementById('should_refund').value = 'false';
-            refundControlsEl.classList.add('hidden'); // Esconde os controles
-        }
-
-
         document.getElementById('noshow-error-message').textContent = '';
         document.getElementById('noshow-error-message').classList.add('hidden');
-        // Limpar o campo de observações ao abrir
-        document.querySelector('#noShowForm textarea[name="no_show_reason"]').value = '';
-        document.querySelector('#noShowForm input[name="block_user"]').checked = false;
 
         document.getElementById('noShowModal').classList.remove('hidden');
         document.getElementById('noShowModal').classList.add('flex');
@@ -746,15 +703,8 @@
         e.preventDefault();
 
         const reservaId = document.getElementById('noShowReservaId').value;
-        // RENOMEADO: Campo de observação agora é 'no_show_reason'
-        const reason = this.querySelector('textarea[name="no_show_reason"]').value;
-        const blockUser = this.querySelector('input[name="block_user"]').checked; // Boolean (true/false)
-
-        // NOVO: Captura o valor pago e a decisão de estorno
-        const paidAmount = document.getElementById('noShowPaidAmount').value;
-        // Converte a string 'true'/'false' em boolean JS para o payload (Laravel JSON)
-        const shouldRefund = this.querySelector('select[name="should_refund"]').value === 'true';
-
+        const notes = this.querySelector('textarea[name="notes"]').value;
+        const blockUser = this.querySelector('input[name="block_user"]').checked ? 1 : 0;
         const csrfToken = document.querySelector('input[name="_token"]').value;
 
         const submitBtn = document.getElementById('submitNoShowBtn');
@@ -762,57 +712,44 @@
         const submitSpinner = document.getElementById('submitNoShowSpinner');
         const errorMessageDiv = document.getElementById('noshow-error-message');
 
-        // 1. Validação de Motivo (Obrigatório)
-        if (reason.length < 5) {
-             errorMessageDiv.textContent = 'O motivo da falta (Observações) é obrigatório e deve ter no mínimo 5 caracteres.';
-             errorMessageDiv.classList.remove('hidden');
-             return;
-        }
-
         submitBtn.disabled = true;
         submitText.classList.add('hidden');
         submitSpinner.classList.remove('hidden');
         errorMessageDiv.classList.add('hidden');
 
-        // MONTANDO O PAYLOAD
-        const payload = {
-            reserva_id: reservaId,
-            no_show_reason: reason, // Renomeado para refletir o campo do Controller
-            block_user: blockUser,
-            paid_amount: paidAmount,
-            should_refund: shouldRefund // Boolean (true/false)
-        };
-
-        // LOG CRÍTICO PARA DEBUG NO BROWSER
-        console.log("No-Show Payload Enviado:", payload);
-
-        // 3. Envio AJAX (Rota: PATCH /admin/reservas/{reserva}/no-show, mas o web.php usa POST /admin/pagamentos/{reserva}/falta)
-        fetch(`/admin/pagamentos/${reservaId}/falta`, { // Usando a rota que você definiu no web.php
-            method: 'POST', // POST ou PATCH, dependendo da sua configuração, mantendo POST como no seu web.php
+        // Envio AJAX (Assumindo a rota POST /admin/pagamentos/{reserva}/falta)
+        fetch(`/admin/pagamentos/${reservaId}/falta`, {
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': csrfToken,
                 'Accept': 'application/json'
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({
+                notes: notes,
+                block_user: blockUser
+            })
         })
         .then(response => {
                 if (!response.ok) {
                     return response.json().then(data => {
-                         // Trata o ValidationException
-                        const validationErrors = data.errors ? Object.values(data.errors).flat().join('; ') : '';
-                        throw new Error(data.message || validationErrors || 'Erro de processamento no servidor.');
+                        throw new Error(data.message || 'Erro de processamento.');
                     });
                 }
                 return response.json();
         })
         .then(data => {
             if(data.success) {
-                showMessage(data.message);
+                // ✅ CORREÇÃO APLICADA AQUI: Redireciona para a página anterior (document.referrer) com um token de cache
+                showMessage('Falta registrada com sucesso. Redirecionando para a página anterior com atualização forçada.');
                 closeNoShowModal();
 
-                // Recarrega a página para atualizar a tabela e o KPI de Faltas
-                location.reload();
+                const referrer = window.location.href; // Usa a URL atual para manter os filtros
+                // Adiciona um parâmetro de no-cache para forçar a atualização da página de origem
+                let redirectUrl = referrer;
+                // Se já tiver query params, usa '&', senão usa '?'
+                redirectUrl += (referrer.includes('?') ? '&' : '?') + 'refreshed=' + Date.now();
+                window.location.href = redirectUrl;
             } else {
                 errorMessageDiv.textContent = data.message || 'Erro ao registrar falta.';
                 errorMessageDiv.classList.remove('hidden');

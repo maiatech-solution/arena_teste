@@ -355,7 +355,6 @@
                 <input type="hidden" name="paid_amount_ref" id="paid-amount-ref">
 
                 {{-- Área de Gerenciamento de Pagamento por Falta --}}
-                {{-- REMOVENDO A CLASSE HIDDEN AQUI E ADICIONANDO NA FUNÇÃO JS --}}
                 <div id="no-show-refund-area" class="mb-6 p-4 border border-red-300 bg-red-50 rounded-lg hidden">
                     <p class="font-bold text-red-700 mb-3 flex items-center">
                         <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 5h10M5 15h14M7 20h10"/></svg>
@@ -1182,7 +1181,7 @@
 
         // --- NO-SHOW LÓGICA (COM ESTORNO) ---
 
-        // Atualizado para receber paidAmount (como valor pago) e isPaid
+        // Atualizado para receber signalValue (como valor pago) e price (valor total da reserva)
         function openNoShowModal(reservaId, clientName, paidAmount, isPaid, price) {
             closeEventModal();
             const modalEl = document.getElementById('no-show-modal');
@@ -1191,10 +1190,6 @@
             const refundAllAmountEl = document.getElementById('refund-all-amount-display');
             const paidAmountRefInput = document.getElementById('paid-amount-ref');
             const noShowReasonInput = document.getElementById('no-show-reason-input');
-
-            // ✅ NOVO: Referência para a área de reembolso
-            const refundArea = document.getElementById('no-show-refund-area');
-
 
             // Resetar o formulário
             document.getElementById('no-show-reserva-id').value = reservaId;
@@ -1216,8 +1211,7 @@
 
 
             if (amountPaid > 0) {
-                // Se houver pagamento, mostra a área de reembolso
-                refundArea.classList.remove('hidden');
+                document.getElementById('no-show-refund-area').classList.remove('hidden');
                 paidAmountEl.textContent = paidFormatted;
                 keepAmountEl.textContent = paidFormatted;
                 refundAllAmountEl.textContent = paidFormatted;
@@ -1225,8 +1219,7 @@
                 // Reseta para a opção de "Manter no Caixa" (retenção)
                 document.getElementById('no-show-choice-keep').checked = true;
             } else {
-                // Se NÃO houver pagamento, esconde a área de reembolso
-                refundArea.classList.add('hidden');
+                document.getElementById('no-show-refund-area').classList.add('hidden');
             }
 
 
@@ -1471,11 +1464,11 @@
 
                     // 3. ✅ Lógica para eventos PAGOS/BAIXADOS
                     if (isPaidFlag) {
-                           // Aplica o fade-out (opacity: 0.5) via CSS class .fc-event-paid (garante que não seja sobrescrito)
-                           info.el.classList.add('fc-event-paid');
+                         // Aplica o fade-out (opacity: 0.5) via CSS class .fc-event-paid (garante que não seja sobrescrito)
+                         info.el.classList.add('fc-event-paid');
 
-                           // Adiciona o indicador de pago no início do título
-                           currentTitle = `(PAGO) ${currentTitle}`;
+                         // Adiciona o indicador de pago no início do título
+                         currentTitle = `(PAGO) ${currentTitle}`;
                     }
 
                     // 4. O resultado final é aplicado ao elemento.
@@ -1642,10 +1635,10 @@
                         // 🎯 NOVO: Botão Marcar como Falta (Só para eventos que já passaram)
                         if (isPastEvent) {
                              actionButtons += `
-                                 <button onclick="openNoShowModal(${reservaId}, '${clientName}', ${paidAmount}, ${isPaid}, ${price})" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150 text-md shadow-xl">
-                                     Marcar como FALTA / Decisão de Estorno
-                                 </button>
-                             `;
+                                <button onclick="openNoShowModal(${reservaId}, '${clientName}', ${paidAmount}, ${isPaid}, ${price})" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150 text-md shadow-xl">
+                                    Marcar como FALTA / Decisão de Estorno
+                                </button>
+                            `;
                         }
 
                         // Botões de Ação Principal (Pagamento/Detalhes)

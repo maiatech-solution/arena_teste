@@ -325,94 +325,6 @@ class AdminController extends Controller
         return $this->reservaController->rejeitar($request, $reserva);
     }
 
-    /**
-     * ✅ NOVO: Registra a falta do cliente (No-Show) e gerencia o estorno/retenção.
-     * A falta (No-Show) é quando o cliente não comparece e NÃO INFORMA o cancelamento.
-     * @param Request $request
-     * @param Reserva $reserva
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function registerNoShow(Request $request, Reserva $reserva)
-    {
-        // 1. Validação de Status
-        if ($reserva->status !== Reserva::STATUS_CONFIRMADA) {
-            return response()->json(['success' => false, 'message' => 'A reserva deve estar confirmada para ser marcada como falta.'], 400);
-        }
-
-        // 2. Validação da Requisição (motivo e decisão de estorno)
-        $validated = $request->validate([
-            'no_show_reason' => 'required|string|min:5|max:255',
-            'should_refund' => 'required|boolean', // Se deve estornar o valor pago
-            'paid_amount' => 'required|numeric|min:0', // O valor pago pelo cliente (para referência)
-        ], [
-            'no_show_reason.required' => 'O motivo da falta é obrigatório.',
-            'no_show_reason.min' => 'O motivo da falta deve ter pelo menos 5 caracteres.',
-        ]);
-
-        // 3. Checagem de integridade (o valor pago do front deve bater com o DB)
-        $amountPaid = (float) $reserva->total_paid;
-        $shouldRefund = $validated['should_refund'];
-
-        if ((float) $validated['paid_amount'] != $amountPaid) {
-             Log::warning("Tentativa de No-Show ID: {$reserva->id} com valor pago inconsistente. Front: {$validated['paid_amount']}, DB: {$amountPaid}");
-             // Continuamos, mas o log de aviso é importante
-        }
-
-        DB::beginTransaction();
-        try {
-            // 4. Atualiza a Reserva para STATUS_NO_SHOW
-            $reserva->status = Reserva::STATUS_NO_SHOW;
-            $reserva->manager_id = Auth::id();
-            $reserva->no_show_reason = '[Gestor] ' . $validated['no_show_reason'];
-            // Garante que o motivo de cancelamento não seja usado
-            $reserva->cancellation_reason = null;
-            $reserva->save();
-
-            // 5. Gera Transação Financeira de Estorno ou Retenção
-            if ($amountPaid > 0) {
-                if ($shouldRefund) {
-                    // Estornar: Cria uma transação negativa (saída do caixa)
-                    FinancialTransaction::create([
-                        'reserva_id' => $reserva->id,
-                        'user_id' => $reserva->user_id,
-                        'manager_id' => Auth::id(),
-                        'amount' => -$amountPaid, // Valor negativo para estorno/saída
-                        'type' => 'refund_noshow',
-                        'payment_method' => 'manual',
-                        'description' => "Estorno do valor pago (R$ " . number_format($amountPaid, 2, ',', '.') . ") devido à falta (No-Show).",
-                        'paid_at' => Carbon::now(),
-                    ]);
-                    $message = "Reserva marcada como Falta. O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi estornado (saiu do caixa).";
-
-                } else {
-                    // Manter (Retenção): O valor original pago permanece no caixa (não há nova transação)
-                    // Para fins de auditoria, a transação de pagamento original serve como registro da retenção.
-                    $message = "Reserva marcada como Falta. O valor pago de R$ " . number_format($amountPaid, 2, ',', '.') . " foi RETIDO no caixa.";
-                }
-            } else {
-                $message = "Reserva marcada como Falta. Não havia valor pago a ser gerenciado.";
-            }
-
-            // 6. Recria o slot fixo de disponibilidade (verde)
-            // Isso libera o horário para ser reservado por outra pessoa, se for o caso.
-            $this->reservaController->recreateFixedSlot($reserva);
-
-            DB::commit();
-            Log::info("Reserva ID: {$reserva->id} marcada como FALTA (No-Show) por Gestor ID: " . Auth::id() . ". Estorno: " . ($shouldRefund ? 'Sim' : 'Não'));
-
-            return response()->json(['success' => true, 'message' => $message], 200);
-
-        } catch (ValidationException $e) {
-             // Garante que erros de validação sejam tratados corretamente
-            DB::rollBack();
-            return response()->json(['success' => false, 'errors' => $e->errors()], 422);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("Erro ao registrar No-Show para reserva ID: {$reserva->id}.", ['exception' => $e]);
-            return response()->json(['success' => false, 'message' => 'Erro interno ao registrar a falta: ' . $e->getMessage()], 500);
-        }
-    }
-
 
     /**
      * ✅ NOVO: Reativa uma reserva cancelada ou rejeitada para o status CONFIRMADA.
@@ -585,8 +497,6 @@ class AdminController extends Controller
 
     /**
      * Cancela uma reserva PONTUAL confirmada (PATCH /admin/reservas/{reserva}/cancelar).
-     * O cancelamento implica que o cliente informou o não comparecimento ANTES ou no ato,
-     * e o status final é STATUS_CANCELADA.
      * @param Reserva $reserva A reserva confirmada PONTUAL a ser cancelada.
      */
     public function cancelarReserva(Request $request, Reserva $reserva)
@@ -600,12 +510,7 @@ class AdminController extends Controller
 
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
-            // 🛑 NOVO: Adiciona a validação para o estorno
-            'should_refund' => 'required|boolean',
         ]);
-
-        $shouldRefund = $validated['should_refund'];
-        $amountPaid = (float) $reserva->signal_value; // No cancelamento pontual, lidamos apenas com o sinal.
 
         DB::beginTransaction();
         try {
@@ -614,27 +519,15 @@ class AdminController extends Controller
             $reserva->cancellation_reason = '[Gestor] ' . $validated['cancellation_reason'];
             $reserva->save();
 
-            // 1. Gera Transação Financeira de Estorno (se aplicável)
-            if ($shouldRefund && $amountPaid > 0) {
-                 FinancialTransaction::create([
-                    'reserva_id' => $reserva->id,
-                    'user_id' => $reserva->user_id,
-                    'manager_id' => Auth::id(),
-                    'amount' => -$amountPaid, // Valor negativo para estorno/saída
-                    'type' => 'refund_cancellation',
-                    'payment_method' => 'manual',
-                    'description' => "Estorno do sinal/valor pago (R$ " . number_format($amountPaid, 2, ',', '.') . ") devido ao cancelamento pontual.",
-                    'paid_at' => Carbon::now(),
-                ]);
-            }
-
-            // 2. Recria o slot fixo de disponibilidade (verde)
+            // 1. Recria o slot fixo de disponibilidade (verde)
+            // 🛑 CRÍTICO: Delega para o helper correto no ReservaController
             $this->reservaController->recreateFixedSlot($reserva);
+
+            // 2. Mantemos o registro para auditoria.
 
             DB::commit();
             Log::info("Reserva PONTUAL ID: {$reserva->id} cancelada pelo gestor ID: " . Auth::id());
-            $message = "Reserva cancelada com sucesso! O horário foi liberado." . ($shouldRefund && $amountPaid > 0 ? " O sinal de R$ " . number_format($amountPaid, 2, ',', '.') . " foi estornado." : "");
-            return response()->json(['success' => true, 'message' => $message], 200);
+            return response()->json(['success' => true, 'message' => 'Reserva cancelada com sucesso! O horário foi liberado.'], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao cancelar reserva PONTUAL ID: {$reserva->id}.", ['exception' => $e]);
@@ -645,7 +538,6 @@ class AdminController extends Controller
 
     /**
      * Cancela UMA reserva de uma série recorrente (PATCH /admin/reservas/{reserva}/cancelar-pontual).
-     * O cancelamento pontual implica que o cliente informou o não comparecimento.
      * @param Reserva $reserva A reserva específica na série a ser cancelada.
      */
     public function cancelarReservaRecorrente(Request $request, Reserva $reserva)
@@ -659,12 +551,7 @@ class AdminController extends Controller
 
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
-            // 🛑 NOVO: Adiciona a validação para o estorno
-            'should_refund' => 'required|boolean',
         ]);
-
-        $shouldRefund = $validated['should_refund'];
-        $amountPaid = (float) $reserva->signal_value;
 
         DB::beginTransaction();
         try {
@@ -675,30 +562,15 @@ class AdminController extends Controller
             $reserva->cancellation_reason = '[Gestor - Pontual Recorrência] ' . $validated['cancellation_reason'];
             $reserva->save();
 
-            // 1. Gera Transação Financeira de Estorno (se aplicável)
-            if ($shouldRefund && $amountPaid > 0) {
-                 FinancialTransaction::create([
-                    'reserva_id' => $reserva->id,
-                    'user_id' => $reserva->user_id,
-                    'manager_id' => Auth::id(),
-                    'amount' => -$amountPaid, // Valor negativo para estorno/saída
-                    'type' => 'refund_cancellation_pontual_recurrent',
-                    'payment_method' => 'manual',
-                    'description' => "Estorno do sinal/valor pago (R$ " . number_format($amountPaid, 2, ',', '.') . ") devido ao cancelamento pontual da recorrência.",
-                    'paid_at' => Carbon::now(),
-                ]);
-            }
-
-            // 2. Recria o slot fixo de disponibilidade (verde)
+            // 1. Recria o slot fixo de disponibilidade (verde)
             // ✅ CRÍTICO: Delega para o helper correto no ReservaController. Isso resolve o problema de slot sumir.
             $this->reservaController->recreateFixedSlot($reserva);
 
-            // 3. Mantemos o registro para auditoria.
+            // 2. Mantemos o registro para auditoria.
 
             DB::commit();
             Log::info("Reserva RECORRENTE PONTUAL ID: {$reserva->id} cancelada pelo gestor ID: " . Auth::id());
-            $message = "Reserva recorrente pontual cancelada com sucesso! O horário foi liberado." . ($shouldRefund && $amountPaid > 0 ? " O sinal de R$ " . number_format($amountPaid, 2, ',', '.') . " foi estornado." : "");
-            return response()->json(['success' => true, 'message' => $message], 200);
+            return response()->json(['success' => true, 'message' => 'Reserva recorrente pontual cancelada com sucesso! O horário foi liberado.'], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao cancelar reserva RECORRENTE PONTUAL ID: {$reserva->id}.", ['exception' => $e]);
@@ -719,14 +591,7 @@ class AdminController extends Controller
 
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
-            // 🛑 NOVO: Adiciona a validação para o estorno
-            'should_refund' => 'required|boolean',
         ]);
-
-        $shouldRefund = $validated['should_refund'];
-        // Para séries, o estorno só deve considerar o pagamento que estava na reserva (signal_value).
-        $amountPaidForRefund = (float) $reserva->signal_value;
-
 
         // Determina o ID mestre da série
         $masterId = $reserva->recurrent_series_id ?? $reserva->id;
@@ -749,11 +614,6 @@ class AdminController extends Controller
             $cancelledCount = 0;
 
             foreach ($seriesReservas as $slot) {
-                // Se a reserva já passou, não cancelamos
-                if (Carbon::parse($slot->date . ' ' . $slot->start_time)->isPast() && !$slot->date->isToday()) {
-                    continue;
-                }
-
                 $slot->status = Reserva::STATUS_CANCELADA;
                 $slot->manager_id = $managerId;
                 $slot->cancellation_reason = $cancellationReason;
@@ -767,26 +627,10 @@ class AdminController extends Controller
                 $cancelledCount++;
             }
 
-            // 1. Gera Transação Financeira de Estorno ÚNICO (se aplicável)
-            if ($shouldRefund && $amountPaidForRefund > 0) {
-                 FinancialTransaction::create([
-                    'reserva_id' => $reserva->id, // Usa a reserva mestre ou a reserva clicada como âncora
-                    'user_id' => $reserva->user_id,
-                    'manager_id' => Auth::id(),
-                    'amount' => -$amountPaidForRefund, // Valor negativo para estorno/saída
-                    'type' => 'refund_cancellation_serie',
-                    'payment_method' => 'manual',
-                    'description' => "Estorno do sinal/valor pago (R$ " . number_format($amountPaidForRefund, 2, ',', '.') . ") devido ao cancelamento da série inteira.",
-                    'paid_at' => Carbon::now(),
-                ]);
-            }
-
             DB::commit();
             Log::info("Série Recorrente MASTER ID: {$masterId} cancelada pelo gestor ID: " . Auth::id() . ". Total de {$cancelledCount} slots liberados.");
 
-            $message = "Toda a série recorrente futura (total de {$cancelledCount} slots) foi cancelada com sucesso! Os horários foram liberados." . ($shouldRefund && $amountPaidForRefund > 0 ? " O sinal de R$ " . number_format($amountPaidForRefund, 2, ',', '.') . " foi estornado." : "");
-
-            return response()->json(['success' => true, 'message' => $message], 200);
+            return response()->json(['success' => true, 'message' => "Toda a série recorrente futura (total de {$cancelledCount} slots) foi cancelada com sucesso! Os horários foram liberados."], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao cancelar série recorrente ID: {$masterId}.", ['exception' => $e]);

@@ -375,14 +375,14 @@
                     </p>
 
                     {{-- 🎯 BLOCO CRÍTICO: GESTÃO FINANCEIRA DE FALTA --}}
-                    <div id="financialNoShowBlock" class="p-4 mb-4 border border-red-300 rounded-lg bg-red-50 dark:bg-red-900/30">
+                    <div class="p-4 mb-4 border border-red-300 rounded-lg bg-red-50 dark:bg-red-900/30">
                         <div class="text-sm font-semibold text-red-700 dark:text-red-300 mb-2">
                             Gestão de Pagamento <span id="noShowAmountDisplay" class="font-extrabold">R$ 0,00</span>
                         </div>
                         <p id="noShowInitialWarning" class="text-xs text-gray-700 dark:text-gray-400 mb-3"></p>
 
                         {{-- Opção de Estorno/Retenção --}}
-                        <div id="refundControls" class="mt-2">
+                        <div class="mt-2">
                             <label for="should_refund" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ação sobre o valor pago:</label>
                             <select name="should_refund" id="should_refund" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-700 dark:text-white">
                                 <option value="false" selected>Reter o valor pago (Sem estorno)</option>
@@ -713,17 +713,13 @@
 
         // NOVO: Atualiza a mensagem de aviso inicial
         const initialWarningEl = document.getElementById('noShowInitialWarning');
-        const refundControlsEl = document.getElementById('refundControls'); // <--- NOVO: Referência ao bloco de controle de estorno
-
         if (paidAmount > 0) {
             initialWarningEl.innerHTML = `O cliente já pagou <span class="font-bold">${paidAmountFormatted}</span>. Escolha abaixo se este valor será retido (padrão) ou estornado.`;
             // Reseta para 'Reter' como padrão
             document.getElementById('should_refund').value = 'false';
-            refundControlsEl.classList.remove('hidden'); // Mostra os controles
         } else {
             initialWarningEl.textContent = `Nenhum valor foi pago. Marcar como falta apenas registrará o status.`;
             document.getElementById('should_refund').value = 'false';
-            refundControlsEl.classList.add('hidden'); // Esconde os controles
         }
 
 

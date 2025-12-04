@@ -327,7 +327,6 @@ class AdminController extends Controller
 
     /**
      * ✅ NOVO: Registra a falta do cliente (No-Show) e gerencia o estorno/retenção.
-     * A falta (No-Show) é quando o cliente não comparece e NÃO INFORMA o cancelamento.
      * @param Request $request
      * @param Reserva $reserva
      * @return \Illuminate\Http\JsonResponse
@@ -386,7 +385,8 @@ class AdminController extends Controller
 
                 } else {
                     // Manter (Retenção): O valor original pago permanece no caixa (não há nova transação)
-                    // Para fins de auditoria, a transação de pagamento original serve como registro da retenção.
+                    // Mas para fins de auditoria, podemos registrar a retenção se necessário.
+                    // Para simplificar, o sistema assume que a transação de pagamento original cobre a retenção.
                     $message = "Reserva marcada como Falta. O valor pago de R$ " . number_format($amountPaid, 2, ',', '.') . " foi RETIDO no caixa.";
                 }
             } else {
@@ -585,8 +585,6 @@ class AdminController extends Controller
 
     /**
      * Cancela uma reserva PONTUAL confirmada (PATCH /admin/reservas/{reserva}/cancelar).
-     * O cancelamento implica que o cliente informou o não comparecimento ANTES ou no ato,
-     * e o status final é STATUS_CANCELADA.
      * @param Reserva $reserva A reserva confirmada PONTUAL a ser cancelada.
      */
     public function cancelarReserva(Request $request, Reserva $reserva)
@@ -645,7 +643,6 @@ class AdminController extends Controller
 
     /**
      * Cancela UMA reserva de uma série recorrente (PATCH /admin/reservas/{reserva}/cancelar-pontual).
-     * O cancelamento pontual implica que o cliente informou o não comparecimento.
      * @param Reserva $reserva A reserva específica na série a ser cancelada.
      */
     public function cancelarReservaRecorrente(Request $request, Reserva $reserva)
@@ -724,7 +721,8 @@ class AdminController extends Controller
         ]);
 
         $shouldRefund = $validated['should_refund'];
-        // Para séries, o estorno só deve considerar o pagamento que estava na reserva (signal_value).
+        // Para séries, o estorno só deve considerar a RESERVA MESTRA (se houver pagamento nela)
+        // ou se o pagamento está associado a cada slot. Aqui, usamos o sinal da reserva clicada.
         $amountPaidForRefund = (float) $reserva->signal_value;
 
 
