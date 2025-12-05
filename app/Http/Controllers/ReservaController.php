@@ -58,6 +58,8 @@ class ReservaController extends Controller
         // Normaliza as horas
         try {
             $startTimeNormalized = Carbon::createFromFormat('G:i', $startTime)->format('H:i:s');
+            // Nota: O Carbon::parse trata 00:00 como a meia-noite da data atual, mas vamos manter a normalização
+            // feita pela correção (23:59) para o último slot.
             $endTimeNormalized = Carbon::parse($endTime)->format('H:i:s');
         } catch (\Exception $e) {
             $startTimeNormalized = Carbon::parse($startTime)->format('H:i:s');
@@ -268,19 +270,40 @@ class ReservaController extends Controller
      */
     public function storeQuickReservaApi(Request $request)
     {
-        // VALIDAÇÃO CORRIGIDA: user_id é removido da regra de required_without
-        $validated = $request->validate([
+        // 🎯 VALIDAÇÃO CORRIGIDA: Usa uma validação customizada para permitir 00:00 após 23:00.
+        $validator = Validator::make($request->all(), [
             'date' => 'required|date_format:Y-m-d',
             'start_time' => 'required|date_format:G:i',
-            'end_time' => 'required|date_format:G:i|after:start_time',
+            'end_time' => [
+                'required',
+                'date_format:G:i',
+                function ($attribute, $value, $fail) use ($request) {
+                    $startTime = $request->input('start_time');
+                    
+                    // Permite a transição 23:00 -> 00:00 (ou 0:00) na validação
+                    if (($value === '0:00' || $value === '00:00') && $startTime === '23:00') {
+                        return; 
+                    }
+            
+                    // Caso normal: aplica a regra after:start_time
+                    try {
+                        $startTimeCarbon = \Carbon\Carbon::createFromFormat('G:i', $startTime);
+                        $endTimeCarbon = \Carbon\Carbon::createFromFormat('G:i', $value);
+
+                        if ($endTimeCarbon->lte($startTimeCarbon)) {
+                            $fail('O horário final deve ser posterior ao horário inicial.');
+                        }
+                    } catch (\Exception $e) {
+                        $fail('Formato de horário inválido.');
+                    }
+                }
+            ],
             'price' => 'required|numeric|min:0',
             'reserva_id_to_update' => 'required|exists:reservas,id',
 
-            // AGORA SÓ EXIGE NAME E CONTACT
             'client_name' => 'required|string|max:255',
             'client_contact' => 'required|digits:11|max:255',
 
-            // Adiciona a validação do valor do sinal
             'signal_value' => 'nullable|numeric|min:0',
 
             'notes' => 'nullable|string',
@@ -291,6 +314,12 @@ class ReservaController extends Controller
             'client_contact.required' => 'O Contato do Cliente (WhatsApp) é obrigatório.',
         ]);
 
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $validated = $validator->validated();
+        
         // NOVA LÓGICA DE VALORES E PAGAMENTO
         $price = (float) $validated['price'];
         $signalValue = (float) ($validated['signal_value'] ?? 0.00);
@@ -305,8 +334,20 @@ class ReservaController extends Controller
         // FIM NOVA LÓGICA DE VALORES E PAGAMENTO
 
         $reservaIdToUpdate = $validated['reserva_id_to_update'];
-        $startTimeNormalized = Carbon::createFromFormat('G:i', $validated['start_time'])->format('H:i:s');
-        $endTimeNormalized = Carbon::createFromFormat('G:i', $validated['end_time'])->format('H:i:s');
+        $startTimeRaw = $validated['start_time'];
+        $endTimeRaw = $validated['end_time'];
+        
+        // 🎯 CORREÇÃO CRÍTICA: Trata o caso 23:00 - 00:00 após a validação
+        if ($startTimeRaw === '23:00' && ($endTimeRaw === '0:00' || $endTimeRaw === '00:00')) {
+            // Força o final do dia para 23:59 para manter a integridade da data no MySQL TIME
+            $endTimeRaw = '23:59';
+            Log::info("Horário 23:00-00:00 ajustado para 23:00-23:59 na criação rápida.");
+        }
+        // FIM CORREÇÃO CRÍTICA
+
+        $startTimeNormalized = Carbon::createFromFormat('G:i', $startTimeRaw)->format('H:i:s');
+        $endTimeNormalized = Carbon::createFromFormat('G:i', $endTimeRaw)->format('H:i:s');
+
 
         $oldReserva = Reserva::find($reservaIdToUpdate);
 
@@ -316,8 +357,8 @@ class ReservaController extends Controller
         }
 
         // 2. Checagem de Conflito Final (contra reservas reais)
-        if ($this->checkOverlap($validated['date'], $validated['start_time'], $validated['end_time'], true, $reservaIdToUpdate)) {
-            $conflictingIds = $this->getConflictingReservaIds($validated['date'], $validated['start_time'], $validated['end_time'], $reservaIdToUpdate);
+        if ($this->checkOverlap($validated['date'], $startTimeRaw, $endTimeRaw, true, $reservaIdToUpdate)) {
+            $conflictingIds = $this->getConflictingReservaIds($validated['date'], $startTimeRaw, $endTimeRaw, $reservaIdToUpdate);
             return response()->json([
                 'success' => false,
                 'message' => 'Conflito: O horário acabou de ser agendado por outro cliente. (IDs: ' . $conflictingIds . ')'], 409);
@@ -395,7 +436,8 @@ class ReservaController extends Controller
             if ($signalValue > 0) {
                 $message .= " Sinal/Pagamento de R$ " . number_format($signalValue, 2, ',', '.') . " registrado.";
             }
-
+            
+            // 🎯 O Retorno JSON de Sucesso!
             return response()->json(['success' => true, 'message' => $message], 200);
 
         } catch (\Exception $e) {
@@ -417,19 +459,40 @@ class ReservaController extends Controller
      */
     public function storeRecurrentReservaApi(Request $request)
     {
-        // VALIDAÇÃO CORRIGIDA: user_id é removido da regra de required_without
-        $validated = $request->validate([
+        // 🎯 VALIDAÇÃO CORRIGIDA: Usa uma validação customizada para permitir 00:00 após 23:00.
+        $validator = Validator::make($request->all(), [
             'date' => 'required|date_format:Y-m-d',
             'start_time' => 'required|date_format:G:i',
-            'end_time' => 'required|date_format:G:i|after:start_time',
+            'end_time' => [
+                'required',
+                'date_format:G:i',
+                function ($attribute, $value, $fail) use ($request) {
+                    $startTime = $request->input('start_time');
+                    
+                    // Permite a transição 23:00 -> 00:00 (ou 0:00) na validação
+                    if (($value === '0:00' || $value === '00:00') && $startTime === '23:00') {
+                        return; 
+                    }
+            
+                    // Caso normal: aplica a regra after:start_time
+                    try {
+                        $startTimeCarbon = \Carbon\Carbon::createFromFormat('G:i', $startTime);
+                        $endTimeCarbon = \Carbon\Carbon::createFromFormat('G:i', $value);
+
+                        if ($endTimeCarbon->lte($startTimeCarbon)) {
+                            $fail('O horário final deve ser posterior ao horário inicial.');
+                        }
+                    } catch (\Exception $e) {
+                        $fail('Formato de horário inválido.');
+                    }
+                }
+            ],
             'price' => 'required|numeric|min:0',
             'reserva_id_to_update' => 'required|exists:reservas,id', // O ID do slot FIXO inicial
 
-            // AGORA SÓ EXIGE NAME E CONTACT
             'client_name' => 'required|string|max:255',
             'client_contact' => 'required|digits:11|max:255',
 
-            // CORREÇÃO CRÍTICA: Adiciona a validação do valor do sinal
             'signal_value' => 'nullable|numeric|min:0',
 
             'notes' => 'nullable|string',
@@ -439,6 +502,12 @@ class ReservaController extends Controller
             'client_name.required' => 'O Nome do Cliente é obrigatório.',
             'client_contact.required' => 'O Contato do Cliente (WhatsApp) é obrigatório.',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'message' => $validator->errors()->first()], 422);
+        }
+        
+        $validated = $validator->validated();
 
         // NOVA LÓGICA DE VALORES E PAGAMENTO (para a Mestra e todas as cópias)
         $price = (float) $validated['price'];
@@ -458,6 +527,14 @@ class ReservaController extends Controller
 
         $startTimeRaw = $validated['start_time'];
         $endTimeRaw = $validated['end_time'];
+        
+        // 🎯 CORREÇÃO CRÍTICA: Trata o caso 23:00 - 00:00 após a validação
+        if ($startTimeRaw === '23:00' && ($endTimeRaw === '0:00' || $endTimeRaw === '00:00')) {
+            // Força o final do dia para 23:59 para manter a integridade da data no MySQL TIME
+            $endTimeRaw = '23:59';
+            Log::info("Horário 23:00-00:00 ajustado para 23:00-23:59 na criação recorrente.");
+        }
+        // FIM CORREÇÃO CRÍTICA
 
         $startTimeNormalized = Carbon::createFromFormat('G:i', $startTimeRaw)->format('H:i:s');
         $endTimeNormalized = Carbon::createFromFormat('G:i', $endTimeRaw)->format('H:i:s');
@@ -523,10 +600,10 @@ class ReservaController extends Controller
 
             // 2. Busca o slot fixo ATIVO (free) para esta data/hora
             $fixedSlotQuery = Reserva::where('is_fixed', true)
-                                           ->whereDate('date', $dateString)
-                                           ->where('start_time', $startTimeNormalized)
-                                           ->where('end_time', $endTimeNormalized)
-                                           ->where('status', Reserva::STATUS_FREE); // PADRONIZADO
+                                         ->whereDate('date', $dateString)
+                                         ->where('start_time', $startTimeNormalized)
+                                         ->where('end_time', $endTimeNormalized)
+                                         ->where('status', Reserva::STATUS_FREE); // PADRONIZADO
 
             if ($isFirstDate) {
                 $fixedSlotQuery->where('id', $scheduleId);
@@ -559,7 +636,7 @@ class ReservaController extends Controller
                 }
 
                 $reservasToCreate[] = [
-                    'user_id' => $userId, // Usa o ID do cliente sincronizado/criado
+                    'user_id' => $userId, // Usa o ID sincronizado
                     'manager_id' => Auth::id(), // Adicionado o manager_id
                     'date' => $dateString,
                     'day_of_week' => $dayOfWeek,
@@ -662,7 +739,8 @@ class ReservaController extends Controller
             if ($conflictCount > 0) {
                 $message .= " Atenção: {$conflictCount} datas foram puladas/conflitantes e não foram agendadas. Verifique o calendário.";
             }
-
+            
+            // 🎯 O Retorno JSON de Sucesso!
             return response()->json(['success' => true, 'message' => $message], 200);
 
         } catch (\Exception $e) {
@@ -920,27 +998,27 @@ class ReservaController extends Controller
                 // CRÍTICO: Identifica todas as reservas futuras elegíveis que PRECISAM de atualização
                 try {
                     $updatedCount = Reserva::where(function ($query) use ($masterId) {
-                                     // Atinge a série inteira (mestra e cópias)
-                                     $query->where('recurrent_series_id', $masterId)
-                                             ->orWhere('id', $masterId);
-                                 })
-                                 // CRÍTICO: Pega todas as reservas com data ESTREITAMENTE MAIOR que a data atual
-                                 ->whereDate('date', '>', $reservaDate)
-                                 // Filtra por horário, garantindo o slot semanal correto
-                                 ->where('start_time', $reserva->start_time)
-                                 ->where('end_time', $reserva->end_time)
-                                 ->where('is_fixed', false) // Apenas reservas de cliente
-                                 // CORREÇÃO CRÍTICA: Alvo: APENAS reservas ATIVAS (Confirmadas)
-                                 // Reservas ativas recorrentes têm status 'confirmed'
-                                 ->where('status', Reserva::STATUS_CONFIRMADA)
-                                 // APENAS ATUALIZA SE O PREÇO ATUAL FOR DIFERENTE DO NOVO PREÇO
-                                 ->where('price', '!=', $newPriceForSeries)
-                                 ->update([
-                                     // Atualiza o preço base (price) e o preço final (final_price)
-                                     'price' => $newPriceForSeries,
-                                     'final_price' => $newPriceForSeries,
-                                     'manager_id' => Auth::id(),
-                                 ]);
+                                           // Atinge a série inteira (mestra e cópias)
+                                           $query->where('recurrent_series_id', $masterId)
+                                                 ->orWhere('id', $masterId);
+                                        })
+                                         // CRÍTICO: Pega todas as reservas com data ESTREITAMENTE MAIOR que a data atual
+                                         ->whereDate('date', '>', $reservaDate)
+                                         // Filtra por horário, garantindo o slot semanal correto
+                                         ->where('start_time', $reserva->start_time)
+                                         ->where('end_time', $reserva->end_time)
+                                         ->where('is_fixed', false) // Apenas reservas de cliente
+                                         // CORREÇÃO CRÍTICA: Alvo: APENAS reservas ATIVAS (Confirmadas)
+                                         // Reservas ativas recorrentes têm status 'confirmed'
+                                         ->where('status', Reserva::STATUS_CONFIRMADA)
+                                         // APENAS ATUALIZA SE O PREÇO ATUAL FOR DIFERENTE DO NOVO PREÇO
+                                         ->where('price', '!=', $newPriceForSeries)
+                                         ->update([
+                                            // Atualiza o preço base (price) e o preço final (final_price)
+                                            'price' => $newPriceForSeries,
+                                            'final_price' => $newPriceForSeries,
+                                            'manager_id' => Auth::id(),
+                                         ]);
 
                     if ($updatedCount > 0) {
                         Log::info("Preço de série recorrente (ID {$masterId}) atualizado para R$ {$newPriceForSeries} em {$updatedCount} reservas futuras.");
@@ -1126,7 +1204,7 @@ class ReservaController extends Controller
                     // Cria a nova reserva se não houver conflito real
                     if (!$isConflict) {
                         $newReservasToCreate[] = [
-                            'user_id' => $userId,
+                            'user_id' => $userId, // Usa o ID do cliente sincronizado/criado
                             'manager_id' => $managerId,
                             'date' => $dateString,
                             'day_of_week' => $dayOfWeek,
@@ -1459,13 +1537,13 @@ class ReservaController extends Controller
     protected function getSeriesMaxDate(int $masterId): ?Carbon
     {
         $maxDate = Reserva::where(function($query) use ($masterId) {
-             $query->where('recurrent_series_id', $masterId)
-                 ->orWhere('id', $masterId);
-             })
-             ->where('is_recurrent', true)
-             ->where('is_fixed', false)
-             ->where('status', Reserva::STATUS_CONFIRMADA) // PADRONIZADO
-             ->max('date');
+                 $query->where('recurrent_series_id', $masterId)
+                     ->orWhere('id', $masterId);
+                 })
+                 ->where('is_recurrent', true)
+                 ->where('is_fixed', false)
+                 ->where('status', Reserva::STATUS_CONFIRMADA) // PADRONIZADO
+                 ->max('date');
 
         return $maxDate ? Carbon::parse($maxDate) : null;
     }
@@ -1839,12 +1917,19 @@ class ReservaController extends Controller
         $validated = $validator->validated();
 
         $date = $validated['data_reserva'];
-        $startTime = $validated['hora_inicio'];
-        $endTime = $validated['hora_fim'];
+        $startTimeRaw = $validated['hora_inicio'];
+        $endTimeRaw = $validated['hora_fim'];
         $scheduleId = $validated['schedule_id'];
         $nomeCliente = $validated['nome_cliente'];
         $contatoCliente = $validated['contato_cliente'];
         $emailCliente = $validated['email_cliente'];
+
+        // 🎯 CORREÇÃO CRÍTICA DO HORÁRIO 23:00 - 00:00 NA VIEW PÚBLICA
+        if ($startTimeRaw === '23:00' && ($endTimeRaw === '0:00' || $endTimeRaw === '00:00')) {
+            $endTimeRaw = '23:59';
+            Log::info("Horário 23:00-00:00 ajustado para 23:00-23:59 na view pública.");
+        }
+        // FIM CORREÇÃO CRÍTICA
 
         // NOVA LÓGICA DE VALORES E PAGAMENTO (para storePublic)
         $price = (float) $validated['price'];
@@ -1861,8 +1946,8 @@ class ReservaController extends Controller
 
 
         // Normaliza as horas para o formato do banco de dados (H:i:s)
-        $startTimeNormalized = Carbon::createFromFormat('G:i', $startTime)->format('H:i:s');
-        $endTimeNormalized = Carbon::createFromFormat('G:i', $endTime)->format('H:i:s');
+        $startTimeNormalized = Carbon::createFromFormat('G:i', $startTimeRaw)->format('H:i:s');
+        $endTimeNormalized = Carbon::createFromFormat('G:i', $endTimeRaw)->format('H:i:s');
 
         DB::beginTransaction();
         try {
