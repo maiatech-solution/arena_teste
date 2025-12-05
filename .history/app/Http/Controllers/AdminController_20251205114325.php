@@ -1372,11 +1372,6 @@ class AdminController extends Controller
         $totalReceived = FinancialTransaction::whereDate('paid_at', $date)
             ->sum('amount');
 
-        // 🛑 NOVO: Busca todas as transações financeiras do dia para auditoria na view
-        $financialTransactions = FinancialTransaction::whereDate('paid_at', $date)
-            ->orderBy('paid_at', 'asc') // Ordena por data/hora para ver a ordem dos eventos
-            ->get();
-
 
         // 3.2 Total Esperado e Total Pendente (A receber)
         $activeReservas = Reserva::where('is_fixed', false)
@@ -1408,7 +1403,6 @@ class AdminController extends Controller
 
         return view('admin.financial.index', [ // Assume que a view é admin.financial.index
             'reservas' => $reservasQuery, // Tabela de agendamentos (inclui canceladas e no_show)
-            'financialTransactions' => $financialTransactions, // 🛑 NOVO: Transações para auditoria
             'selectedDate' => $selectedDate,
             'highlightReservaId' => $reservaId, // Para destacar linha se vier do calendário
 

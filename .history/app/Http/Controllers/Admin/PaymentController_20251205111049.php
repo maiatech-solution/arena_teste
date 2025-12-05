@@ -73,11 +73,10 @@ class PaymentController extends Controller
         $reservas = $query->get();
 
         // =========================================================================
-        // 2. Cálculo dos Totais sobre a coleção de Reservas (AGORA CALCULA O SALDO REAL)
+        // 2. Cálculo dos Totais sobre a coleção de Reservas (CORRIGIDO PARA USAR TRANSAÇÕES)
         // =========================================================================
 
         // 🛑 CRÍTICO: Lista de todos os tipos de transação que contam como ENTRADA no CAIXA
-        // Mantendo esta lista para o LOG DETALHADO, mas o KPI principal não usará o whereIn.
         $transactionIncomeTypes = [
             'signal',
             'payment',
@@ -90,26 +89,11 @@ class PaymentController extends Controller
             'RETEN_NOSHOW_COMP'   // Compensação de retenção (No-Show)
         ];
 
-        // Total Recebido Hoje (Caixa): SALDO LÍQUIDO (Entradas - Saídas)
-        // Assumindo que os estornos (saídas) são valores NEGATIVOS.
+        // Total Recebido Hoje (Caixa): SOMA DAS TRANSAÇÕES (CORREÇÃO CRÍTICA)
+        // Este KPI DEVE consultar a tabela de Transações para refletir o fluxo de caixa real (Entradas - Saídas)
         $totalReceived = FinancialTransaction::whereDate('paid_at', $dateObject)
-            // ✅ CORREÇÃO FINAL: Soma a coluna 'amount' para todas as transações, incluindo saídas (negativas).
+            ->whereIn('type', $transactionIncomeTypes)
             ->sum('amount');
-
-        // 🛑 NOVO: LOG DE DEBUG PARA RASTREAR O SALDO (TODOS os tipos)
-        $detailedTransactions = FinancialTransaction::whereDate('paid_at', $dateObject)
-            // Busca TODAS as transações do dia para debug
-            ->get(['amount', 'type', 'reserva_id']);
-
-        $debugLog = [];
-        $debugLog['total_received_calculated_NET'] = $totalReceived;
-        // Agrupa por tipo (incluindo negativos)
-        $debugLog['transactions_by_type_NET'] = $detailedTransactions->groupBy('type')->map(fn($group) => $group->sum('amount'));
-        // Lista todas as transações, incluindo estornos (negativos) e compensações.
-        $debugLog['transactions_list'] = $detailedTransactions->map(fn($t) => "R$ {$t->amount} (Tipo: {$t->type}, Reserva: {$t->reserva_id})")->toArray();
-
-        Log::info("DEBUG FINANCEIRO: Detalhamento do Total Recebido Hoje (Saldo Líquido).", $debugLog);
-        // --------------------------------------------------------
 
         // Total Esperado: Soma de todos os final_price ou price
         $totalExpected = $reservas->sum(fn($r) => $r->final_price ?? $r->price);
@@ -125,7 +109,7 @@ class PaymentController extends Controller
         return view('admin.payment.index', [
             'selectedDate' => $selectedDateString,
             'reservas' => $reservas,
-            'totalReceived' => $totalReceived, // Agora é baseado no SALDO LÍQUIDO das Transações
+            'totalReceived' => $totalReceived, // Agora é baseado nas Transações
             'totalPending' => $totalPending,
             'totalExpected' => $totalExpected,
             'noShowCount' => $noShowCount,

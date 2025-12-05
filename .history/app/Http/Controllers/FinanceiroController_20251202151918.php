@@ -64,18 +64,6 @@ class FinanceiroController extends Controller
                 'reservas' => [],
             ];
 
-            // 🛑 NOVO: Lista de todos os tipos de transação que contam como ENTRADA no CAIXA
-            $transactionIncomeTypes = [
-                'signal',
-                'full_payment',
-                'partial_payment',
-                'payment_settlement', // Tipo genérico de quitação, se usado.
-                'RETEN_CANC_COMP',
-                'RETEN_CANC_P_COMP',
-                'RETEN_CANC_S_COMP',
-                'RETEN_NOSHOW_COMP' // Inclui todas as compensações de retenção
-            ];
-
             foreach ($periodos as $periodo) {
                 list($start, $end) = $this->getDateRange($periodo);
 
@@ -83,14 +71,12 @@ class FinanceiroController extends Controller
                 $transacoesNoPeriodo = FinancialTransaction::query()
                     // Filtra pela data/hora que o pagamento REALMENTE ocorreu
                     ->whereBetween('paid_at', [$start, $end])
-                    // ✅ CORREÇÃO CRÍTICA: Inclui TODOS os tipos de ENTRADA, incluindo compensações
-                    ->whereIn('type', $transactionIncomeTypes)
+                    ->whereIn('type', ['signal', 'payment_settlement']) // Apenas pagamentos de entrada
                     ->get();
 
                 $totalRecebido = $transacoesNoPeriodo->sum('amount');
 
                 // 2. Total Sinais (Soma de transações do tipo 'signal')
-                // Apenas o 'signal' original é contado aqui para KPI específico
                 $totalSinais = $transacoesNoPeriodo->where('type', 'signal')->sum('amount');
 
                 // 3. Contagem de Reservas CONFIRMADAS (Reservas que VÃO ACONTECER no período)
@@ -143,7 +129,7 @@ class FinanceiroController extends Controller
                     // Seleciona reservas onde (total_paid < preço final/original) OU (total_paid é nulo/zero)
                     // 🛑 CORREÇÃO APLICADA: Assume que o campo 'price' é o valor total acordado.
                     $query->whereRaw('COALESCE(total_paid, 0) < price')
-                              ->orWhereNull('total_paid');
+                          ->orWhereNull('total_paid');
                 })
                 // Apenas reservas futuras (a partir de hoje) ou no dia de hoje
                 ->where('date', '>=', Carbon::today()->toDateString())

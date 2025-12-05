@@ -305,21 +305,19 @@
             <div id="refund-decision-area" class="mb-6 p-4 border border-red-300 bg-red-50 rounded-lg hidden">
                 <p class="font-bold text-red-700 mb-3 flex items-center">
                     <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 5h10M5 15h14M7 20h10"/></svg>
-                    <span id="refund-title-text">HOUVE SINAL PAGO:</span> R$ <span id="refund-signal-value" class="font-extrabold ml-1">0,00</span>
+                    HOUVE SINAL PAGO: R$ <span id="refund-signal-value" class="font-extrabold ml-1">0,00</span>
                 </p>
-                <p class="text-sm text-gray-700 mb-2 font-medium">O que fazer com o valor?</p>
+                <p class="text-sm text-gray-700 mb-2 font-medium">O que fazer com o valor do sinal?</p>
                 <div class="flex flex-wrap gap-4">
                     <label class="inline-flex items-center">
                         <input type="radio" name="refund_choice" value="refund" id="refund-choice-yes" class="form-radio h-5 w-5 text-red-600 border-red-500 focus:ring-red-500">
-                        <span class="ml-2 text-red-700 font-semibold text-sm">Devolver TODO o valor (Estornar do Caixa)</span>
+                        <span class="ml-2 text-red-700 font-semibold text-sm">Devolver (Estornar do Caixa)</span>
                     </label>
                     <label class="inline-flex items-center">
                         <input type="radio" name="refund_choice" value="keep" id="refund-choice-no" class="form-radio h-5 w-5 text-green-600 border-green-500 focus:ring-green-500" checked>
-                        <span class="ml-2 text-green-700 font-semibold text-sm">Manter TODO o valor (Fica no Caixa)</span>
+                        <span class="ml-2 text-green-700 font-semibold text-sm">Manter (Fica no Caixa)</span>
                     </label>
                 </div>
-                {{-- ✅ NOVO: Nota sobre estorno parcial --}}
-                <p class="text-xs text-gray-500 mt-2 font-medium">⚠️ Para estornar um valor parcial, mantenha o valor no caixa e utilize a página de **Caixa/Pagamentos** para registrar a saída parcial posteriormente.</p>
             </div>
             {{-- FIM NOVO --}}
 
@@ -468,8 +466,7 @@
                         </p>
 
                         {{-- ✅ NOVO: Onde a reputação será exibida --}}
-                        <div id="client-reputation-display" class="mt-2
-                            text-sm">
+                        <div id="client-reputation-display" class="mt-2 text-sm">
                             </div>
                     </div>
                 </div>
@@ -654,28 +651,16 @@
                 </div>
             `;
 
-            if (!container) return;
-
             container.insertAdjacentHTML('afterbegin', alertHtml);
             const newAlert = container.firstChild;
 
             // Fade in
-            setTimeout(() => {
-                // ✅ CORREÇÃO DE BUG: Verifica se o elemento existe (e tem classList) antes de remover classes
-                if (newAlert && newAlert.classList) {
-                    newAlert.classList.remove('opacity-0');
-                }
-            }, 10);
+            setTimeout(() => newAlert.classList.remove('opacity-0'), 10);
 
             // Fade out and remove after 5 seconds
             setTimeout(() => {
-                // ✅ CORREÇÃO DE BUG: Verifica se o elemento existe (e tem classList) antes de adicionar classes
-                if (newAlert && newAlert.classList) {
-                    newAlert.classList.add('opacity-0');
-                    setTimeout(() => {
-                        if (newAlert) newAlert.remove();
-                    }, 300);
-                }
+                newAlert.classList.add('opacity-0');
+                setTimeout(() => newAlert.remove(), 300);
             }, 5000);
         }
 
@@ -1056,8 +1041,7 @@
 
         // --- CANCELAMENTO LÓGICA (COM ESTORNO) ---
 
-        // ✅ NOVO: Adicionado isEventPaid
-        function openCancellationModal(reservaId, method, urlBase, message, buttonText, paidOrSignalValue = 0, isEventPaid = false) {
+        function openCancellationModal(reservaId, method, urlBase, message, buttonText, signalValue = 0) {
             closeEventModal();
             currentReservaId = reservaId;
             currentMethod = method;
@@ -1066,42 +1050,20 @@
 
             const refundArea = document.getElementById('refund-decision-area');
             const signalDisplay = document.getElementById('refund-signal-value');
-            const titleDisplay = document.getElementById('refund-title-text'); // NOVO
 
-            // ✅ NOVO: Adiciona o input hidden para enviar o valor limpo
-            let paidAmountRefInput = document.getElementById('cancellation-paid-amount-ref');
-            if (!paidAmountRefInput) {
-                paidAmountRefInput = document.createElement('input');
-                paidAmountRefInput.type = 'hidden';
-                paidAmountRefInput.id = 'cancellation-paid-amount-ref';
-                paidAmountRefInput.name = 'paid_amount_ref';
-                document.getElementById('cancellation-modal-content').appendChild(paidAmountRefInput);
-            }
-
-
-            const signalValueCleaned = cleanAndConvertForApi(paidOrSignalValue);
+            const signalValueCleaned = cleanAndConvertForApi(signalValue);
             const isRefundable = signalValueCleaned > 0;
             const signalFormatted = signalValueCleaned.toFixed(2).replace('.', ',');
 
             document.getElementById('modal-message-cancel').textContent = message;
 
-            // ✅ CRÍTICO: Define o valor LIMPO no input hidden
-            paidAmountRefInput.value = signalValueCleaned;
-
-
             if (isRefundable) {
                 refundArea.classList.remove('hidden');
-
-                // NOVO: Define o título dinâmico com base se a reserva estava PAGA
-                titleDisplay.textContent = isEventPaid ? 'VALOR PAGO TOTAL/PARCIAL:' : 'HOUVE SINAL PAGO:';
-
                 signalDisplay.textContent = signalFormatted;
-
                 document.getElementById('refund-choice-no').checked = true;
             } else {
                 refundArea.classList.add('hidden');
                 signalDisplay.textContent = '0,00';
-                titleDisplay.textContent = 'HOUVE SINAL PAGO:'; // Reseta
             }
 
             document.getElementById('cancellation-modal').classList.remove('hidden');
@@ -1125,34 +1087,26 @@
 
             let shouldRefund = false;
             const refundArea = document.getElementById('refund-decision-area');
-            const paidAmountRefInput = document.getElementById('cancellation-paid-amount-ref');
+            const signalDisplay = document.getElementById('refund-signal-value');
 
-            // ✅ Pega o valor LIMPO do input hidden
-            const paidAmountToProcess = paidAmountRefInput ? parseFloat(paidAmountRefInput.value) : 0;
+            const signalValueToCheck = cleanAndConvertForApi(signalDisplay.textContent);
 
-
-            if (paidAmountToProcess > 0 && !refundArea.classList.contains('hidden')) {
+            if (signalValueToCheck > 0 && !refundArea.classList.contains('hidden')) {
                 const refundChoice = document.querySelector('input[name="refund_choice"]:checked');
+                shouldRefund = refundChoice && refundChoice.value === 'refund';
 
                 if (!refundChoice) {
-                    showDashboardMessage("Por favor, selecione se o valor pago será devolvido ou mantido.", 'warning');
+                    showDashboardMessage("Por favor, selecione se o sinal pago será devolvido ou mantido.", 'warning');
                     return;
                 }
-
-                // Verifica se a opção é DEVOLVER
-                shouldRefund = refundChoice.value === 'refund';
             }
 
             const bodyData = {
                 cancellation_reason: reason,
                 should_refund: shouldRefund,
-                paid_amount_ref: paidAmountToProcess, // ✅ NOVO: Envia o valor pago/sinal para o backend
                 _token: csrfToken,
                 _method: method,
             };
-
-            // 🎯 LOG DE DEBUG CRÍTICO PARA O BACKEND
-            console.log("PAYLOAD DE CANCELAMENTO ENVIADO (DEBUG BACKEND):", JSON.stringify(bodyData, null, 2));
 
             const fetchConfig = {
                 method: 'POST',
@@ -1187,7 +1141,7 @@
                     if (calendar) calendar.refetchEvents();
 
                 } else if (response.status === 422 && result.errors) {
-                    const reasonError = result.errors.cancellation_reason ? result.errors.cancellation_reason.join(', ') : 'Erro de validação desconhecida.';
+                    const reasonError = result.errors.cancellation_reason ? result.errors.cancellation_reason.join(', ') : 'Erro de validação desconhecido.';
                     console.error(`ERRO DE VALIDAÇÃO: ${reasonError}`);
                     showDashboardMessage(`ERRO DE VALIDAÇÃO: ${reasonError}`, 'warning');
                 } else {
@@ -1204,8 +1158,7 @@
             }
         }
 
-        // ✅ NOVO: Adicionado isEventPaid
-        const cancelarPontual = (id, isRecurrent, paidOrSignalValue, isEventPaid) => {
+        const cancelarPontual = (id, isRecurrent, signalValue) => {
             const urlBase = isRecurrent ? CANCEL_PONTUAL_URL : CANCEL_PADRAO_URL;
             const method = 'PATCH';
             const confirmation = isRecurrent
@@ -1213,19 +1166,18 @@
                 : "Cancelar esta reserva pontual (O horário será liberado e a reserva deletada).";
             const buttonText = isRecurrent ? 'Cancelar ESTE DIA' : 'Confirmar Cancelamento';
 
-            // Passamos o signalValue (ou paidAmount) e o status de pago para o modal de cancelamento
-            openCancellationModal(id, method, urlBase, confirmation, buttonText, paidOrSignalValue, isEventPaid);
+            // Passamos o signalValue para o modal de cancelamento
+            openCancellationModal(id, method, urlBase, confirmation, buttonText, signalValue);
         };
 
-        // ✅ NOVO: Adicionado isEventPaid
-        const cancelarSerie = (id, paidOrSignalValue, isEventPaid) => {
+        const cancelarSerie = (id, signalValue) => {
             const urlBase = CANCEL_SERIE_URL;
             const method = 'DELETE';
             const confirmation = "⚠️ ATENÇÃO: Cancelar TODA A SÉRIE desta reserva? Todos os horários futuros serão liberados.";
             const buttonText = 'Confirmar Cancelamento de SÉRIE';
 
-            // Passamos o signalValue (ou paidAmount) e o status de pago para o modal de cancelamento
-            openCancellationModal(id, method, urlBase, confirmation, buttonText, paidOrSignalValue, isEventPaid);
+            // Passamos o signalValue para o modal de cancelamento
+            openCancellationModal(id, method, urlBase, confirmation, buttonText, signalValue);
         };
 
         // --- NO-SHOW LÓGICA (COM ESTORNO) ---
@@ -1363,118 +1315,6 @@
 
         });
 
-        // ✅ NOVO: Event Listener para o botão de Confirmação de Cancelamento
-        document.getElementById('confirm-cancellation-btn').addEventListener('click', async function() {
-            const reasonInput = document.getElementById('cancellation-reason-input');
-            const reason = reasonInput.value.trim();
-
-            if (reason.length < 5) {
-                showDashboardMessage("Por favor, forneça o motivo do cancelamento com pelo menos 5 caracteres.", 'warning');
-                return;
-            }
-
-            if (currentReservaId && currentMethod && currentUrlBase) {
-                // ✅ CHAMADA AGORA ENVIARÁ O VALOR PAGO/SINAL PARA O BACKEND
-                await sendCancellationRequest(currentReservaId, currentMethod, currentUrlBase, reason);
-            } else {
-                console.error("Dados de cancelamento (ID, Método ou URL) não encontrados.");
-                showDashboardMessage("Erro interno: Dados da reserva para cancelamento perdidos.", 'error');
-            }
-        });
-
-        // --- RENOVAÇÃO LÓGICA ---
-
-        function closeRenewalModal() {
-            document.getElementById('renewal-modal').classList.add('hidden');
-        }
-
-        function renderRenewalList() {
-            const listContainer = document.getElementById('renewal-list');
-            const messageBox = document.getElementById('renewal-message-box');
-            listContainer.innerHTML = '';
-            messageBox.classList.add('hidden');
-
-            if (globalExpiringSeries.length === 0) {
-                listContainer.innerHTML = '<p class="text-gray-500 italic">Nenhuma série a ser renovada no momento.</p>';
-                return;
-            }
-
-            globalExpiringSeries.forEach(series => {
-                const lastDate = moment(series.last_date);
-                const suggestedNewDate = lastDate.clone().add(6, 'months');
-                const lastDateDisplay = lastDate.format('DD/MM/YYYY');
-                const suggestedNewDateDisplay = suggestedNewDate.format('DD/MM/YYYY');
-
-                const itemHtml = `
-                    <div id="renewal-item-${series.master_reserva_id}" class="p-4 bg-yellow-50 border border-yellow-300 rounded-lg shadow-sm flex justify-between items-center transition-opacity duration-300">
-                        <div>
-                            <p class="font-bold text-gray-800">${series.client_name}</p>
-                            <p class="text-sm text-gray-600">Horário: ${series.slot_time} | Expira em: ${lastDateDisplay}</p>
-                            <p class="text-xs text-green-700 font-semibold">Sugestão: Renovar até ${suggestedNewDateDisplay} (+6 meses)</p>
-                        </div>
-                        <button onclick="handleRenewal(${series.master_reserva_id})"
-                                class="renew-btn-${series.master_reserva_id} px-4 py-2 bg-yellow-600 text-white text-sm font-semibold rounded-lg hover:bg-yellow-700 transition duration-150">
-                            Renovar
-                        </button>
-                    </div>
-                `;
-                listContainer.insertAdjacentHTML('beforeend', itemHtml);
-            });
-        }
-
-        function openRenewalModal() {
-            renderRenewalList();
-            document.getElementById('renewal-modal').classList.remove('hidden');
-        }
-
-        async function handleRenewal(masterReservaId) {
-            const url = RENEW_SERIE_URL.replace(':masterReserva', masterReservaId);
-            const button = document.querySelector(`.renew-btn-${masterReservaId}`);
-
-            if (!button) return;
-
-            const originalText = button.textContent;
-            button.disabled = true;
-            button.textContent = 'Processando...';
-
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': csrfToken,
-                        'Accept': 'application/json',
-                    },
-                    body: JSON.stringify({ _method: 'PATCH' })
-                });
-
-                const result = await response.json();
-
-                if (response.ok && result.success) {
-                    showDashboardMessage(result.message || `Série ${masterReservaId} renovada com sucesso!`, 'success');
-
-                    // Remove a série renovada da lista global e atualiza o modal
-                    globalExpiringSeries = globalExpiringSeries.filter(s => s.master_reserva_id !== masterReservaId);
-                    renderRenewalList();
-
-                    // Atualiza o contador de alerta no dashboard
-                    if (calendar) calendar.refetchEvents();
-
-                } else {
-                    console.error(result.message || `Erro ao renovar série ${masterReservaId}. Status: ${response.status}`);
-                    showDashboardMessage(result.message || `Falha na renovação da série ${masterReservaId}.`, 'error');
-                }
-            } catch (error) {
-                console.error('Erro de Rede na Renovação:', error);
-                showDashboardMessage("Erro de conexão ao tentar renovar a série.", 'error');
-            } finally {
-                // Se a renovação falhar, o botão volta ao normal
-                if (button.textContent === 'Processando...') {
-                    button.disabled = false;
-                    button.textContent = originalText;
-                }
-            }
-        }
 
         window.onload = function() {
             var calendarEl = document.getElementById('calendar');
@@ -1735,10 +1575,6 @@
                         const eventEndMoment = moment(endTime);
                         const isPastEvent = eventEndMoment.isBefore(moment());
 
-                        // ✅ NOVO: Define o valor a ser usado no modal de cancelamento:
-                        // Se estiver pago, usa o valor total pago. Senão, usa o sinal.
-                        const valueForCancellationDecision = isPaid ? paidAmount : signalValue;
-
 
                         // ✅ CORREÇÃO: Usando HH:mm para formato de 24 horas consistente
                         let timeDisplay = moment(startTime).format('HH:mm');
@@ -1835,16 +1671,16 @@
                         if (!isPastEvent) {
                             if (isRecurrent) {
                                 actionButtons += `
-                                    <button onclick="cancelarPontual(${reservaId}, true, ${valueForCancellationDecision}, ${isPaid})" class="w-full mb-2 px-4 py-2 bg-yellow-500 text-white font-medium rounded-lg hover:bg-yellow-600 transition duration-150 text-sm">
+                                    <button onclick="cancelarPontual(${reservaId}, true, ${signalValue})" class="w-full mb-2 px-4 py-2 bg-yellow-500 text-white font-medium rounded-lg hover:bg-yellow-600 transition duration-150 text-sm">
                                         Cancelar APENAS ESTE DIA
                                     </button>
-                                    <button onclick="cancelarSerie(${reservaId}, ${valueForCancellationDecision}, ${isPaid})" class="w-full mb-2 px-4 py-2 bg-red-800 text-white font-medium rounded-lg hover:bg-red-900 transition duration-150 text-sm">
+                                    <button onclick="cancelarSerie(${reservaId}, ${signalValue})" class="w-full mb-2 px-4 py-2 bg-red-800 text-white font-medium rounded-lg hover:bg-red-900 transition duration-150 text-sm">
                                         Cancelar SÉRIE INTEIRA (Futuros)
                                     </button>
                                 `;
                             } else {
                                 actionButtons += `
-                                    <button onclick="cancelarPontual(${reservaId}, false, ${valueForCancellationDecision}, ${isPaid})" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition duration-150 text-sm">
+                                    <button onclick="cancelarPontual(${reservaId}, false, ${signalValue})" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition duration-150 text-sm">
                                         Cancelar Reserva Pontual
                                     </button>
                                 `;
@@ -1875,11 +1711,8 @@
         // Expondo funções globais
         window.cancelarPontual = cancelarPontual;
         window.cancelarSerie = cancelarSerie;
-        // ✅ CORRIGIDO: Expondo as funções de renovação
         window.openRenewalModal = openRenewalModal;
-        window.closeRenewalModal = closeRenewalModal;
         window.handleRenewal = handleRenewal;
-
         window.openPendingActionModal = openPendingActionModal;
         window.closePendingActionModal = closePendingActionModal;
         window.openNoShowModal = openNoShowModal;

@@ -1113,7 +1113,7 @@ class AdminController extends Controller
     {
         // 1. Impede a auto-exclusão
         if (Auth::user()->id === $user->id) {
-            return response()->json(['success' => false, 'message' => 'Você não pode excluir sua própria conta.'], 403);
+            return redirect()->back()->with('error', 'Você não pode excluir sua própria conta.');
         }
 
         // 2. 🛑 CHECAGEM CRÍTICA DE RESERVAS ATIVAS (Pontuais ou Recorrentes)
@@ -1125,7 +1125,7 @@ class AdminController extends Controller
         if ($activeReservationsExist) {
             $errorMessage = "Impossível excluir o usuário '{$user->name}'. Ele(a) possui reservas ativas (pendentes ou confirmadas). Cancele ou rejeite todas as reservas dele(a) antes de prosseguir com a exclusão.";
             Log::warning("Exclusão de usuário ID: {$user->id} bloqueada por reservas ativas.");
-            return response()->json(['success' => false, 'message' => $errorMessage], 400);
+            return redirect()->back()->with('error', $errorMessage);
         }
         // ----------------------------------------------------------------------
 
@@ -1136,10 +1136,10 @@ class AdminController extends Controller
             $user->delete();
 
             Log::warning("Usuário ID: {$user->id} excluído pelo gestor ID: " . Auth::id());
-            return response()->json(['success' => true, 'message' => 'Usuário excluído com sucesso.'], 200);
+            return redirect()->route('admin.users.index')->with('success', 'Usuário excluído com sucesso.');
         } catch (\Exception $e) {
             Log::error("Erro ao excluir o usuário {$user->id}.", ['exception' => $e]);
-            return response()->json(['success' => false, 'message' => 'Erro ao excluir o usuário: ' . $e->getMessage()], 500);
+            return redirect()->back()->with('error', 'Erro ao excluir o usuário: ' . $e->getMessage());
         }
     }
 
@@ -1366,16 +1366,12 @@ class AdminController extends Controller
             'RETEN_NOSHOW_COMP' // Compensação de retenção (No-Show)
         ];
 
-        // 3.1 Total Recebido HOJE (Cash in Hand - Saldo Líquido)
-        // ✅ CORREÇÃO FINAL: Removendo o filtro de tipos e somando o 'amount' total,
-        // garantindo que entradas (positivas) e saídas/estornos (negativos) sejam contabilizados.
+        // 3.1 Total Recebido HOJE (Cash in Hand)
+        // Transações que ocorreram NA DATA FILTRADA e que são ENTRADAS (incluindo compensação de retenção)
         $totalReceived = FinancialTransaction::whereDate('paid_at', $date)
+            // ✅ CORREÇÃO FINAL: Garante que todos os tipos de compensação POSITIVA sejam incluídos.
+            ->whereIn('type', $transactionIncomeTypes)
             ->sum('amount');
-
-        // 🛑 NOVO: Busca todas as transações financeiras do dia para auditoria na view
-        $financialTransactions = FinancialTransaction::whereDate('paid_at', $date)
-            ->orderBy('paid_at', 'asc') // Ordena por data/hora para ver a ordem dos eventos
-            ->get();
 
 
         // 3.2 Total Esperado e Total Pendente (A receber)
@@ -1408,12 +1404,11 @@ class AdminController extends Controller
 
         return view('admin.financial.index', [ // Assume que a view é admin.financial.index
             'reservas' => $reservasQuery, // Tabela de agendamentos (inclui canceladas e no_show)
-            'financialTransactions' => $financialTransactions, // 🛑 NOVO: Transações para auditoria
             'selectedDate' => $selectedDate,
             'highlightReservaId' => $reservaId, // Para destacar linha se vier do calendário
 
             // KPIs para a view
-            'totalReceived' => $totalReceived, // Recebido HOJE (agora Saldo Líquido)
+            'totalReceived' => $totalReceived, // Recebido HOJE (inclui retenção)
             'totalPending' => max(0, $totalPending), // Pendente (não pode ser negativo no display)
             'totalExpected' => $totalExpected, // Receita total prevista
             'noShowCount' => $noShowCount,

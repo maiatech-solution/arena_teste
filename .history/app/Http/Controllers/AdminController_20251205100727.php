@@ -367,19 +367,6 @@ class AdminController extends Controller
             $reserva->cancellation_reason = null;
             $reserva->save();
 
-            // 🛑 CRÍTICO: Excluir o sinal original explicitamente, se existir.
-            FinancialTransaction::where('reserva_id', $reserva->id)
-                ->where('type', 'signal')
-                ->delete();
-            Log::info("DEBUG FINANCEIRO: Sinal original removido explicitamente (type 'signal') para NO-SHOW ID {$reserva->id}.");
-
-            // 🛑 NOVO: Neutraliza tipos de transação antiga (RETEN_CANC)
-            FinancialTransaction::where('reserva_id', $reserva->id)
-                ->where('type', 'RETEN_CANC')
-                ->delete();
-            Log::info("DEBUG FINANCEIRO: Transação RETEN_CANC antiga removida explicitamente para NO-SHOW ID {$reserva->id}.");
-
-
             // 5. Gera Transação Financeira de Estorno ou Retenção
             if ($amountPaid > 0) {
                 if ($shouldRefund) {
@@ -397,18 +384,20 @@ class AdminController extends Controller
                     $message = "Reserva marcada como Falta. O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi estornado (saiu do caixa).";
 
                 } else {
-                    // Retenção: Cria a transação POSITIVA para COMPENSAR o valor que acabamos
-                    // de remover na exclusão explícita do sinal acima.
-                    FinancialTransaction::create([
+                    // Retenção: O valor pago já está no caixa (já entrou como 'signal').
+                    // Não criamos uma nova transação positiva para evitar duplicidade de receita.
+                    // O valor simplesmente é mantido.
+
+                    /* FinancialTransaction::create([
                         'reserva_id' => $reserva->id,
                         'user_id' => $reserva->user_id,
                         'manager_id' => Auth::id(),
                         'amount' => $amountPaid,
-                        'type' => 'RETEN_NOSHOW_COMP', // 🛑 NOVO TIPO: Indica compensação de retenção por falta
+                        'type' => 'RETEN_NOSHOW',
                         'payment_method' => 'retained_funds',
-                        'description' => "Retenção e Compensação do valor pago (R$ " . number_format($amountPaid, 2, ',', '.') . ") devido à falta (No-Show).",
+                        'description' => "Retenção do valor pago (R$ " . number_format($amountPaid, 2, ',', '.') . ") devido à falta (No-Show).",
                         'paid_at' => Carbon::now(),
-                    ]);
+                    ]); */
                     $message = "Reserva marcada como Falta. O valor pago de R$ " . number_format($amountPaid, 2, ',', '.') . " foi RETIDO no caixa.";
                 }
             } else {
@@ -641,63 +630,49 @@ class AdminController extends Controller
 
         DB::beginTransaction();
         try {
-
-            $messageFinance = "";
-
-            // 1. Mudar status da reserva primeiro
             $reserva->status = Reserva::STATUS_CANCELADA;
             $reserva->manager_id = Auth::id();
             $reserva->cancellation_reason = '[Gestor] ' . $validated['cancellation_reason'];
             $reserva->save();
 
-            // 🛑 CRÍTICO: Excluir o sinal original explicitamente, se existir.
-            FinancialTransaction::where('reserva_id', $reserva->id)
-                ->where('type', 'signal')
-                ->delete();
-            Log::info("DEBUG FINANCEIRO: Sinal original removido explicitamente (type 'signal') para CANCELAMENTO PONTUAL ID {$reserva->id}.");
-
-            // 🛑 CRÍTICO: Neutraliza tipos de transação antiga (RETEN_CANC)
-            // Se esta transação POSITIVA existe de testes passados, ela DEVE ser deletada.
-            $deletedRetenCancCount = FinancialTransaction::where('reserva_id', $reserva->id)
-                ->where('type', 'RETEN_CANC')
-                ->delete();
-            if ($deletedRetenCancCount > 0) {
-                 Log::warning("DEBUG FINANCEIRO: **ALERTA**: {$deletedRetenCancCount} transações RETEN_CANC antigas foram removidas para ID {$reserva->id}.");
-            }
-
-
-            // 2. Gera Transação Financeira: Estorno OU Retenção (APÓS a remoção do sinal)
+            $messageFinance = "";
+            // 1. Gera Transação Financeira: Estorno OU Retenção
             if ($amountPaid > 0) {
                 if ($shouldRefund) {
-                     // 🛑 CORREÇÃO CRÍTICA: Se a transação 'signal' foi DELETADA (passo anterior),
-                     // NÃO CRIAMOS a transação REFUND_CANC. O estorno já é refletido na contabilidade.
-                     $messageFinance = " O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi estornado (refletido pela exclusão do sinal).";
-
-                     // Opcional: Registrar um log de estorno, se necessário, sem afetar o saldo
-                     Log::info("DEBUG FINANCEIRO: Estorno (REFUND_CANC) processado para ID {$reserva->id}. O valor não foi debitado novamente, pois o sinal original foi excluído.");
-
-                } else {
-                    // 2.2 Retenção: Cria a transação POSITIVA para COMPENSAR o valor que foi removido
-                    // pela deleção explícita do sinal acima.
-
-                    // A) REGISTRA A ENTRADA POSITIVA DE RETENÇÃO
+                     // 1.1 Estorno: Cria uma transação negativa (saída do caixa)
                     FinancialTransaction::create([
                         'reserva_id' => $reserva->id,
-                        'user_id' => $reserva->user_id,
+                        'user_id' => $reserva->user_id, // ✅ CORREÇÃO: Garante o User ID do cliente
                         'manager_id' => Auth::id(),
-                        'amount' => $amountPaid, // Valor positivo para retenção (fica no caixa)
-                        'type' => 'RETEN_CANC_COMP', // 🛑 NOVO TIPO: Indica claramente que é uma compensação
-                        'payment_method' => 'retained_funds',
-                        'description' => "Retenção do valor pago (R$ " . number_format($amountPaid, 2, ',', '.') . ") após cancelamento (Compensação do sinal).",
+                        'amount' => -$amountPaid, // Valor negativo para estorno/saída
+                        'type' => 'REFUND_CANC', // 🛑 Tipo abreviado
+                        'payment_method' => 'manual',
+                        'description' => "Estorno do sinal/valor pago (R$ " . number_format($amountPaid, 2, ',', '.') . ") devido ao cancelamento pontual.",
                         'paid_at' => Carbon::now(),
                     ]);
-
-                    $messageFinance = " O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi RETIDO no caixa (Compensação).";
-                    Log::info("DEBUG FINANCEIRO: Transação de RETENÇÃO (RETEN_CANC_COMP) criada APÓS o save para ID {$reserva->id}.");
+                    $messageFinance = " O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi estornado.";
+                } else {
+                    // 🛑 REVERTIDO: Voltamos a criar uma transação de retenção POSITIVA.
+                    // Isso é necessário se o seu relatório de caixa depende de uma transação
+                    // para saber que o dinheiro *ainda está* lá, especialmente se a transação
+                    // original de 'signal' estiver sendo deletada por um gatilho.
+                    FinancialTransaction::create([
+                        'reserva_id' => $reserva->id,
+                        'user_id' => $reserva->user_id, // ✅ Garante o User ID do cliente
+                        'manager_id' => Auth::id(),
+                        'amount' => $amountPaid, // Valor positivo para retenção (fica no caixa)
+                        'type' => 'RETEN_CANC', // 🛑 Tipo abreviado
+                        'payment_method' => 'retained_funds',
+                        'description' => "Retenção do valor pago (R$ " . number_format($amountPaid, 2, ',', '.') . ") devido ao cancelamento pontual (No-Refund).",
+                        'paid_at' => Carbon::now(),
+                    ]);
+                    $messageFinance = " O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi RETIDO no caixa (Não-Estornado).";
+                    Log::info("DEBUG FINANCEIRO: Transação de RETENÇÃO (RETEN_CANC) criada para ID {$reserva->id} no valor de {$amountPaid}. Verifique se a transação 'signal' original NÃO foi removida.");
                 }
             }
 
-            // 3. Recria o slot fixo de disponibilidade (verde)
+
+            // 2. Recria o slot fixo de disponibilidade (verde)
             $this->reservaController->recreateFixedSlot($reserva);
 
             DB::commit();
@@ -742,62 +717,55 @@ class AdminController extends Controller
 
         DB::beginTransaction();
         try {
-
-            $messageFinance = "";
-
-            // 2. 🛑 FLUXO: Mudar status.
+            // Se for o mestre, devemos parar. Mas o mestre é tratado no DELETE.
+            // Aqui, é um slot pontual de uma série.
             $reserva->status = Reserva::STATUS_CANCELADA;
             $reserva->manager_id = Auth::id();
             $reserva->cancellation_reason = '[Gestor - Pontual Recorrência] ' . $validated['cancellation_reason'];
             $reserva->save();
 
-            // 🛑 CRÍTICO: Excluir o sinal original explicitamente, se existir.
-            FinancialTransaction::where('reserva_id', $reserva->id)
-                ->where('type', 'signal')
-                ->delete();
-            Log::info("DEBUG FINANCEIRO: Sinal original removido explicitamente (type 'signal') para CANCELAMENTO RECORRENTE ID {$reserva->id}.");
-
-            // 🛑 CRÍTICO: Neutraliza tipos de transação antiga (RETEN_CANC)
-            $deletedRetenCancCount = FinancialTransaction::where('reserva_id', $reserva->id)
-                ->where('type', 'RETEN_CANC')
-                ->delete();
-            if ($deletedRetenCancCount > 0) {
-                 Log::warning("DEBUG FINANCEIRO: **ALERTA**: {$deletedRetenCancCount} transações RETEN_CANC antigas foram removidas para ID {$reserva->id}.");
-            }
-
-
-            // 1. Gera Transação Financeira: Estorno OU Retenção (APÓS a remoção do sinal)
+            $messageFinance = "";
+            // 1. Gera Transação Financeira: Estorno OU Retenção
             if ($amountPaid > 0) {
                 if ($shouldRefund) {
-                     // 🛑 CORREÇÃO CRÍTICA: Se a transação 'signal' foi DELETADA (passo anterior),
-                     // NÃO CRIAMOS a transação REFUND_CANC_P. O estorno já é refletido na contabilidade.
-                     $messageFinance = " O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi estornado (refletido pela exclusão do sinal).";
-
-                     // Opcional: Registrar um log de estorno, se necessário, sem afetar o saldo
-                     Log::info("DEBUG FINANCEIRO: Estorno (REFUND_CANC_P) processado para ID {$reserva->id}. O valor não foi debitado novamente, pois o sinal original foi excluído.");
-
-                } else {
-                    // 1.2 Retenção: Cria a transação POSITIVA para COMPENSAR o sinal perdido.
+                     // 1.1 Estorno: Cria uma transação negativa (saída do caixa)
                     FinancialTransaction::create([
-                        'reserva_id' => $reserva->id, // 🛑 CRÍTICO: Usa o ID, mas APÓS o CASCADE DELETE
-                        'user_id' => $reserva->user_id, // Mantém o usuário para rastreabilidade
+                        'reserva_id' => $reserva->id,
+                        'user_id' => $reserva->user_id, // ✅ CORREÇÃO: Garante o User ID do cliente
                         'manager_id' => Auth::id(),
-                        'amount' => $amountPaid, // Valor positivo para retenção (fica no caixa)
-                        'type' => 'RETEN_CANC_P_COMP', // 🛑 NOVO TIPO: Indica claramente que é uma compensação
-                        'payment_method' => 'retained_funds',
-                        'description' => "Retenção do valor pago (R$ " . number_format($amountPaid, 2, ',', '.') . ") após cancelamento pontual recorrente (Compensação).",
+                        'amount' => -$amountPaid, // Valor negativo para estorno/saída
+                        'type' => 'REFUND_CANC_P', // 🛑 CORREÇÃO: Tipo abreviado
+                        'payment_method' => 'manual',
+                        'description' => "Estorno do sinal/valor pago (R$ " . number_format($amountPaid, 2, ',', '.') . ") devido ao cancelamento pontual da recorrência.",
                         'paid_at' => Carbon::now(),
                     ]);
-                    $messageFinance = " O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi RETIDO no caixa (Compensação).";
-                    Log::info("DEBUG FINANCEIRO: Transação de RETENÇÃO (RETEN_CANC_P_COMP) criada APÓS o save para ID {$reserva->id}.");
+                    $messageFinance = " O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi estornado.";
+                } else {
+                    // 🛑 REVERTIDO: Voltamos a criar uma transação de retenção POSITIVA.
+                    // Isso é necessário se o seu relatório de caixa depende de uma transação
+                    // para saber que o dinheiro *ainda está* lá, especialmente se a transação
+                    // original de 'signal' estiver sendo deletada por um gatilho.
+                    FinancialTransaction::create([
+                        'reserva_id' => $reserva->id,
+                        'user_id' => $reserva->user_id, // ✅ CORREÇÃO: Garante o User ID do cliente
+                        'manager_id' => Auth::id(),
+                        'amount' => $amountPaid, // Valor positivo para retenção (fica no caixa)
+                        'type' => 'RETEN_CANC_P', // 🛑 CORREÇÃO: Tipo abreviado
+                        'payment_method' => 'retained_funds',
+                        'description' => "Retenção do valor pago (R$ " . number_format($amountPaid, 2, ',', '.') . ") devido ao cancelamento pontual da recorrência (No-Refund).",
+                        'paid_at' => Carbon::now(),
+                    ]);
+                    $messageFinance = " O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi RETIDO no caixa (Não-Estornado).";
+                    Log::info("DEBUG FINANCEIRO: Transação de RETENÇÃO (RETEN_CANC_P) criada para ID {$reserva->id} no valor de {$amountPaid}. Verifique se a transação 'signal' original NÃO foi removida.");
                 }
             }
 
-            // 3. Recria o slot fixo de disponibilidade (verde)
+
+            // 2. Recria o slot fixo de disponibilidade (verde)
             // ✅ CRÍTICO: Delega para o helper correto no ReservaController. Isso resolve o problema de slot sumir.
             $this->reservaController->recreateFixedSlot($reserva);
 
-            // 4. Mantemos o registro para auditoria.
+            // 3. Mantemos o registro para auditoria.
 
             DB::commit();
             Log::info("Reserva RECORRENTE PONTUAL ID: {$reserva->id} cancelada pelo gestor ID: " . Auth::id());
@@ -845,12 +813,6 @@ class AdminController extends Controller
 
         DB::beginTransaction();
         try {
-            // 🛑 NOVO FLUXO PARA SÉRIE:
-            // 1. O loop cancela os slots.
-
-            $messageFinance = "";
-            $cancelledCount = 0;
-
             // Busca todas as reservas da série (incluindo a mestra) que estão no futuro
             $seriesReservas = Reserva::where(function ($query) use ($masterId) {
                 $query->where('recurrent_series_id', $masterId)
@@ -861,6 +823,8 @@ class AdminController extends Controller
                 ->where('status', Reserva::STATUS_CONFIRMADA)
                 ->get();
 
+            $cancelledCount = 0;
+
             foreach ($seriesReservas as $slot) {
                 // Se a reserva já passou, não cancelamos
                 if (Carbon::parse($slot->date . ' ' . $slot->start_time)->isPast() && !$slot->date->isToday()) {
@@ -870,53 +834,49 @@ class AdminController extends Controller
                 $slot->status = Reserva::STATUS_CANCELADA;
                 $slot->manager_id = $managerId;
                 $slot->cancellation_reason = $cancellationReason;
-                $slot->save(); // <--- CASCADE DELETE pode disparar aqui.
-
-                // 🛑 CRÍTICO: Excluir o sinal original explicitamente, se existir.
-                FinancialTransaction::where('reserva_id', $slot->id)
-                    ->where('type', 'signal')
-                    ->delete();
-                Log::info("DEBUG FINANCEIRO: Sinal original removido explicitamente (type 'signal') para CANCELAMENTO DE SÉRIE ID {$slot->id}.");
-
-                // 🛑 CRÍTICO: Neutraliza tipos de transação antiga (RETEN_CANC)
-                $deletedRetenCancCount = FinancialTransaction::where('reserva_id', $slot->id)
-                    ->where('type', 'RETEN_CANC')
-                    ->delete();
-                if ($deletedRetenCancCount > 0) {
-                     Log::warning("DEBUG FINANCEIRO: **ALERTA**: {$deletedRetenCancCount} transações RETEN_CANC antigas foram removidas para ID {$slot->id}.");
-                }
-
+                $slot->save();
 
                 // 🛑 CRÍTICO: Recria o slot fixo para cada item cancelado da série.
                 $this->reservaController->recreateFixedSlot($slot);
 
+                // 2. Mantemos o registro para auditoria.
+
                 $cancelledCount++;
             }
 
-            // 2. Gera Transação Financeira: Estorno OU Retenção (APÓS a remoção do sinal)
+            $messageFinance = "";
+            // 1. Gera Transação Financeira: Estorno OU Retenção (Apenas uma transação para a série)
             if ($amountPaidForRefund > 0) {
                 if ($shouldRefund) {
-                     // 🛑 CORREÇÃO CRÍTICA: Se o sinal foi DELETADO, NÃO CRIAMOS o estorno negativo.
-                     $messageFinance = " O sinal de R$ " . number_format($amountPaidForRefund, 2, ',', '.') . " foi estornado (refletido pela exclusão do sinal).";
-
-                     // Opcional: Registrar um log de estorno, se necessário, sem afetar o saldo
-                     Log::info("DEBUG FINANCEIRO: Estorno (REFUND_CANC_S) processado para série ID {$masterId}. O valor não foi debitado novamente, pois o sinal original foi excluído.");
-
-                } else {
-                    // 2.2 Retenção: Cria a transação POSITIVA para COMPENSAR o sinal perdido (uma única compensação para toda a série).
-                    // Fazemos isso apenas uma vez na transação mestre.
+                    // 1.1 Estorno: Cria uma transação negativa (saída do caixa)
                     FinancialTransaction::create([
-                        'reserva_id' => $reserva->id, // 🛑 CRÍTICO: Usa o ID da reserva âncora
-                        'user_id' => $reserva->user_id, // Mantém o usuário para rastreabilidade
+                        'reserva_id' => $reserva->id, // Usa a reserva mestre ou a reserva clicada como âncora
+                        'user_id' => $reserva->user_id, // ✅ CORREÇÃO: Garante o User ID do cliente
                         'manager_id' => Auth::id(),
-                        'amount' => $amountPaidForRefund, // Valor positivo para retenção (fica no caixa)
-                        'type' => 'RETEN_CANC_S_COMP', // 🛑 NOVO TIPO: Indica claramente que é uma compensação
-                        'payment_method' => 'retained_funds',
-                        'description' => "Retenção do sinal/valor pago (R$ " . number_format($amountPaidForRefund, 2, ',', '.') . ") após cancelamento de série (Compensação).",
+                        'amount' => -$amountPaidForRefund, // Valor negativo para estorno/saída
+                        'type' => 'REFUND_CANC_S', // 🛑 CORREÇÃO: Tipo abreviado
+                        'payment_method' => 'manual',
+                        'description' => "Estorno do sinal/valor pago (R$ " . number_format($amountPaidForRefund, 2, ',', '.') . ") devido ao cancelamento da série inteira.",
                         'paid_at' => Carbon::now(),
                     ]);
-                    $messageFinance = " O sinal de R$ " . number_format($amountPaidForRefund, 2, ',', '.') . " foi RETIDO no caixa (Compensação).";
-                    Log::info("DEBUG FINANCEIRO: Transação de RETENÇÃO (RETEN_CANC_S_COMP) criada APÓS o save para série ID {$masterId}.");
+                    $messageFinance = " O sinal de R$ " . number_format($amountPaidForRefund, 2, ',', '.') . " foi estornado.";
+                } else {
+                    // 🛑 REVERTIDO: Voltamos a criar uma transação de retenção POSITIVA.
+                    // Isso é necessário se o seu relatório de caixa depende de uma transação
+                    // para saber que o dinheiro *ainda está* lá, especialmente se a transação
+                    // original de 'signal' estiver sendo deletada por um gatilho.
+                    FinancialTransaction::create([
+                        'reserva_id' => $reserva->id,
+                        'user_id' => $reserva->user_id, // ✅ CORREÇÃO: Garante o User ID do cliente
+                        'manager_id' => Auth::id(),
+                        'amount' => $amountPaidForRefund, // Valor positivo para retenção (fica no caixa)
+                        'type' => 'RETEN_CANC_S', // 🛑 CORREÇÃO: Tipo abreviado
+                        'payment_method' => 'retained_funds',
+                        'description' => "Retenção do sinal/valor pago (R$ " . number_format($amountPaidForRefund, 2, ',', '.') . ") devido ao cancelamento da série (No-Refund).",
+                        'paid_at' => Carbon::now(),
+                    ]);
+                    $messageFinance = " O sinal de R$ " . number_format($amountPaidForRefund, 2, ',', '.') . " foi RETIDO no caixa (Não-Estornado).";
+                    Log::info("DEBUG FINANCEIRO: Transação de RETENÇÃO (RETEN_CANC_S) criada para ID {$reserva->id} no valor de {$amountPaidForRefund}. Verifique se a transação 'signal' original NÃO foi removida.");
                 }
             }
 
@@ -1023,9 +983,7 @@ class AdminController extends Controller
      */
     public function createUser()
     {
-        return view('admin.users.create', [
-            // ... (variáveis necessárias)
-        ]);
+        return view('admin.users.create');
     }
 
     /**
@@ -1113,7 +1071,7 @@ class AdminController extends Controller
     {
         // 1. Impede a auto-exclusão
         if (Auth::user()->id === $user->id) {
-            return response()->json(['success' => false, 'message' => 'Você não pode excluir sua própria conta.'], 403);
+            return redirect()->back()->with('error', 'Você não pode excluir sua própria conta.');
         }
 
         // 2. 🛑 CHECAGEM CRÍTICA DE RESERVAS ATIVAS (Pontuais ou Recorrentes)
@@ -1125,7 +1083,7 @@ class AdminController extends Controller
         if ($activeReservationsExist) {
             $errorMessage = "Impossível excluir o usuário '{$user->name}'. Ele(a) possui reservas ativas (pendentes ou confirmadas). Cancele ou rejeite todas as reservas dele(a) antes de prosseguir com a exclusão.";
             Log::warning("Exclusão de usuário ID: {$user->id} bloqueada por reservas ativas.");
-            return response()->json(['success' => false, 'message' => $errorMessage], 400);
+            return redirect()->back()->with('error', $errorMessage);
         }
         // ----------------------------------------------------------------------
 
@@ -1136,10 +1094,10 @@ class AdminController extends Controller
             $user->delete();
 
             Log::warning("Usuário ID: {$user->id} excluído pelo gestor ID: " . Auth::id());
-            return response()->json(['success' => true, 'message' => 'Usuário excluído com sucesso.'], 200);
+            return redirect()->route('admin.users.index')->with('success', 'Usuário excluído com sucesso.');
         } catch (\Exception $e) {
             Log::error("Erro ao excluir o usuário {$user->id}.", ['exception' => $e]);
-            return response()->json(['success' => false, 'message' => 'Erro ao excluir o usuário: ' . $e->getMessage()], 500);
+            return redirect()->back()->with('error', 'Erro ao excluir o usuário: ' . $e->getMessage());
         }
     }
 
@@ -1173,6 +1131,7 @@ class AdminController extends Controller
             ->where('is_recurrent', true)
             // Filtra apenas status que podem ser cancelados (ativos)
             ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+            // Filtra apenas reservas futuras ou de hoje
             ->whereDate('date', '>=', Carbon::today()->toDateString())
             ->select('recurrent_series_id', DB::raw('count(*) as total'))
             ->groupBy('recurrent_series_id')
@@ -1301,127 +1260,6 @@ class AdminController extends Controller
             'search' => $search,
             'startDate' => $startDate,
             'endDate' => $endDate,
-        ]);
-    }
-
-    // ------------------------------------------------------------------------
-    // ✅ MÓDULO: RELATÓRIO DE PAGAMENTOS/CAIXA (Backend da sua view)
-    // ------------------------------------------------------------------------
-
-    /**
-     * Calcula o saldo total de todas as transações financeiras.
-     * @return float
-     */
-    private function calculateTotalBalance()
-    {
-        // Esta consulta deve somar TODOS os valores na coluna 'amount'.
-        $total = FinancialTransaction::sum('amount');
-
-        Log::info("DEBUG FINANCEIRO: Saldo total do caixa calculado: R$ " . number_format($total, 2, ',', '.'));
-
-        return (float) $total;
-    }
-
-    /**
-     * Exibe a lista de transações financeiras e o saldo.
-     * Corresponde à sua view /admin/pagamentos
-     *
-     * @param Request $request
-     */
-    public function indexFinancialDashboard(Request $request) // 🛑 RENOMEADO: De indexPagamentos para indexFinancialDashboard
-    {
-        // 1. Definição da data de referência (hoje ou data do filtro)
-        $selectedDate = $request->input('date', Carbon::today()->toDateString());
-        $date = Carbon::parse($selectedDate)->toDateString();
-        $search = $request->input('search');
-        $reservaId = $request->input('reserva_id');
-
-        // 2. Consulta de Reservas Agendadas para a Tabela
-        $reservasQuery = Reserva::where('is_fixed', false)
-            ->whereDate('date', $date)
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, Reserva::STATUS_CANCELADA, Reserva::STATUS_NO_SHOW])
-            ->when($reservaId, function ($query, $reservaId) {
-                return $query->where('id', $reservaId);
-            })
-            ->when($search, function ($query, $search) {
-                return $query->where(function ($q) use ($search) {
-                    $q->where('client_name', 'like', '%' . $search . '%')
-                        ->orWhere('client_contact', 'like', '%' . $search . '%');
-                });
-            })
-            ->orderBy('start_time')
-            ->get();
-
-        // 3. Cálculo dos KPIs Financeiros do Dia
-
-        // 🛑 CRÍTICO: Lista de todos os tipos de transação que contam como ENTRADA no CAIXA
-        $transactionIncomeTypes = [
-            'signal',
-            'full_payment',
-            'partial_payment',
-            'payment_settlement',
-            'RETEN_CANC_COMP', // Compensação de retenção (Cancelamento Pontual)
-            'RETEN_CANC_P_COMP', // Compensação de retenção (Cancelamento Pontual Recorrente)
-            'RETEN_CANC_S_COMP', // Compensação de retenção (Cancelamento de Série)
-            'RETEN_NOSHOW_COMP' // Compensação de retenção (No-Show)
-        ];
-
-        // 3.1 Total Recebido HOJE (Cash in Hand - Saldo Líquido)
-        // ✅ CORREÇÃO FINAL: Removendo o filtro de tipos e somando o 'amount' total,
-        // garantindo que entradas (positivas) e saídas/estornos (negativos) sejam contabilizados.
-        $totalReceived = FinancialTransaction::whereDate('paid_at', $date)
-            ->sum('amount');
-
-        // 🛑 NOVO: Busca todas as transações financeiras do dia para auditoria na view
-        $financialTransactions = FinancialTransaction::whereDate('paid_at', $date)
-            ->orderBy('paid_at', 'asc') // Ordena por data/hora para ver a ordem dos eventos
-            ->get();
-
-
-        // 3.2 Total Esperado e Total Pendente (A receber)
-        $activeReservas = Reserva::where('is_fixed', false)
-            ->whereDate('date', $date)
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
-            ->get();
-
-        $totalExpected = 0.00;
-        $totalPaidBySignals = 0.00;
-
-        foreach ($activeReservas as $reserva) {
-            $totalExpected += $reserva->price;
-            $totalPaidBySignals += $reserva->total_paid;
-        }
-
-        $totalPending = $totalExpected - $totalPaidBySignals;
-
-        // 3.3 Contagem de Faltas (No-Show)
-        $noShowCount = Reserva::whereDate('date', $date)
-            ->where('is_fixed', false)
-            ->where('status', Reserva::STATUS_NO_SHOW)
-            ->count();
-
-        // 4. Saldo Total (Global)
-        $totalBalance = $this->calculateTotalBalance();
-
-        Log::info("DEBUG FINANCEIRO: KPIs do dia {$date} - Recebido: R$ {$totalReceived}, Pendente: R$ {$totalPending}, Esperado: R$ {$totalExpected}");
-
-
-        return view('admin.financial.index', [ // Assume que a view é admin.financial.index
-            'reservas' => $reservasQuery, // Tabela de agendamentos (inclui canceladas e no_show)
-            'financialTransactions' => $financialTransactions, // 🛑 NOVO: Transações para auditoria
-            'selectedDate' => $selectedDate,
-            'highlightReservaId' => $reservaId, // Para destacar linha se vier do calendário
-
-            // KPIs para a view
-            'totalReceived' => $totalReceived, // Recebido HOJE (agora Saldo Líquido)
-            'totalPending' => max(0, $totalPending), // Pendente (não pode ser negativo no display)
-            'totalExpected' => $totalExpected, // Receita total prevista
-            'noShowCount' => $noShowCount,
-
-            // Variáveis globais/de filtro
-            'pageTitle' => 'Gerenciamento de Caixa & Pagamentos',
-            'search' => $search,
-            'totalGlobalBalance' => $totalBalance, // Opcional: para mostrar o saldo acumulado total
         ]);
     }
 }

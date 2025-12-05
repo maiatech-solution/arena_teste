@@ -661,16 +661,12 @@
 
             // Fade in
             setTimeout(() => {
-                // ✅ CORREÇÃO DE BUG: Verifica se o elemento existe (e tem classList) antes de remover classes
-                if (newAlert && newAlert.classList) {
-                    newAlert.classList.remove('opacity-0');
-                }
+                if (newAlert) newAlert.classList.remove('opacity-0');
             }, 10);
 
             // Fade out and remove after 5 seconds
             setTimeout(() => {
-                // ✅ CORREÇÃO DE BUG: Verifica se o elemento existe (e tem classList) antes de adicionar classes
-                if (newAlert && newAlert.classList) {
+                if (newAlert) {
                     newAlert.classList.add('opacity-0');
                     setTimeout(() => {
                         if (newAlert) newAlert.remove();
@@ -1382,99 +1378,6 @@
             }
         });
 
-        // --- RENOVAÇÃO LÓGICA ---
-
-        function closeRenewalModal() {
-            document.getElementById('renewal-modal').classList.add('hidden');
-        }
-
-        function renderRenewalList() {
-            const listContainer = document.getElementById('renewal-list');
-            const messageBox = document.getElementById('renewal-message-box');
-            listContainer.innerHTML = '';
-            messageBox.classList.add('hidden');
-
-            if (globalExpiringSeries.length === 0) {
-                listContainer.innerHTML = '<p class="text-gray-500 italic">Nenhuma série a ser renovada no momento.</p>';
-                return;
-            }
-
-            globalExpiringSeries.forEach(series => {
-                const lastDate = moment(series.last_date);
-                const suggestedNewDate = lastDate.clone().add(6, 'months');
-                const lastDateDisplay = lastDate.format('DD/MM/YYYY');
-                const suggestedNewDateDisplay = suggestedNewDate.format('DD/MM/YYYY');
-
-                const itemHtml = `
-                    <div id="renewal-item-${series.master_reserva_id}" class="p-4 bg-yellow-50 border border-yellow-300 rounded-lg shadow-sm flex justify-between items-center transition-opacity duration-300">
-                        <div>
-                            <p class="font-bold text-gray-800">${series.client_name}</p>
-                            <p class="text-sm text-gray-600">Horário: ${series.slot_time} | Expira em: ${lastDateDisplay}</p>
-                            <p class="text-xs text-green-700 font-semibold">Sugestão: Renovar até ${suggestedNewDateDisplay} (+6 meses)</p>
-                        </div>
-                        <button onclick="handleRenewal(${series.master_reserva_id})"
-                                class="renew-btn-${series.master_reserva_id} px-4 py-2 bg-yellow-600 text-white text-sm font-semibold rounded-lg hover:bg-yellow-700 transition duration-150">
-                            Renovar
-                        </button>
-                    </div>
-                `;
-                listContainer.insertAdjacentHTML('beforeend', itemHtml);
-            });
-        }
-
-        function openRenewalModal() {
-            renderRenewalList();
-            document.getElementById('renewal-modal').classList.remove('hidden');
-        }
-
-        async function handleRenewal(masterReservaId) {
-            const url = RENEW_SERIE_URL.replace(':masterReserva', masterReservaId);
-            const button = document.querySelector(`.renew-btn-${masterReservaId}`);
-
-            if (!button) return;
-
-            const originalText = button.textContent;
-            button.disabled = true;
-            button.textContent = 'Processando...';
-
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': csrfToken,
-                        'Accept': 'application/json',
-                    },
-                    body: JSON.stringify({ _method: 'PATCH' })
-                });
-
-                const result = await response.json();
-
-                if (response.ok && result.success) {
-                    showDashboardMessage(result.message || `Série ${masterReservaId} renovada com sucesso!`, 'success');
-
-                    // Remove a série renovada da lista global e atualiza o modal
-                    globalExpiringSeries = globalExpiringSeries.filter(s => s.master_reserva_id !== masterReservaId);
-                    renderRenewalList();
-
-                    // Atualiza o contador de alerta no dashboard
-                    if (calendar) calendar.refetchEvents();
-
-                } else {
-                    console.error(result.message || `Erro ao renovar série ${masterReservaId}. Status: ${response.status}`);
-                    showDashboardMessage(result.message || `Falha na renovação da série ${masterReservaId}.`, 'error');
-                }
-            } catch (error) {
-                console.error('Erro de Rede na Renovação:', error);
-                showDashboardMessage("Erro de conexão ao tentar renovar a série.", 'error');
-            } finally {
-                // Se a renovação falhar, o botão volta ao normal
-                if (button.textContent === 'Processando...') {
-                    button.disabled = false;
-                    button.textContent = originalText;
-                }
-            }
-        }
 
         window.onload = function() {
             var calendarEl = document.getElementById('calendar');
@@ -1875,11 +1778,8 @@
         // Expondo funções globais
         window.cancelarPontual = cancelarPontual;
         window.cancelarSerie = cancelarSerie;
-        // ✅ CORRIGIDO: Expondo as funções de renovação
         window.openRenewalModal = openRenewalModal;
-        window.closeRenewalModal = closeRenewalModal;
         window.handleRenewal = handleRenewal;
-
         window.openPendingActionModal = openPendingActionModal;
         window.closePendingActionModal = closePendingActionModal;
         window.openNoShowModal = openNoShowModal;

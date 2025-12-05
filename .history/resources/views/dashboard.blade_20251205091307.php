@@ -661,16 +661,12 @@
 
             // Fade in
             setTimeout(() => {
-                // ✅ CORREÇÃO DE BUG: Verifica se o elemento existe (e tem classList) antes de remover classes
-                if (newAlert && newAlert.classList) {
-                    newAlert.classList.remove('opacity-0');
-                }
+                if (newAlert) newAlert.classList.remove('opacity-0');
             }, 10);
 
             // Fade out and remove after 5 seconds
             setTimeout(() => {
-                // ✅ CORREÇÃO DE BUG: Verifica se o elemento existe (e tem classList) antes de adicionar classes
-                if (newAlert && newAlert.classList) {
+                if (newAlert) {
                     newAlert.classList.add('opacity-0');
                     setTimeout(() => {
                         if (newAlert) newAlert.remove();
