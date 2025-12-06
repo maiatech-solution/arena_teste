@@ -14,7 +14,8 @@ use Illuminate\Support\Str;
 use Carbon\Carbon;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
-use App\Models\FinancialTransaction; // Importa o modelo de transações
+use App\Models\FinancialTransaction; 
+use App\Http\Controllers\FinanceiroController; // 🎯 CRÍTICO: Importar o Controller de Validação
 
 class ReservaController extends Controller
 {
@@ -600,10 +601,10 @@ class ReservaController extends Controller
 
             // 2. Busca o slot fixo ATIVO (free) para esta data/hora
             $fixedSlotQuery = Reserva::where('is_fixed', true)
-                                         ->whereDate('date', $dateString)
-                                         ->where('start_time', $startTimeNormalized)
-                                         ->where('end_time', $endTimeNormalized)
-                                         ->where('status', Reserva::STATUS_FREE); // PADRONIZADO
+                                             ->whereDate('date', $dateString)
+                                             ->where('start_time', $startTimeNormalized)
+                                             ->where('end_time', $endTimeNormalized)
+                                             ->where('status', Reserva::STATUS_FREE); // PADRONIZADO
 
             if ($isFirstDate) {
                 $fixedSlotQuery->where('id', $scheduleId);
@@ -781,11 +782,6 @@ class ReservaController extends Controller
 
         $reservations = Reserva::whereIn('status', $visibleStatuses)
             ->where('is_fixed', false)
-            // CORREÇÃO CRÍTICA: Removido o filtro where('is_cancelled', false).
-            // Se o status é CONFIRMADA, PENDENTE ou CONCLUIDA, ele não deve ser considerado cancelado
-            // para fins de exibição no calendário. Isso resolve o problema de registros CONCLUIDA
-            // que podem ter o flag is_cancelled=true incorretamente no DB.
-            // Omitir o filtro de is_cancelled é mais seguro, pois o filtro de status já exclui o STATUS_CANCELADA.
             ->whereBetween('date', [$start, $end])
             ->get();
 
@@ -837,6 +833,7 @@ class ReservaController extends Controller
                 $title = 'RECORR.: ' . $title;
                 $color = '#C026D3'; // Fuchsia (Recorrente Confirmado)
                 $className = 'fc-event-recurrent';
+                $isPaid = false;
             }
 
             if ($reserva->status === Reserva::STATUS_PENDENTE) {
@@ -920,6 +917,18 @@ class ReservaController extends Controller
             return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404);
         }
 
+        // 🎯 VALIDAÇÃO DE SEGURANÇA: CAIXA FECHADO
+        $financeiroController = app(FinanceiroController::class);
+        $reservaDate = Carbon::parse($reserva->date)->toDateString();
+        
+        if ($financeiroController->isCashClosed($reservaDate)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro: Não é possível finalizar o pagamento. O caixa do dia ' . Carbon::parse($reservaDate)->format('d/m/Y') . ' está fechado. Reabra o caixa para continuar.',
+            ], 403); 
+        }
+        // FIM DA VALIDAÇÃO DE SEGURANÇA
+
         // LOG DE DIAGNÓSTICO: Mostra TODO o request, incluindo o apply_to_series
         Log::debug('finalizarPagamento Request Data: ' . json_encode($request->all()));
         Log::debug('apply_to_series flag value (boolean): ' . ($request->boolean('apply_to_series') ? 'TRUE' : 'FALSE'));
@@ -998,27 +1007,27 @@ class ReservaController extends Controller
                 // CRÍTICO: Identifica todas as reservas futuras elegíveis que PRECISAM de atualização
                 try {
                     $updatedCount = Reserva::where(function ($query) use ($masterId) {
-                                           // Atinge a série inteira (mestra e cópias)
-                                           $query->where('recurrent_series_id', $masterId)
+                                            // Atinge a série inteira (mestra e cópias)
+                                            $query->where('recurrent_series_id', $masterId)
                                                  ->orWhere('id', $masterId);
                                         })
-                                         // CRÍTICO: Pega todas as reservas com data ESTREITAMENTE MAIOR que a data atual
-                                         ->whereDate('date', '>', $reservaDate)
-                                         // Filtra por horário, garantindo o slot semanal correto
-                                         ->where('start_time', $reserva->start_time)
-                                         ->where('end_time', $reserva->end_time)
-                                         ->where('is_fixed', false) // Apenas reservas de cliente
-                                         // CORREÇÃO CRÍTICA: Alvo: APENAS reservas ATIVAS (Confirmadas)
-                                         // Reservas ativas recorrentes têm status 'confirmed'
-                                         ->where('status', Reserva::STATUS_CONFIRMADA)
-                                         // APENAS ATUALIZA SE O PREÇO ATUAL FOR DIFERENTE DO NOVO PREÇO
-                                         ->where('price', '!=', $newPriceForSeries)
-                                         ->update([
-                                            // Atualiza o preço base (price) e o preço final (final_price)
-                                            'price' => $newPriceForSeries,
-                                            'final_price' => $newPriceForSeries,
-                                            'manager_id' => Auth::id(),
-                                         ]);
+                                            // CRÍTICO: Pega todas as reservas com data ESTREITAMENTE MAIOR que a data atual
+                                            ->whereDate('date', '>', $reservaDate)
+                                            // Filtra por horário, garantindo o slot semanal correto
+                                            ->where('start_time', $reserva->start_time)
+                                            ->where('end_time', $reserva->end_time)
+                                            ->where('is_fixed', false) // Apenas reservas de cliente
+                                            // CORREÇÃO CRÍTICA: Alvo: APENAS reservas ATIVAS (Confirmadas)
+                                            // Reservas ativas recorrentes têm status 'confirmed'
+                                            ->where('status', Reserva::STATUS_CONFIRMADA)
+                                            // APENAS ATUALIZA SE O PREÇO ATUAL FOR DIFERENTE DO NOVO PREÇO
+                                            ->where('price', '!=', $newPriceForSeries)
+                                            ->update([
+                                                // Atualiza o preço base (price) e o preço final (final_price)
+                                                'price' => $newPriceForSeries,
+                                                'final_price' => $newPriceForSeries,
+                                                'manager_id' => Auth::id(),
+                                            ]);
 
                     if ($updatedCount > 0) {
                         Log::info("Preço de série recorrente (ID {$masterId}) atualizado para R$ {$newPriceForSeries} em {$updatedCount} reservas futuras.");
@@ -1060,6 +1069,15 @@ class ReservaController extends Controller
     {
         // DIAGNÓSTICO DE INPUT: Loga o input de recorrência
         Log::debug("Input 'is_recurrent' RAW: " . print_r($request->input('is_recurrent'), true));
+
+        // 🎯 VALIDAÇÃO DE SEGURANÇA: CAIXA FECHADO
+        $financeiroController = app(FinanceiroController::class);
+        $reservaDate = Carbon::parse($reserva->date)->toDateString();
+        
+        if ($financeiroController->isCashClosed($reservaDate)) {
+             return redirect()->back()->with('error', 'Erro: Não é possível confirmar esta reserva. O caixa do dia ' . Carbon::parse($reservaDate)->format('d/m/Y') . ' está fechado. Reabra o caixa para continuar.');
+        }
+        // FIM DA VALIDAÇÃO DE SEGURANÇA
 
         // 1. Validação
         $validated = $request->validate([
@@ -1433,6 +1451,15 @@ class ReservaController extends Controller
             'rejection_reason' => 'nullable|string|max:255',
         ]);
 
+        // 🎯 VALIDAÇÃO DE SEGURANÇA: CAIXA FECHADO
+        $financeiroController = app(FinanceiroController::class);
+        $reservaDate = Carbon::parse($reserva->date)->toDateString();
+        
+        if ($financeiroController->isCashClosed($reservaDate)) {
+             return response()->json(['success' => false, 'message' => 'Erro: Não é possível rejeitar esta reserva. O caixa do dia ' . Carbon::parse($reservaDate)->format('d/m/Y') . ' está fechado.'], 403);
+        }
+        // FIM DA VALIDAÇÃO DE SEGURANÇA
+
         if ($reserva->status !== Reserva::STATUS_PENDENTE) { // PADRONIZADO
             return response()->json(['success' => false, 'message' => 'Esta reserva já foi processada.'], 400);
         }
@@ -1537,13 +1564,13 @@ class ReservaController extends Controller
     protected function getSeriesMaxDate(int $masterId): ?Carbon
     {
         $maxDate = Reserva::where(function($query) use ($masterId) {
-                 $query->where('recurrent_series_id', $masterId)
-                     ->orWhere('id', $masterId);
-                 })
-                 ->where('is_recurrent', true)
-                 ->where('is_fixed', false)
-                 ->where('status', Reserva::STATUS_CONFIRMADA) // PADRONIZADO
-                 ->max('date');
+                     $query->where('recurrent_series_id', $masterId)
+                         ->orWhere('id', $masterId);
+                     })
+                     ->where('is_recurrent', true)
+                     ->where('is_fixed', false)
+                     ->where('status', Reserva::STATUS_CONFIRMADA) // PADRONIZADO
+                     ->max('date');
 
         return $maxDate ? Carbon::parse($maxDate) : null;
     }
@@ -1737,10 +1764,10 @@ class ReservaController extends Controller
             if ($newReservasCount > 0) {
                 // 4. Atualiza a data final em todas as reservas existentes da série.
                 /*
-                 Reserva::where('recurrent_series_id', $masterId)
-                     ->orWhere('id', $masterId) // Inclui a própria masterReserva
-                     ->where('is_fixed', false)
-                     ->update(['recurrent_end_date' => $endDate]);
+                    Reserva::where('recurrent_series_id', $masterId)
+                        ->orWhere('id', $masterId) // Inclui a própria masterReserva
+                        ->where('is_fixed', false)
+                        ->update(['recurrent_end_date' => $endDate]);
                 */
 
                 $message = "Série #{$masterId} de '{$clientName}' renovada com sucesso! Foram adicionadas {$newReservasCount} novas reservas, estendendo o prazo até " . $endDate->format('d/m/Y') . ".";

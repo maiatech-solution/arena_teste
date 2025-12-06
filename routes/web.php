@@ -194,6 +194,10 @@ Route::middleware(['auth', 'gestor'])->group(function () {
     // 💰 Módulo Financeiro / Pagamentos
     Route::get('/admin/pagamentos', [PaymentController::class, 'index'])->name('admin.payment.index');
 
+    // ✅ ROTA NOVA E CRÍTICA: ROTA POST PARA FECHAR O CAIXA (RESOLVE O ERRO DE ROTA)
+    Route::post('/admin/pagamentos/fechar-caixa', [FinanceiroController::class, 'closeCash'])
+        ->name('admin.payment.close_cash');
+
     // ✅ CORREÇÃO CRÍTICA AQUI: Aponta para ReservaController::finalizarPagamento
     Route::post('/admin/pagamentos/{reserva}/finalizar', [ReservaController::class, 'finalizarPagamento'])->name('admin.payment.finalize');
 
