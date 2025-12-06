@@ -164,7 +164,7 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::delete('{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('cancelar_serie');
 
             // 🎯 ROTA DE REGISTRO DE FALTA (NO-SHOW) - Adicionada aqui.
-            Route::patch('{reserva}/no-show', [AdminController::class, 'registerNoShow'])->name('no_show');
+            Route::post('{reserva}/no-show', [PaymentController::class, 'registerNoShow'])->name('no_show'); // 🚨 CORREÇÃO: Deve ser POST, e o método está no PaymentController (anteriormente estava no AdminController)
 
             Route::delete('{reserva}', [AdminController::class, 'destroyReserva'])->name('destroy');
 
@@ -194,14 +194,18 @@ Route::middleware(['auth', 'gestor'])->group(function () {
     // 💰 Módulo Financeiro / Pagamentos
     Route::get('/admin/pagamentos', [PaymentController::class, 'index'])->name('admin.payment.index');
 
-    // ✅ ROTA NOVA E CRÍTICA: ROTA POST PARA FECHAR O CAIXA (RESOLVE O ERRO DE ROTA)
+    // ✅ ROTA NOVA E CRÍTICA: ROTA POST PARA FECHAR O CAIXA
     Route::post('/admin/pagamentos/fechar-caixa', [FinanceiroController::class, 'closeCash'])
         ->name('admin.payment.close_cash');
 
-    // ✅ CORREÇÃO CRÍTICA AQUI: Aponta para ReservaController::finalizarPagamento
+    // 🎯 ROTA QUE FALTAVA: ROTA POST PARA ABRIR O CAIXA (Corrigirá o Erro 404)
+    Route::post('/admin/pagamentos/abrir-caixa', [FinanceiroController::class, 'openCash'])
+        ->name('admin.payment.open_cash'); // 👈 Rota Adicionada
+
+    // Rota Finalizar Pagamento (Baixar)
     Route::post('/admin/pagamentos/{reserva}/finalizar', [ReservaController::class, 'finalizarPagamento'])->name('admin.payment.finalize');
 
-    // Mantenho as outras rotas do PaymentController como estavam, assumindo que estão corretas.
+    // Rota Registrar Falta/No-Show (Agora dentro do PaymentController)
     Route::post('/admin/pagamentos/{reserva}/falta', [PaymentController::class, 'registerNoShow'])->name('admin.payment.noshow');
 
     // 📊 ROTAS DO DASHBOARD FINANCEIRO

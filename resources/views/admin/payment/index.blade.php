@@ -91,7 +91,6 @@
             </div>
             
             {{-- 🚨 3. FECHAMENTO DE CAIXA (Lógica Condicional) --}}
-            {{-- Recebe $cashierStatus do PaymentController::index (necessário atualizar o controller) --}}
             @if(isset($cashierStatus) && $cashierStatus === 'closed')
                 {{-- Bloco para reabrir o caixa --}}
                 <div class="bg-gray-50 dark:bg-gray-700/50 overflow-hidden shadow-lg sm:rounded-lg p-5 border border-red-400 dark:border-red-600">
@@ -100,6 +99,7 @@
                             <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L12 12M6 6l12 12"></path></svg>
                             CAIXA FECHADO! Alterações Bloqueadas para o dia {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}.
                         </div>
+                        {{-- O onclick AGORA chama a função que abre o novo modal --}}
                         <button id="openCashBtn" onclick="openCash('{{ $selectedDate }}')" 
                             class="w-full sm:w-auto px-6 py-2 bg-red-600 text-white font-bold rounded-lg shadow-md hover:bg-red-700 transition duration-150 flex items-center justify-center">
                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -497,28 +497,286 @@
     </div>
 
 {{-- ================================================================== --}}
-{{-- MODAL 1: FINALIZAR PAGAMENTO (CÓDIGO OMITIDO PARA BREVIDADE, MAS MANTIDO NO ARQUIVO FINAL) --}}
+{{-- MODAL 1: FINALIZAR PAGAMENTO (CÓDIGO OMITIDO) --}}
 {{-- ================================================================== --}}
 <div id="paymentModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-    {{-- Conteúdo do Modal 1 --}}
+    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+    <div class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
+        <form id="paymentForm">
+            @csrf
+            <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="sm:flex sm:items-start">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
+                        <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="modal-title">
+                            Baixar Pagamento da Reserva
+                        </h3>
+                        <div class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            <p>Cliente: <span id="modalClientName" class="font-bold"></span></p>
+                            <p>Sinal Pago (Base): <span id="modalSignalAmount" class="font-bold text-green-600"></span></p>
+                        </div>
+                        <input type="hidden" id="modalReservaId" name="reserva_id">
+                        <input type="hidden" id="modalSignalAmountRaw" name="signal_amount_raw">
+                        
+                        <div class="mt-4 space-y-3">
+                            <div>
+                                <label for="modalFinalPrice" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Valor Total Final (Pode ser editado para dar desconto)
+                                </label>
+                                <input type="number" step="0.01" id="modalFinalPrice" name="final_price" oninput="calculateAmountDue()" required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white font-bold text-lg">
+                            </div>
+                            <div>
+                                <label for="modalAmountPaid" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Valor Recebido AGORA (Saldo a Pagar)
+                                </label>
+                                <input type="number" step="0.01" id="modalAmountPaid" name="amount_paid" oninput="checkManualOverpayment()" required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:text-white font-bold text-xl">
+                                <p id="trocoMessage" class="hidden mt-1 text-sm font-semibold text-yellow-700">Troco a Devolver: R$ 0,00</p>
+                            </div>
+                            <div>
+                                <label for="modalPaymentMethod" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Forma de Pagamento
+                                </label>
+                                <select id="modalPaymentMethod" name="payment_method" required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white">
+                                    <option value="">-- Selecione a forma de pagamento --</option>
+                                    <option value="pix">PIX</option>
+                                    <option value="money">Dinheiro</option>
+                                    <option value="credit_card">Cartão de Crédito</option>
+                                    <option value="debit_card">Cartão de Débito</option>
+                                    <option value="transfer">Transferência Bancária</option>
+                                    <option value="other">Outro / Cortesia</option>
+                                </select>
+                            </div>
+                            {{-- Opção de Recorrência (Hidden por padrão) --}}
+                            <div id="recurrentOption" class="hidden pt-3 border-t border-gray-200 dark:border-gray-700">
+                                <input type="checkbox" id="apply_to_series" name="apply_to_series" value="1" class="rounded dark:bg-gray-700 border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500">
+                                <label for="apply_to_series" class="ml-2 text-sm text-gray-700 dark:text-gray-300 font-medium">
+                                    Aplicar novo preço (R$ <span id="currentNewPrice"></span>) a todas as reservas futuras desta série?
+                                </label>
+                            </div>
+                        </div>
+                        <div id="payment-error-message" class="hidden mt-3 p-3 bg-red-100 text-red-700 text-sm font-medium rounded-lg"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button type="submit" id="submitPaymentBtn"
+                    class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm transition duration-150">
+                    <span id="submitPaymentText">Finalizar Pagamento</span>
+                    <svg id="submitPaymentSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </button>
+                <button type="button" onclick="closePaymentModal()"
+                    class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 sm:mt-0 sm:w-auto sm:text-sm transition duration-150">
+                    Cancelar
+                </button>
+            </div>
+        </form>
+    </div>
 </div>
 
 {{-- ================================================================== --}}
-{{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) (CÓDIGO OMITIDO PARA BREVIDADE, MAS MANTIDO NO ARQUIVO FINAL) --}}
+{{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) (CÓDIGO OMITIDO) --}}
 {{-- ================================================================== --}}
 <div id="noShowModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
-    {{-- Conteúdo do Modal 2 --}}
+    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+    <div class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
+        <form id="noShowForm">
+            @csrf
+            <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="sm:flex sm:items-start">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                        <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L12 12M6 6l12 12"></path></svg>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="modal-title">
+                            Registrar Falta (No-Show)
+                        </h3>
+                        <div class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            <p>Cliente: <span id="noShowClientName" class="font-bold"></span></p>
+                            <p id="noShowInitialWarning" class="mt-2 p-2 rounded-md bg-yellow-50 dark:bg-yellow-900/20">
+                                Nenhum valor foi pago. Marcar como falta apenas registrará o status.
+                            </p>
+                        </div>
+                        
+                        <input type="hidden" id="noShowReservaId" name="reserva_id">
+                        <input type="hidden" id="noShowPaidAmount" name="paid_amount">
+
+                        <div id="refundControls" class="mt-4 space-y-3 hidden">
+                            <label for="should_refund" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Ação com o valor já pago (<span id="noShowAmountDisplay" class="font-bold"></span>)
+                            </label>
+                            <select id="should_refund" name="should_refund"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white">
+                                <option value="false">Reter o valor (Padrão: Multa)</option>
+                                <option value="true">Estornar/Devolver o valor</option>
+                            </select>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Se estornado, uma transação negativa será registrada.</p>
+                        </div>
+
+                        <div class="mt-4">
+                            <label for="no_show_reason" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Observações (Obrigatório)
+                            </label>
+                            <textarea id="no_show_reason" name="no_show_reason" rows="3" required
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+                                placeholder="Motivo da falta, se conhecido, ou observações sobre o bloqueio..."></textarea>
+                        </div>
+
+                        <div class="mt-4">
+                            <input type="checkbox" id="block_user" name="block_user" class="rounded dark:bg-gray-700 border-gray-300 text-red-600 shadow-sm focus:ring-red-500">
+                            <label for="block_user" class="ml-2 text-sm font-bold text-red-700 dark:text-red-400">
+                                Bloquear cliente permanentemente (Devido à falta)
+                            </label>
+                        </div>
+                        <div id="noshow-error-message" class="hidden mt-3 p-3 bg-red-100 text-red-700 text-sm font-medium rounded-lg"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button type="submit" id="submitNoShowBtn"
+                    class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm transition duration-150">
+                    <span id="submitNoShowText">Registrar Falta</span>
+                    <svg id="submitNoShowSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </button>
+                <button type="button" onclick="closeNoShowModal()"
+                    class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 sm:mt-0 sm:w-auto sm:text-sm transition duration-150">
+                    Cancelar
+                </button>
+            </div>
+        </form>
+    </div>
 </div>
 
+
 {{-- ================================================================== --}}
-{{-- MODAL 3: FECHAR CAIXA (CLOSE CASH) (CÓDIGO OMITIDO PARA BREVIDADE, MAS MANTIDO NO ARQUIVO FINAL) --}}
+{{-- MODAL 3: FECHAR CAIXA (CLOSE CASH) (CÓDIGO OMITIDO) --}}
 {{-- ================================================================== --}}
 <div id="closeCashModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
-    {{-- Conteúdo do Modal 3 --}}
+    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+    <div class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
+        <form id="closeCashForm">
+            @csrf
+            <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="sm:flex sm:items-start">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100 sm:mx-0 sm:h-10 sm:w-10">
+                        <svg class="h-6 w-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="modal-title">
+                            Fechamento de Caixa: <span id="closeCashDateDisplay"></span>
+                        </h3>
+                        <div class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            <p>Confirme os valores para finalizar as operações financeiras do dia.</p>
+                        </div>
+
+                        <div class="mt-4 space-y-3">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Total de Movimentação CALCULADO pelo Sistema
+                                </label>
+                                <p id="calculatedLiquidAmount" class="mt-1 block w-full bg-gray-100 dark:bg-gray-900 p-2 rounded-md font-bold text-lg text-indigo-600">R$ 0,00</p>
+                            </div>
+                            <div>
+                                <label for="actualCashAmount" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Valor TOTAL EM CAIXA FÍSICO (Para Comparação)
+                                </label>
+                                <input type="number" step="0.01" id="actualCashAmount" name="actual_cash_amount" required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-700 dark:text-white font-bold text-xl">
+                            </div>
+                        </div>
+
+                        <div id="differenceMessage" class="hidden mt-3 p-3 text-sm font-semibold rounded-lg"></div>
+                        <input type="hidden" id="closeCashDate" name="date">
+                        <div id="closecash-error-message" class="hidden mt-3 p-3 bg-red-100 text-red-700 text-sm font-medium rounded-lg"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button type="submit" id="submitCloseCashBtn"
+                    class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm transition duration-150">
+                    <span id="submitCloseCashText">Confirmar Fechamento</span>
+                    <svg id="submitCloseCashSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </button>
+                <button type="button" onclick="closeCloseCashModal()"
+                    class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 sm:mt-0 sm:w-auto sm:text-sm transition duration-150">
+                    Cancelar
+                </button>
+            </div>
+        </form>
+    </div>
 </div>
 
 
-{{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA (COM FUNÇÃO openCash) --}}
+{{-- ================================================================== --}}
+{{-- MODAL 4: ABRIR CAIXA (OPEN CASH) - Exige Justificativa --}}
+{{-- ================================================================== --}}
+<div id="openCashModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+
+    <div class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
+        <form id="openCashForm">
+            @csrf
+            <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="sm:flex sm:items-start">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                        <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.3 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="modal-title">
+                            Reabrir Caixa Diário
+                        </h3>
+                        <div class="mt-2">
+                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                O caixa do dia <span id="openCashDateDisplay" class="font-bold text-red-500"></span> está **FECHADO**. Para reabri-lo e permitir alterações, é necessário registrar o motivo.
+                            </p>
+                        </div>
+
+                        <div class="mt-4">
+                            <label for="reopen_reason" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Justificativa da Reabertura <span class="text-red-500">*</span>
+                            </label>
+                            <textarea id="reopen_reason" name="reopen_reason" rows="3" required
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+                                placeholder="Ex: Preciso corrigir o valor de troco de uma reserva."></textarea>
+                        </div>
+                        <input type="hidden" id="reopenCashDate" name="date">
+                        <div id="openCash-error-message" class="hidden mt-3 p-3 bg-red-100 text-red-700 text-sm font-medium rounded-lg"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button type="submit" id="submitOpenCashBtn"
+                    class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm transition duration-150">
+                    <span id="submitOpenCashText">Reabrir e Salvar Justificativa</span>
+                    <svg id="submitOpenCashSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </button>
+                <button type="button" onclick="closeOpenCashModal()"
+                    class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 sm:mt-0 sm:w-auto sm:text-sm transition duration-150">
+                    Cancelar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+{{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA (COM FUNÇÃO openCash ATUALIZADA) --}}
 
 <script>
 // --- Funções de Suporte ---
@@ -852,7 +1110,14 @@ function closeCloseCashModal() {
     document.getElementById('closeCashModal').classList.remove('flex');
 }
 
-document.getElementById('actualCashAmount').addEventListener('input', calculateDifference);
+// 🚨 CORRIGIDO: Proteção contra elemento nulo (o erro 990 deve ser resolvido aqui)
+document.addEventListener('DOMContentLoaded', () => {
+    const actualCashAmountEl = document.getElementById('actualCashAmount');
+    if (actualCashAmountEl) {
+        actualCashAmountEl.addEventListener('input', calculateDifference);
+    }
+});
+
 
 document.getElementById('closeCashForm').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -873,7 +1138,8 @@ document.getElementById('closeCashForm').addEventListener('submit', function(e) 
 
     const payload = {
         date: date,
-        actual_cash_amount: actualAmount,
+        calculated_amount: parseFloat(document.querySelector('tr.font-bold .text-lg').innerText.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()), // Passa o valor calculado
+        actual_amount: actualAmount,
     };
 
     fetch(`/admin/pagamentos/fechar-caixa`, {
@@ -915,43 +1181,100 @@ document.getElementById('closeCashForm').addEventListener('submit', function(e) 
     });
 });
 
-// --- Lógica de Abertura de Caixa (NOVA) ---
+// --- Lógica de Abertura de Caixa (CHAMA O MODAL) ---
+
+// 🎯 Nova função que abre o modal de justificativa
+function openCashModal(dateString) {
+    const formattedDate = new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
+    
+    document.getElementById('reopenCashDate').value = dateString;
+    document.getElementById('openCashDateDisplay').innerText = formattedDate;
+    document.getElementById('reopen_reason').value = ''; 
+    document.getElementById('openCash-error-message').classList.add('hidden');
+    
+    document.getElementById('openCashModal').classList.remove('hidden');
+    document.getElementById('openCashModal').classList.add('flex');
+}
+
+function closeOpenCashModal() {
+    document.getElementById('openCashModal').classList.add('hidden');
+    document.getElementById('openCashModal').classList.remove('flex');
+}
+
+// Função de clique no botão "Abrir Caixa"
 function openCash(date) {
-    if (!confirm(`Tem certeza que deseja reabrir o caixa do dia ${date}? Isso permitirá alterações financeiras para esta data.`)) {
+    // Agora chama o modal, em vez do confirm()
+    openCashModal(date);
+}
+
+// Nova função para lidar com o envio do formulário do modal de reabertura
+document.getElementById('openCashForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const date = document.getElementById('reopenCashDate').value;
+    const reason = document.getElementById('reopen_reason').value.trim();
+    const csrfToken = document.querySelector('input[name="_token"]').value;
+    
+    const submitBtn = document.getElementById('submitOpenCashBtn');
+    const submitText = document.getElementById('submitOpenCashText');
+    const submitSpinner = document.getElementById('submitOpenCashSpinner');
+    const errorMessageDiv = document.getElementById('openCash-error-message');
+
+    if (reason.length < 5) {
+        errorMessageDiv.textContent = 'A justificativa é obrigatória e deve ter no mínimo 5 caracteres.';
+        errorMessageDiv.classList.remove('hidden');
         return;
     }
 
-    const csrfToken = document.querySelector('input[name="_token"]').value;
-    const openCashBtn = document.getElementById('openCashBtn');
-    
-    openCashBtn.disabled = true;
+    submitBtn.disabled = true;
+    submitText.classList.add('hidden');
+    submitSpinner.classList.remove('hidden');
+    errorMessageDiv.classList.add('hidden');
 
-    fetch(`/admin/pagamentos/abrir-caixa`, { 
+    const payload = {
+        date: date,
+        reason: reason // 🎯 ENVIANDO O MOTIVO
+    };
+
+    fetch(`/admin/pagamentos/abrir-caixa`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json'
         },
-        body: JSON.stringify({ date: date })
+        body: JSON.stringify(payload)
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.message || 'Erro ao reabrir o caixa. Verifique o console.');
+            });
+        }
+        return response.json();
+    })
     .then(data => {
         if(data.success) {
             showMessage(data.message);
+            closeOpenCashModal();
             // Redireciona para atualizar a view
-            window.location.href = data.redirect || '{{ route('admin.payment.index') }}'; 
+            window.location.href = data.redirect || '{{ route('admin.payment.index') }}';
         } else {
-            alert('Erro ao reabrir caixa: ' + data.message);
+            errorMessageDiv.textContent = data.message || 'Erro ao reabrir caixa.';
+            errorMessageDiv.classList.remove('hidden');
         }
     })
     .catch(error => {
         console.error('Erro:', error);
-        alert('Erro de rede ou servidor ao reabrir caixa.');
+        errorMessageDiv.textContent = 'Erro de rede ou servidor ao reabrir caixa: ' + error.message;
+        errorMessageDiv.classList.remove('hidden');
     })
     .finally(() => {
-        openCashBtn.disabled = false;
+        submitBtn.disabled = false;
+        submitText.classList.remove('hidden');
+        submitSpinner.classList.add('hidden');
     });
-}
+});
 
 
 // --- Lógica de Habilitação do Botão (CRÍTICO) ---
@@ -960,7 +1283,7 @@ function checkCashierStatus() {
     const totalReservations = parseInt("{{ $totalReservasDia }}");
     
     // Lista de status FINISHED (Concluídos/Finalizados) que permitem fechar o caixa.
-    const finalStatuses = ['pago completo', 'pago parcial', 'falta', 'cancelada', 'finalizado'];
+    const finalStatuses = ['pago completo', 'pago parcial', 'falta', 'cancelada', 'finalizado', 'sinal dado']; // ✅ Sinal Dado adicionado para ser considerado finalizado para o contador
     
     let completedReservations = 0;
 
@@ -1029,14 +1352,23 @@ document.addEventListener('DOMContentLoaded', () => {
     checkCashierStatus();
     
     // O restante dos listeners do DOMContentLoaded
-    document.getElementById('modalFinalPrice').addEventListener('input', calculateAmountDue);
-    document.getElementById('modalAmountPaid').addEventListener('input', checkManualOverpayment);
+    // 🚨 CORRIGIDO: Proteção contra elemento nulo (o erro 990 deve ser resolvido aqui)
+    const modalFinalPriceEl = document.getElementById('modalFinalPrice');
+    const modalAmountPaidEl = document.getElementById('modalAmountPaid');
+    
+    if (modalFinalPriceEl) {
+        modalFinalPriceEl.addEventListener('input', calculateAmountDue);
+    }
+    if (modalAmountPaidEl) {
+        modalAmountPaidEl.addEventListener('input', checkManualOverpayment);
+    }
     
     // Destaque de Linha (mantido)
     const urlParams = new URLSearchParams(window.location.search);
     const reservaId = urlParams.get('reserva_id');
     if (reservaId) {
-        const highlightedRow = document.querySelector(`.bg-indigo-50`);
+        // Usa uma seleção mais robusta
+        const highlightedRow = document.querySelector(`.bg-indigo-50.dark\\:bg-indigo-900\\/20`);
         if (highlightedRow) {
             highlightedRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
