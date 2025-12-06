@@ -19,6 +19,7 @@ class Cashier extends Model
         'status',
         'closed_by_user_id',
         'closing_time',
+        'notes', // ✅ CAMPO ADICIONADO AQUI
     ];
 
     protected $casts = [
