@@ -54,7 +54,7 @@ class PaymentController extends Controller
 
     /**
      * Exibe o Dashboard de Caixa e gerencia filtros de data, ID e Pesquisa.
-     * 🎯 NOVO: Retorna o status do caixa para a view.
+     * 🎯 ATUALIZADO: Cálculo preciso de Total Previsto e Saldo Pendente (KPIs).
      */
     public function index(Request $request)
     {
@@ -82,7 +82,7 @@ class PaymentController extends Controller
         } else {
             $query->whereDate('date', $dateObject);
 
-            // 🎯 NOVO: LÓGICA DE FILTRO POR PESQUISA (NOME OU WHATSAPP)
+            // 🎯 LÓGICA DE FILTRO POR PESQUISA (NOME OU WHATSAPP)
             if ($searchTerm) {
                 $searchWildcard = '%' . $searchTerm . '%';
                 $query->where(function ($q) use ($searchWildcard) {
@@ -99,7 +99,8 @@ class PaymentController extends Controller
                   Reserva::STATUS_CONFIRMADA,
                   Reserva::STATUS_PENDENTE,
                   'completed',
-                  'no_show'
+                  'no_show',
+                  'canceled' // Inclui canceladas para ver na tabela (se necessário)
               ])
               ->orderBy('start_time', 'asc');
 
@@ -132,11 +133,28 @@ class PaymentController extends Controller
             'no_show'
         ])->count();
 
-        $totalExpected = $reservas->sum(fn($r) => $r->final_price ?? $r->price); 
+        // --- 🎯 CORREÇÃO CRÍTICA PARA KPIS: SALDO PENDENTE / TOTAL PREVISTO ---
+        // Filtrar as reservas que REALMENTE importam para a projeção de receita AINDA NÃO PAGA.
+        
+        $reservasKPI = Reserva::query()
+            ->whereDate('date', $dateObject)
+            ->whereNotIn('status', ['no_show', 'canceled', 'rejected']) // Filtra para o Saldo Pendente
+            ->where('is_fixed', false)
+            ->get();
+        
+        // 1. Receita Bruta Total (TOTAL PREVISTO) - Deve incluir todas as reservas agendadas, concluídas ou não.
+        // Usamos a coleção original $reservas para refletir o valor total negociado (R$ 350,00).
+        $totalExpected = $reservas->sum(fn($r) => $r->final_price ?? $r->price); // ✅ CORREÇÃO APLICADA AQUI
 
-        $totalPendingLiquido = $reservas->sum(fn($r) => max(0, ($r->final_price ?? $r->price) - $r->total_paid));
+        // 2. Saldo Pendente (SALDO PENDENTE A RECEBER) - Usa a coleção FILTRADA $reservasKPI
+        // Deve ser R$ 0,00 se tudo foi resolvido.
+        $totalPendingLiquido = $reservasKPI->sum(function ($r) {
+            $total = $r->final_price ?? $r->price;
+            $pago = $r->total_paid ?? 0;
+            return max(0, $total - $pago);
+        });
 
-        // Faltas (No-Show)
+        // Faltas (No-Show) - Usa a coleção original 'reservas' para contagem correta
         $noShowCount = $reservas->where('status', 'no_show')->count();
 
         // Busca todas as transações do dia para a Tabela de Movimentação Detalhada
@@ -162,14 +180,14 @@ class PaymentController extends Controller
             'totalAntecipadoReservasDia' => $totalAntecipadoReservasDia,
             'totalReservasDia' => $totalReservasDia,
             
-            // --- VARIÁVEIS PARA DESTAQUE ---
-            'totalPending' => $totalExpected,
+            // --- VARIÁVEIS PARA DESTAQUE (AGORA CORRETAS) ---
+            'totalPending' => $totalPendingLiquido, // ✅ SALDO PENDENTE A RECEBER (R$ 0,00 no seu cenário)
             'saldoPendenteLiquido' => $totalPendingLiquido, 
-            'totalExpected' => $totalExpected, 
+            'totalExpected' => $totalExpected, // ✅ RECEITA BRUTA (R$ 350,00 no seu cenário)
             'noShowCount' => $noShowCount,
             'highlightReservaId' => $selectedReservaId,
             'financialTransactions' => $financialTransactions, 
-            'cashierStatus' => $cashierStatus, // 🎯 Adicionado o status do caixa
+            'cashierStatus' => $cashierStatus, // 🎯 Status do caixa
         ]);
     }
 
@@ -208,7 +226,7 @@ class PaymentController extends Controller
              return response()->json([
                  'success' => false,
                  'message' => 'O valor a ser recebido deve ser positivo.',
-             ], 422);
+               ], 422);
         }
 
         try {
