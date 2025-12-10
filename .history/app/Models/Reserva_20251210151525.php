@@ -105,9 +105,8 @@ class Reserva extends Model
     public static function getActionRequiredStatuses(): array
     {
         return [
-            self::STATUS_PENDENTE,      // Exige Confirmação
-            self::STATUS_CONFIRMADA,    // Exige Conclusão/Cancelamento/Falta
-            self::STATUS_LANCADA_CAIXA, // ADICIONADO: Bloqueia se já foi lançado, mas ainda falta concluir.
+            self::STATUS_PENDENTE,   // Exige Confirmação
+            self::STATUS_CONFIRMADA, // Exige Conclusão/Cancelamento/Falta
         ];
     }
 

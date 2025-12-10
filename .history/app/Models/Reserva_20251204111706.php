@@ -8,33 +8,24 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use App\Models\User;
-use App\Models\FinancialTransaction;
+use App\Models\FinancialTransaction; // Importa FinancialTransaction
 
 class Reserva extends Model
 {
     use HasFactory;
 
     // ------------------------------------------------------------------------
-    // CONSTANTES DE STATUS PRINCIPAL
+    // CONSTANTES DE STATUS (Padronizadas em inglês para consistência com DB)
     // ------------------------------------------------------------------------
-    public const STATUS_FREE = 'free';
+    public const STATUS_FREE = 'free'; // ✅ Slot disponível, não ocupado
     public const STATUS_PENDENTE = 'pending';
     public const STATUS_CONFIRMADA = 'confirmed';
     public const STATUS_CANCELADA = 'cancelled';
     public const STATUS_REJEITADA = 'rejected';
     public const STATUS_EXPIRADA = 'expired';
-    public const STATUS_MAINTENANCE = 'maintenance';
-    public const STATUS_LANCADA_CAIXA = 'paid_to_cashier';
-    public const STATUS_CONCLUIDA = 'completed';
-    public const STATUS_NO_SHOW = 'no_show'; // ✅ Status para Falta
-
-    // ------------------------------------------------------------------------
-    // CONSTANTES DE STATUS DE PAGAMENTO
-    // ------------------------------------------------------------------------
-    public const PAYMENT_STATUS_PENDING = 'pending';
-    public const PAYMENT_STATUS_PARTIAL = 'partial';
-    public const PAYMENT_STATUS_PAID = 'paid';
-    public const PAYMENT_STATUS_UNPAID = 'unpaid';
+    public const STATUS_MAINTENANCE = 'maintenance'; // ✅ Corrigido para MAINTENANCE
+    public const STATUS_LANCADA_CAIXA = 'paid_to_cashier'; // 🆕 Adicionado: Para fluxo financeiro
+    public const STATUS_CONCLUIDA = 'completed'; // 🆕 NOVO: Status para reservas concluídas e pagas
 
     /**
      * Os atributos que são mass assignable.
@@ -49,22 +40,23 @@ class Reserva extends Model
         'client_contact',
         'notes',
         'status',
-        'manager_id',
+        'manager_id', // ID do gestor que criou/confirmou
 
-        'cancellation_reason',
-        'fixed_slot_id',
-        'no_show_reason',
+        'cancellation_reason', // ✅ ADICIONADO: Motivo do cancelamento
+        'fixed_slot_id', // ID do slot fixo consumido pela reserva
 
-        'is_fixed',
-        'day_of_week',
+        // --- Campos para Recorrência ---
+        'is_fixed', 			// Grade de slots fixos gerada pelo ConfigController
+        'day_of_week', 			// Dia da semana para filtros (0=Dom, 1=Seg, ...)
 
-        'is_recurrent',
-        'recurrent_series_id',
+        'is_recurrent', 		// Flag para saber se é parte de uma série de cliente fixo
+        'recurrent_series_id', 	// ID do primeiro slot da série (mestre)
 
-        'final_price',
-        'signal_value',
-        'total_paid',
-        'payment_status',
+        // --- Campos Financeiros ---
+        'final_price', // Preço final ajustado (se houver)
+        'signal_value', // Valor do sinal pago
+        'total_paid', // Total já pago (sinal + outros)
+        'payment_status', // Status: pending, partial, paid
     ];
 
     /**
@@ -77,77 +69,61 @@ class Reserva extends Model
     ];
 
     // ------------------------------------------------------------------------
-    // ✅ MÉTODOS DE CHECAGEM PARA FECHAMENTO DE CAIXA (O BLOQUEIO)
-    // ------------------------------------------------------------------------
-
-    /**
-     * Retorna a lista de status que indicam que a reserva foi devidamente
-     * tratada e NÃO exige mais ação do Gestor no Caixa (Baixa Dada).
-     *
-     * @return array
-     */
-    public static function getFinalizedStatuses(): array
-    {
-        return [
-            self::STATUS_REJEITADA,
-            self::STATUS_CANCELADA,
-            self::STATUS_CONCLUIDA,
-            self::STATUS_NO_SHOW,
-        ];
-    }
-
-    /**
-     * Retorna a lista de status que AINDA EXIGEM AÇÃO (Pending Finalization).
-     * Estas reservas BLOQUEIAM o Fechamento de Caixa.
-     *
-     * @return array
-     */
-    public static function getActionRequiredStatuses(): array
-    {
-        return [
-            self::STATUS_PENDENTE,      // Exige Confirmação
-            self::STATUS_CONFIRMADA,    // Exige Conclusão/Cancelamento/Falta
-            self::STATUS_LANCADA_CAIXA, // ADICIONADO: Bloqueia se já foi lançado, mas ainda falta concluir.
-        ];
-    }
-
-    // ------------------------------------------------------------------------
-    // SCOPES LOCAIS
+    // SCOPES LOCAIS (CORREÇÃO DA DISPONIBILIDADE)
     // ------------------------------------------------------------------------
 
     /**
      * Scope local para retornar todas as reservas que ESTÃO OCUPANDO um horário.
+     * ✅ CRÍTICO: Este escopo agora só inclui reservas de CLIENTES ATIVAS.
+     * Ele não deve incluir slots FIXOS (is_fixed=true) ou FREE (STATUS_FREE).
      */
     public function scopeIsOccupied($query, string $checkDate, string $checkStartTime, string $checkEndTime)
     {
-        return $query->where('date', $checkDate)
+        return $query->where('date', $checkDate) // 1. Filtra pela data específica
+            // 2. FILTRO CRÍTICO: Apenas status que indicam ocupação real
             ->whereIn('status', [self::STATUS_CONFIRMADA, self::STATUS_PENDENTE])
+            // 3. Opcional: Para ter certeza de que estamos vendo apenas reservas de clientes,
+            // embora o filtro de status já exclua slots FREE.
             ->where('is_fixed', false)
             ->where(function ($q) use ($checkStartTime, $checkEndTime) {
+                // 4. Lógica de sobreposição de tempo (usando as strings de hora 'HH:MM:SS')
                 $q->where('start_time', '<', $checkEndTime)
                     ->where('end_time', '>', $checkStartTime);
             });
     }
 
+
     // ------------------------------------------------------------------------
     // RELACIONAMENTOS
     // ------------------------------------------------------------------------
 
+    /**
+     * Relação com o Usuário (o cliente que fez a reserva, se houver)
+     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    /**
+     * Relação com o slot fixo que esta reserva de cliente consumiu (se houver).
+     */
     public function fixedSlot(): BelongsTo
     {
         return $this->belongsTo(Reserva::class, 'fixed_slot_id');
     }
 
+    /**
+     * Relação com o Gestor que manipulou ou criou a reserva (se houver)
+     */
     public function manager(): BelongsTo
     {
         return $this->belongsTo(User::class, 'manager_id');
     }
 
+    /**
+     * Relacionamento: Uma reserva tem várias transações financeiras.
+     */
     public function transactions(): HasMany
     {
         return $this->hasMany(FinancialTransaction::class);
@@ -157,25 +133,30 @@ class Reserva extends Model
     // ACESSORES MODERNOS
     // ------------------------------------------------------------------------
 
+    /**
+     * Retorna o nome amigável do status (usado nas listas do Admin).
+     */
     protected function statusText(): Attribute
     {
         return Attribute::make(
             get: fn() => match ($this->status) {
-                self::STATUS_FREE => 'Livre (Slot)',
+                self::STATUS_FREE => 'Livre (Slot)', // ✅ Slot Disponível
                 self::STATUS_PENDENTE => 'Pendente',
                 self::STATUS_CONFIRMADA => 'Confirmada',
                 self::STATUS_CANCELADA => 'Cancelada',
                 self::STATUS_REJEITADA => 'Rejeitada',
                 self::STATUS_EXPIRADA => 'Expirada',
-                self::STATUS_MAINTENANCE => 'Manutenção',
-                self::STATUS_LANCADA_CAIXA => 'Lançada no Caixa',
-                self::STATUS_CONCLUIDA => 'Concluída',
-                self::STATUS_NO_SHOW => 'Falta (No-Show)',
+                self::STATUS_MAINTENANCE => 'Manutenção', // ✅ Corrigido
+                self::STATUS_LANCADA_CAIXA => 'Lançada no Caixa', // ✅ Adicionado
+                self::STATUS_CONCLUIDA => 'Concluída', // 🆕 Adicionado
                 default => 'Desconhecido',
             },
         );
     }
 
+    /**
+     * Retorna o nome do criador (Gestor ou Cliente via Web).
+     */
     protected function criadoPorLabel(): Attribute
     {
         return Attribute::make(
@@ -187,14 +168,21 @@ class Reserva extends Model
     // 💰 MÓDULO FINANCEIRO
     // =========================================================================
 
+    /**
+     * Calcula quanto falta o cliente pagar.
+     * Lógica: (Preço Final ou Preço Original) - Total Pago
+     */
     public function getRemainingAmountAttribute(): float
     {
         $total = $this->final_price ?? $this->price;
         return max(0, $total - $this->total_paid);
     }
 
+    /**
+     * Verifica se a reserva está totalmente quitada.
+     */
     public function getIsPaidAttribute(): bool
     {
-        return $this->payment_status === self::PAYMENT_STATUS_PAID || $this->remaining_amount <= 0;
+        return $this->payment_status === 'paid' || $this->remaining_amount <= 0;
     }
 }

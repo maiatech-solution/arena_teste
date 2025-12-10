@@ -10,10 +10,10 @@
 
             {{-- 1. ESTRUTURA DE KPIS --}}
             <div class="space-y-4">
-
+                
                 {{-- Linha dos KPIs (4 colunas em telas grandes) --}}
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4">
-
+                    
                     {{-- CARD 3: RECEITA GARANTIDA P/ HOJE (PAGO) --}}
                     <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-300 dark:border-indigo-800 overflow-hidden shadow-lg sm:rounded-lg p-5 flex flex-col justify-center">
                         <div class="flex items-center justify-between">
@@ -49,7 +49,7 @@
                     {{-- CARD 5: RESERVAS ATIVAS DO DIA (Contagem) --}}
                     @php
                         // A cor do Card é determinada pela Movimentação Líquida do dia
-                        $isNegativeLiquid = $totalRecebidoDiaLiquido < 0;
+                        $isNegativeLiquid = $totalRecebidoDiaLiquido < 0; 
                         $kpiClass = $isNegativeLiquid ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-800' : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-800';
                         $textColor = $isNegativeLiquid ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300';
                     @endphp
@@ -89,7 +89,7 @@
 
                 {{-- FIM DA LINHA DE KPIS --}}
             </div>
-
+            
             {{-- 🚨 3. FECHAMENTO DE CAIXA (Lógica Condicional) --}}
             @if(isset($cashierStatus) && $cashierStatus === 'closed')
                 {{-- Bloco para reabrir o caixa --}}
@@ -100,14 +100,14 @@
                             CAIXA FECHADO! Alterações Bloqueadas para o dia {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}.
                         </div>
                         {{-- O onclick AGORA chama a função que abre o novo modal --}}
-                        <button id="openCashBtn" onclick="openCash('{{ $selectedDate }}')"
+                        <button id="openCashBtn" onclick="openCash('{{ $selectedDate }}')" 
                             class="w-full sm:w-auto px-6 py-2 bg-red-600 text-white font-bold rounded-lg shadow-md hover:bg-red-700 transition duration-150 flex items-center justify-center">
                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                             Abrir Caixa (Permitir Alterações)
                         </button>
                     </div>
                 </div>
-            @else
+            @else 
                 {{-- Bloco para fechar o caixa (Se o status for 'open', 'pending' ou não houver registro) --}}
                 <div class="bg-gray-50 dark:bg-gray-700/50 overflow-hidden shadow-lg sm:rounded-lg p-5 border border-indigo-400 dark:border-indigo-600">
                     <div class="flex flex-col sm:flex-row items-center justify-between">
@@ -129,10 +129,10 @@
                 </div>
             @endif
 
-
+            
             {{-- 1.5. Linha dos Filtros (Agora abaixo do Fechamento/Abertura de Caixa) --}}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-
+                
                 {{-- CARD/BLOCO 1: FILTRO DE DATA --}}
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-lg sm:rounded-lg p-5 flex flex-col justify-between border border-gray-200 dark:border-gray-700">
                     <form method="GET" action="{{ route('admin.payment.index') }}">
@@ -170,7 +170,7 @@
                                 <input type="text" name="search" id="search" value="{{ request('search') }}"
                                     placeholder="Digite o nome ou WhatsApp do cliente..."
                                     class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white">
-
+                                
                                 <button type="submit" class="h-10 px-4 py-2 bg-indigo-600 text-white rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 flex items-center justify-center">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                                 </button>
@@ -186,7 +186,7 @@
                     </form>
                 </div>
             </div>
-
+            
             {{-- 2. TABELA DE RESERVAS (PRIORIDADE DO CAIXA) --}}
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
@@ -251,7 +251,7 @@
                                         } elseif ($reserva->status === 'canceled') {
                                             $statusClass = 'bg-gray-400 text-white font-bold';
                                             $statusLabel = 'CANCELADA';
-                                        } elseif ($currentStatus === 'paid' || $reserva->status === 'completed') {
+                                        } elseif ($currentStatus === 'paid' || $currentStatus === 'completed') {
                                             $statusClass = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
                                             $statusLabel = 'PAGO COMPLETO'; // Mais específico
                                         } elseif ($currentStatus === 'partial') {
@@ -264,14 +264,14 @@
                                             // Pendente/Unpaid normal (se não houver pagamento ou for só sinal)
                                             $statusClass = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
                                             // Se o sinal foi dado, mas não é parcial:
-                                            $statusLabel = ($pago > 0) ? 'SINAL DADO' : 'PENDENTE';
+                                            $statusLabel = ($pago > 0) ? 'SINAL DADO' : 'PENDENTE'; 
                                         }
 
                                         // Destaque para a linha quando vier do dashboard
                                         $rowHighlight = (isset($highlightReservaId) && $reserva->id == $highlightReservaId)
                                             ? 'bg-indigo-50 dark:bg-indigo-900/20 border-l-4 border-indigo-500'
                                             : 'hover:bg-gray-50 dark:hover:bg-gray-700';
-
+                                            
                                         // Variável de controle para desabilitar botões
                                         $isActionDisabled = (isset($cashierStatus) && $cashierStatus === 'closed');
                                     @endphp
@@ -386,7 +386,7 @@
                                     @if ($reservaId)
                                         @php
                                             // Pega a primeira transação para ter acesso ao relacionamento 'reserva'
-                                            $transactionExample = $transactions->first();
+                                            $transactionExample = $transactions->first(); 
                                             // Tenta obter o nome do cliente através do relacionamento (se existir, se foi carregado, se a reserva não foi excluída)
                                             $clientName = $transactionExample->reserva->client_name ?? 'N/A';
                                             $reservaInfo = "ID: " . $reservaId . ($clientName !== 'N/A' ? ' - ' . $clientName : ' (Reserva Ausente/Cancelada)');
@@ -394,7 +394,7 @@
                                         <tr class="bg-gray-100 dark:bg-gray-700/50 border-t-2 border-indigo-400 dark:border-indigo-600">
                                             {{-- Colspan ajustado para 5 colunas de texto --}}
                                             <td colspan="5" class="px-4 py-2 text-sm font-bold text-gray-800 dark:text-gray-200">
-                                                ✅ MOVIMENTOS DA RESERVA <span class="text-indigo-600 dark:text-indigo-400">{{ $reservaInfo }}</span>
+                                                ✅ MOVIMENTOS DA RESERVA <span class="text-indigo-600 dark:text-indigo-400">{{ $reservaInfo }}</span> 
                                             </td>
                                             <td class="px-4 py-2 text-right text-sm font-bold text-gray-800 dark:text-gray-200">
                                                 TOTAL: R$ {{ number_format($transactions->sum('amount'), 2, ',', '.') }}
@@ -408,11 +408,11 @@
                                             $amount = (float) $transaction->amount;
                                             $isPositive = $amount >= 0;
                                             $isRefund = $transaction->type === 'refund' || $amount < 0; // Se o valor for negativo, é saída
-
+                                            
                                             // Destaque visual para estornos/saídas
                                             $rowClass = $isRefund ? 'bg-red-50 dark:bg-red-900/30 hover:bg-red-100' : 'hover:bg-gray-50 dark:hover:bg-gray-700';
                                             $amountClass = $isPositive ? 'text-green-600 font-bold' : 'text-red-600 font-bold';
-
+                                            
                                             // Mapeamento de Tipos para exibição amigável
                                             $typeMap = [
                                                 'signal' => 'Sinal',
@@ -462,7 +462,7 @@
                                             </td>
                                         </tr>
                                     @endforeach
-
+                                    
                                 @empty
                                     <tr>
                                         <td colspan="6" class="px-4 py-4 text-center text-gray-500 dark:text-gray-400">
@@ -497,10 +497,8 @@
     </div>
 
 {{-- ================================================================== --}}
-{{-- MODAIS (MANUTENÇÃO DO LAYOUT) --}}
+{{-- MODAL 1: FINALIZAR PAGAMENTO (CÓDIGO OMITIDO) --}}
 {{-- ================================================================== --}}
-
-{{-- MODAL 1: FINALIZAR PAGAMENTO (mantido) --}}
 <div id="paymentModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4" aria-labelledby="modal-title" role="dialog" aria-modal="true">
     <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
     <div class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
@@ -521,7 +519,7 @@
                         </div>
                         <input type="hidden" id="modalReservaId" name="reserva_id">
                         <input type="hidden" id="modalSignalAmountRaw" name="signal_amount_raw">
-
+                        
                         <div class="mt-4 space-y-3">
                             <div>
                                 <label for="modalFinalPrice" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -583,7 +581,9 @@
     </div>
 </div>
 
-{{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) (mantido) --}}
+{{-- ================================================================== --}}
+{{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) (CÓDIGO OMITIDO) --}}
+{{-- ================================================================== --}}
 <div id="noShowModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
     <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
     <div class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
@@ -604,7 +604,7 @@
                                 Nenhum valor foi pago. Marcar como falta apenas registrará o status.
                             </p>
                         </div>
-
+                        
                         <input type="hidden" id="noShowReservaId" name="reserva_id">
                         <input type="hidden" id="noShowPaidAmount" name="paid_amount">
 
@@ -658,7 +658,9 @@
 </div>
 
 
-{{-- MODAL 3: FECHAR CAIXA (CLOSE CASH) (mantido) --}}
+{{-- ================================================================== --}}
+{{-- MODAL 3: FECHAR CAIXA (CLOSE CASH) (CÓDIGO OMITIDO) --}}
+{{-- ================================================================== --}}
 <div id="closeCashModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
     <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
     <div class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
@@ -718,7 +720,9 @@
 </div>
 
 
-{{-- MODAL 4: ABRIR CAIXA (OPEN CASH) - Exige Justificativa (mantido) --}}
+{{-- ================================================================== --}}
+{{-- MODAL 4: ABRIR CAIXA (OPEN CASH) - Exige Justificativa --}}
+{{-- ================================================================== --}}
 <div id="openCashModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4" aria-labelledby="modal-title" role="dialog" aria-modal="true">
     <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
 
@@ -772,7 +776,7 @@
 </div>
 
 
-{{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA (COM FUNÇÃO checkCashierStatus CORRIGIDA) --}}
+{{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA (COM FUNÇÃO openCash ATUALIZADA) --}}
 
 <script>
 // --- Funções de Suporte ---
@@ -872,7 +876,7 @@ function closePaymentModal() {
 
 document.getElementById('paymentForm').addEventListener('submit', function(e) {
     e.preventDefault();
-
+    
     const reservaId = document.getElementById('modalReservaId').value;
     const finalPrice = parseFloat(document.getElementById('modalFinalPrice').value).toFixed(2);
     const amountPaid = parseFloat(document.getElementById('modalAmountPaid').value).toFixed(2);
@@ -899,7 +903,7 @@ document.getElementById('paymentForm').addEventListener('submit', function(e) {
 
     const payload = {
         reserva_id: reservaId,
-        final_price: finalPrice,
+        final_price: finalPrice, 
         amount_paid: amountPaid,
         payment_method: paymentMethod,
         apply_to_series: applyToSeries
@@ -952,7 +956,7 @@ function openNoShowModal(id, clientName, paidAmount) {
     document.getElementById('noShowAmountDisplay').innerText = paidAmountFormatted;
 
     const initialWarningEl = document.getElementById('noShowInitialWarning');
-    const refundControlsEl = document.getElementById('refundControls');
+    const refundControlsEl = document.getElementById('refundControls'); 
 
     if (paidAmount > 0) {
         initialWarningEl.innerHTML = `O cliente já pagou <span class="font-bold">${paidAmountFormatted}</span>. Escolha abaixo se este valor será retido (padrão) ou estornado.`;
@@ -981,10 +985,10 @@ function closeNoShowModal() {
 
 document.getElementById('noShowForm').addEventListener('submit', function(e) {
     e.preventDefault();
-
+    
     const reservaId = document.getElementById('noShowReservaId').value;
     const reason = this.querySelector('textarea[name="no_show_reason"]').value;
-    const blockUser = this.querySelector('input[name="block_user"]').checked;
+    const blockUser = this.querySelector('input[name="block_user"]').checked; 
     const paidAmount = document.getElementById('noShowPaidAmount').value;
     const shouldRefund = this.querySelector('select[name="should_refund"]').value === 'true';
     const csrfToken = document.querySelector('input[name="_token"]').value;
@@ -995,9 +999,9 @@ document.getElementById('noShowForm').addEventListener('submit', function(e) {
     const errorMessageDiv = document.getElementById('noshow-error-message');
 
     if (reason.length < 5) {
-         errorMessageDiv.textContent = 'O motivo da falta (Observações) é obrigatório e deve ter no mínimo 5 caracteres.';
-         errorMessageDiv.classList.remove('hidden');
-         return;
+          errorMessageDiv.textContent = 'O motivo da falta (Observações) é obrigatório e deve ter no mínimo 5 caracteres.';
+          errorMessageDiv.classList.remove('hidden');
+          return;
     }
 
     submitBtn.disabled = true;
@@ -1060,11 +1064,11 @@ function calculateDifference() {
     // Limpeza robusta do valor formatado
     let calculatedText = calculatedAmountEl.innerText.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
     const calculatedAmount = parseFloat(calculatedText) || 0;
-
+    
     const actualAmount = parseFloat(document.getElementById('actualCashAmount').value) || 0;
     const difference = actualAmount - calculatedAmount;
     const diffMessageEl = document.getElementById('differenceMessage');
-
+    
     diffMessageEl.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-yellow-100', 'text-yellow-700', 'bg-green-100', 'text-green-700');
 
     if (Math.abs(difference) < 0.01) {
@@ -1084,17 +1088,17 @@ function openCloseCashModal() {
     const calculatedLiquidAmount = document.querySelector('tr.font-bold .text-lg').innerText;
     const cashierDate = document.getElementById('cashierDate').value;
     const formattedDate = new Date(cashierDate + 'T00:00:00').toLocaleDateString('pt-BR');
-
+    
     document.getElementById('closeCashDate').value = cashierDate;
     document.getElementById('closeCashDateDisplay').innerText = formattedDate;
     document.getElementById('calculatedLiquidAmount').innerText = calculatedLiquidAmount;
-
+    
     // Converte para float e preenche o input, usando PONTO como separador decimal
     const liquidValueRawText = calculatedLiquidAmount.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
     const liquidValueRaw = parseFloat(liquidValueRawText) || 0;
-
+    
     document.getElementById('actualCashAmount').value = liquidValueRaw.toFixed(2);
-
+    
     calculateDifference();
 
     document.getElementById('closeCashModal').classList.remove('hidden');
@@ -1121,7 +1125,7 @@ document.getElementById('closeCashForm').addEventListener('submit', function(e) 
     const actualAmount = parseFloat(document.getElementById('actualCashAmount').value).toFixed(2);
     const date = document.getElementById('closeCashDate').value;
     const csrfToken = document.querySelector('input[name="_token"]').value;
-
+    
     const submitBtn = document.getElementById('submitCloseCashBtn');
     const submitText = document.getElementById('submitCloseCashText');
     const submitSpinner = document.getElementById('submitCloseCashSpinner');
@@ -1148,18 +1152,18 @@ document.getElementById('closeCashForm').addEventListener('submit', function(e) 
         body: JSON.stringify(payload)
     })
     .then(response => {
-         if (!response.ok) {
+        if (!response.ok) {
              return response.json().then(data => {
                  throw new Error(data.message || 'Erro ao fechar o caixa. Verifique o console.');
              });
-         }
-         return response.json();
+        }
+        return response.json();
     })
     .then(data => {
         if(data.success) {
             showMessage(data.message);
             // Redireciona para o Payment Index (deve recarregar o novo status)
-            window.location.href = data.redirect || '{{ route('admin.payment.index') }}';
+            window.location.href = data.redirect || '{{ route('admin.payment.index') }}'; 
         } else {
             errorMessageDiv.textContent = data.message || 'Erro ao fechar caixa.';
             errorMessageDiv.classList.remove('hidden');
@@ -1177,17 +1181,17 @@ document.getElementById('closeCashForm').addEventListener('submit', function(e) 
     });
 });
 
-// --- Lógica de Abertura de Caixa (MODAL 4) ---
+// --- Lógica de Abertura de Caixa (CHAMA O MODAL) ---
 
 // 🎯 Nova função que abre o modal de justificativa
 function openCashModal(dateString) {
     const formattedDate = new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
-
+    
     document.getElementById('reopenCashDate').value = dateString;
     document.getElementById('openCashDateDisplay').innerText = formattedDate;
-    document.getElementById('reopen_reason').value = '';
+    document.getElementById('reopen_reason').value = ''; 
     document.getElementById('openCash-error-message').classList.add('hidden');
-
+    
     document.getElementById('openCashModal').classList.remove('hidden');
     document.getElementById('openCashModal').classList.add('flex');
 }
@@ -1210,7 +1214,7 @@ document.getElementById('openCashForm').addEventListener('submit', function(e) {
     const date = document.getElementById('reopenCashDate').value;
     const reason = document.getElementById('reopen_reason').value.trim();
     const csrfToken = document.querySelector('input[name="_token"]').value;
-
+    
     const submitBtn = document.getElementById('submitOpenCashBtn');
     const submitText = document.getElementById('submitOpenCashText');
     const submitSpinner = document.getElementById('submitOpenCashSpinner');
@@ -1273,21 +1277,20 @@ document.getElementById('openCashForm').addEventListener('submit', function(e) {
 });
 
 
-// --- Lógica de Habilitação do Botão (CRÍTICO CORRIGIDO) ---
+// --- Lógica de Habilitação do Botão (CRÍTICO) ---
 function checkCashierStatus() {
     // 1. O número total de agendamentos para o dia (do PHP)
     const totalReservations = parseInt("{{ $totalReservasDia }}");
-
+    
     // Lista de status FINISHED (Concluídos/Finalizados) que permitem fechar o caixa.
-    // 🚨 CORREÇÃO: REMOVIDOS 'pago parcial' e 'sinal dado' desta lista!
-    const finalStatuses = ['pago completo', 'falta', 'cancelada', 'finalizado'];
-
+    const finalStatuses = ['pago completo', 'pago parcial', 'falta', 'cancelada', 'finalizado', 'sinal dado']; // ✅ Sinal Dado adicionado para ser considerado finalizado para o contador
+    
     let completedReservations = 0;
 
     // Se o caixa JÁ estiver fechado, não faz nada com o botão de fechar.
     @if(isset($cashierStatus) && $cashierStatus === 'closed')
         // O botão de "Fechar Caixa" não existe, apenas o de "Abrir Caixa"
-        return;
+        return; 
     @endif
 
 
@@ -1307,7 +1310,7 @@ function checkCashierStatus() {
         const statusSpan = row.querySelector('td:nth-child(3) span');
         if (statusSpan) {
             const statusText = statusSpan.innerText.trim().toLowerCase();
-
+            
             // Verifica se o status está na lista de status finais.
             if (finalStatuses.includes(statusText)) {
                 completedReservations++;
@@ -1316,7 +1319,7 @@ function checkCashierStatus() {
     });
 
     const isAllCompleted = completedReservations === totalReservations;
-
+    
     if (isAllCompleted) {
         updateCashierButton(true, "✅ Pronto para Fechamento!");
     } else {
@@ -1333,7 +1336,7 @@ function updateCashierButton(isReady, statusMessage) {
 
     closeCashBtn.disabled = !isReady;
     cashStatusEl.innerHTML = statusMessage;
-
+    
     if (isReady) {
         cashStatusEl.classList.remove('text-red-500', 'dark:text-red-400');
         cashStatusEl.classList.add('text-green-600', 'dark:text-green-400');
@@ -1347,18 +1350,19 @@ function updateCashierButton(isReady, statusMessage) {
 document.addEventListener('DOMContentLoaded', () => {
     // Inicializa a verificação na carga da página
     checkCashierStatus();
-
+    
     // O restante dos listeners do DOMContentLoaded
+    // 🚨 CORRIGIDO: Proteção contra elemento nulo (o erro 990 deve ser resolvido aqui)
     const modalFinalPriceEl = document.getElementById('modalFinalPrice');
     const modalAmountPaidEl = document.getElementById('modalAmountPaid');
-
+    
     if (modalFinalPriceEl) {
         modalFinalPriceEl.addEventListener('input', calculateAmountDue);
     }
     if (modalAmountPaidEl) {
         modalAmountPaidEl.addEventListener('input', checkManualOverpayment);
     }
-
+    
     // Destaque de Linha (mantido)
     const urlParams = new URLSearchParams(window.location.search);
     const reservaId = urlParams.get('reserva_id');

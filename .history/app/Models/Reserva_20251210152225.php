@@ -107,7 +107,7 @@ class Reserva extends Model
         return [
             self::STATUS_PENDENTE,      // Exige Confirmação
             self::STATUS_CONFIRMADA,    // Exige Conclusão/Cancelamento/Falta
-            self::STATUS_LANCADA_CAIXA, // ADICIONADO: Bloqueia se já foi lançado, mas ainda falta concluir.
+            self::STATUS_LANCADA_CAIXA, // 🚨 ADICIONADO: Se foi lançado, mas ainda não concluído, deve bloquear.
         ];
     }
 
