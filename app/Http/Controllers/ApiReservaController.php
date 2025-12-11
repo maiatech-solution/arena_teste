@@ -27,7 +27,7 @@ class ApiReservaController extends Controller
             $start = Carbon::parse($request->input('start', Carbon::today()->subMonths(1)->toDateString()));
             $end = Carbon::parse($request->input('end', Carbon::today()->addMonths(6)->toDateString()));
 
-            // 🎯 CRÍTICO: Incluir TODOS os status que ocupam um horário
+            // CRÍTICO: Incluir TODOS os status que ocupam um horário
             $statuses = [
                 Reserva::STATUS_CONFIRMADA,
                 Reserva::STATUS_PENDENTE,
@@ -36,16 +36,12 @@ class ApiReservaController extends Controller
                 Reserva::STATUS_NO_SHOW,
             ];
 
-            Log::info("getConfirmedReservas: Buscando reservas de clientes. Status: " . implode(', ', $statuses));
-
             $reservas = Reserva::where('is_fixed', false) // Apenas reservas de cliente
                                ->whereIn('status', $statuses)
                                ->whereDate('date', '>=', $start)
                                ->whereDate('date', '<=', $end)
                                ->get();
 
-            Log::info("getConfirmedReservas: Total de reservas encontradas: " . $reservas->count());
-            
             $events = $reservas->map(function ($reserva) {
                 
                 $isRecurrent = (bool)$reserva->is_recurrent;
@@ -53,6 +49,15 @@ class ApiReservaController extends Controller
                 $isNoShow = $reserva->status === Reserva::STATUS_NO_SHOW;
                 $isPending = $reserva->status === Reserva::STATUS_PENDENTE;
 
+                // 🎯 CORREÇÃO CRÍTICA APLICADA: 
+                // Se 'start_time' é um objeto Carbon (devido ao cast no Model), use ->format('H:i:s').
+                // Garante que o formato é compatível com a ISO 8601 (FullCalendar).
+                $timeStartFormatted = $reserva->start_time instanceof Carbon ? $reserva->start_time->format('H:i:s') : $reserva->start_time;
+                $timeEndFormatted = $reserva->end_time instanceof Carbon ? $reserva->end_time->format('H:i:s') : $reserva->end_time;
+
+                $startOutput = $reserva->date->format('Y-m-d') . 'T' . $timeStartFormatted;
+                $endOutput = $reserva->date->format('Y-m-d') . 'T' . $timeEndFormatted;
+                
                 // 1. Definição inicial (Padrão: Avulso/Recorrente)
                 $color = $isRecurrent ? '#c026d3' : '#4f46e5'; // Fúcsia ou Índigo
                 $className = $isRecurrent ? 'fc-event-recurrent' : 'fc-event-quick';
@@ -64,27 +69,25 @@ class ApiReservaController extends Controller
                     $className = 'fc-event-pending';
                     $titlePrefix = 'PENDENTE: ';
                 } elseif ($isNoShow) {
-                    // FALTA (A classe do frontend aplica o vermelho, mas forçamos a cor aqui também)
                     $color = '#E53E3E'; // Vermelho
                     $className = 'fc-event-no-show'; 
                     $titlePrefix = 'FALTA: ';
                 } elseif ($isPaid) {
-                    // PAGA (Mantém a cor original, mas o frontend aplicará a classe .fc-event-paid para o fade)
-                    $color = $isRecurrent ? '#c026d3' : '#4f46e5'; 
+                    // PAGA/CONCLUIDA
+                    $color = '#10b981'; // Verde para concluída/paga
+                    $className .= ' fc-event-paid';
+                    $titlePrefix = 'PAGO: ';
                 }
                 
-                // Prefixos de título (Adicionados depois de resolver o status principal)
+                // Prefixo de título para recorrente (deve ser o último a ser adicionado se for o caso)
                 if ($isRecurrent) {
-                    $titlePrefix .= 'RECORR.: ';
+                    $titlePrefix = 'RECORR.: ' . str_replace('PAGO: ', '', $titlePrefix);
                 }
 
                 $clientName = $reserva->user ? $reserva->user->name : ($reserva->client_name ?? 'Cliente');
 
-                // Monta o título completo. O frontend removerá o prefixo (PAGO) e adicionará o dele.
+                // Monta o título completo. 
                 $eventTitle = $titlePrefix . $clientName . ' - R$ ' . number_format((float)$reserva->price, 2, ',', '.');
-
-                $startOutput = $reserva->date->format('Y-m-d') . 'T' . $reserva->start_time;
-                $endOutput = $reserva->date->format('Y-m-d') . 'T' . $reserva->end_time;
 
                 // 3. Monta o objeto de evento
                 return [
@@ -97,14 +100,9 @@ class ApiReservaController extends Controller
                     'extendedProps' => [
                         'status' => $reserva->status, // Status é crucial para o JS saber o que fazer
                         'price' => (float)$reserva->price, 
-                        
-                        // total_paid é o valor acumulado pago (sinal + saldo)
                         'total_paid' => (float)($reserva->total_paid ?? $reserva->signal_value),
                         'signal_value' => (float)$reserva->signal_value,
-                        
                         'is_recurrent' => $isRecurrent,
-                        
-                        // is_paid é true se for concluída/lançada.
                         'is_paid' => $isPaid, 
                         'is_fixed' => false
                     ]
@@ -120,17 +118,12 @@ class ApiReservaController extends Controller
     }
 
     // =========================================================================
-    // ⚠️ MÉTODO getConcludedReservas FOI REMOVIDO/CONSOLIDADO
-    // =========================================================================
-
-    // =========================================================================
-    // ✅ MÉTODO 2: Horários Disponíveis p/ Calendário (API)
+    // ✅ MÉTODO 2: Horários Disponíveis p/ Calendário (API) - CORRIGIDO
     // Rota: api.horarios.disponiveis
     // =========================================================================
     /**
      * Retorna os slots da GRADE (is_fixed=true) que estão livres.
-     *
-     * @param \Illuminate\Http\Request $request
+     * * @param \Illuminate\Http\Request $request
      * @return \Illuminate\Http\JsonResponse
      */
     public function getAvailableSlotsApi(Request $request)
@@ -139,24 +132,31 @@ class ApiReservaController extends Controller
             $startDate = Carbon::parse($request->input('start', Carbon::today()->toDateString()));
             $endDate = Carbon::parse($request->input('end', Carbon::today()->addWeeks(6)->toDateString()));
 
+            // Busca apenas slots de disponibilidade (FREE)
             $allFixedSlots = Reserva::where('is_fixed', true)
-                                     ->whereDate('date', '>=', $startDate->toDateString())
-                                     ->whereDate('date', '<=', $endDate->toDateString())
-                                     ->where('status', Reserva::STATUS_FREE)
-                                     ->get();
+                                         ->whereDate('date', '>=', $startDate->toDateString())
+                                         ->whereDate('date', '<=', $endDate->toDateString())
+                                         ->where('status', Reserva::STATUS_FREE) // Apenas os slots livres
+                                         ->get();
 
             $events = [];
 
             foreach ($allFixedSlots as $slot) {
-                $slotStartTime = $slot->start_time;
-                $slotEndTime = $slot->end_time;
-
+                
+                // 🎯 CORREÇÃO CRÍTICA APLICADA AQUI: 
+                // Se 'start_time' é um objeto Carbon, use ->format('H:i:s') para obter a string de hora.
+                $slotStartTime = $slot->start_time instanceof Carbon ? $slot->start_time->format('H:i:s') : $slot->start_time;
+                $slotEndTime = $slot->end_time instanceof Carbon ? $slot->end_time->format('H:i:s') : $slot->end_time;
+                
                 if (empty($slotStartTime) || empty($slotEndTime)) continue;
 
                 $slotDateString = $slot->date->toDateString();
-                $startDateTime = Carbon::parse($slotDateString . ' ' . $slotStartTime);
+                
+                // Garante que o parse é feito com a string de hora (corrigido)
+                $startDateTime = Carbon::parse($slotDateString . ' ' . $slotStartTime); 
                 $endDateTime = Carbon::parse($slotDateString . ' ' . $slotEndTime);
 
+                // Lógica de virada de dia (23:00 -> 00:00)
                 if ($endDateTime->lte($startDateTime)) {
                     $endDateTime->addDay();
                 }
@@ -164,14 +164,14 @@ class ApiReservaController extends Controller
                 $startOutput = $startDateTime->format('Y-m-d\TH:i:s');
                 $endOutput = $endDateTime->format('Y-m-d\TH:i:s');
 
-                // Filtro de sobreposição: verifica se o slot está ocupado por RESERVA DE CLIENTE (confirmada/pendente)
+                // Filtro de sobreposição: verifica se o slot está ocupado por RESERVA DE CLIENTE
                 $isOccupied = Reserva::where('is_fixed', false)
                 ->whereDate('date', $slotDateString)
-                // ✅ Apenas CONFIRMADA e PENDENTE causam ocupação real para slots disponíveis
                 ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
                 ->where(function ($query) use ($slotStartTime, $slotEndTime) {
+                    // Usando as strings de hora formatadas para a query SQL
                     $query->where('start_time', '<', $slotEndTime)
-                                  ->where('end_time', '>', $slotStartTime);
+                              ->where('end_time', '>', $slotStartTime);
                 })
                 ->exists();
 
@@ -187,8 +187,8 @@ class ApiReservaController extends Controller
                         'color' => '#10b981', // Verde (Available)
                         'className' => 'fc-event-available',
                         'extendedProps' => [
-                            'status' => Reserva::STATUS_FREE, // ✅ NOVO STATUS no extendedProps
-                            'price' => (float)$slot->price, // Garantindo que seja float
+                            'status' => Reserva::STATUS_FREE, 
+                            'price' => (float)$slot->price, 
                             'is_fixed' => true,
                         ]
                     ];
@@ -198,13 +198,14 @@ class ApiReservaController extends Controller
             return response()->json($events);
 
         } catch (\Exception $e) {
-            Log::error("Erro no getAvailableSlotsApi: " . $e->getMessage());
+            Log::error("Erro CRÍTICO no getAvailableSlotsApi: " . $e->getMessage());
+            // Retorna o erro 500 para o FullCalendar
             return response()->json(['error' => 'Erro interno ao carregar horários disponíveis. Detalhes: ' . $e->getMessage()], 500);
         }
     }
 
     // =========================================================================
-    // ✅ MÉTODO 3: Horários Disponíveis p/ FORMULÁRIO PÚBLICO (HTML) - MANTIDO
+    // ✅ MÉTODO 3: Horários Disponíveis p/ FORMULÁRIO PÚBLICO (HTML) - CORRIGIDO
     // =========================================================================
     /**
      * Calcula e retorna os horários disponíveis para uma data específica (página pública e /admin/reservas/create).
@@ -220,48 +221,62 @@ class ApiReservaController extends Controller
         $isToday = $selectedDate->isToday();
         $now = Carbon::now();
 
+        // Slots fixos (FREE)
         $allFixedSlots = Reserva::where('is_fixed', true)
-                                    ->whereDate('date', $dateString)
-                                    ->where('status', Reserva::STATUS_FREE) // Deve buscar STATUS_FREE para slots disponíveis
-                                    ->get();
+                                     ->whereDate('date', $dateString)
+                                     ->where('status', Reserva::STATUS_FREE)
+                                     ->get();
 
+        // Reservas ativas de clientes (PENDING/CONFIRMED)
         $occupiedReservas = Reserva::where('is_fixed', false)
-                                    ->whereDate('date', $dateString)
-                                    // Apenas CONFIRMADA e PENDENTE causam ocupação real
-                                    ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-                                    ->get();
+                                     ->whereDate('date', $dateString)
+                                     ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                                     ->get();
 
         $availableTimes = [];
 
         foreach ($allFixedSlots as $slot) {
-            if (empty($slot->start_time) || empty($slot->end_time)) continue;
+            
+            // 🎯 CORREÇÃO CRÍTICA APLICADA AQUI: 
+            // Se 'start_time' é um objeto Carbon, use ->format('H:i') para consistência com o parse.
+            $slotStart = $slot->start_time instanceof Carbon ? $slot->start_time->setTimezone(config('app.timezone'))->format('H:i') : $slot->start_time;
+            $slotEnd = $slot->end_time instanceof Carbon ? $slot->end_time->setTimezone(config('app.timezone'))->format('H:i') : $slot->end_time;
+            
+            if (empty($slotStart) || empty($slotEnd)) continue;
 
-            $slotStart = Carbon::parse($slot->start_time);
-            $slotEnd = Carbon::parse($slot->end_time);
+            $slotStartCarbon = Carbon::parse($slotStart);
+            $slotEndCarbon = Carbon::parse($slotEnd);
 
-            $slotEndDateTime = $selectedDate->copy()->setTime($slotEnd->hour, $slotEnd->minute);
+            $slotEndDateTime = $selectedDate->copy()->setTime($slotEndCarbon->hour, $slotEndCarbon->minute);
 
-            if ($slotEnd->lt($slotStart)) {
+            if ($slotEndCarbon->lt($slotStartCarbon)) {
                 $slotEndDateTime->addDay();
             }
 
+            // Ignorar slots que já passaram hoje
             if ($isToday && $slotEndDateTime->lt($now)) {
                 continue;
             }
 
+            // Checagem de sobreposição
             $isOccupied = $occupiedReservas->contains(function ($reservation) use ($slotStart, $slotEnd) {
-                return $reservation->start_time < $slotEnd->format('H:i:s') && $reservation->end_time > $slotStart->format('H:i:s');
+                // Necessário formatar a hora da reserva do cliente para string H:i:s para comparação
+                $reservationStart = $reservation->start_time instanceof Carbon ? $reservation->start_time->format('H:i:s') : $reservation->start_time;
+                $reservationEnd = $reservation->end_time instanceof Carbon ? $reservation->end_time->format('H:i:s') : $reservation->end_time;
+                
+                // Compara se o slot fixo está entre o início e o fim da reserva do cliente
+                return $reservationStart < $slotEnd . ':00' && $reservationEnd > $slotStart . ':00';
             });
 
             if (!$isOccupied) {
                 // Slot disponível
                 $availableTimes[] = [
                     'id' => $slot->id,
-                    'time_slot' => $slotStart->format('H:i') . ' - ' . $slotEnd->format('H:i'),
+                    'time_slot' => $slotStart . ' - ' . $slotEnd,
                     'price' => number_format($slot->price, 2, ',', '.'),
                     'raw_price' => $slot->price,
-                    'start_time' => $slotStart->format('H:i'),
-                    'end_time' => $slotEnd->format('H:i'),
+                    'start_time' => $slotStart,
+                    'end_time' => $slotEnd,
                     'schedule_id' => $slot->id,
                 ];
             }

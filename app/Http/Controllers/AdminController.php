@@ -6,11 +6,11 @@ use App\Models\Reserva;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB; // Necessário para a função DB::raw()
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Carbon\Carbon; // Necessário para Carbon::today()
+use Carbon\Carbon;
 use Illuminate\Validation\Rule;
 use Carbon\CarbonPeriod;
 use Illuminate\Validation\ValidationException;
@@ -49,7 +49,6 @@ class AdminController extends Controller
      */
     public function indexReservasDashboard()
     {
-        // O código de contagem não é mais necessário aqui, a view é estática ou usa contagens simples
         return view('admin.reservas.index-dashboard');
     }
 
@@ -78,7 +77,7 @@ class AdminController extends Controller
         $search = $request->input('search');
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
-        $isOnlyMine = $request->input('only_mine') === 'true'; // Mantendo a variável, mesmo que o filtro tenha sido simplificado
+        $isOnlyMine = $request->input('only_mine') === 'true'; 
 
         $reservas = Reserva::where('status', Reserva::STATUS_CONFIRMADA)
             ->where('is_fixed', false)
@@ -97,7 +96,6 @@ class AdminController extends Controller
             ->when($endDate, function ($query, $endDate) {
                 return $query->whereDate('date', '<=', $endDate);
             })
-            // O filtro 'only_mine' foi removido do front, mas o código de filtro está aqui para fins de demonstração
             ->when($isOnlyMine, function ($query) {
                 return $query->where('manager_id', Auth::id());
             })
@@ -150,14 +148,14 @@ class AdminController extends Controller
             });
         });
 
-        // 5. Ordenação e Paginação (Mostra as reservas mais antigas/próximas primeiro)
+        // 5. Ordenação e Paginação
         $reservas = $reservas
             ->orderBy('date', 'asc') // ORDEM CRESCENTE (ASC)
             ->orderBy('start_time', 'asc') // ORDEM CRESCENTE (ASC)
             ->paginate(20)
             ->appends($request->except('page'));
 
-        // 6. Retorna a view 'admin.reservas.todas' (que foi criada no Canvas)
+        // 6. Retorna a view 'admin.reservas.todas' 
         return view('admin.reservas.todas', [
             'reservas' => $reservas,
             'pageTitle' => 'Todas as Reservas (Inventário e Clientes)',
@@ -169,16 +167,12 @@ class AdminController extends Controller
         ]);
     }
 
-    // O método 'canceled_index' foi removido, pois a rota não será mais usada.
-    // O histórico de cancelamento/rejeição agora é mantido no DB sem a necessidade de deletar.
-
     /**
      * Exibe o formulário para criação manual de reserva.
      */
     public function createReserva()
     {
         $users = User::where('role', 'cliente')->get();
-        // 🛑 CORREÇÃO: O AdminController agora tem um método storeReserva (substituindo o storeManualReserva do seu código)
         return view('admin.reservas.create', compact('users'));
     }
 
@@ -191,237 +185,112 @@ class AdminController extends Controller
     }
 
     /**
-     * Cria uma nova reserva manual (Admin) - Consome o slot FREE se existir.
-     * (Este método substitui o storeManualReserva do seu código)
+     * ✅ CORRIGIDO: Cria uma nova reserva manual (Admin) - DELEGADO.
+     * Delega a lógica de criação complexa (consumir slot, criar cliente, transação) para ReservaController.
      */
     public function storeReserva(Request $request)
     {
-        // Validação básica (usando lógica já presente)
         $validated = $request->validate([
             'user_id' => 'nullable|exists:users,id',
             'date' => 'required|date_format:Y-m-d',
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'required|date_format:H:i|after:start_time',
             'price' => 'required|numeric|min:0',
-            // ✅ NOVO: Adiciona a possibilidade de sinal/pagamento para criação manual
             'signal_value' => 'nullable|numeric|min:0',
-            // FIM NOVO
             'client_name' => 'required|string|max:255',
             'client_contact' => 'required|string|max:255',
             'notes' => 'nullable|string',
+            'payment_method' => 'required|string', // Necessário para a transação
+            'is_recurrent' => 'nullable|boolean', // Adicionado, se aplicável
         ]);
 
-        $price = (float) $validated['price'];
-        $signalValue = (float) ($validated['signal_value'] ?? 0.00);
-        $totalPaid = $signalValue;
-
-        $paymentStatus = 'pending';
-        if ($signalValue > 0) {
-            $paymentStatus = ($signalValue >= $price) ? 'paid' : 'partial';
-        }
-
-        // Normaliza as horas para o formato H:i:s
-        $startTimeNormalized = Carbon::createFromFormat('H:i', $validated['start_time'])->format('H:i:s');
-        $endTimeNormalized = Carbon::createFromFormat('H:i', $validated['end_time'])->format('H:i:s');
-
-        // Checa se o horário está ocupado por outra reserva real (usando helper do ReservaController)
-        if ($this->reservaController->checkOverlap($validated['date'], $validated['start_time'], $validated['end_time'], false)) {
-            return redirect()->back()->withInput()->with('error', 'O horário selecionado já está ocupado por outra reserva confirmada ou pendente.');
-        }
-
-        // Tenta encontrar um slot fixo livre (STATUS_FREE) para consumo
-        $fixedSlot = Reserva::where('is_fixed', true)
-            ->where('date', $validated['date'])
-            ->where('start_time', $startTimeNormalized)
-            ->where('end_time', $endTimeNormalized)
-            ->where('status', Reserva::STATUS_FREE) // 🛑 CRÍTICO: Busca por STATUS_FREE
-            ->first();
-
+        $clientContact = $validated['client_contact'];
+        
         DB::beginTransaction();
         try {
-            if ($fixedSlot) {
-                // Consome o slot fixo disponível
-                $fixedSlot->delete();
-            } else {
-                // Aviso se o slot fixo não existia, mas permite a criação
-                Log::warning("Reserva manual criada sem consumir slot fixo disponível: {$validated['date']} {$startTimeNormalized}.");
-            }
-
-            // Cria a nova reserva confirmada
-            $newReserva = Reserva::create([
-                'user_id' => $validated['user_id'] ?? null,
-                'date' => $validated['date'],
-                'day_of_week' => Carbon::parse($validated['date'])->dayOfWeek,
-                'start_time' => $startTimeNormalized,
-                'end_time' => $endTimeNormalized,
-                'price' => $price,
-                // ✅ Adicionado Pagamento/Sinal
-                'signal_value' => $signalValue,
-                'total_paid' => $totalPaid,
-                'payment_status' => $paymentStatus,
-                'client_name' => $validated['client_name'],
-                'client_contact' => $validated['client_contact'],
-                'notes' => $validated['notes'] ?? null,
-                'status' => Reserva::STATUS_CONFIRMADA, // Reserva de cliente confirmada pelo Admin
-                'is_fixed' => false,
-                'is_recurrent' => false,
-                'manager_id' => Auth::id(),
+            // 1. Encontra/Cria o cliente
+            $clientUser = $this->reservaController->findOrCreateClient([
+                'name' => $validated['client_name'],
+                'whatsapp_contact' => $clientContact,
+                'email' => null, // Assumindo que o Admin não passa e-mail por aqui
             ]);
 
-            // ✅ NOVO: GERA TRANSAÇÃO FINANCEIRA para o sinal
-            if ($signalValue > 0) {
-                FinancialTransaction::create([
-                    'reserva_id' => $newReserva->id,
-                    'user_id' => $newReserva->user_id,
-                    'manager_id' => Auth::id(),
-                    'amount' => $signalValue,
-                    'type' => 'signal',
-                    'payment_method' => 'manual', // Assumindo pagamento manual
-                    'description' => 'Sinal/Pagamento inicial recebido na criação manual da reserva.',
-                    'paid_at' => Carbon::now(),
-                ]);
-            }
+            // 2. Tenta encontrar slot fixo para consumo (para enviar o ID para consumo)
+            $startTimeNormalized = Carbon::createFromFormat('H:i', $validated['start_time'])->format('H:i:s');
+            $endTimeNormalized = Carbon::createFromFormat('H:i', $validated['end_time'])->format('H:i:s');
+
+             $fixedSlot = Reserva::where('is_fixed', true)
+                ->where('date', $validated['date'])
+                ->where('start_time', $startTimeNormalized)
+                ->where('end_time', $endTimeNormalized)
+                ->where('status', Reserva::STATUS_FREE) 
+                ->first();
+             $fixedSlotId = $fixedSlot ? $fixedSlot->id : null;
+
+            // 3. DELEGA A CRIAÇÃO FINAL ao ReservaController
+            $newReserva = $this->reservaController->createConfirmedReserva($validated, $clientUser, $fixedSlotId);
 
             DB::commit();
-            return redirect()->route('admin.reservas.confirmadas')->with('success', 'Reserva criada e confirmada manualmente com sucesso!');
+            return redirect()->route('admin.reservas.confirmadas')->with('success', 'Reserva criada e confirmada manualmente com sucesso! ID: ' . $newReserva->id);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao criar reserva manual.", ['exception' => $e, 'data' => $validated]);
-            return redirect()->back()->withInput()->with('error', 'Erro interno ao criar reserva. Tente novamente.');
+            return redirect()->back()->withInput()->with('error', 'Erro interno ao criar reserva: ' . $e->getMessage());
         }
     }
 
 
     // ------------------------------------------------------------------------
-    // MÓDULO: AÇÕES DE STATUS E CANCELAMENTO
+    // MÓDULO: AÇÕES DE STATUS E CANCELAMENTO (DELEGADOS)
     // ------------------------------------------------------------------------
 
     /**
-     * Confirma uma reserva pendente e registra o sinal financeiro.
-     * 🛑 AGORA DELEGA a lógica complexa para o ReservaController.
-     * @param Request $request
-     * @param Reserva $reserva
+     * Confirma uma reserva pendente e registra o sinal financeiro. (DELEGADO)
      */
     public function confirmarReserva(Request $request, Reserva $reserva)
     {
-        // 🛑 DELEGAÇÃO COMPLETA: O AdminController apenas repassa a requisição
-        // A lógica de confirmação, criação de série, consumo de slot fixo,
-        // cancelamento de outras pendentes e registro de transação financeira
-        // AGORA RESIDE INTEIRAMENTE em ReservaController::confirmar.
+        // 🛑 DELEGAÇÃO COMPLETA
         return $this->reservaController->confirmar($request, $reserva);
     }
 
     /**
-     * Rejeita uma reserva pendente.
-     * 🛑 AGORA DELEGA a lógica de rejeição para o ReservaController.
-     * @param Request $request
-     * @param Reserva $reserva
+     * Rejeita uma reserva pendente. (DELEGADO)
      */
     public function rejeitarReserva(Request $request, Reserva $reserva)
     {
-        // 🛑 DELEGAÇÃO COMPLETA: O AdminController apenas repassa a requisição.
-        // A lógica de alteração de status e recriação do slot fixo reside em ReservaController::rejeitar.
+        // 🛑 DELEGAÇÃO COMPLETA
         return $this->reservaController->rejeitar($request, $reserva);
     }
 
     /**
-     * ✅ NOVO: Registra a falta do cliente (No-Show) e gerencia o estorno/retenção.
-     * A falta (No-Show) é quando o cliente não comparece e NÃO INFORMA o cancelamento.
-     * @param Request $request
-     * @param Reserva $reserva
-     * @return \Illuminate\Http\JsonResponse
+     * ✅ CORRIGIDO: Registra a falta do cliente (No-Show) - DELEGADO.
+     * Delega a manipulação de status e transações financeiras.
      */
     public function registerNoShow(Request $request, Reserva $reserva)
     {
-        // 1. Validação de Status
         if ($reserva->status !== Reserva::STATUS_CONFIRMADA) {
             return response()->json(['success' => false, 'message' => 'A reserva deve estar confirmada para ser marcada como falta.'], 400);
         }
 
-        // 2. Validação da Requisição (motivo e decisão de estorno)
         $validated = $request->validate([
             'no_show_reason' => 'required|string|min:5|max:255',
-            'should_refund' => 'required|boolean', // Se deve estornar o valor pago
-            'paid_amount' => 'required|numeric|min:0', // O valor pago pelo cliente (para referência)
-        ], [
-            'no_show_reason.required' => 'O motivo da falta é obrigatório.',
-            'no_show_reason.min' => 'O motivo da falta deve ter pelo menos 5 caracteres.',
+            'should_refund' => 'required|boolean', 
+            'paid_amount' => 'required|numeric|min:0', 
         ]);
-
-        // 3. Checagem de integridade (o valor pago do front deve bater com o DB)
-        $amountPaid = (float) $reserva->total_paid;
-        $shouldRefund = $validated['should_refund'];
-
-        if ((float) $validated['paid_amount'] != $amountPaid) {
-              Log::warning("Tentativa de No-Show ID: {$reserva->id} com valor pago inconsistente. Front: {$validated['paid_amount']}, DB: {$amountPaid}");
-              // Continuamos, mas o log de aviso é importante
-        }
 
         DB::beginTransaction();
         try {
-            // 4. Atualiza a Reserva para STATUS_NO_SHOW
-            $reserva->status = Reserva::STATUS_NO_SHOW;
-            $reserva->manager_id = Auth::id();
-            $reserva->no_show_reason = '[Gestor] ' . $validated['no_show_reason'];
-            // Garante que o motivo de cancelamento não seja usado
-            $reserva->cancellation_reason = null;
-            $reserva->save();
-
-            // 🛑 CRÍTICO: Excluir o sinal original explicitamente, se existir.
-            FinancialTransaction::where('reserva_id', $reserva->id)
-                ->where('type', 'signal')
-                ->delete();
-            Log::info("DEBUG FINANCEIRO: Sinal original removido explicitamente (type 'signal') para NO-SHOW ID {$reserva->id}.");
-
-            // 🛑 NOVO: Neutraliza tipos de transação antiga (RETEN_CANC)
-            FinancialTransaction::where('reserva_id', $reserva->id)
-                ->where('type', 'RETEN_CANC')
-                ->delete();
-            Log::info("DEBUG FINANCEIRO: Transação RETEN_CANC antiga removida explicitamente para NO-SHOW ID {$reserva->id}.");
-
-
-            // 5. Gera Transação Financeira de Estorno ou Retenção
-            if ($amountPaid > 0) {
-                if ($shouldRefund) {
-                    // Estornar: Cria uma transação negativa (saída do caixa)
-                    FinancialTransaction::create([
-                        'reserva_id' => $reserva->id,
-                        'user_id' => $reserva->user_id,
-                        'manager_id' => Auth::id(),
-                        'amount' => -$amountPaid, // Valor negativo para estorno/saída
-                        'type' => 'REFUND_NOSHOW', // 🛑 CORREÇÃO: Tipo abreviado
-                        'payment_method' => 'manual',
-                        'description' => "Estorno do valor pago (R$ " . number_format($amountPaid, 2, ',', '.') . ") devido à falta (No-Show).",
-                        'paid_at' => Carbon::now(),
-                    ]);
-                    $message = "Reserva marcada como Falta. O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi estornado (saiu do caixa).";
-
-                } else {
-                    // Retenção: Cria a transação POSITIVA para COMPENSAR o valor que acabamos
-                    // de remover na exclusão explícita do sinal acima.
-                    FinancialTransaction::create([
-                        'reserva_id' => $reserva->id,
-                        'user_id' => $reserva->user_id,
-                        'manager_id' => Auth::id(),
-                        'amount' => $amountPaid,
-                        'type' => 'RETEN_NOSHOW_COMP', // 🛑 NOVO TIPO: Indica compensação de retenção por falta
-                        'payment_method' => 'retained_funds',
-                        'description' => "Retenção e Compensação do valor pago (R$ " . number_format($amountPaid, 2, ',', '.') . ") devido à falta (No-Show).",
-                        'paid_at' => Carbon::now(),
-                    ]);
-                    $message = "Reserva marcada como Falta. O valor pago de R$ " . number_format($amountPaid, 2, ',', '.') . " foi RETIDO no caixa.";
-                }
-            } else {
-                $message = "Reserva marcada como Falta. Não havia valor pago a ser gerenciado.";
-            }
-
-            // 6. Recria o slot fixo de disponibilidade (verde)
-            // Isso libera o horário para ser reservado por outra pessoa, se for o caso.
-            $this->reservaController->recreateFixedSlot($reserva);
-
+            // 🛑 DELEGA A LÓGICA CENTRALIZADA
+            $result = $this->reservaController->finalizeStatus(
+                $reserva, 
+                Reserva::STATUS_NO_SHOW, 
+                '[Gestor] ' . $validated['no_show_reason'], 
+                $validated['should_refund'], 
+                (float) $validated['paid_amount']
+            );
+            
             DB::commit();
-            Log::info("Reserva ID: {$reserva->id} marcada como FALTA (No-Show) por Gestor ID: " . Auth::id() . ". Estorno: " . ($shouldRefund ? 'Sim' : 'Não'));
-
+            $message = "Reserva marcada como Falta." . $result['message_finance'];
             return response()->json(['success' => true, 'message' => $message], 200);
 
         } catch (ValidationException $e) {
@@ -431,19 +300,16 @@ class AdminController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao registrar No-Show para reserva ID: {$reserva->id}.", ['exception' => $e]);
-            // 🛑 MUDANÇA CRÍTICA: Retorna a mensagem de exceção para diagnóstico
             return response()->json([
                 'success' => false,
-                'message' => 'Erro interno ao registrar a falta. Por favor, verifique os logs do servidor para o erro 500. Detalhe: ' . $e->getMessage()
+                'message' => 'Erro interno ao registrar a falta. Detalhe: ' . $e->getMessage()
             ], 500);
         }
     }
 
 
     /**
-     * ✅ NOVO: Reativa uma reserva cancelada ou rejeitada para o status CONFIRMADA.
-     * @param Request $request
-     * @param Reserva $reserva A reserva cancelada/rejeitada a ser reativada.
+     * ✅ CORRIGIDO: Reativa uma reserva cancelada ou rejeitada para o status CONFIRMADA.
      */
     public function reativar(Request $request, Reserva $reserva)
     {
@@ -453,7 +319,6 @@ class AdminController extends Controller
         }
 
         // 2. Checa por sobreposição (evita reativar se o slot estiver ocupado por outra reserva ativa)
-        // Usamos o helper checkOverlap com 'true' para verificar apenas reservas de clientes ativas
         if ($this->reservaController->checkOverlap($reserva->date, $reserva->start_time, $reserva->end_time, true, $reserva->id)) {
              return response()->json(['success' => false, 'message' => 'O horário está ocupado por outra reserva ativa (confirmada ou pendente). Não é possível reativar.'], 400);
         }
@@ -468,7 +333,6 @@ class AdminController extends Controller
             $reserva->save();
 
             // 4. 🛑 CONSUMIR O SLOT FIXO (remover do calendário público)
-            // Se o slot fixo para este horário existir, ele deve ser excluído, pois a reserva foi reativada.
             $this->reservaController->consumeFixedSlot($reserva);
 
             DB::commit();
@@ -479,37 +343,25 @@ class AdminController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao reativar reserva ID: {$reserva->id}.", ['exception' => $e]);
-            // 🛑 MUDANÇA CRÍTICA: Retorna a mensagem de exceção para diagnóstico
             return response()->json([
                 'success' => false,
-                'message' => 'Erro interno ao reativar a reserva. Por favor, verifique os logs do servidor para o erro 500. Detalhe: ' . $e->getMessage()
+                'message' => 'Erro interno ao reativar a reserva. Detalhe: ' . $e->getMessage()
             ], 500);
         }
     }
 
     /**
      * Atualiza o preço de uma reserva específica via requisição AJAX (PATCH).
-     *
-     * Esta ação é usada para alterar o preço de um slot (livre ou reservado)
-     * por motivo de feriado, promoção ou desconto, mantendo o histórico de
-     * auditoria através da justificativa.
-     *
-     * @param \Illuminate\Http\Request $request
-     * @param \App\Models\Reserva $reserva
-     * @return \Illuminate\Http\JsonResponse
      */
     public function updatePrice(Request $request, Reserva $reserva)
     {
-        // 1. Validação dos dados
+         // 1. Validação dos dados
         $validated = $request->validate([
             'new_price' => 'required|numeric|min:0',
             'justification' => 'required|string|min:5',
         ], [
             'new_price.required' => 'O novo preço é obrigatório.',
-            'new_price.numeric' => 'O preço deve ser um valor numérico.',
-            'new_price.min' => 'O preço não pode ser negativo.',
             'justification.required' => 'A justificativa para alteração de preço é obrigatória.',
-            'justification.min' => 'A justificativa deve ter pelo menos 5 caracteres.',
         ]);
 
         try {
@@ -529,16 +381,13 @@ class AdminController extends Controller
             $reserva->price = $newPrice;
             $reserva->save();
 
-            // 4. Opcional: Registrar a auditoria da mudança de preço, incluindo a justificativa
+            // 4. Opcional: Registrar a auditoria da mudança de preço
             Log::info("Preço da Reserva ID {$reserva->id} alterado de R$ {$oldPrice} para R$ {$newPrice} por " . auth()->user()->name . ". Justificativa: {$justification}");
 
             return response()->json([
                 'success' => true,
                 'message' => "Preço atualizado para R$ " . number_format($newPrice, 2, ',', '.') . " com sucesso. A tela será recarregada.",
             ]);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            throw $e;
 
         } catch (\Exception $e) {
             // Erro geral do servidor
@@ -551,20 +400,10 @@ class AdminController extends Controller
 
     /**
      * Cria uma nova reserva recorrente para um cliente.
-     * Rota: admin.reservas.make_recurrent
-     *
-     * 🛑 NOTA: Este método está chamando um método (processRecurrentCreation) que não existe
-     * no ReservaController que eu criei. No entanto, estou MANTENDO a chamada
-     * para que o fluxo do seu AdminController seja preservado, caso você o implemente
-     * ou o renomeie. O método principal que usei para séries é storeRecurrentReservaApi.
-     *
-     * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
      */
     public function makeRecurrent(Request $request)
     {
-        // Limite máximo de 6 meses (26 semanas) a partir da data de início da série
-        // Usamos a data de hoje como âncora para o limite.
+         // Limite máximo de 6 meses (26 semanas) a partir da data de início da série
         $maxDate = Carbon::today()->addMonths(6)->toDateString();
 
         // 1. Validação CRÍTICA: Enforça o limite de 6 meses na data final.
@@ -580,10 +419,7 @@ class AdminController extends Controller
         ]);
 
         try {
-            // 2. Delega a criação da série de reservas para o ReservaController
-            // Se o método processRecurrentCreation não existir, isso irá falhar.
-            // Para maior robustez, você pode querer unificar com o storeRecurrentReservaApi.
-            // MANTENDO COMO ESTÁ para preservar o seu fluxo.
+            // 2. Delega a criação da série de reservas para o ReservaController (Assumindo que este método existe lá)
             $result = $this->reservaController->processRecurrentCreation(
                 $validated['reserva_id'],
                 $validated['start_date'],
@@ -598,7 +434,7 @@ class AdminController extends Controller
             ]);
 
         } catch (ValidationException $e) {
-             // 4. Exceções de Validação são relançadas para serem tratadas pelo handler do Laravel (ex: erro 422)
+            // 4. Exceções de Validação são relançadas para serem tratadas pelo handler do Laravel (ex: erro 422)
             throw $e;
 
         } catch (\Exception $e) {
@@ -614,10 +450,8 @@ class AdminController extends Controller
 
 
     /**
-     * Cancela uma reserva PONTUAL confirmada (PATCH /admin/reservas/{reserva}/cancelar).
-     * O cancelamento implica que o cliente informou o não comparecimento ANTES ou no ato,
-     * e o status final é STATUS_CANCELADA.
-     * @param Reserva $reserva A reserva confirmada PONTUAL a ser cancelada.
+     * ✅ CORRIGIDO: Cancela uma reserva PONTUAL confirmada - DELEGADO.
+     * Delega a manipulação de status e transações financeiras.
      */
     public function cancelarReserva(Request $request, Reserva $reserva)
     {
@@ -630,96 +464,38 @@ class AdminController extends Controller
 
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
-            // 🛑 NOVO: Adiciona a validação para o estorno
             'should_refund' => 'required|boolean',
-            'paid_amount_ref' => 'required|numeric|min:0', // ✅ CRÍTICO: Novo campo de valor de referência
+            'paid_amount_ref' => 'required|numeric|min:0', 
         ]);
-
-        $shouldRefund = $validated['should_refund'];
-        // Usamos paid_amount_ref pois o cliente pode ter pago mais que o signal_value.
-        $amountPaid = (float) $validated['paid_amount_ref'];
 
         DB::beginTransaction();
         try {
-
-            $messageFinance = "";
-
-            // 1. Mudar status da reserva primeiro
-            $reserva->status = Reserva::STATUS_CANCELADA;
-            $reserva->manager_id = Auth::id();
-            $reserva->cancellation_reason = '[Gestor] ' . $validated['cancellation_reason'];
-            $reserva->save();
-
-            // 🛑 CRÍTICO: Excluir o sinal original explicitamente, se existir.
-            FinancialTransaction::where('reserva_id', $reserva->id)
-                ->where('type', 'signal')
-                ->delete();
-            Log::info("DEBUG FINANCEIRO: Sinal original removido explicitamente (type 'signal') para CANCELAMENTO PONTUAL ID {$reserva->id}.");
-
-            // 🛑 CRÍTICO: Neutraliza tipos de transação antiga (RETEN_CANC)
-            // Se esta transação POSITIVA existe de testes passados, ela DEVE ser deletada.
-            $deletedRetenCancCount = FinancialTransaction::where('reserva_id', $reserva->id)
-                ->where('type', 'RETEN_CANC')
-                ->delete();
-            if ($deletedRetenCancCount > 0) {
-                 Log::warning("DEBUG FINANCEIRO: **ALERTA**: {$deletedRetenCancCount} transações RETEN_CANC antigas foram removidas para ID {$reserva->id}.");
-            }
-
-
-            // 2. Gera Transação Financeira: Estorno OU Retenção (APÓS a remoção do sinal)
-            if ($amountPaid > 0) {
-                if ($shouldRefund) {
-                     // 🛑 CORREÇÃO CRÍTICA: Se a transação 'signal' foi DELETADA (passo anterior),
-                     // NÃO CRIAMOS a transação REFUND_CANC. O estorno já é refletido na contabilidade.
-                     $messageFinance = " O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi estornado (refletido pela exclusão do sinal).";
-
-                     // Opcional: Registrar um log de estorno, se necessário, sem afetar o saldo
-                     Log::info("DEBUG FINANCEIRO: Estorno (REFUND_CANC) processado para ID {$reserva->id}. O valor não foi debitado novamente, pois o sinal original foi excluído.");
-
-                } else {
-                    // 2.2 Retenção: Cria a transação POSITIVA para COMPENSAR o valor que foi removido
-                    // pela deleção explícita do sinal acima.
-
-                    // A) REGISTRA A ENTRADA POSITIVA DE RETENÇÃO
-                    FinancialTransaction::create([
-                        'reserva_id' => $reserva->id,
-                        'user_id' => $reserva->user_id,
-                        'manager_id' => Auth::id(),
-                        'amount' => $amountPaid, // Valor positivo para retenção (fica no caixa)
-                        'type' => 'RETEN_CANC_COMP', // 🛑 NOVO TIPO: Indica claramente que é uma compensação
-                        'payment_method' => 'retained_funds',
-                        'description' => "Retenção do valor pago (R$ " . number_format($amountPaid, 2, ',', '.') . ") após cancelamento (Compensação do sinal).",
-                        'paid_at' => Carbon::now(),
-                    ]);
-
-                    $messageFinance = " O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi RETIDO no caixa (Compensação).";
-                    Log::info("DEBUG FINANCEIRO: Transação de RETENÇÃO (RETEN_CANC_COMP) criada APÓS o save para ID {$reserva->id}.");
-                }
-            }
-
-            // 3. Recria o slot fixo de disponibilidade (verde)
-            $this->reservaController->recreateFixedSlot($reserva);
+            // 🛑 DELEGA A LÓGICA CENTRALIZADA (Cancelamento Pontual)
+            $result = $this->reservaController->finalizeStatus(
+                $reserva, 
+                Reserva::STATUS_CANCELADA, 
+                '[Gestor] ' . $validated['cancellation_reason'], 
+                $validated['should_refund'], 
+                (float) $validated['paid_amount_ref']
+            );
 
             DB::commit();
-            Log::info("Reserva PONTUAL ID: {$reserva->id} cancelada pelo gestor ID: " . Auth::id());
-            $message = "Reserva cancelada com sucesso! O horário foi liberado." . $messageFinance;
+            $message = "Reserva cancelada com sucesso! O horário foi liberado." . $result['message_finance'];
             return response()->json(['success' => true, 'message' => $message], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao cancelar reserva PONTUAL ID: {$reserva->id}.", ['exception' => $e]);
-            // 🛑 MUDANÇA CRÍTICA: Retorna a mensagem de exceção para diagnóstico
             return response()->json([
                 'success' => false,
-                'message' => 'Erro interno ao cancelar a reserva. Por favor, verifique os logs do servidor para o erro 500. Detalhe: ' . $e->getMessage()
+                'message' => 'Erro interno ao cancelar a reserva. Detalhe: ' . $e->getMessage()
             ], 500);
         }
     }
 
 
     /**
-     * Cancela UMA reserva de uma série recorrente (PATCH /admin/reservas/{reserva}/cancelar-pontual).
-     * O cancelamento pontual implica que o cliente informou o não comparecimento.
-     * @param Reserva $reserva A reserva específica na série a ser cancelada.
+     * ✅ CORRIGIDO: Cancela UMA reserva de uma série recorrente (PATCH /admin/reservas/{reserva}/cancelar-pontual).
+     * Delega a manipulação de status e transações financeiras.
      */
     public function cancelarReservaRecorrente(Request $request, Reserva $reserva)
     {
@@ -732,92 +508,38 @@ class AdminController extends Controller
 
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
-            // 🛑 NOVO: Adiciona a validação para o estorno
             'should_refund' => 'required|boolean',
-            'paid_amount_ref' => 'required|numeric|min:0', // ✅ CRÍTICO: Novo campo de valor de referência
+            'paid_amount_ref' => 'required|numeric|min:0', 
         ]);
-
-        $shouldRefund = $validated['should_refund'];
-        $amountPaid = (float) $validated['paid_amount_ref']; // Usamos paid_amount_ref para ser o valor exato pago pelo cliente.
 
         DB::beginTransaction();
         try {
-
-            $messageFinance = "";
-
-            // 2. 🛑 FLUXO: Mudar status.
-            $reserva->status = Reserva::STATUS_CANCELADA;
-            $reserva->manager_id = Auth::id();
-            $reserva->cancellation_reason = '[Gestor - Pontual Recorrência] ' . $validated['cancellation_reason'];
-            $reserva->save();
-
-            // 🛑 CRÍTICO: Excluir o sinal original explicitamente, se existir.
-            FinancialTransaction::where('reserva_id', $reserva->id)
-                ->where('type', 'signal')
-                ->delete();
-            Log::info("DEBUG FINANCEIRO: Sinal original removido explicitamente (type 'signal') para CANCELAMENTO RECORRENTE ID {$reserva->id}.");
-
-            // 🛑 CRÍTICO: Neutraliza tipos de transação antiga (RETEN_CANC)
-            $deletedRetenCancCount = FinancialTransaction::where('reserva_id', $reserva->id)
-                ->where('type', 'RETEN_CANC')
-                ->delete();
-            if ($deletedRetenCancCount > 0) {
-                 Log::warning("DEBUG FINANCEIRO: **ALERTA**: {$deletedRetenCancCount} transações RETEN_CANC antigas foram removidas para ID {$reserva->id}.");
-            }
-
-
-            // 1. Gera Transação Financeira: Estorno OU Retenção (APÓS a remoção do sinal)
-            if ($amountPaid > 0) {
-                if ($shouldRefund) {
-                     // 🛑 CORREÇÃO CRÍTICA: Se a transação 'signal' foi DELETADA (passo anterior),
-                     // NÃO CRIAMOS a transação REFUND_CANC_P. O estorno já é refletido na contabilidade.
-                     $messageFinance = " O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi estornado (refletido pela exclusão do sinal).";
-
-                     // Opcional: Registrar um log de estorno, se necessário, sem afetar o saldo
-                     Log::info("DEBUG FINANCEIRO: Estorno (REFUND_CANC_P) processado para ID {$reserva->id}. O valor não foi debitado novamente, pois o sinal original foi excluído.");
-
-                } else {
-                    // 1.2 Retenção: Cria a transação POSITIVA para COMPENSAR o sinal perdido.
-                    FinancialTransaction::create([
-                        'reserva_id' => $reserva->id, // 🛑 CRÍTICO: Usa o ID, mas APÓS o CASCADE DELETE
-                        'user_id' => $reserva->user_id, // Mantém o usuário para rastreabilidade
-                        'manager_id' => Auth::id(),
-                        'amount' => $amountPaid, // Valor positivo para retenção (fica no caixa)
-                        'type' => 'RETEN_CANC_P_COMP', // 🛑 NOVO TIPO: Indica claramente que é uma compensação
-                        'payment_method' => 'retained_funds',
-                        'description' => "Retenção do valor pago (R$ " . number_format($amountPaid, 2, ',', '.') . ") após cancelamento pontual recorrente (Compensação).",
-                        'paid_at' => Carbon::now(),
-                    ]);
-                    $messageFinance = " O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi RETIDO no caixa (Compensação).";
-                    Log::info("DEBUG FINANCEIRO: Transação de RETENÇÃO (RETEN_CANC_P_COMP) criada APÓS o save para ID {$reserva->id}.");
-                }
-            }
-
-            // 3. Recria o slot fixo de disponibilidade (verde)
-            // ✅ CRÍTICO: Delega para o helper correto no ReservaController. Isso resolve o problema de slot sumir.
-            $this->reservaController->recreateFixedSlot($reserva);
-
-            // 4. Mantemos o registro para auditoria.
+            // 🛑 DELEGA A LÓGICA CENTRALIZADA (Usa a mesma lógica de cancelamento pontual)
+            $result = $this->reservaController->finalizeStatus(
+                $reserva, 
+                Reserva::STATUS_CANCELADA, 
+                '[Gestor - Pontual Recorrência] ' . $validated['cancellation_reason'], 
+                $validated['should_refund'], 
+                (float) $validated['paid_amount_ref']
+            );
 
             DB::commit();
-            Log::info("Reserva RECORRENTE PONTUAL ID: {$reserva->id} cancelada pelo gestor ID: " . Auth::id());
-            $message = "Reserva recorrente pontual cancelada com sucesso! O horário foi liberado." . $messageFinance;
+            $message = "Reserva recorrente pontual cancelada com sucesso! O horário foi liberado." . $result['message_finance'];
             return response()->json(['success' => true, 'message' => $message], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao cancelar reserva RECORRENTE PONTUAL ID: {$reserva->id}.", ['exception' => $e]);
-            // 🛑 MUDANÇA CRÍTICA: Retorna a mensagem de exceção para diagnóstico
             return response()->json([
                 'success' => false,
-                'message' => 'Erro interno ao cancelar a reserva pontual. Por favor, verifique os logs do servidor para o erro 500. Detalhe: ' . $e->getMessage()
+                'message' => 'Erro interno ao cancelar a reserva pontual. Detalhe: ' . $e->getMessage()
             ], 500);
         }
     }
 
 
     /**
-     * Cancela TODAS as reservas futuras de uma série recorrente (DELETE /admin/reservas/{reserva}/cancelar-serie).
-     * @param Reserva $reserva Qualquer reserva pertencente à série.
+     * ✅ CORRIGIDO: Cancela TODAS as reservas futuras de uma série recorrente (DELETE /admin/reservas/{reserva}/cancelar-serie).
+     * Delega a lógica de loop e finanças.
      */
     public function cancelarSerieRecorrente(Request $request, Reserva $reserva)
     {
@@ -827,113 +549,32 @@ class AdminController extends Controller
 
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
-            // 🛑 NOVO: Adiciona a validação para o estorno
             'should_refund' => 'required|boolean',
-            'paid_amount_ref' => 'required|numeric|min:0', // ✅ CRÍTICO: Novo campo de valor de referência
+            'paid_amount_ref' => 'required|numeric|min:0', // Valor do sinal da mestra (única transação financeira)
         ]);
 
-        $shouldRefund = $validated['should_refund'];
-        // Para séries, o estorno só deve considerar o pagamento que estava na reserva (signal_value).
-        $amountPaidForRefund = (float) $validated['paid_amount_ref'];
-
-
-        // Determina o ID mestre da série
         $masterId = $reserva->recurrent_series_id ?? $reserva->id;
-        $today = Carbon::today()->toDateString();
-        $cancellationReason = '[Gestor - Série Recorrente] ' . $validated['cancellation_reason'];
-        $managerId = Auth::id();
-
+        
         DB::beginTransaction();
         try {
-            // 🛑 NOVO FLUXO PARA SÉRIE:
-            // 1. O loop cancela os slots.
-
-            $messageFinance = "";
-            $cancelledCount = 0;
-
-            // Busca todas as reservas da série (incluindo a mestra) que estão no futuro
-            $seriesReservas = Reserva::where(function ($query) use ($masterId) {
-                $query->where('recurrent_series_id', $masterId)
-                    ->orWhere('id', $masterId);
-            })
-                ->where('is_fixed', false)
-                ->whereDate('date', '>=', $today)
-                ->where('status', Reserva::STATUS_CONFIRMADA)
-                ->get();
-
-            foreach ($seriesReservas as $slot) {
-                // Se a reserva já passou, não cancelamos
-                if (Carbon::parse($slot->date . ' ' . $slot->start_time)->isPast() && !$slot->date->isToday()) {
-                    continue;
-                }
-
-                $slot->status = Reserva::STATUS_CANCELADA;
-                $slot->manager_id = $managerId;
-                $slot->cancellation_reason = $cancellationReason;
-                $slot->save(); // <--- CASCADE DELETE pode disparar aqui.
-
-                // 🛑 CRÍTICO: Excluir o sinal original explicitamente, se existir.
-                FinancialTransaction::where('reserva_id', $slot->id)
-                    ->where('type', 'signal')
-                    ->delete();
-                Log::info("DEBUG FINANCEIRO: Sinal original removido explicitamente (type 'signal') para CANCELAMENTO DE SÉRIE ID {$slot->id}.");
-
-                // 🛑 CRÍTICO: Neutraliza tipos de transação antiga (RETEN_CANC)
-                $deletedRetenCancCount = FinancialTransaction::where('reserva_id', $slot->id)
-                    ->where('type', 'RETEN_CANC')
-                    ->delete();
-                if ($deletedRetenCancCount > 0) {
-                     Log::warning("DEBUG FINANCEIRO: **ALERTA**: {$deletedRetenCancCount} transações RETEN_CANC antigas foram removidas para ID {$slot->id}.");
-                }
-
-
-                // 🛑 CRÍTICO: Recria o slot fixo para cada item cancelado da série.
-                $this->reservaController->recreateFixedSlot($slot);
-
-                $cancelledCount++;
-            }
-
-            // 2. Gera Transação Financeira: Estorno OU Retenção (APÓS a remoção do sinal)
-            if ($amountPaidForRefund > 0) {
-                if ($shouldRefund) {
-                     // 🛑 CORREÇÃO CRÍTICA: Se o sinal foi DELETADO, NÃO CRIAMOS o estorno negativo.
-                     $messageFinance = " O sinal de R$ " . number_format($amountPaidForRefund, 2, ',', '.') . " foi estornado (refletido pela exclusão do sinal).";
-
-                     // Opcional: Registrar um log de estorno, se necessário, sem afetar o saldo
-                     Log::info("DEBUG FINANCEIRO: Estorno (REFUND_CANC_S) processado para série ID {$masterId}. O valor não foi debitado novamente, pois o sinal original foi excluído.");
-
-                } else {
-                    // 2.2 Retenção: Cria a transação POSITIVA para COMPENSAR o sinal perdido (uma única compensação para toda a série).
-                    // Fazemos isso apenas uma vez na transação mestre.
-                    FinancialTransaction::create([
-                        'reserva_id' => $reserva->id, // 🛑 CRÍTICO: Usa o ID da reserva âncora
-                        'user_id' => $reserva->user_id, // Mantém o usuário para rastreabilidade
-                        'manager_id' => Auth::id(),
-                        'amount' => $amountPaidForRefund, // Valor positivo para retenção (fica no caixa)
-                        'type' => 'RETEN_CANC_S_COMP', // 🛑 NOVO TIPO: Indica claramente que é uma compensação
-                        'payment_method' => 'retained_funds',
-                        'description' => "Retenção do sinal/valor pago (R$ " . number_format($amountPaidForRefund, 2, ',', '.') . ") após cancelamento de série (Compensação).",
-                        'paid_at' => Carbon::now(),
-                    ]);
-                    $messageFinance = " O sinal de R$ " . number_format($amountPaidForRefund, 2, ',', '.') . " foi RETIDO no caixa (Compensação).";
-                    Log::info("DEBUG FINANCEIRO: Transação de RETENÇÃO (RETEN_CANC_S_COMP) criada APÓS o save para série ID {$masterId}.");
-                }
-            }
-
+            // 🛑 DELEGAÇÃO COMPLETA da lógica de loop e finanças.
+            $result = $this->reservaController->cancelSeries(
+                $masterId,
+                $validated['cancellation_reason'],
+                $validated['should_refund'],
+                (float) $validated['paid_amount_ref']
+            );
 
             DB::commit();
-            Log::info("Série Recorrente MASTER ID: {$masterId} cancelada pelo gestor ID: " . Auth::id() . ". Total de {$cancelledCount} slots liberados.");
-
-            $message = "Toda a série recorrente futura (total de {$cancelledCount} slots) foi cancelada com sucesso! Os horários foram liberados." . $messageFinance;
+            $message = "Toda a série recorrente futura (total de {$result['cancelled_count']} slots) foi cancelada com sucesso! Os horários foram liberados." . $result['message_finance'];
 
             return response()->json(['success' => true, 'message' => $message], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao cancelar série recorrente ID: {$masterId}.", ['exception' => $e]);
-            // 🛑 MUDANÇA CRÍTICA: Retorna a mensagem de exceção para diagnóstico
             return response()->json([
                 'success' => false,
-                'message' => 'Erro interno ao cancelar a série recorrente. Por favor, verifique os logs do servidor para o erro 500. Detalhe: ' . $e->getMessage()
+                'message' => 'Erro interno ao cancelar a série recorrente. Detalhe: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -958,7 +599,7 @@ class AdminController extends Controller
             $reserva->delete();
 
             DB::commit();
-            Log::warning("Reserva ID: {$reserva->id} excluída permanentemente pelo gestor ID: " . auth()->user()->id); // 🐛 ADICIONADO LOG
+            Log::warning("Reserva ID: {$reserva->id} excluída permanentemente pelo gestor ID: " . auth()->user()->id); 
             return redirect()->route('admin.reservas.confirmadas')->with('success', 'Reserva excluída permanentemente.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -972,22 +613,19 @@ class AdminController extends Controller
     // ------------------------------------------------------------------------
 
     /**
-     * Exibe a lista de todos os usuários, com opção de filtro por função (role) e pesquisa.
-     *
-     * @param \Illuminate\Http\Request $request
+     * Exibe a lista de todos os usuários.
      */
     public function indexUsers(Request $request)
     {
         // 1. Obtém o filtro de função e a busca da query string
         $roleFilter = $request->query('role_filter');
-        $search = $request->query('search'); // ✅ NOVO
+        $search = $request->query('search'); 
 
         $query = User::query();
 
         // 2. Aplica o filtro de função.
         if ($roleFilter) {
             if ($roleFilter === 'gestor') {
-                // CORREÇÃO: Inclui 'admin' e 'gestor'
                 $query->whereIn('role', ['gestor', 'admin']);
             } elseif ($roleFilter === 'cliente') {
                 $query->where('role', 'cliente');
@@ -997,13 +635,13 @@ class AdminController extends Controller
         // 3. Aplica o filtro de pesquisa (Search)
         if ($search) {
             $query->where(function ($q) use ($search) {
-                $q->where('client_name', 'like', '%' . $search . '%')
-                    ->orWhere('client_contact', 'like', '%' . $search . '%');
+                $q->where('name', 'like', '%' . $search . '%') 
+                    ->orWhere('whatsapp_contact', 'like', '%' . $search . '%')
+                    ->orWhere('email', 'like', '%' . $search . '%');
             });
         }
 
-        // 4. Obtém os usuários, ordenando primeiro por Função (Gestor/Admin = 0, Cliente = 1), e depois por Nome.
-        // 🛑 NOVO: Aplica a ordenação por função prioritária (Admin/Gestor = 0)
+        // 4. Obtém os usuários, ordenando primeiro por Função, e depois por Nome.
         $users = $query
             ->orderByRaw("CASE WHEN role IN ('admin', 'gestor') THEN 0 ELSE 1 END")
             ->orderBy('name')
@@ -1014,7 +652,7 @@ class AdminController extends Controller
             'users' => $users,
             'pageTitle' => 'Gerenciamento de Usuários',
             'roleFilter' => $roleFilter,
-            'search' => $search, // ✅ NOVO
+            'search' => $search, 
         ]);
     }
 
@@ -1024,7 +662,7 @@ class AdminController extends Controller
     public function createUser()
     {
         return view('admin.users.create', [
-            // ... (variáveis necessárias)
+             // ... 
         ]);
     }
 
@@ -1107,7 +745,6 @@ class AdminController extends Controller
 
     /**
      * Exclui um usuário.
-     * ✅ NOVO: Inclui checagem de integridade de reservas ativas.
      */
     public function destroyUser(User $user)
     {
@@ -1116,11 +753,11 @@ class AdminController extends Controller
             return response()->json(['success' => false, 'message' => 'Você não pode excluir sua própria conta.'], 403);
         }
 
-        // 2. 🛑 CHECAGEM CRÍTICA DE RESERVAS ATIVAS (Pontuais ou Recorrentes)
+        // 2. CHECAGEM CRÍTICA DE RESERVAS ATIVAS
         $activeReservationsExist = Reserva::where('user_id', $user->id)
             ->where('is_fixed', false) // Apenas reservas reais de clientes, não slots de disponibilidade
             ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-            ->exists(); // Usa exists() para eficiência
+            ->exists(); 
 
         if ($activeReservationsExist) {
             $errorMessage = "Impossível excluir o usuário '{$user->name}'. Ele(a) possui reservas ativas (pendentes ou confirmadas). Cancele ou rejeite todas as reservas dele(a) antes de prosseguir com a exclusão.";
@@ -1149,8 +786,6 @@ class AdminController extends Controller
 
     /**
      * Exibe a lista de reservas (ativas e históricas) de um cliente específico.
-     *
-     * @param \App\Models\User $user O cliente cujas reservas serão listadas.
      */
     public function clientReservations(User $user)
     {
@@ -1161,13 +796,11 @@ class AdminController extends Controller
         // 1. Busca todas as reservas do cliente, excluindo slots fixos (is_fixed=true)
         $reservas = Reserva::where('user_id', $user->id)
             ->where('is_fixed', false)
-            // 🛑 CORRIGIDO: Ordem crescente (asc) por data e hora para mostrar o histórico cronológico
             ->orderBy('date', 'asc')
             ->orderBy('start_time', 'asc')
             ->get();
 
-        // 2. ✅ CRÍTICO: Cálculo da Contagem Total de Slots FUTUROS/HOJE por Série (ANTES da paginação)
-        // Isso garante que o botão de cancelamento de série na view mostre o total correto de slots futuros.
+        // 2. ✅ CRÍTICO: Cálculo da Contagem Total de Slots FUTUROS/HOJE por Série
         $seriesFutureCounts = Reserva::where('user_id', $user->id)
             ->where('is_fixed', false)
             ->where('is_recurrent', true)
@@ -1206,8 +839,6 @@ class AdminController extends Controller
     /**
      * Cancela TODAS as reservas futuras de uma série recorrente específica (a partir do masterId).
      * Rota usada na listagem de reservas do cliente.
-     * @param Request $request
-     * @param int $masterId O ID da reserva mestra (recurrent_series_id).
      */
     public function cancelClientSeries(Request $request, $masterId)
     {
@@ -1225,6 +856,10 @@ class AdminController extends Controller
         $cancellationReason = '[Gestor - Cliente/Série] ' . $validated['justificativa_gestor'];
         $managerId = Auth::id();
 
+        // NOTA: Para cancelamento de série por cliente, assumimos que o pagamento do sinal já foi tratado
+        // ou retido, pois o Admin deve usar a rota `cancelarSerieRecorrente` com a lógica financeira.
+        // Este método aqui faz apenas a atualização de status para a view de histórico do cliente.
+        
         DB::beginTransaction();
         try {
             // Busca todas as reservas da série (incluindo a mestra) que estão no futuro
@@ -1249,8 +884,6 @@ class AdminController extends Controller
 
                 // 2. Recria o slot fixo de disponibilidade (verde)
                 $this->reservaController->recreateFixedSlot($slot);
-
-                // 3. MANTÉM A RESERVA (sem o delete)
 
                 $cancelledCount++;
             }
@@ -1316,19 +949,14 @@ class AdminController extends Controller
     {
         // Esta consulta deve somar TODOS os valores na coluna 'amount'.
         $total = FinancialTransaction::sum('amount');
-
         Log::info("DEBUG FINANCEIRO: Saldo total do caixa calculado: R$ " . number_format($total, 2, ',', '.'));
-
         return (float) $total;
     }
 
     /**
      * Exibe a lista de transações financeiras e o saldo.
-     * Corresponde à sua view /admin/pagamentos
-     *
-     * @param Request $request
      */
-    public function indexFinancialDashboard(Request $request) // 🛑 RENOMEADO: De indexPagamentos para indexFinancialDashboard
+    public function indexFinancialDashboard(Request $request) 
     {
         // 1. Definição da data de referência (hoje ou data do filtro)
         $selectedDate = $request->input('date', Carbon::today()->toDateString());
@@ -1339,7 +967,7 @@ class AdminController extends Controller
         // 2. Consulta de Reservas Agendadas para a Tabela
         $reservasQuery = Reserva::where('is_fixed', false)
             ->whereDate('date', $date)
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, Reserva::STATUS_CANCELADA, Reserva::STATUS_NO_SHOW])
+            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, Reserva::STATUS_CONCLUIDA, Reserva::STATUS_CANCELADA, Reserva::STATUS_NO_SHOW])
             ->when($reservaId, function ($query, $reservaId) {
                 return $query->where('id', $reservaId);
             })
@@ -1354,21 +982,7 @@ class AdminController extends Controller
 
         // 3. Cálculo dos KPIs Financeiros do Dia
 
-        // 🛑 CRÍTICO: Lista de todos os tipos de transação que contam como ENTRADA no CAIXA
-        $transactionIncomeTypes = [
-            'signal',
-            'full_payment',
-            'partial_payment',
-            'payment_settlement',
-            'RETEN_CANC_COMP', // Compensação de retenção (Cancelamento Pontual)
-            'RETEN_CANC_P_COMP', // Compensação de retenção (Cancelamento Pontual Recorrente)
-            'RETEN_CANC_S_COMP', // Compensação de retenção (Cancelamento de Série)
-            'RETEN_NOSHOW_COMP' // Compensação de retenção (No-Show)
-        ];
-
         // 3.1 Total Recebido HOJE (Cash in Hand - Saldo Líquido)
-        // ✅ CORREÇÃO FINAL: Removendo o filtro de tipos e somando o 'amount' total,
-        // garantindo que entradas (positivas) e saídas/estornos (negativos) sejam contabilizados.
         $totalReceived = FinancialTransaction::whereDate('paid_at', $date)
             ->sum('amount');
 

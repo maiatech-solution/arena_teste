@@ -497,6 +497,19 @@
                 </div>
                 {{-- FIM DO CAMPO CORRIGIDO --}}
 
+                <div class="mb-4">
+                    <label for="payment_method_quick" class="block text-sm font-medium text-gray-700">Método de Pagamento (Sinal)</label>
+                    <select name="payment_method" id="payment_method_quick" required
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500">
+                        <option value="">Selecione o Método</option>
+                        <option value="pix">PIX</option>
+                        <option value="cartao">Cartão de Crédito/Débito</option>
+                        <option value="dinheiro">Dinheiro</option>
+                        <option value="transferencia">Transferência Bancária</option>
+                        <option value="outro">Outro/Sem Sinal</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">Se o sinal for R$ 0,00, selecione 'Outro/Sem Sinal'.</p>
+                </div>
                 {{-- CHECKBOX PARA RECORRÊNCIA --}}
                 <div class="mb-4 p-3 border border-indigo-200 rounded-lg bg-indigo-50">
                     <div class="flex items-center">
@@ -649,7 +662,7 @@
                     textColor = 'text-red-700';
                     break;
                 case 'warning':
-                    bgColor = 'bg-yellow-100';
+                    bgColor = 'bg-yellow-1-0';
                     borderColor = 'border-yellow-500';
                     textColor = 'text-yellow-700';
                     break;
@@ -851,12 +864,20 @@
 
             const clientName = clientNameInput().value.trim();
             const clientContact = clientContactInput().value.trim();
+            
+            // ✅ CRÍTICO: Validação do payment_method
+            const paymentMethod = document.getElementById('payment_method_quick').value;
 
             if (!clientName) {
                 showDashboardMessage("Por favor, preencha o Nome Completo do Cliente.", 'error');
                 return;
             }
 
+            if (!paymentMethod) {
+                showDashboardMessage("Por favor, selecione o Método de Pagamento.", 'error');
+                return;
+            }
+            
             // Validação de 11 dígitos no WhatsApp
             if (!validateClientContact(clientContact)) {
                 return;
@@ -866,12 +887,29 @@
             const formData = new FormData(form);
             const data = Object.fromEntries(formData.entries());
 
+            // ✅ CORREÇÃO CRÍTICA 1: LER O PREÇO DO SLOT FIXO (quick-price)
+            // E ENVIAR COMO 'fixed_price' (O NOME ESPERADO PELO BACKEND)
+            const fixedPriceRaw = document.getElementById('quick-price').value;
+            data.fixed_price = cleanAndConvertForApi(fixedPriceRaw); 
+            // FIM DA CORREÇÃO CRÍTICA 1
+
             // ✅ CRÍTICO: Limpa e converte o valor do sinal antes de enviar
             const signalValueRaw = data.signal_value;
             data.signal_value = cleanAndConvertForApi(signalValueRaw);
+            
+            // CORREÇÃO CRÍTICA 2: Remove a chave 'price' do payload, pois o backend usa 'fixed_price'
+            delete data.price;
+            
+            // CORREÇÃO CRÍTICA 3: Adiciona o payment_method (já está em data, mas melhor garantir)
+            data.payment_method = paymentMethod;
+
 
             const isRecurrent = document.getElementById('is-recurrent').checked;
             const targetUrl = isRecurrent ? RECURRENT_STORE_URL : QUICK_STORE_URL;
+
+            // 🎯 LOG DE DEBUG CRÍTICO PARA O BACKEND
+            console.log("PAYLOAD QUICK BOOKING ENVIADO (DEBUG BACKEND):", JSON.stringify(data, null, 2));
+
 
             const submitBtn = document.getElementById('submit-quick-booking');
             submitBtn.disabled = true;
@@ -1544,7 +1582,7 @@
                     {
                         // 1. TODAS AS RESERVAS DE CLIENTE (CONFIRMADAS, PENDENTES, PAGAS, FALTAS)
                         // A URL CONFIRMED_API_URL agora retorna TODOS os eventos de cliente.
-                        url: CONFIRMED_API_URL, 
+                        url: CONFIRMED_API_URL,	
                         method: 'GET',
                         failure: function() {
                             console.error('Falha ao carregar reservas de clientes via API.');
@@ -1552,7 +1590,7 @@
                         eventDataTransform: function(eventData) {
                             // Filtra slots que o backend pode ter retornado por engano
                             if (eventData.extendedProps && eventData.extendedProps.status === 'available') {
-                                return null; 
+                                return null;	
                             }
                             return eventData;
                         }
@@ -1610,7 +1648,7 @@
                 editable: false,
                 initialDate: new Date().toISOString().slice(0, 10),
 
-                // ✅ HOOK CRÍTICO PARA ESTILIZAÇÃO (CORRIGIDO PARA LIMPEZA DE PREFIXOS)
+                // ✅ HOOK CRÍTICO PARA ESTILIZAÇÃO (CORRIGIDO NOVAMENTE: Lógica de PAGO/SINAL e Futuro)
                 eventDidMount: function(info) {
                     const event = info.event;
                     const titleEl = info.el.querySelector('.fc-event-title');
@@ -1618,70 +1656,71 @@
                     const isAvailable = event.classNames.includes('fc-event-available');
                     const status = extendedProps.status; // Pega o status do backend
 
-                    // Se for slot disponível, pare.
-                    if (isAvailable) return;
-
-                    // Apenas processa eventos reservados (não os disponíveis)
-                    if (!titleEl) return;
+                    if (isAvailable || !titleEl) return;
 
                     let currentTitle = titleEl.textContent;
 
                     // 1. Limpeza de TODOS os prefixos conhecidos (para evitar duplicação)
-                    currentTitle = currentTitle.replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '').trim();
-                    currentTitle = currentTitle.replace(/^PAGO[\.:\s]*\s*/i, '').trim();
-                    currentTitle = currentTitle.replace(/^FALTA[\.:\s]*\s*/i, '').trim();
-                    currentTitle = currentTitle.replace(/^CANCELADO[\.:\s]*\s*/i, '').trim();
-                    currentTitle = currentTitle.replace(/^PENDENTE[\.:\s]*\s*/i, '').trim();
-                    currentTitle = currentTitle.replace(/^A VENCER\/FALTA[\.:\s]*\s*/i, '').trim();
-
+                    currentTitle = currentTitle
+                        .replace(/^(RECORR(?:E)?|PAGO|FALTA|CANCELADO|PENDENTE|A VENCER\/FALTA)[\.:\s]*\s*/i, '')
+                        .replace(/^\((PAGO|FALTA|RECORR\.|SINAL|A VENCER\/FALTA)\)\s*/i, '')
+                        .trim();
+                    
                     // 2. Remove o sufixo de preço ' - R$ XX.XX' para obter o nome limpo
                     let clientName = currentTitle.split(' - R$ ')[0].trim();
                     currentTitle = clientName; // Reinicia o título apenas com o nome
 
                     const eventEndMoment = moment(event.end);
-                    const isPastEvent = eventEndMoment.isBefore(moment());
+                    // CRÍTICO: Se a reserva for para HOJE e a HORA DE FIM não passou, é futuro/atual.
+                    const isFutureOrTodayEvent = eventEndMoment.isAfter(moment());	
                     
-                    // Remove classes de status antigas que poderiam estar causando conflito
-                    info.el.classList.remove('fc-event-paid', 'fc-event-no-show'); 
+                    const price = extendedProps.final_price || extendedProps.price || 0;
+                    // Verifica se o valor pago é >= ao preço final (considerando tolerância)
+                    const isTotalPaid = (extendedProps.total_paid >= price) && (price > 0);
+                    
+                    // Remove classes de status antigas
+                    info.el.classList.remove('fc-event-paid', 'fc-event-no-show');	
 
-
-                    // 3. Lógica de Estilização e Prefixo
+                    // 3. Lógica de Estilização e Prefixo (Ordem de prioridade alta para baixa)
                     
                     if (status === 'no_show') {
                         // ❌ FALTA (Vermelho forte)
-                        info.el.classList.add('fc-event-no-show'); 
+                        info.el.classList.add('fc-event-no-show');	
                         currentTitle = `(FALTA) ${clientName}`;
                     
-                    } else if (status === 'concluida' || status === 'lancada_caixa') {
-                        // ✅ PAGO (Faded/Apagado)
+                    } else if (status === 'concluida' || status === 'lancada_caixa' || status === 'cancelada' || status === 'rejeitada' || isTotalPaid) {
+                        // ✅ PAGO/FINALIZADA OU PAGA TOTALMENTE (Caso Leonardo): Faded/Apagado
                         info.el.classList.add('fc-event-paid');
-                        currentTitle = `(PAGO) ${clientName}`;
+                        
+                        let prefix = status.toUpperCase();
+                        if (isTotalPaid) {
+                             prefix = 'PAGO'; // Se o pagamento for total, marca como pago (principalmente para o caso de status 'confirmada' pago 100%)
+                        }
+                        currentTitle = `(${prefix}) ${clientName}`;
                     
-                    } else if ((extendedProps.total_paid || 0) > 0) {
-                        // 💰 CONFIRMADA COM SINAL PAGO (Faded para indicar saldo baixo/pago parcial)
-                        info.el.classList.add('fc-event-paid');
+                    } else if (status === 'pending') {
+                        // 🟠 PENDENTE (Laranja forte, sem fade)
+                        info.el.classList.remove('fc-event-paid');
+                        currentTitle = `(PENDENTE) ${clientName}`;
+                    
+                    } else if ((extendedProps.total_paid || 0) > 0 && isFutureOrTodayEvent) {
+                        // 💰 SINAL PAGO EM EVENTO FUTURO/HOJE (Mantém a cor original, sem fade)
                         currentTitle = `(SINAL) ${clientName}`;
-                    
-                    } else if (isPastEvent && status !== 'pending' && status !== 'cancelada' && status !== 'rejeitada') {
-                        // ⚠️ A VENCER/FALTA (Eventos que já passaram, mas não foram pagos/tratados)
-                        // Aplica o fade, indicando que a ação deveria ter sido tomada.
-                        info.el.classList.add('fc-event-paid'); 
+
+                    } else if (!isFutureOrTodayEvent) {
+                        // ⚠️ A VENCER/FALTA (Passado e sem status final/pago, Faded forte)
+                        info.el.classList.add('fc-event-paid');	
                         currentTitle = `(A VENCER/FALTA) ${clientName}`;
 
                     } else if (extendedProps.is_recurrent) {
-                        // 🟣 RECORRENTE Padrão (Sem fade, se não tiver pago parcial)
+                        // 🟣 RECORRENTE Padrão (Sem fade)
                         currentTitle = `(RECORR.) ${clientName}`;
                     }
-
-                    // 4. Se for Pendente, usa a classe PENDENTE (Laranja), sem fade (aplica o prefixo final)
-                    if (status === 'pending') {
-                        info.el.classList.remove('fc-event-paid'); // Garante que não está faded
-                        currentTitle = `(PENDENTE) ${clientName}`;
-                    }
-
-                    // 5. O resultado final é aplicado ao elemento.
+                    
+                    // 4. O resultado final é aplicado ao elemento.
                     titleEl.textContent = currentTitle;
                 },
+
 
                 eventClick: function(info) {
                     const event = info.event;
@@ -1735,6 +1774,9 @@
                         signalValueInputQuick().value = '0,00';
                         signalValueInputQuick().removeAttribute('title');
                         signalValueInputQuick().classList.remove('bg-indigo-50', 'border-indigo-400', 'text-indigo-800');
+                        
+                        // ✅ NOVO: Inicializa o método de pagamento
+                        document.getElementById('payment_method_quick').value = '';
 
 
                         document.getElementById('notes').value = '';
@@ -1757,11 +1799,11 @@
 
                         const isRecurrent = extendedProps.is_recurrent;
                         // ✅ Pega o valor total pago (sinal + pagamentos totais)
-                        const paidAmount = extendedProps.total_paid || 0; 
-                        const signalValue = extendedProps.signal_value || 0; 
-                        const price = extendedProps.price || 0; 
+                        const paidAmount = extendedProps.total_paid || 0;	
+                        const signalValue = extendedProps.signal_value || 0;	
+                        const price = extendedProps.price || 0;	
                         // isPaid é true se o status for concluida/lancada_caixa
-                        const isPaid = extendedProps.is_paid === true || extendedProps.is_paid === 1;
+                        const isPaid = extendedProps.is_paid === true || extendedProps.is_paid === 1; // Verifica se está pago integralmente
 
                         const dateReservation = moment(startTime).format('YYYY-MM-DD');
                         const dateDisplay = moment(startTime).format('DD/MM/YYYY');
@@ -1770,7 +1812,7 @@
 
                         // ✅ NOVO: Define o valor a ser usado no modal de cancelamento:
                         // Se estiver pago, usa o valor total pago. Senão, usa o sinal.
-                        const valueForCancellationDecision = isPaid ? paidAmount : signalValue;
+                        const valueForCancellationDecision = paidAmount;
 
 
                         // ✅ CORREÇÃO: Usando HH:mm para formato de 24 horas consistente
@@ -1799,7 +1841,7 @@
 
                         let statusText = 'Confirmada';
                         let statusColor = 'text-indigo-600';
-                        if (status === 'concluida' || status === 'lancada_caixa') {
+                        if (status === 'concluida' || status === 'lancada_caixa' || isPaid) { // Adiciona isPaid aqui para o caso Leonardo
                             statusText = 'Baixada/Paga';
                             statusColor = 'text-green-600'; // Destaca o status de pago
                         } else if (status === 'no_show') {
@@ -1825,6 +1867,7 @@
                             <p><strong>Horário:</strong> ${timeDisplay}</p>
                             <p><strong>Valor Total:</strong> <span class="text-green-600 font-bold">R$ ${priceDisplayFormatted}</span></p>
                             <p><strong>Valor Pago (Total):</strong> <span class="text-blue-600 font-bold">R$ ${paidAmountDisplay}</span></p>
+                            <p><strong>Sinal Original:</strong> R$ ${signalValueDisplay}</p>
                             ${recurrentStatus}
                         `;
 
@@ -1832,7 +1875,7 @@
                         let detailsButton;
 
                         // Se estiver CONCLUÍDO/PAGO/FALTA, mostramos Ver Pagamento
-                        if (status === 'concluida' || status === 'lancada_caixa' || status === 'no_show') {
+                        if (status === 'concluida' || status === 'lancada_caixa' || status === 'no_show' || isPaid) { // Adiciona isPaid aqui
                             detailsButton = `
                                 <a href="${showUrl}" class="w-full inline-block text-center mb-2 px-4 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition duration-150 text-md shadow-xl">
                                     Ver Detalhes Completos / Gerenciar
@@ -1861,11 +1904,11 @@
 
                         // 🎯 NOVO: Botão Marcar como Falta (Só para eventos que já passaram e não são NO_SHOW/CANCELADA)
                         if (isPastEvent && status !== 'no_show' && status !== 'cancelada' && status !== 'rejeitada') {
-                             actionButtons += `
-                                 <button onclick="openNoShowModal(${reservaId}, '${clientName}', ${paidAmount}, ${isPaid}, ${price})" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150 text-md shadow-xl">
-                                     Marcar como FALTA / Decisão de Estorno
-                                 </button>
-                             `;
+                               actionButtons += `
+                                    <button onclick="openNoShowModal(${reservaId}, '${clientName}', ${paidAmount}, ${isPaid}, ${price})" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150 text-md shadow-xl">
+                                        Marcar como FALTA / Decisão de Estorno
+                                    </button>
+                               `;
                         }
 
                         // Botões de Ação Principal (Pagamento/Detalhes)

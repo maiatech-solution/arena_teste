@@ -90,6 +90,8 @@
                 {{-- FIM DA LINHA DE KPIS --}}
             </div>
 
+            ---
+
             {{-- 🚨 3. FECHAMENTO DE CAIXA (Lógica Condicional) --}}
             @if(isset($cashierStatus) && $cashierStatus === 'closed')
                 {{-- Bloco para reabrir o caixa --}}
@@ -129,6 +131,7 @@
                 </div>
             @endif
 
+            ---
 
             {{-- 1.5. Linha dos Filtros (Agora abaixo do Fechamento/Abertura de Caixa) --}}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -187,6 +190,8 @@
                 </div>
             </div>
 
+            ---
+
             {{-- 2. TABELA DE RESERVAS (PRIORIDADE DO CAIXA) --}}
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
@@ -233,7 +238,8 @@
 
                                         // LÓGICA DE DETECÇÃO DE ATRASO
                                         if (in_array($currentStatus, ['pending', 'unpaid', 'partial'])) { // Adicionando 'partial' ao check de atraso
-                                            $dateTimeString = \Carbon\Carbon::parse($reserva->date)->format('Y-m-d') . ' ' . $reserva->end_time;
+                                            // ✅ CORREÇÃO APLICADA: Combina a string da data (Y-m-d) com a string Pura da hora (H:i:s)
+                                            $dateTimeString = $reserva->date->format('Y-m-d') . ' ' . $reserva->end_time->format('H:i:s');
                                             $reservaEndTime = \Carbon\Carbon::parse($dateTimeString);
 
                                             if ($reservaEndTime->lessThan(\Carbon\Carbon::now())) {
@@ -352,6 +358,8 @@
                     </div>
                 </div>
             </div>
+
+            ---
 
             {{-- 4. TABELA DE TRANSAÇÕES FINANCEIRAS (AUDITORIA DE CAIXA) --}}
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg">
@@ -484,6 +492,8 @@
                 </div>
             </div>
 
+            ---
+            
             {{-- 5. LINK DISCRETO PARA DASHBOARD NO FINAL DA PÁGINA --}}
             <div class="mt-8 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
                 <a href="{{ route('admin.financeiro.dashboard') }}"
@@ -497,10 +507,10 @@
     </div>
 
 {{-- ================================================================== --}}
-{{-- MODAIS (MANUTENÇÃO DO LAYOUT) --}}
+{{-- MODAIS (MANTIDOS SEM ALTERAÇÃO NA ESTRUTURA) --}}
 {{-- ================================================================== --}}
 
-{{-- MODAL 1: FINALIZAR PAGAMENTO (mantido) --}}
+{{-- MODAL 1: FINALIZAR PAGAMENTO --}}
 <div id="paymentModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4" aria-labelledby="modal-title" role="dialog" aria-modal="true">
     <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
     <div class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
@@ -583,7 +593,7 @@
     </div>
 </div>
 
-{{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) (mantido) --}}
+{{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) --}}
 <div id="noShowModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
     <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
     <div class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
@@ -658,7 +668,7 @@
 </div>
 
 
-{{-- MODAL 3: FECHAR CAIXA (CLOSE CASH) (mantido) --}}
+{{-- MODAL 3: FECHAR CAIXA (CLOSE CASH) --}}
 <div id="closeCashModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
     <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
     <div class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
@@ -718,7 +728,7 @@
 </div>
 
 
-{{-- MODAL 4: ABRIR CAIXA (OPEN CASH) - Exige Justificativa (mantido) --}}
+{{-- MODAL 4: ABRIR CAIXA (OPEN CASH) - Exige Justificativa --}}
 <div id="openCashModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4" aria-labelledby="modal-title" role="dialog" aria-modal="true">
     <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
 
@@ -772,7 +782,7 @@
 </div>
 
 
-{{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA (COM FUNÇÃO checkCashierStatus CORRIGIDA) --}}
+{{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA (JÁ CORRIGIDO) --}}
 
 <script>
 // --- Funções de Suporte ---
@@ -1148,12 +1158,12 @@ document.getElementById('closeCashForm').addEventListener('submit', function(e) 
         body: JSON.stringify(payload)
     })
     .then(response => {
-         if (!response.ok) {
-             return response.json().then(data => {
-                 throw new Error(data.message || 'Erro ao fechar o caixa. Verifique o console.');
-             });
-         }
-         return response.json();
+          if (!response.ok) {
+              return response.json().then(data => {
+                  throw new Error(data.message || 'Erro ao fechar o caixa. Verifique o console.');
+              });
+          }
+          return response.json();
     })
     .then(data => {
         if(data.success) {
