@@ -61,7 +61,6 @@
             color: white !important;
             padding: 2px 5px;
             border-radius: 4px;
-            /* Garante que o texto dentro do evento seja branco e negrito */
             font-weight: 700 !important;
             color: #ffffff !important;
         }
@@ -74,6 +73,16 @@
             padding: 2px 5px;
             border-radius: 4px;
         }
+        
+        /* ✅ NOVO: Estilo para Eventos FALTA (No-Show - Vermelho) */
+        .fc-event-no-show {
+            background-color: #E53E3E !important; /* Vermelho/Red */
+            border-color: #C53030 !important;
+            color: white !important;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-weight: 700 !important;
+        }
 
         /* Estilo para Eventos PENDENTES (Laranja) */
         .fc-event-pending {
@@ -84,8 +93,9 @@
             border-radius: 4px;
             font-style: italic;
         }
-
-        /* ✅ CRÍTICO: Estilo para Eventos PAGOS/Baixados (Faded/Apagado) */
+        
+        /* ✅ CRÍTICO: Estilo para Eventos PAGOS/Baixados/Cancelados (Faded/Apagado) */
+        /* Esta classe é aplicada pelo JS para dar o efeito de "passado/resolvido" */
         .fc-event-paid {
             opacity: 0.5 !important; /* FORÇADO a opacidade para garantir a prioridade */
             filter: grayscale(40%); /* Fica um pouco cinza */
@@ -202,7 +212,7 @@
                     </div>
                 @endif
 
-                {{-- Legenda ATUALIZADA para incluir status Pago --}}
+                {{-- Legenda ATUALIZADA para incluir status Pago/Falta --}}
                 <div class="flex flex-wrap gap-4 mb-4 text-sm font-medium">
                     <div class="flex items-center p-2 bg-fuchsia-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-fuchsia-700 mr-2"></span>
@@ -212,17 +222,21 @@
                         <span class="inline-block w-4 h-4 rounded-full bg-indigo-600 mr-2"></span>
                         <span>Reservado Avulso (Rápido)</span>
                     </div>
+                    {{-- NOVO: Adicionado Falta/No-Show --}}
+                    <div class="flex items-center p-2 bg-red-50 rounded-lg shadow-sm">
+                        <span class="inline-block w-4 h-4 rounded-full bg-red-600 mr-2"></span>
+                        <span>FALTA (No-Show)</span>
+                    </div>
+                    {{-- Pago/Faded --}}
                     <div class="flex items-center p-2 bg-gray-100 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-gray-400 mr-2 opacity-50"></span>
-                        <span class="italic text-gray-600">Reservado PAGO (Faded)</span>
+                        <span class="italic text-gray-600">Resolvido/PAGO (Faded)</span>
                     </div>
                     <div class="flex items-center p-2 bg-green-50 rounded-lg shadow-sm">
                         <span class="inline-block w-4 h-4 rounded-full bg-green-500 mr-2"></span>
                         <span>Disponível (Horários Abiertos)</span>
                     </div>
                 </div>
-
-                {{-- BOTÃO TEMPORÁRIO DE DEBUG REMOVIDO --}}
 
                 <div class="calendar-container">
                     <div id='calendar'></div>
@@ -357,7 +371,6 @@
                 <input type="hidden" name="paid_amount_ref" id="paid-amount-ref">
 
                 {{-- Área de Gerenciamento de Pagamento por Falta --}}
-                {{-- REMOVENDO A CLASSE HIDDEN AQUI E ADICIONANDO NA FUNÇÃO JS --}}
                 <div id="no-show-refund-area" class="mb-6 p-4 border border-red-300 bg-red-50 rounded-lg hidden">
                     <p class="font-bold text-red-700 mb-3 flex items-center">
                         <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 5h10M5 15h14M7 20h10"/></svg>
@@ -519,7 +532,6 @@
         // === CONFIGURAÇÕES E ROTAS ===
         const PENDING_API_URL = '{{ route("api.reservas.pendentes.count") }}';
         const CONFIRMED_API_URL = '{{ route("api.reservas.confirmadas") }}';
-        const CONCLUDED_API_URL = '{{ route("api.reservas.concluidas") }}';
         const AVAILABLE_API_URL = '{{ route("api.horarios.disponiveis") }}';
         const SHOW_RESERVA_URL = '{{ route("admin.reservas.show", ":id") }}';
 
@@ -1247,7 +1259,6 @@
             // Resetar o formulário
             document.getElementById('no-show-reserva-id').value = reservaId;
             noShowReasonInput.value = '';
-            document.getElementById('no-show-modal-content').classList.remove('opacity-0', 'scale-95');
             document.getElementById('confirm-no-show-btn').textContent = 'Confirmar Falta';
             document.getElementById('confirm-no-show-btn').disabled = false;
 
@@ -1308,6 +1319,7 @@
 
             if (parseFloat(paidAmount) > 0 && !document.getElementById('no-show-refund-area').classList.contains('hidden')) {
                 const refundChoice = document.querySelector('input[name="no_show_refund_choice"]:checked');
+                
                 // Se o radio for 'refund_all', deve estornar
                 shouldRefund = refundChoice && refundChoice.value === 'refund_all';
             }
@@ -1319,6 +1331,10 @@
                 _token: csrfToken,
                 _method: 'PATCH',
             };
+
+            // 🎯 LOG DE DEBUG CRÍTICO PARA O BACKEND
+            console.log("PAYLOAD DE FALTA/NO-SHOW ENVIADO (DEBUG BACKEND):", JSON.stringify(bodyData, null, 2));
+
 
             submitBtn.disabled = true;
             submitBtn.textContent = 'Processando...';
@@ -1522,41 +1538,27 @@
                 slotMaxTime: '23:00:00',
 
                 // 🛑 ALTERAÇÃO CRÍTICA: REMOVENDO validRange PARA PERMITIR VISUALIZAÇÃO DE EVENTOS PASSADOS
-                // validRange: {
-                //     start: moment().format('YYYY-MM-DD')
-                // },
 
                 // ✅ Múltiplas fontes de eventos para garantir que pagos não sejam filtrados
                 eventSources: [
                     {
-                        // 1. RESERVAS CONFIRMADAS/PENDENTES (AS QUE AINDA NÃO FORAM PAGAS)
-                        url: CONFIRMED_API_URL,
+                        // 1. TODAS AS RESERVAS DE CLIENTE (CONFIRMADAS, PENDENTES, PAGAS, FALTAS)
+                        // A URL CONFIRMED_API_URL agora retorna TODOS os eventos de cliente.
+                        url: CONFIRMED_API_URL, 
                         method: 'GET',
                         failure: function() {
-                            console.error('Falha ao carregar reservas CONFIRMADAS/PENDENTES via API.');
+                            console.error('Falha ao carregar reservas de clientes via API.');
                         },
-                        // Se o backend retorna slots disponíveis, filtramos aqui.
                         eventDataTransform: function(eventData) {
+                            // Filtra slots que o backend pode ter retornado por engano
                             if (eventData.extendedProps && eventData.extendedProps.status === 'available') {
-                                return null;
+                                return null; 
                             }
-                            // Retorna o evento com suas classes padrões (Recorrente, Avulso, Pendente)
                             return eventData;
                         }
                     },
                     {
-                        // 2. RESERVAS CONCLUÍDAS/PAGAS (AS QUE ESTAVAM SUMINDO)
-                        id: 'concluded-slots-source-id',
-                        url: CONCLUDED_API_URL,
-                        method: 'GET',
-                        // Aplicamos a classe de fade diretamente na fonte para facilitar a diferenciação visual
-                        className: 'fc-event-paid',
-                        failure: function() {
-                            console.error('Falha ao carregar reservas CONCLUÍDAS/PAGAS via API.');
-                        },
-                    },
-                    {
-                        // 3. HORÁRIOS DISPONÍVEIS
+                        // 2. HORÁRIOS DISPONÍVEIS (MANTIDO)
                         id: 'available-slots-source-id',
                         className: 'fc-event-available',
                         display: 'block',
@@ -1608,14 +1610,13 @@
                 editable: false,
                 initialDate: new Date().toISOString().slice(0, 10),
 
-                // ✅ HOOK CRÍTICO PARA ESTILIZAÇÃO
+                // ✅ HOOK CRÍTICO PARA ESTILIZAÇÃO (CORRIGIDO PARA LIMPEZA DE PREFIXOS)
                 eventDidMount: function(info) {
                     const event = info.event;
                     const titleEl = info.el.querySelector('.fc-event-title');
                     const extendedProps = event.extendedProps || {};
-                    // Ajuste para aceitar explicitamente true ou 1 (booleano ou numérico)
-                    const isPaidFlag = extendedProps.is_paid === true || extendedProps.is_paid === 1 || info.el.classList.contains('fc-event-paid'); // Novo check se veio da fonte de pagos
                     const isAvailable = event.classNames.includes('fc-event-available');
+                    const status = extendedProps.status; // Pega o status do backend
 
                     // Se for slot disponível, pare.
                     if (isAvailable) return;
@@ -1625,25 +1626,57 @@
 
                     let currentTitle = titleEl.textContent;
 
-                    // 1. Limpeza do prefixo 'RECORR.:' e outros
+                    // 1. Limpeza de TODOS os prefixos conhecidos (para evitar duplicação)
                     currentTitle = currentTitle.replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '').trim();
-                    currentTitle = currentTitle.replace(/^(PAGO)[\.:\s]*\s*/i, '').trim(); // Remove PAGO se já estiver no título
+                    currentTitle = currentTitle.replace(/^PAGO[\.:\s]*\s*/i, '').trim();
+                    currentTitle = currentTitle.replace(/^FALTA[\.:\s]*\s*/i, '').trim();
+                    currentTitle = currentTitle.replace(/^CANCELADO[\.:\s]*\s*/i, '').trim();
+                    currentTitle = currentTitle.replace(/^PENDENTE[\.:\s]*\s*/i, '').trim();
+                    currentTitle = currentTitle.replace(/^A VENCER\/FALTA[\.:\s]*\s*/i, '').trim();
 
-                    // 2. Remove o sufixo de preço ' - R$ XX.XX'
-                    currentTitle = currentTitle.split(' - R$ ')[0].trim();
+                    // 2. Remove o sufixo de preço ' - R$ XX.XX' para obter o nome limpo
+                    let clientName = currentTitle.split(' - R$ ')[0].trim();
+                    currentTitle = clientName; // Reinicia o título apenas com o nome
 
-                    // 3. ✅ Lógica para eventos PAGOS/BAIXADOS
-                    if (isPaidFlag) {
-                           // Aplica o fade-out (opacity: 0.5) via CSS class .fc-event-paid (garante que não seja sobrescrito)
-                           info.el.classList.add('fc-event-paid');
+                    const eventEndMoment = moment(event.end);
+                    const isPastEvent = eventEndMoment.isBefore(moment());
+                    
+                    // Remove classes de status antigas que poderiam estar causando conflito
+                    info.el.classList.remove('fc-event-paid', 'fc-event-no-show'); 
 
-                           // Adiciona o indicador de pago no início do título
-                           currentTitle = `(PAGO) ${currentTitle}`;
-                    } else if (moment(event.end).isBefore(moment())) {
-                        // 4. Lógica para eventos NÃO PAGOS (Pendentes/Confirmados) que JÁ PASSARAM
-                        // Aplica o fade-out para eventos passados NÃO pagos, indicando que a ação deveria ter sido tomada
-                         info.el.classList.add('fc-event-paid'); // Reutilizando a classe de fade
-                         currentTitle = `(A VENCER/FALTA) ${currentTitle}`;
+
+                    // 3. Lógica de Estilização e Prefixo
+                    
+                    if (status === 'no_show') {
+                        // ❌ FALTA (Vermelho forte)
+                        info.el.classList.add('fc-event-no-show'); 
+                        currentTitle = `(FALTA) ${clientName}`;
+                    
+                    } else if (status === 'concluida' || status === 'lancada_caixa') {
+                        // ✅ PAGO (Faded/Apagado)
+                        info.el.classList.add('fc-event-paid');
+                        currentTitle = `(PAGO) ${clientName}`;
+                    
+                    } else if ((extendedProps.total_paid || 0) > 0) {
+                        // 💰 CONFIRMADA COM SINAL PAGO (Faded para indicar saldo baixo/pago parcial)
+                        info.el.classList.add('fc-event-paid');
+                        currentTitle = `(SINAL) ${clientName}`;
+                    
+                    } else if (isPastEvent && status !== 'pending' && status !== 'cancelada' && status !== 'rejeitada') {
+                        // ⚠️ A VENCER/FALTA (Eventos que já passaram, mas não foram pagos/tratados)
+                        // Aplica o fade, indicando que a ação deveria ter sido tomada.
+                        info.el.classList.add('fc-event-paid'); 
+                        currentTitle = `(A VENCER/FALTA) ${clientName}`;
+
+                    } else if (extendedProps.is_recurrent) {
+                        // 🟣 RECORRENTE Padrão (Sem fade, se não tiver pago parcial)
+                        currentTitle = `(RECORR.) ${clientName}`;
+                    }
+
+                    // 4. Se for Pendente, usa a classe PENDENTE (Laranja), sem fade (aplica o prefixo final)
+                    if (status === 'pending') {
+                        info.el.classList.remove('fc-event-paid'); // Garante que não está faded
+                        currentTitle = `(PENDENTE) ${clientName}`;
                     }
 
                     // 5. O resultado final é aplicado ao elemento.
@@ -1724,10 +1757,10 @@
 
                         const isRecurrent = extendedProps.is_recurrent;
                         // ✅ Pega o valor total pago (sinal + pagamentos totais)
-                        const paidAmount = extendedProps.paid_amount || 0;
-                        const signalValue = extendedProps.signal_value || 0; // Sinal/Entrada (para o fluxo de cancelamento)
-                        const price = extendedProps.price || 0; // Pega o preço total
-                        // Ajuste para aceitar explicitamente true ou 1 (booleano ou numérico)
+                        const paidAmount = extendedProps.total_paid || 0; 
+                        const signalValue = extendedProps.signal_value || 0; 
+                        const price = extendedProps.price || 0; 
+                        // isPaid é true se o status for concluida/lancada_caixa
                         const isPaid = extendedProps.is_paid === true || extendedProps.is_paid === 1;
 
                         const dateReservation = moment(startTime).format('YYYY-MM-DD');
@@ -1746,20 +1779,32 @@
                             timeDisplay += ' - ' + moment(endTime).format('HH:mm');
                         }
 
-                        // O título do evento deve estar no formato "(PAGO) Nome do Cliente"
-                        // Para exibir apenas o nome do cliente no modal, removemos o prefixo (PAGO) e o preço
-                        let clientName = event.title.replace(/^\(PAGO\)\s*/i, '').split(' - R$ ')[0].trim();
+                        // Remove todos os prefixos para obter o nome limpo do cliente
+                        let clientName = event.title
+                            .replace(/^\(PAGO\)\s*/i, '')
+                            .replace(/^\(FALTA\)\s*/i, '')
+                            .replace(/^\(RECORR\.\)\s*/i, '')
+                            .replace(/^\(SINAL\)\s*/i, '')
+                            .replace(/^\(A VENCER\/FALTA\)\s*/i, '')
+                            .replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '') // Limpeza adicional do Controller
+                            .replace(/^PAGO[\.:\s]*\s*/i, '')
+                            .replace(/^FALTA[\.:\s]*\s*/i, '')
+                            .replace(/^CANCELADO[\.:\s]*\s*/i, '')
+                            .replace(/^PENDENTE[\.:\s]*\s*/i, '')
+                            .split(' - R$ ')[0].trim();
 
-                        // ✅ ATUALIZADO: Incluir a data E o valor do sinal na URL do Caixa
-                        // Isso permite que o Controller de Pagamentos pré-preencha o campo Pago
+
                         const paymentUrl = `${PAYMENT_INDEX_URL}?reserva_id=${reservaId}&data_reserva=${dateReservation}&signal_value=${signalValue}`;
                         const showUrl = SHOW_RESERVA_URL.replace(':id', reservaId);
 
                         let statusText = 'Confirmada';
                         let statusColor = 'text-indigo-600';
-                        if (isPaid) {
+                        if (status === 'concluida' || status === 'lancada_caixa') {
                             statusText = 'Baixada/Paga';
                             statusColor = 'text-green-600'; // Destaca o status de pago
+                        } else if (status === 'no_show') {
+                            statusText = 'FALTA (No-Show)';
+                            statusColor = 'text-red-600'; // Destaca o status de falta
                         }
 
 
@@ -1786,7 +1831,8 @@
                         let paymentButton;
                         let detailsButton;
 
-                        if (isPaid) {
+                        // Se estiver CONCLUÍDO/PAGO/FALTA, mostramos Ver Pagamento
+                        if (status === 'concluida' || status === 'lancada_caixa' || status === 'no_show') {
                             detailsButton = `
                                 <a href="${showUrl}" class="w-full inline-block text-center mb-2 px-4 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition duration-150 text-md shadow-xl">
                                     Ver Detalhes Completos / Gerenciar
@@ -1798,6 +1844,7 @@
                                 </a>
                             `;
                         } else {
+                            // Se estiver CONFIRMADO/PENDENTE, mostramos Registrar Pagamento
                             paymentButton = `
                                 <a href="${paymentUrl}" class="w-full inline-block text-center mb-2 px-4 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 text-md shadow-xl">
                                     Registrar Pagamento / Acessar Caixa
@@ -1812,8 +1859,8 @@
 
                         let actionButtons = '';
 
-                        // 🎯 NOVO: Botão Marcar como Falta (Só para eventos que já passaram)
-                        if (isPastEvent) {
+                        // 🎯 NOVO: Botão Marcar como Falta (Só para eventos que já passaram e não são NO_SHOW/CANCELADA)
+                        if (isPastEvent && status !== 'no_show' && status !== 'cancelada' && status !== 'rejeitada') {
                              actionButtons += `
                                  <button onclick="openNoShowModal(${reservaId}, '${clientName}', ${paidAmount}, ${isPaid}, ${price})" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150 text-md shadow-xl">
                                      Marcar como FALTA / Decisão de Estorno
@@ -1822,17 +1869,12 @@
                         }
 
                         // Botões de Ação Principal (Pagamento/Detalhes)
-                        if (isPaid) {
-                            actionButtons += detailsButton;
-                            actionButtons += paymentButton;
-                        } else {
-                            actionButtons += paymentButton;
-                            actionButtons += detailsButton;
-                        }
+                        actionButtons += paymentButton;
+                        actionButtons += detailsButton;
 
 
-                        // Botões de Cancelamento (Só para eventos futuros ou atuais)
-                        if (!isPastEvent) {
+                        // Botões de Cancelamento (Só para eventos futuros ou atuais E que não são NO_SHOW/CANCELADA)
+                        if (!isPastEvent && status !== 'no_show' && status !== 'cancelada' && status !== 'rejeitada') {
                             if (isRecurrent) {
                                 actionButtons += `
                                     <button onclick="cancelarPontual(${reservaId}, true, ${valueForCancellationDecision}, ${isPaid})" class="w-full mb-2 px-4 py-2 bg-yellow-500 text-white font-medium rounded-lg hover:bg-yellow-600 transition duration-150 text-sm">
