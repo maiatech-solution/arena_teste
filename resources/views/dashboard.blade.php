@@ -94,9 +94,13 @@
             font-style: italic;
         }
         
-        /* ✅ CRÍTICO: Estilo para Eventos PAGOS/Baixados/Cancelados (Faded/Apagado) */
+        /* ✅ CRÍTICO: Estilo para Eventos PAGOS/Baixados/Cancelados/ATRASADOS (Faded/Apagado) */
         /* Esta classe é aplicada pelo JS para dar o efeito de "passado/resolvido" */
         .fc-event-paid {
+            /* Usando um cinza mais escuro para o background ser notável, mas com opacidade */
+            background-color: #6B7280 !important; /* Cinza 500 */
+            border-color: #4B5563 !important;
+            color: white !important;
             opacity: 0.5 !important; /* FORÇADO a opacidade para garantir a prioridade */
             filter: grayscale(40%); /* Fica um pouco cinza */
         }
@@ -974,7 +978,11 @@
             const dateDisplay = moment(event.start).format('DD/MM/YYYY');
             const timeDisplay = moment(event.start).format('HH:mm') + ' - ' + moment(event.end).format('HH:mm');
             const priceDisplay = parseFloat(extendedProps.price || 0).toFixed(2).replace('.', ',');
-            const clientName = event.title.replace(/^(PAGO)[\.:\s]*\s*/i, '').replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '').split(' - R$ ')[0].trim().replace(/^\(PAGO\)\s*/i, '');
+            
+            // Regex abrangente para limpar o nome do cliente que pode ter prefixos
+            const prefixRegex = /^\s*(?:\(?(?:PAGO|FALTA|ATRASADO|CANCELADO|REJEITADA|PENDENTE|A\sVENCER\/FALTA|RECORR(?:E)?|SINAL|RESOLVIDO)\)?[\.:\s]*\s*)+/i;
+            const clientName = event.title.replace(prefixRegex, '').split(' - R$ ')[0].trim();
+
 
             document.getElementById('pending-reserva-id').value = reservaId;
 
@@ -1460,14 +1468,14 @@
                 const suggestedNewDateDisplay = suggestedNewDate.format('DD/MM/YYYY');
 
                 const itemHtml = `
-                    <div id="renewal-item-${series.master_reserva_id}" class="p-4 bg-yellow-50 border border-yellow-300 rounded-lg shadow-sm flex justify-between items-center transition-opacity duration-300">
+                    <div id="renewal-item-${series.master_id}" class="p-4 bg-yellow-50 border border-yellow-300 rounded-lg shadow-sm flex justify-between items-center transition-opacity duration-300">
                         <div>
                             <p class="font-bold text-gray-800">${series.client_name}</p>
                             <p class="text-sm text-gray-600">Horário: ${series.slot_time} | Expira em: ${lastDateDisplay}</p>
                             <p class="text-xs text-green-700 font-semibold">Sugestão: Renovar até ${suggestedNewDateDisplay} (+6 meses)</p>
                         </div>
-                        <button onclick="handleRenewal(${series.master_reserva_id})"
-                                class="renew-btn-${series.master_reserva_id} px-4 py-2 bg-yellow-600 text-white text-sm font-semibold rounded-lg hover:bg-yellow-700 transition duration-150">
+                        <button onclick="handleRenewal(${series.master_id})"
+                                class="renew-btn-${series.master_id} px-4 py-2 bg-yellow-600 text-white text-sm font-semibold rounded-lg hover:bg-yellow-700 transition duration-150">
                             Renovar
                         </button>
                     </div>
@@ -1508,7 +1516,7 @@
                     showDashboardMessage(result.message || `Série ${masterReservaId} renovada com sucesso!`, 'success');
 
                     // Remove a série renovada da lista global e atualiza o modal
-                    globalExpiringSeries = globalExpiringSeries.filter(s => s.master_reserva_id !== masterReservaId);
+                    globalExpiringSeries = globalExpiringSeries.filter(s => s.master_id !== masterReservaId);
                     renderRenewalList();
 
                     // Atualiza o contador de alerta no dashboard
@@ -1628,7 +1636,7 @@
                                     successCallback(filteredEvents);
                                 })
                                 .catch(error => {
-                                    console.error('Falha ao carregar e filtrar horários disponíveis:', error);
+                                    console.log('Falha ao carregar e filtrar horários disponíveis:', error);
                                     failureCallback(error);
                                 });
                         }
@@ -1648,7 +1656,7 @@
                 editable: false,
                 initialDate: new Date().toISOString().slice(0, 10),
 
-                // ✅ HOOK CRÍTICO PARA ESTILIZAÇÃO (CORRIGIDO NOVAMENTE: Lógica de PAGO/SINAL e Futuro)
+                // ✅ HOOK CRÍTICO PARA ESTILIZAÇÃO (CORRIGIDO E ATUALIZADO PARA PAGO/FALTA/ATRASADO)
                 eventDidMount: function(info) {
                     const event = info.event;
                     const titleEl = info.el.querySelector('.fc-event-title');
@@ -1660,85 +1668,102 @@
 
                     let currentTitle = titleEl.textContent;
 
-                    // 1. Limpeza de TODOS os prefixos conhecidos (para evitar duplicação)
-                    currentTitle = currentTitle
-                        .replace(/^(RECORR(?:E)?|PAGO|FALTA|CANCELADO|PENDENTE|A VENCER\/FALTA)[\.:\s]*\s*/i, '')
-                        .replace(/^\((PAGO|FALTA|RECORR\.|SINAL|A VENCER\/FALTA)\)\s*/i, '')
-                        .trim();
+                    // 1. Limpeza de TODOS os prefixos conhecidos (incluindo o novo ATRASADO)
+                    // Regex abrangente para remover prefixos de status conhecidos
+                    const prefixRegex = /^\s*(?:\(?(?:PAGO|FALTA|ATRASADO|CANCELADO|REJEITADA|PENDENTE|A\sVENCER\/FALTA|RECORR(?:E)?|SINAL|RESOLVIDO)\)?[\.:\s]*\s*)+/i;
+
+                    let clientName = currentTitle;
                     
-                    // 2. Remove o sufixo de preço ' - R$ XX.XX' para obter o nome limpo
-                    let clientName = currentTitle.split(' - R$ ')[0].trim();
-                    currentTitle = clientName; // Reinicia o título apenas com o nome
+                    // Remove o sufixo de preço antes de limpar o prefixo, se existir.
+                    const priceSuffixMatch = currentTitle.match(/(\s-\sR\$\s[\d,\.]+)/);
+                    const priceSuffix = priceSuffixMatch ? priceSuffixMatch[0] : '';
+                    
+                    // Remove o sufixo e o prefixo do nome
+                    clientName = clientName.replace(priceSuffix, '').replace(prefixRegex, '').trim();
+
 
                     const eventEndMoment = moment(event.end);
-                    // CRÍTICO: Se a reserva for para HOJE e a HORA DE FIM não passou, é futuro/atual.
-                    const isFutureOrTodayEvent = eventEndMoment.isAfter(moment());	
+                    const isPastEvent = eventEndMoment.isBefore(moment()); // Se a hora final já passou
+                    const isFutureOrTodayEvent = !isPastEvent;
                     
                     const price = extendedProps.final_price || extendedProps.price || 0;
-                    // Verifica se o valor pago é >= ao preço final (considerando tolerância)
-                    const isTotalPaid = (extendedProps.total_paid >= price) && (price > 0);
+                    // isPaid é true se o valor pago for igual ao preço final (com tolerância)
+                    const isTotalPaid = (Math.abs((extendedProps.total_paid || 0) - price) < 0.01) && (price > 0);
                     
-                    // Remove classes de status antigas
-                    info.el.classList.remove('fc-event-paid', 'fc-event-no-show');	
+                    const isLate = isPastEvent && status === 'confirmed'; // ATRASADO: Passou do tempo E ainda está como confirmed
 
-                    // 3. Lógica de Estilização e Prefixo (Ordem de prioridade alta para baixa)
-                    
-                    if (status === 'no_show') {
-                        // ❌ FALTA (Vermelho forte)
-                        info.el.classList.add('fc-event-no-show');	
-                        currentTitle = `(FALTA) ${clientName}`;
-                    
-                    } else if (status === 'concluida' || status === 'lancada_caixa' || status === 'cancelada' || status === 'rejeitada' || isTotalPaid) {
-                        // ✅ PAGO/FINALIZADA OU PAGA TOTALMENTE (Caso Leonardo): Faded/Apagado
-                        info.el.classList.add('fc-event-paid');
-                        
-                        let prefix = status.toUpperCase();
-                        if (isTotalPaid) {
-                             prefix = 'PAGO'; // Se o pagamento for total, marca como pago (principalmente para o caso de status 'confirmada' pago 100%)
-                        }
-                        currentTitle = `(${prefix}) ${clientName}`;
-                    
-                    } else if (status === 'pending') {
-                        // 🟠 PENDENTE (Laranja forte, sem fade)
-                        info.el.classList.remove('fc-event-paid');
-                        currentTitle = `(PENDENTE) ${clientName}`;
-                    
-                    } else if ((extendedProps.total_paid || 0) > 0 && isFutureOrTodayEvent) {
-                        // 💰 SINAL PAGO EM EVENTO FUTURO/HOJE (Mantém a cor original, sem fade)
-                        currentTitle = `(SINAL) ${clientName}`;
+                    // Reset de classes críticas
+                    info.el.classList.remove('fc-event-paid', 'fc-event-no-show', 'fc-event-recurrent', 'fc-event-quick', 'fc-event-pending');
 
-                    } else if (!isFutureOrTodayEvent) {
-                        // ⚠️ A VENCER/FALTA (Passado e sem status final/pago, Faded forte)
-                        info.el.classList.add('fc-event-paid');	
-                        currentTitle = `(A VENCER/FALTA) ${clientName}`;
+                    // 2. Lógica de Estilização e Prefixo (Ordem de prioridade alta para baixa)
+                    let prefix = '';
 
-                    } else if (extendedProps.is_recurrent) {
-                        // 🟣 RECORRENTE Padrão (Sem fade)
-                        currentTitle = `(RECORR.) ${clientName}`;
+                    // ** Estilo de Cor Principal (Recorrente/Avulso) **
+                    if (extendedProps.is_recurrent && status !== 'pending') {
+                         info.el.classList.add('fc-event-recurrent'); // Roxo
+                    } else if (status === 'confirmed') {
+                         info.el.classList.add('fc-event-quick'); // Indigo
                     }
                     
-                    // 4. O resultado final é aplicado ao elemento.
-                    titleEl.textContent = currentTitle;
+                    // ** Lógica de Prefixo e Faded (Visão Geral do Status) **
+                    if (status === 'no_show') {
+                        // ❌ FALTA (Vermelho forte)
+                        info.el.classList.add('fc-event-no-show', 'fc-event-paid'); // Aplica o estilo de cor forte + o faded
+                        prefix = '(FALTA)';
+                    } else if (status === 'pending') {
+                        // 🟠 PENDENTE (Laranja forte, sem fade)
+                        info.el.classList.add('fc-event-pending');
+                        prefix = '(PENDENTE)';
+                    } else if (isLate) {
+                        // 🔴 ATRASADO (Passou do tempo e precisa de ação)
+                        info.el.classList.add('fc-event-paid'); // Aplica o estilo faded
+                        prefix = '(ATRASADO)';
+                    } else if (isTotalPaid || status === 'concluida' || status === 'lancada_caixa') {
+                        // ✅ PAGO/RESOLVIDO (Faded)
+                        info.el.classList.add('fc-event-paid');
+                        prefix = '(PAGO)';
+                    } else if (status === 'cancelada' || status === 'rejeitada') {
+                        // ⚪ CANCELADO/REJEITADO (Faded)
+                        info.el.classList.add('fc-event-paid');
+                        prefix = `(${status.toUpperCase()})`;
+                    } else if (!isFutureOrTodayEvent && status === 'confirmed') {
+                        // Antigo A VENCER/FALTA (agora é ATRASADO, tratado acima, mas mantido para redundância)
+                         info.el.classList.add('fc-event-paid');
+                         prefix = '(ATRASADO)'; 
+                    }
+                    
+                    // 3. Aplicação do Título Final
+                    const finalTitle = `${prefix} ${clientName}`.trim() + priceSuffix;
+                    titleEl.textContent = finalTitle;
+
+                    // 4. Forçar estilos para garantir que o Faded funcione
+                    if (info.el.classList.contains('fc-event-paid') && !info.el.classList.contains('fc-event-no-show')) {
+                        // Cor cinza escura para Faded (PAGO, ATRASADO, CANCELADO, REJEITADA)
+                        info.el.style.backgroundColor = '#6B7280'; 
+                        info.el.style.borderColor = '#4B5563';
+                        info.el.style.color = 'white';
+                    }
                 },
 
 
+                // 💥 FUNÇÃO eventClick CORRIGIDA PARA FLUXOS PAGO/FALTA/ATRASADO 💥
                 eventClick: function(info) {
                     const event = info.event;
                     const isAvailable = event.classNames.includes('fc-event-available');
                     const extendedProps = event.extendedProps || {};
                     const status = extendedProps.status;
 
-
+                    // 1. AÇÃO PENDENTE (Laranja) tem prioridade no modal
                     if (status === 'pending') {
                         openPendingActionModal(event);
                         return;
                     }
 
+                    // 2. SLOT DISPONÍVEL (Verde) - Abre agendamento rápido
                     if (isAvailable) {
                         const startDate = moment(event.start);
                         const endDate = moment(event.end);
 
-                        // Não permite agendar slots disponíveis que já passaram
                         if (endDate.isBefore(moment())) {
                             console.log("Slot passado, clique ignorado.");
                             return;
@@ -1746,14 +1771,10 @@
 
                         const dateString = startDate.format('YYYY-MM-DD');
                         const dateDisplay = startDate.format('DD/MM/YYYY');
-
                         const startTimeInput = startDate.format('H:mm');
                         const endTimeInput = endDate.format('H:mm');
-
                         const timeSlotDisplay = startDate.format('HH:mm') + ' - ' + endDate.format('HH:mm');
-
                         const price = extendedProps.price || 0;
-
                         const reservaIdToUpdate = event.id;
 
                         document.getElementById('reserva-id-to-update').value = reservaIdToUpdate;
@@ -1762,23 +1783,17 @@
                         document.getElementById('quick-end-time').value = endTimeInput;
                         document.getElementById('quick-price').value = price;
 
-                        // Limpa/Reseta os campos do formulário
+                        // Reset de campos do formulário
                         clientNameInput().value = '';
                         clientContactInput().value = '';
                         whatsappError().classList.add('hidden');
                         clientContactInput().classList.remove('border-red-500', 'border-green-500');
-                        reputationDisplay().innerHTML = ''; // Limpa a reputação anterior
-                        currentClientStatus = { is_vip: false, reputation_tag: '' }; // Reseta o status
-
-                        // Inicializa o campo de sinal do agendamento rápido
+                        reputationDisplay().innerHTML = ''; 
+                        currentClientStatus = { is_vip: false, reputation_tag: '' }; 
                         signalValueInputQuick().value = '0,00';
                         signalValueInputQuick().removeAttribute('title');
                         signalValueInputQuick().classList.remove('bg-indigo-50', 'border-indigo-400', 'text-indigo-800');
-                        
-                        // ✅ NOVO: Inicializa o método de pagamento
                         document.getElementById('payment_method_quick').value = '';
-
-
                         document.getElementById('notes').value = '';
                         document.getElementById('is-recurrent').checked = false;
 
@@ -1786,54 +1801,44 @@
                             <p><strong>Data:</strong> ${dateDisplay}</p>
                             <p><strong>Horário:</strong> ${timeSlotDisplay}</p>
                             <p><strong>Valor:</strong> R$ ${parseFloat(price).toFixed(2).replace('.', ',')}</p>
-
                         `;
 
                         quickBookingModal.classList.remove('hidden');
-
+                        return;
                     }
+                    
+                    // 3. EVENTOS DE CLIENTE (CONFIRMADO, PAGO, FALTA, CANCELADO, ATRASADO) - Abrem o modal de Detalhes
                     else if (event.id) {
                         const startTime = event.start;
                         const endTime = event.end;
                         const reservaId = event.id;
 
                         const isRecurrent = extendedProps.is_recurrent;
-                        // ✅ Pega o valor total pago (sinal + pagamentos totais)
                         const paidAmount = extendedProps.total_paid || 0;	
                         const signalValue = extendedProps.signal_value || 0;	
                         const price = extendedProps.price || 0;	
-                        // isPaid é true se o status for concluida/lancada_caixa
-                        const isPaid = extendedProps.is_paid === true || extendedProps.is_paid === 1; // Verifica se está pago integralmente
+                        
+                        const isTotalPaid = (Math.abs(paidAmount - price) < 0.01) && (price > 0);
+                        const isPaid = extendedProps.is_paid === true || extendedProps.is_paid === 1 || isTotalPaid; 
 
                         const dateReservation = moment(startTime).format('YYYY-MM-DD');
                         const dateDisplay = moment(startTime).format('DD/MM/YYYY');
                         const eventEndMoment = moment(endTime);
                         const isPastEvent = eventEndMoment.isBefore(moment());
+                        const isFutureEvent = !isPastEvent; // Simplificando
+                        
+                        const isLate = isPastEvent && status === 'confirmed'; 
 
-                        // ✅ NOVO: Define o valor a ser usado no modal de cancelamento:
-                        // Se estiver pago, usa o valor total pago. Senão, usa o sinal.
-                        const valueForCancellationDecision = paidAmount;
+                        // Define o valor a ser usado no modal de cancelamento/falta (usamos o total pago)
+                        const valueForActionDecision = paidAmount;
 
-
-                        // ✅ CORREÇÃO: Usando HH:mm para formato de 24 horas consistente
                         let timeDisplay = moment(startTime).format('HH:mm');
                         if (endTime) {
                             timeDisplay += ' - ' + moment(endTime).format('HH:mm');
                         }
 
-                        // Remove todos os prefixos para obter o nome limpo do cliente
-                        let clientName = event.title
-                            .replace(/^\(PAGO\)\s*/i, '')
-                            .replace(/^\(FALTA\)\s*/i, '')
-                            .replace(/^\(RECORR\.\)\s*/i, '')
-                            .replace(/^\(SINAL\)\s*/i, '')
-                            .replace(/^\(A VENCER\/FALTA\)\s*/i, '')
-                            .replace(/^RECORR(?:E)?[\.:\s]*\s*/i, '') // Limpeza adicional do Controller
-                            .replace(/^PAGO[\.:\s]*\s*/i, '')
-                            .replace(/^FALTA[\.:\s]*\s*/i, '')
-                            .replace(/^CANCELADO[\.:\s]*\s*/i, '')
-                            .replace(/^PENDENTE[\.:\s]*\s*/i, '')
-                            .split(' - R$ ')[0].trim();
+                        const prefixRegex = /^\s*(?:\(?(?:PAGO|FALTA|ATRASADO|CANCELADO|REJEITADA|PENDENTE|A\sVENCER\/FALTA|RECORR(?:E)?|SINAL|RESOLVIDO)\)?[\.:\s]*\s*)+/i;
+                        let clientName = event.title.replace(prefixRegex, '').split(' - R$ ')[0].trim();
 
 
                         const paymentUrl = `${PAYMENT_INDEX_URL}?reserva_id=${reservaId}&data_reserva=${dateReservation}&signal_value=${signalValue}`;
@@ -1841,20 +1846,29 @@
 
                         let statusText = 'Confirmada';
                         let statusColor = 'text-indigo-600';
-                        if (status === 'concluida' || status === 'lancada_caixa' || isPaid) { // Adiciona isPaid aqui para o caso Leonardo
-                            statusText = 'Baixada/Paga';
-                            statusColor = 'text-green-600'; // Destaca o status de pago
+                        
+                        // LÓGICA DE STATUS TEXTUAL (para o modal)
+                        if (isPaid || status === 'concluida' || status === 'lancada_caixa') {
+                            statusText = 'PAGO / Baixada';
+                            statusColor = 'text-green-600'; 
                         } else if (status === 'no_show') {
                             statusText = 'FALTA (No-Show)';
-                            statusColor = 'text-red-600'; // Destaca o status de falta
+                            statusColor = 'text-red-600'; 
+                        } else if (status === 'cancelada') {
+                            statusText = 'Cancelada';
+                            statusColor = 'text-gray-500';
+                        } else if (status === 'rejeitada') {
+                            statusText = 'Rejeitada';
+                            statusColor = 'text-gray-500';
+                        } else if (isLate) { 
+                            statusText = 'ATRASADA (Requer Ação!)';
+                            statusColor = 'text-red-700 font-extrabold';
                         }
-
 
                         let recurrentStatus = isRecurrent ?
                             '<p class="text-sm font-semibold text-fuchsia-600">Parte de uma Série Recorrente</p>' :
                             '<p class="text-sm font-semibold text-gray-500">Reserva Pontual</p>';
 
-                        // ✅ CORREÇÃO: Formata o valor do sinal para exibição
                         const signalValueDisplay = parseFloat(signalValue).toFixed(2).replace('.', ',');
                         const paidAmountDisplay = parseFloat(paidAmount).toFixed(2).replace('.', ',');
                         const priceDisplayFormatted = parseFloat(price).toFixed(2).replace('.', ',');
@@ -1871,71 +1885,88 @@
                             ${recurrentStatus}
                         `;
 
-                        let paymentButton;
-                        let detailsButton;
+                        let actionButtons = '';
+                        const isCanceledOrRejected = status === 'cancelada' || status === 'rejeitada';
 
-                        // Se estiver CONCLUÍDO/PAGO/FALTA, mostramos Ver Pagamento
-                        if (status === 'concluida' || status === 'lancada_caixa' || status === 'no_show' || isPaid) { // Adiciona isPaid aqui
-                            detailsButton = `
-                                <a href="${showUrl}" class="w-full inline-block text-center mb-2 px-4 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition duration-150 text-md shadow-xl">
-                                    Ver Detalhes Completos / Gerenciar
-                                </a>
-                            `;
-                            paymentButton = `
-                                <a href="${paymentUrl}" class="w-full inline-block text-center mb-2 px-4 py-2 bg-gray-500 text-white font-medium rounded-lg hover:bg-gray-600 transition duration-150 text-sm shadow-md">
-                                    Ver Registro de Pagamento / Caixa
-                                </a>
-                            `;
-                        } else {
-                            // Se estiver CONFIRMADO/PENDENTE, mostramos Registrar Pagamento
-                            paymentButton = `
+                        // ===========================================
+                        // 1. BOTÕES PRINCIPAIS DE PAGAMENTO/DETALHES
+                        // ===========================================
+
+                        // Botão de Pagamento/Caixa
+                        if (status === 'no_show' || isLate || status === 'confirmed') {
+                             // FALTA, ATRASADO e CONFIRMADO precisam de ação de caixa/pagamento
+                            actionButtons += `
                                 <a href="${paymentUrl}" class="w-full inline-block text-center mb-2 px-4 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 text-md shadow-xl">
                                     Registrar Pagamento / Acessar Caixa
                                 </a>
                             `;
-                            detailsButton = `
-                                <a href="${showUrl}" class="w-full inline-block text-center mb-2 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition duration-150 text-sm">
-                                    Ver Detalhes da Reserva (Status, Notas)
+                        } else if (isPaid || status === 'concluida' || status === 'lancada_caixa') {
+                             // PAGO/BAIXADO (Ver o registro)
+                            actionButtons += `
+                                <a href="${paymentUrl}" class="w-full inline-block text-center mb-2 px-4 py-3 bg-gray-500 text-white font-medium rounded-lg hover:bg-gray-600 transition duration-150 text-md shadow-md">
+                                    Ver Registro de Pagamento / Caixa
                                 </a>
                             `;
                         }
+                        
+                        // Botão de Detalhes
+                        actionButtons += `
+                            <a href="${showUrl}" class="w-full inline-block text-center mb-2 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition duration-150 text-sm">
+                                Ver Detalhes da Reserva (Status, Notas)
+                            </a>
+                        `;
 
-                        let actionButtons = '';
+                        // ===========================================
+                        // 2. BOTÕES DE FLUXO (FALTA / CANCELAMENTO)
+                        // ===========================================
+                        
+                        // 2.1. Botão Marcar como FALTA (Aparece se: É Passado OU É Futuro/Pago)
+                        // Regra: Deve ser possível marcar FALTA se (1) for um evento passado não resolvido ou (2) um evento futuro pago (desistência paga).
+                        
+                        const isCancellableNoShow = !isCanceledOrRejected;
 
-                        // 🎯 NOVO: Botão Marcar como Falta (Só para eventos que já passaram e não são NO_SHOW/CANCELADA)
-                        if (isPastEvent && status !== 'no_show' && status !== 'cancelada' && status !== 'rejeitada') {
-                               actionButtons += `
-                                    <button onclick="openNoShowModal(${reservaId}, '${clientName}', ${paidAmount}, ${isPaid}, ${price})" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150 text-md shadow-xl">
-                                        Marcar como FALTA / Decisão de Estorno
-                                    </button>
-                               `;
+                        if (isFutureEvent && isPaid && isCancellableNoShow) {
+                            // PAGO E FUTURO: Desistência PAGA (Permite marcar falta com estorno)
+                             actionButtons += `
+                                <button onclick="openNoShowModal(${reservaId}, '${clientName}', ${valueForActionDecision}, ${isPaid}, ${price})" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150 text-md shadow-xl">
+                                    Marcar como FALTA (Cliente Pago Desistiu)
+                                </button>
+                            `;
+                        } else if (isPastEvent && status !== 'no_show' && !isCanceledOrRejected && status !== 'concluida' && status !== 'lancada_caixa') {
+                            // ATRASADO/CONFIRMADO (Passado e não resolvido): Precisa marcar falta
+                            actionButtons += `
+                                <button onclick="openNoShowModal(${reservaId}, '${clientName}', ${valueForActionDecision}, ${isPaid}, ${price})" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150 text-md shadow-xl">
+                                    Marcar como FALTA / Decisão de Estorno
+                                </button>
+                            `;
                         }
 
-                        // Botões de Ação Principal (Pagamento/Detalhes)
-                        actionButtons += paymentButton;
-                        actionButtons += detailsButton;
 
-
-                        // Botões de Cancelamento (Só para eventos futuros ou atuais E que não são NO_SHOW/CANCELADA)
-                        if (!isPastEvent && status !== 'no_show' && status !== 'cancelada' && status !== 'rejeitada') {
+                        // 2.2. Botões de CANCELAMENTO (Aparece se: É Futuro E Não Cancelada/Rejeitada/Falta)
+                        if (isFutureEvent && !isCanceledOrRejected && status !== 'no_show') {
+                            const buttonText = isPaid ? 'Cancelar Reserva (Gerenciar Estorno)' : 'Cancelar Reserva';
+                            
                             if (isRecurrent) {
                                 actionButtons += `
-                                    <button onclick="cancelarPontual(${reservaId}, true, ${valueForCancellationDecision}, ${isPaid})" class="w-full mb-2 px-4 py-2 bg-yellow-500 text-white font-medium rounded-lg hover:bg-yellow-600 transition duration-150 text-sm">
+                                    <button onclick="cancelarPontual(${reservaId}, true, ${valueForActionDecision}, ${isPaid})" class="w-full mb-2 px-4 py-2 bg-yellow-500 text-white font-medium rounded-lg hover:bg-yellow-600 transition duration-150 text-sm">
                                         Cancelar APENAS ESTE DIA
                                     </button>
-                                    <button onclick="cancelarSerie(${reservaId}, ${valueForCancellationDecision}, ${isPaid})" class="w-full mb-2 px-4 py-2 bg-red-800 text-white font-medium rounded-lg hover:bg-red-900 transition duration-150 text-sm">
+                                    <button onclick="cancelarSerie(${reservaId}, ${valueForActionDecision}, ${isPaid})" class="w-full mb-2 px-4 py-2 bg-red-800 text-white font-medium rounded-lg hover:bg-red-900 transition duration-150 text-sm">
                                         Cancelar SÉRIE INTEIRA (Futuros)
                                     </button>
                                 `;
                             } else {
                                 actionButtons += `
-                                    <button onclick="cancelarPontual(${reservaId}, false, ${valueForCancellationDecision}, ${isPaid})" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition duration-150 text-sm">
-                                        Cancelar Reserva Pontual
+                                    <button onclick="cancelarPontual(${reservaId}, false, ${valueForActionDecision}, ${isPaid})" class="w-full mb-2 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition duration-150 text-sm">
+                                        ${buttonText}
                                     </button>
                                 `;
                             }
                         }
 
+                        // ===========================================
+                        // 3. BOTÃO DE FECHAR
+                        // ===========================================
                         actionButtons += `
                             <button onclick="closeEventModal()" class="w-full px-4 py-2 bg-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-400 transition duration-150 text-sm">
                                 Fechar
@@ -1955,6 +1986,7 @@
             setInterval(() => {
                 // Refazendo a busca de slots disponíveis periodicamente
                 calendar.getEventSourceById('available-slots-source-id')?.refetch();
+                calendar.refetchEvents(); // Força a atualização dos eventos de cliente também
             }, 60000); // A cada 1 minuto
         };
         // Expondo funções globais

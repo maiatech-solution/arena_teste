@@ -354,7 +354,7 @@ class ReservaController extends Controller
         $messageFinance = "";
 
         // 1. Atualiza a Reserva
-        // 🎯 CORREÇÃO CRÍTICA APLICADA AQUI: Usar update() condicionalmente para evitar a coluna 'no_show_reason'
+        // 🎯 CORREÇÃO CRÍTICA APLICADA: Usar update() condicionalmente para evitar a coluna 'no_show_reason'
         $updateData = [
             'status' => $newStatus,
             'manager_id' => Auth::id(),
@@ -363,9 +363,15 @@ class ReservaController extends Controller
         if ($newStatus === Reserva::STATUS_CANCELADA) {
             $updateData['cancellation_reason'] = $reason;
             // Garantindo que no_show_reason não seja incluído se a coluna não existir.
+            if (isset($reserva->no_show_reason)) {
+                 $updateData['no_show_reason'] = null; // Limpa se estiver cancelando
+            }
         } elseif ($newStatus === Reserva::STATUS_NO_SHOW) {
             $updateData['no_show_reason'] = $reason;
             // Garantindo que cancellation_reason não seja incluído se a coluna não existir (mais limpo).
+            if (isset($reserva->cancellation_reason)) {
+                 $updateData['cancellation_reason'] = null; // Limpa se for falta
+            }
         }
         
         $reserva->update($updateData);
@@ -921,6 +927,7 @@ class ReservaController extends Controller
 
     /**
      * Helper para mapear objetos Reserva para o formato JSON do FullCalendar.
+     * 🛑 CORRIGIDO: Removida a lógica de prefixo de título aqui para evitar duplicação no JS.
      */
     protected function mapToFullCalendarEvents($reservations)
     {
@@ -941,22 +948,21 @@ class ReservaController extends Controller
             // ---------------------------------
 
             $basePrice = number_format($reserva->price, 2, ',', '.');
+            // 🛑 TÍTULO BASE SEM PREFIXO: O JavaScript fará isso
             $title = $reserva->client_name . ' - R$ ' . $basePrice;
             $color = '#4f46e5'; // Indigo (Padrão: Confirmada, Avulsa)
             $className = 'fc-event-quick';
             $isPaid = false;    
             $isFinalized = false;
-            $titlePrefix = '';
 
             // Valor que o cliente pagou e foi retido (sinal ou pagamento total)
             $retainedAmount = (float)$reserva->total_paid;
-            
             // Lógica para determinar se o pagamento está completo
             $isTotalPaid = (abs($retainedAmount - (float)$reserva->final_price) < 0.01 && $reserva->final_price > 0);
 
 
             // -------------------------------------------------------------------------
-            // 2. Lógica de Status (Prioridade de Sobrescrita)
+            // 2. Lógica de Status (Aplica a classe CSS e cor no PHP, o JS aplica o prefixo)
             // -------------------------------------------------------------------------
 
             if ($reserva->is_fixed) {
@@ -975,76 +981,59 @@ class ReservaController extends Controller
                  }
             
             } elseif ($reserva->status === Reserva::STATUS_NO_SHOW) {
-                // ** FALTA ** (Mais alta prioridade visual, Vermelho)
+                // ** FALTA **
                 $isFinalized = true;
                 $isPaid = ($retainedAmount > 0.00);
-                $titlePrefix = 'FALTA: ';
-                $title = $titlePrefix . $reserva->client_name;
                 $color = '#E53E3E'; // Vermelho
-                $className = 'fc-event-no-show ' . ($isPaid ? 'fc-event-paid' : 'fc-event-cancelled');
+                $className = 'fc-event-no-show';
             
             } elseif (in_array($reserva->status, [Reserva::STATUS_CONCLUIDA, Reserva::STATUS_LANCADA_CAIXA])) {
-                // ** PAGO/CONCLUÍDA ** (Alta Prioridade, Verde Escuro)
+                // ** PAGO/CONCLUÍDA **
                 $isFinalized = true;
                 $isPaid = true;
-                $titlePrefix = 'PAGO: ';
                 $color = '#10b981';
-                $className .= ' fc-event-concluida fc-event-paid';
+                $className .= ' fc-event-concluida';
             
             } elseif (in_array($reserva->status, [Reserva::STATUS_CANCELADA, Reserva::STATUS_REJEITADA, Reserva::STATUS_EXPIRADA])) {
-                // ** CANCELADA / REJEITADA ** (Cinza, Finalizada)
+                // ** CANCELADA / REJEITADA **
                 $isFinalized = true;
                 $isPaid = false;
-                $title = 'CANCELADO: ' . $reserva->client_name;
                 $color = '#94a3b8'; // Cinza
                 $className = 'fc-event-cancelled';
             
             } elseif ($reserva->status === Reserva::STATUS_PENDENTE) {
-                // ** PENDENTE ** (Laranja)
-                $title = 'PENDENTE: ' . $reserva->client_name;
+                // ** PENDENTE **
                 $color = '#ff9800';
                 $className = 'fc-event-pending';
             
             } elseif ($reserva->status === Reserva::STATUS_CONFIRMADA) {
                 
-                // Trata o caso de Reservas CONFIRMADAS que estão PAGAS INTEGRALMENTE (Leonardo)
+                // Trata o caso de Reservas CONFIRMADAS que estão PAGAS INTEGRALMENTE
                 if ($isTotalPaid) {
                      $isPaid = true;
                      $isFinalized = true; // Força a finalização para o calendário
-                     $titlePrefix = 'PAGO: ';
                      $color = '#10b981'; // Cor de Pago
-                     $className .= ' fc-event-paid fc-event-concluida';
+                     $className .= ' fc-event-concluida';
                 }
                 // Trata o caso de Reservas CONFIRMADAS com Sinal (Parcialmente pago)
                 elseif ($retainedAmount > 0) {
-                    $isPaid = true;
-                    $titlePrefix = 'SINAL: ';
-                    // Mantém a cor original do evento (recorrente/quick)
+                     $isPaid = true; // Tem pagamento (Sinal)
                 }
-            }
-
-            // Lógica de Título para Recorrente (deve ser aplicada por último, exceto slots fixos)
-            if (!$reserva->is_fixed && $reserva->is_recurrent) {
-                // Se a reserva já tem um prefixo (PAGO, SINAL, PENDENTE), apenas adiciona 'RECORR.'
-                if ($titlePrefix) {
-                    $title = 'RECORR.: ' . str_replace(['PAGO: ', 'SINAL: ', 'PENDENTE: '], '', $title);
-                } else {
-                    $title = 'RECORR.: ' . $title;
-                }
-                $color = '#C026D3'; // Fuchsia (Roxo)
-                $className = str_replace('fc-event-quick', '', $className);
-                $className .= ' fc-event-recurrent';
             }
             
-            // Se o título não foi alterado nos blocos anteriores (caso Confirmed sem Sinal), usa o padrão
-            if ($reserva->status === Reserva::STATUS_CONFIRMADA && !$titlePrefix && !$reserva->is_fixed) {
-                 $title = $reserva->client_name . ' - R$ ' . $basePrice;
+            // Lógica de Cor para Recorrente (se não for FINALIZADA)
+            if (!$reserva->is_fixed && $reserva->is_recurrent) {
+                 if (!$isFinalized && $reserva->status !== Reserva::STATUS_PENDENTE) {
+                    $color = '#C026D3'; // Fuchsia (Roxo)
+                    $className = str_replace('fc-event-quick', '', $className);
+                    $className .= ' fc-event-recurrent';
+                 }
             }
 
 
             $events[] = [
                 'id' => $reserva->id,
-                'title' => $title,
+                'title' => $title, // Título base SEM prefixo (ex: "José - R$ 100,00")
                 'start' => $startDateTime->toDateTimeString(),
                 'end' => $endDateTime->toDateTimeString(),
                 'backgroundColor' => $color,
@@ -1167,20 +1156,20 @@ class ReservaController extends Controller
 
                 try {
                     $updatedCount = Reserva::where(function ($query) use ($masterId) {
-                                            $query->where('recurrent_series_id', $masterId)
-                                                 ->orWhere('id', $masterId);
-                                        })
-                                            ->whereDate('date', '>', $reservaDate)
-                                            ->where('start_time', $reserva->start_time)
-                                            ->where('end_time', $reserva->end_time)
-                                            ->where('is_fixed', false)
-                                            ->where('status', Reserva::STATUS_CONFIRMADA)
-                                            ->where('price', '!=', $newPriceForSeries)
-                                            ->update([
-                                                'price' => $newPriceForSeries,
-                                                'final_price' => $newPriceForSeries,
-                                                'manager_id' => Auth::id(),
-                                            ]);
+                                             $query->where('recurrent_series_id', $masterId)
+                                                  ->orWhere('id', $masterId);
+                                         })
+                                             ->whereDate('date', '>', $reservaDate)
+                                             ->where('start_time', $reserva->start_time)
+                                             ->where('end_time', $reserva->end_time)
+                                             ->where('is_fixed', false)
+                                             ->where('status', Reserva::STATUS_CONFIRMADA)
+                                             ->where('price', '!=', $newPriceForSeries)
+                                             ->update([
+                                                 'price' => $newPriceForSeries,
+                                                 'final_price' => $newPriceForSeries,
+                                                 'manager_id' => Auth::id(),
+                                             ]);
 
                     if ($updatedCount > 0) {
                         $message = "Pagamento finalizado e preço da série atualizado com sucesso! ({$updatedCount} reservas alteradas)";
@@ -1407,28 +1396,28 @@ class ReservaController extends Controller
 
                     // Cria a nova reserva se não houver conflito real
                     if (!$isConflict && $fixedSlot) { // Adicionado check for $fixedSlot
-                         $newReservasToCreate[] = [
-                            'user_id' => $userId,
-                            'manager_id' => $managerId,
-                            'date' => $dateString,
-                            'day_of_week' => $dayOfWeek,
-                            'start_time' => $startTime,
-                            'end_time' => $endTime,
-                            'price' => $price,
-                            'final_price' => $price,
-                            'signal_value' => 0.00,
-                            'total_paid' => 0.00,
-                            'payment_status' => 'pending',
-                            'client_name' => $clientName,
-                            'client_contact' => $clientContact,
-                            'notes' => $masterReserva->notes,
-                            'status' => Reserva::STATUS_CONFIRMADA,
-                            'is_fixed' => false,
-                            'is_recurrent' => true,
-                            'recurrent_series_id' => $masterId,
-                            'created_at' => Carbon::now(),
-                            'updated_at' => Carbon::now(),
-                         ];
+                           $newReservasToCreate[] = [
+                                'user_id' => $userId,
+                                'manager_id' => $managerId,
+                                'date' => $dateString,
+                                'day_of_week' => $dayOfWeek,
+                                'start_time' => $startTime,
+                                'end_time' => $endTime,
+                                'price' => $price,
+                                'final_price' => $price,
+                                'signal_value' => 0.00,
+                                'total_paid' => 0.00,
+                                'payment_status' => 'pending',
+                                'client_name' => $clientName,
+                                'client_contact' => $clientContact,
+                                'notes' => $masterReserva->notes,
+                                'status' => Reserva::STATUS_CONFIRMADA,
+                                'is_fixed' => false,
+                                'is_recurrent' => true,
+                                'recurrent_series_id' => $masterId,
+                                'created_at' => Carbon::now(),
+                                'updated_at' => Carbon::now(),
+                            ];
 
                         $fixedSlot->delete(); // Consome o slot verde/FREE
                     } else {
@@ -1719,13 +1708,13 @@ class ReservaController extends Controller
     protected function getSeriesMaxDate(int $masterId): ?Carbon
     {
         $maxDate = Reserva::where(function($query) use ($masterId) {
-                                 $query->where('recurrent_series_id', $masterId)
-                                     ->orWhere('id', $masterId);
-                                 })
-                                 ->where('is_recurrent', true)
-                                 ->where('is_fixed', false)
-                                 ->where('status', Reserva::STATUS_CONFIRMADA)
-                                 ->max('date');
+                                     $query->where('recurrent_series_id', $masterId)
+                                          ->orWhere('id', $masterId);
+                                     })
+                                     ->where('is_recurrent', true)
+                                     ->where('is_fixed', false)
+                                     ->where('status', Reserva::STATUS_CONFIRMADA)
+                                     ->max('date');
 
         return $maxDate ? Carbon::parse($maxDate) : null;
     }
