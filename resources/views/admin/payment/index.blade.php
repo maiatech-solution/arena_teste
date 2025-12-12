@@ -5,6 +5,18 @@
         </h2>
     </x-slot>
 
+    @php
+        // Variável de controle para desabilitar ações se o caixa estiver fechado
+        $isActionDisabled = (isset($cashierStatus) && $cashierStatus === 'closed');
+        // Para garantir que exista, caso não venha do Controller
+        $totalReservasDia = $totalReservasDia ?? 0;
+        $totalRecebidoDiaLiquido = $totalRecebidoDiaLiquido ?? 0;
+        $totalAntecipadoReservasDia = $totalAntecipadoReservasDia ?? 0;
+        $totalPending = $totalPending ?? 0;
+        $totalExpected = $totalExpected ?? 0;
+        $noShowCount = $noShowCount ?? 0;
+    @endphp
+
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
 
@@ -230,15 +242,16 @@
                                 @forelse ($reservas as $reserva)
                                     @php
                                         // Cálculos Visuais
-                                        $total = $reserva->final_price ?? $reserva->price;
-                                        $pago = $reserva->total_paid; // Valor total já pago (inclui sinal e parciais)
+                                        // Garante que o total é o preço da reserva, mesmo após ações
+                                        $total = $reserva->final_price ?? $reserva->price; 
+                                        $pago = $reserva->total_paid; // Valor total já pago (inclui sinal e parciais, menos estornos)
                                         $restante = max(0, $total - $pago); // Saldo a pagar
                                         $currentStatus = $reserva->payment_status;
                                         $isOverdue = false;
 
                                         // LÓGICA DE DETECÇÃO DE ATRASO
-                                        if (in_array($currentStatus, ['pending', 'unpaid', 'partial'])) { // Adicionando 'partial' ao check de atraso
-                                            // ✅ CORREÇÃO APLICADA: Combina a string da data (Y-m-d) com a string Pura da hora (H:i:s)
+                                        if (in_array($reserva->status, ['confirmed', 'pending'])) { 
+                                            // Se o status da reserva for confirmado ou pendente, mas o pagamento não for total, checa o atraso
                                             $dateTimeString = $reserva->date->format('Y-m-d') . ' ' . $reserva->end_time->format('H:i:s');
                                             $reservaEndTime = \Carbon\Carbon::parse($dateTimeString);
 
@@ -254,22 +267,21 @@
                                         if ($reserva->status === 'no_show') {
                                             $statusClass = 'bg-red-500 text-white font-bold';
                                             $statusLabel = 'FALTA';
-                                        } elseif ($reserva->status === 'canceled') {
+                                        } elseif ($reserva->status === 'canceled' || $reserva->status === 'rejected') {
                                             $statusClass = 'bg-gray-400 text-white font-bold';
-                                            $statusLabel = 'CANCELADA';
+                                            $statusLabel = strtoupper($reserva->status);
                                         } elseif ($currentStatus === 'paid' || $reserva->status === 'completed') {
                                             $statusClass = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
-                                            $statusLabel = 'PAGO COMPLETO'; // Mais específico
+                                            $statusLabel = 'PAGO COMPLETO';
                                         } elseif ($currentStatus === 'partial') {
                                             $statusClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
-                                            $statusLabel = 'PAGO PARCIAL'; // Mais específico
+                                            $statusLabel = 'PAGO PARCIAL';
                                         } elseif ($isOverdue) {
                                             $statusClass = 'bg-red-700 text-white font-bold animate-pulse shadow-xl';
                                             $statusLabel = 'ATRASADO';
                                         } else {
-                                            // Pendente/Unpaid normal (se não houver pagamento ou for só sinal)
+                                            // Confirmado/Pendende/Unpaid/Sinal
                                             $statusClass = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-                                            // Se o sinal foi dado, mas não é parcial:
                                             $statusLabel = ($pago > 0) ? 'SINAL DADO' : 'PENDENTE';
                                         }
 
@@ -277,9 +289,7 @@
                                         $rowHighlight = (isset($highlightReservaId) && $reserva->id == $highlightReservaId)
                                             ? 'bg-indigo-50 dark:bg-indigo-900/20 border-l-4 border-indigo-500'
                                             : 'hover:bg-gray-50 dark:hover:bg-gray-700';
-
-                                        // Variável de controle para desabilitar botões
-                                        $isActionDisabled = (isset($cashierStatus) && $cashierStatus === 'closed');
+                                            
                                     @endphp
                                     <tr class="{{ $rowHighlight }} transition">
                                         <td class="px-4 py-4 whitespace-nowrap text-sm font-bold">
@@ -320,8 +330,25 @@
                                             {{ number_format($restante, 2, ',', '.') }}
                                         </td>
                                         <td class="px-4 py-4 whitespace-nowrap text-center text-sm font-medium">
-                                            @if($restante > 0 && $reserva->status !== 'no_show' && $reserva->status !== 'canceled')
-                                                {{-- Botão Pagar: DESABILITADO SE CAIXA FECHADO --}}
+                                            @php
+                                                // --- Lógica de Habilitação dos Botões (Caixa) ---
+                                                
+                                                // 1. Condição para o botão $ Baixar
+                                                // Permitido APENAS se houver saldo restante E a reserva não estiver em um estado terminal de cancelamento/rejeição
+                                                $canPay = $restante > 0 && 
+                                                          $reserva->status !== 'canceled' && 
+                                                          $reserva->status !== 'rejected';
+                                                
+                                                // 2. Condição para o botão X Falta
+                                                // Permitido se a reserva não estiver em um estado terminal/finalizado (Falta/Cancelada/Rejeitada/Concluída)
+                                                $canBeNoShow = $reserva->status !== 'no_show' && 
+                                                               $reserva->status !== 'canceled' && 
+                                                               $reserva->status !== 'rejected' &&
+                                                               $reserva->status !== 'completed';
+                                            @endphp
+
+                                            @if($canPay)
+                                                {{-- Botão Pagar: Aparece se houver saldo restante. --}}
                                                 <button onclick="openPaymentModal({{ $reserva->id }}, {{ $total }}, {{ $restante }}, {{ $pago }}, '{{ $reserva->client_name }}', {{ $reserva->is_recurrent ? 'true' : 'false' }})"
                                                     class="text-white bg-green-600 hover:bg-green-700 rounded px-3 py-1 text-xs mr-2 transition duration-150 {{ $isActionDisabled ? 'opacity-50 cursor-not-allowed' : '' }}"
                                                     {{ $isActionDisabled ? 'disabled' : '' }}>
@@ -329,18 +356,27 @@
                                                 </button>
                                             @endif
 
-                                            @if($restante > 0 || ($pago > 0 && $reserva->status !== 'no_show' && $reserva->status !== 'canceled'))
-                                                {{-- Botão Falta: DESABILITADO SE CAIXA FECHADO --}}
+                                            @if($canBeNoShow)
+                                                {{-- Botão Falta: Aparece se ainda não foi marcada Falta/Cancelada/Rejeitada/Concluída --}}
                                                 <button onclick="openNoShowModal({{ $reserva->id }}, '{{ $reserva->client_name }}', {{ $pago }})"
                                                     class="text-white bg-red-600 hover:bg-red-700 rounded px-3 py-1 text-xs transition duration-150 {{ $isActionDisabled ? 'opacity-50 cursor-not-allowed' : '' }}"
                                                     {{ $isActionDisabled ? 'disabled' : '' }}>
                                                     X Falta
                                                 </button>
                                             @elseif($reserva->status === 'no_show')
-                                                <span class="text-xs text-red-500 italic font-medium">Falta Registrada</span>
+                                                {{-- Se for FALTA, e não tiver mais saldo a pagar (R$ 0,00), mostra status final. --}}
+                                                @if ($restante <= 0)
+                                                    <span class="text-xs text-red-500 italic font-medium">Falta Registrada</span>
+                                                @else
+                                                    {{-- Caso contrário (FALTA, mas RESTANTE > 0), o botão de Baixar aparece acima para cobrar a dívida. --}}
+                                                    <span class="text-xs text-red-500 italic font-medium">Falta (Aguardando Pagamento)</span>
+                                                @endif
+                                                
                                             @elseif($reserva->status === 'canceled')
                                                 <span class="text-xs text-gray-500 italic font-medium">Cancelada</span>
-                                            @elseif($pago == $total)
+                                            @elseif($reserva->status === 'rejected')
+                                                <span class="text-xs text-gray-500 italic font-medium">Rejeitada</span>
+                                            @elseif($pago >= $total)
                                                 <span class="text-xs text-green-500 italic font-medium">Finalizado</span>
                                             @endif
                                         </td>
@@ -782,7 +818,7 @@
 </div>
 
 
-{{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA (JÁ CORRIGIDO) --}}
+{{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA --}}
 
 <script>
 // --- Funções de Suporte ---
@@ -846,13 +882,23 @@ function checkManualOverpayment() {
         amountPaidEl.classList.add('focus:border-yellow-500');
     } else {
         if (finalPrice - signalAmount < 0) {
-             calculateAmountDue();
+              calculateAmountDue();
         }
     }
 }
 
 // --- Lógica do Pagamento/No-Show (Modal Triggers e Handlers, mantidos) ---
 function openPaymentModal(id, totalPrice, remaining, signalAmount, clientName, isRecurrent = false) {
+    // Verifica o status de bloqueio global antes de abrir
+    if (document.getElementById('openCloseCashModalBtn') && document.getElementById('openCloseCashModalBtn').disabled) {
+        // Se o botão de fechar caixa estiver desabilitado, significa que o caixa está fechado
+        // A lógica do Blade já deve ter bloqueado, mas esta é uma proteção extra se a data for passada
+        if ("{{ $isActionDisabled }}" === '1') {
+             showMessage('Ações bloqueadas. O caixa para esta data está FECHADO. Por favor, reabra o caixa primeiro.', false);
+             return;
+        }
+    }
+
     document.getElementById('modalReservaId').value = id;
     document.getElementById('modalClientName').innerText = clientName;
     const formattedSignal = signalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -954,6 +1000,14 @@ document.getElementById('paymentForm').addEventListener('submit', function(e) {
 });
 
 function openNoShowModal(id, clientName, paidAmount) {
+     // Verifica o status de bloqueio global antes de abrir
+    if (document.getElementById('openCloseCashModalBtn') && document.getElementById('openCloseCashModalBtn').disabled) {
+        if ("{{ $isActionDisabled }}" === '1') {
+             showMessage('Ações bloqueadas. O caixa para esta data está FECHADO. Por favor, reabra o caixa primeiro.', false);
+             return;
+        }
+    }
+    
     document.getElementById('noShowReservaId').value = id;
     document.getElementById('noShowClientName').innerText = clientName;
 
@@ -965,11 +1019,11 @@ function openNoShowModal(id, clientName, paidAmount) {
     const refundControlsEl = document.getElementById('refundControls');
 
     if (paidAmount > 0) {
-        initialWarningEl.innerHTML = `O cliente já pagou <span class="font-bold">${paidAmountFormatted}</span>. Escolha abaixo se este valor será retido (padrão) ou estornado.`;
+        initialWarningEl.innerHTML = `O cliente já pagou <span class="font-bold">${paidAmountFormatted}</span>. Escolha abaixo se este valor será retido (padrão: multa) ou estornado.`;
         document.getElementById('should_refund').value = 'false';
         refundControlsEl.classList.remove('hidden');
     } else {
-        initialWarningEl.textContent = `Nenhum valor foi pago. Marcar como falta apenas registrará o status.`;
+        initialWarningEl.textContent = `Nenhum valor foi pago. Marcar como falta apenas registrará o status e o débito total para o cliente.`;
         document.getElementById('should_refund').value = 'false';
         refundControlsEl.classList.add('hidden');
     }
@@ -1005,9 +1059,9 @@ document.getElementById('noShowForm').addEventListener('submit', function(e) {
     const errorMessageDiv = document.getElementById('noshow-error-message');
 
     if (reason.length < 5) {
-         errorMessageDiv.textContent = 'O motivo da falta (Observações) é obrigatório e deve ter no mínimo 5 caracteres.';
-         errorMessageDiv.classList.remove('hidden');
-         return;
+          errorMessageDiv.textContent = 'O motivo da falta (Observações) é obrigatório e deve ter no mínimo 5 caracteres.';
+          errorMessageDiv.classList.remove('hidden');
+          return;
     }
 
     submitBtn.disabled = true;
@@ -1289,8 +1343,7 @@ function checkCashierStatus() {
     const totalReservations = parseInt("{{ $totalReservasDia }}");
 
     // Lista de status FINISHED (Concluídos/Finalizados) que permitem fechar o caixa.
-    // 🚨 CORREÇÃO: REMOVIDOS 'pago parcial' e 'sinal dado' desta lista!
-    const finalStatuses = ['pago completo', 'falta', 'cancelada', 'finalizado'];
+    const finalStatuses = ['pago completo', 'falta', 'cancelada', 'rejeitada', 'finalizado'];
 
     let completedReservations = 0;
 

@@ -1729,7 +1729,7 @@
                     } else if (!isFutureOrTodayEvent && status === 'confirmed') {
                         // Antigo A VENCER/FALTA (agora é ATRASADO, tratado acima, mas mantido para redundância)
                          info.el.classList.add('fc-event-paid');
-                         prefix = '(ATRASADO)'; 
+                         prefix = '(ATRASADO)';	
                     }
                     
                     // 3. Aplicação do Título Final
@@ -1739,7 +1739,7 @@
                     // 4. Forçar estilos para garantir que o Faded funcione
                     if (info.el.classList.contains('fc-event-paid') && !info.el.classList.contains('fc-event-no-show')) {
                         // Cor cinza escura para Faded (PAGO, ATRASADO, CANCELADO, REJEITADA)
-                        info.el.style.backgroundColor = '#6B7280'; 
+                        info.el.style.backgroundColor = '#6B7280';	
                         info.el.style.borderColor = '#4B5563';
                         info.el.style.color = 'white';
                     }
@@ -1788,8 +1788,8 @@
                         clientContactInput().value = '';
                         whatsappError().classList.add('hidden');
                         clientContactInput().classList.remove('border-red-500', 'border-green-500');
-                        reputationDisplay().innerHTML = ''; 
-                        currentClientStatus = { is_vip: false, reputation_tag: '' }; 
+                        reputationDisplay().innerHTML = '';	
+                        currentClientStatus = { is_vip: false, reputation_tag: '' };	
                         signalValueInputQuick().value = '0,00';
                         signalValueInputQuick().removeAttribute('title');
                         signalValueInputQuick().classList.remove('bg-indigo-50', 'border-indigo-400', 'text-indigo-800');
@@ -1819,7 +1819,7 @@
                         const price = extendedProps.price || 0;	
                         
                         const isTotalPaid = (Math.abs(paidAmount - price) < 0.01) && (price > 0);
-                        const isPaid = extendedProps.is_paid === true || extendedProps.is_paid === 1 || isTotalPaid; 
+                        const isPaid = extendedProps.is_paid === true || extendedProps.is_paid === 1 || isTotalPaid;	
 
                         const dateReservation = moment(startTime).format('YYYY-MM-DD');
                         const dateDisplay = moment(startTime).format('DD/MM/YYYY');
@@ -1827,7 +1827,7 @@
                         const isPastEvent = eventEndMoment.isBefore(moment());
                         const isFutureEvent = !isPastEvent; // Simplificando
                         
-                        const isLate = isPastEvent && status === 'confirmed'; 
+                        const isLate = isPastEvent && status === 'confirmed';	
 
                         // Define o valor a ser usado no modal de cancelamento/falta (usamos o total pago)
                         const valueForActionDecision = paidAmount;
@@ -1850,17 +1850,17 @@
                         // LÓGICA DE STATUS TEXTUAL (para o modal)
                         if (isPaid || status === 'concluida' || status === 'lancada_caixa') {
                             statusText = 'PAGO / Baixada';
-                            statusColor = 'text-green-600'; 
+                            statusColor = 'text-green-600';	
                         } else if (status === 'no_show') {
                             statusText = 'FALTA (No-Show)';
-                            statusColor = 'text-red-600'; 
+                            statusColor = 'text-red-600';	
                         } else if (status === 'cancelada') {
                             statusText = 'Cancelada';
                             statusColor = 'text-gray-500';
                         } else if (status === 'rejeitada') {
                             statusText = 'Rejeitada';
                             statusColor = 'text-gray-500';
-                        } else if (isLate) { 
+                        } else if (isLate) {	
                             statusText = 'ATRASADA (Requer Ação!)';
                             statusColor = 'text-red-700 font-extrabold';
                         }
@@ -1893,15 +1893,15 @@
                         // ===========================================
 
                         // Botão de Pagamento/Caixa
-                        if (status === 'no_show' || isLate || status === 'confirmed') {
-                             // FALTA, ATRASADO e CONFIRMADO precisam de ação de caixa/pagamento
+                        if (status === 'confirmed' || isLate) {
+                            // CONFIRMADO ou ATRASADO (precisa de acerto - COR VERDE)
                             actionButtons += `
                                 <a href="${paymentUrl}" class="w-full inline-block text-center mb-2 px-4 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 text-md shadow-xl">
                                     Registrar Pagamento / Acessar Caixa
                                 </a>
                             `;
-                        } else if (isPaid || status === 'concluida' || status === 'lancada_caixa') {
-                             // PAGO/BAIXADO (Ver o registro)
+                        } else if (isPaid || status === 'concluida' || status === 'lancada_caixa' || status === 'no_show') {
+                            // PAGO/BAIXADO/FALTA (Ação já resolvida - COR CINZA) <-- CORREÇÃO APLICADA AQUI
                             actionButtons += `
                                 <a href="${paymentUrl}" class="w-full inline-block text-center mb-2 px-4 py-3 bg-gray-500 text-white font-medium rounded-lg hover:bg-gray-600 transition duration-150 text-md shadow-md">
                                     Ver Registro de Pagamento / Caixa
@@ -1921,7 +1921,6 @@
                         // ===========================================
                         
                         // 2.1. Botão Marcar como FALTA (Aparece se: É Passado OU É Futuro/Pago)
-                        // Regra: Deve ser possível marcar FALTA se (1) for um evento passado não resolvido ou (2) um evento futuro pago (desistência paga).
                         
                         const isCancellableNoShow = !isCanceledOrRejected;
 
