@@ -73,7 +73,7 @@
             padding: 2px 5px;
             border-radius: 4px;
         }
-
+        
         /* ✅ NOVO: Estilo para Eventos FALTA (No-Show - Vermelho) */
         .fc-event-no-show {
             background-color: #E53E3E !important; /* Vermelho/Red */
@@ -93,7 +93,7 @@
             border-radius: 4px;
             font-style: italic;
         }
-
+        
         /* ✅ CRÍTICO: Estilo para Eventos PAGOS/Baixados/Cancelados/ATRASADOS (Faded/Apagado) */
         /* Esta classe é aplicada pelo JS para dar o efeito de "passado/resolvido" */
         .fc-event-paid {
@@ -655,50 +655,58 @@
         /**
          * FUNÇÃO PARA EXIBIR MENSAGENS NO DASHBOARD (Substitui alerts e session flashes via JS)
          */
-        // Localize a função antiga e substitua por esta:
-function showDashboardMessage(message, type = 'success') {
-    const container = document.getElementById('dashboard-message-container');
-    if (!container) return;
+        function showDashboardMessage(message, type = 'success') {
+            const container = document.getElementById('dashboard-message-container');
+            let bgColor, borderColor, textColor;
 
-    // Definição de cores baseadas no tipo
-    const colors = {
-        error: 'bg-red-100 border-red-500 text-red-700',
-        warning: 'bg-yellow-100 border-yellow-500 text-yellow-700',
-        success: 'bg-green-100 border-green-500 text-green-700'
-    };
+            switch (type) {
+                case 'error':
+                    bgColor = 'bg-red-100';
+                    borderColor = 'border-red-500';
+                    textColor = 'text-red-700';
+                    break;
+                case 'warning':
+                    bgColor = 'bg-yellow-1-0';
+                    borderColor = 'border-yellow-500';
+                    textColor = 'text-yellow-700';
+                    break;
+                case 'success':
+                default:
+                    bgColor = 'bg-green-100';
+                    borderColor = 'border-green-500';
+                    textColor = 'text-green-700';
+            }
 
-    const colorClass = colors[type] || colors.success;
+            const alertHtml = `
+                <div class="${bgColor} border-l-4 ${borderColor} ${textColor} p-4 mb-4 rounded transition-opacity duration-300 opacity-0" role="alert">
+                    <p>${message}</p>
+                </div>
+            `;
 
-    // HTML do alerta - Começa invisível (opacity-0) e deslocado (translate-y)
-    const alertHtml = `
-        <div class="${colorClass} border-l-4 p-4 mb-4 rounded shadow-md transform transition-all duration-500 opacity-0 translate-y-[-10px]" role="alert">
-            <p class="font-bold">${message}</p>
-        </div>
-    `;
+            if (!container) return;
 
-    // Insere no topo da lista
-    container.insertAdjacentHTML('afterbegin', alertHtml);
-    const newAlert = container.firstElementChild;
+            container.insertAdjacentHTML('afterbegin', alertHtml);
+            const newAlert = container.firstChild;
 
-    // TRUQUE PARA CORRIGIR O BUG "INVISÍVEL":
-    // Usamos requestAnimationFrame para garantir que o navegador renderize o estado inicial (invisível)
-    // antes de removermos a classe opacity-0. Isso força a transição visual.
-    requestAnimationFrame(() => {
-        if (newAlert) {
-            newAlert.classList.remove('opacity-0', 'translate-y-[-10px]');
+            // Fade in
+            setTimeout(() => {
+                // ✅ CORREÇÃO DE BUG: Verifica se o elemento existe (e tem classList) antes de remover classes
+                if (newAlert && newAlert.classList) {
+                    newAlert.classList.remove('opacity-0');
+                }
+            }, 10);
+
+            // Fade out and remove after 5 seconds
+            setTimeout(() => {
+                // ✅ CORREÇÃO DE BUG: Verifica se o elemento existe (e tem classList) antes de adicionar classes
+                if (newAlert && newAlert.classList) {
+                    newAlert.classList.add('opacity-0');
+                    setTimeout(() => {
+                        if (newAlert) newAlert.remove();
+                    }, 300);
+                }
+            }, 5000);
         }
-    });
-
-    // Remove automaticamente após 5 segundos
-    setTimeout(() => {
-        if (newAlert) {
-            // Adiciona opacidade para sumir suavemente
-            newAlert.classList.add('opacity-0');
-            // Remove do DOM após a animação de sumir (500ms)
-            setTimeout(() => newAlert.remove(), 500);
-        }
-    }, 5000);
-}
 
         /**
          * FUNÇÃO PARA CHECAR AS RESERVAS PENDENTES EM TEMPO REAL (PERIÓDICO)
@@ -860,7 +868,7 @@ function showDashboardMessage(message, type = 'success') {
 
             const clientName = clientNameInput().value.trim();
             const clientContact = clientContactInput().value.trim();
-
+            
             // ✅ CRÍTICO: Validação do payment_method
             const paymentMethod = document.getElementById('payment_method_quick').value;
 
@@ -873,7 +881,7 @@ function showDashboardMessage(message, type = 'success') {
                 showDashboardMessage("Por favor, selecione o Método de Pagamento.", 'error');
                 return;
             }
-
+            
             // Validação de 11 dígitos no WhatsApp
             if (!validateClientContact(clientContact)) {
                 return;
@@ -886,16 +894,16 @@ function showDashboardMessage(message, type = 'success') {
             // ✅ CORREÇÃO CRÍTICA 1: LER O PREÇO DO SLOT FIXO (quick-price)
             // E ENVIAR COMO 'fixed_price' (O NOME ESPERADO PELO BACKEND)
             const fixedPriceRaw = document.getElementById('quick-price').value;
-            data.fixed_price = cleanAndConvertForApi(fixedPriceRaw);
+            data.fixed_price = cleanAndConvertForApi(fixedPriceRaw); 
             // FIM DA CORREÇÃO CRÍTICA 1
 
             // ✅ CRÍTICO: Limpa e converte o valor do sinal antes de enviar
             const signalValueRaw = data.signal_value;
             data.signal_value = cleanAndConvertForApi(signalValueRaw);
-
+            
             // CORREÇÃO CRÍTICA 2: Remove a chave 'price' do payload, pois o backend usa 'fixed_price'
             delete data.price;
-
+            
             // CORREÇÃO CRÍTICA 3: Adiciona o payment_method (já está em data, mas melhor garantir)
             data.payment_method = paymentMethod;
 
@@ -970,7 +978,7 @@ function showDashboardMessage(message, type = 'success') {
             const dateDisplay = moment(event.start).format('DD/MM/YYYY');
             const timeDisplay = moment(event.start).format('HH:mm') + ' - ' + moment(event.end).format('HH:mm');
             const priceDisplay = parseFloat(extendedProps.price || 0).toFixed(2).replace('.', ',');
-
+            
             // Regex abrangente para limpar o nome do cliente que pode ter prefixos
             const prefixRegex = /^\s*(?:\(?(?:PAGO|FALTA|ATRASADO|CANCELADO|REJEITADA|PENDENTE|A\sVENCER\/FALTA|RECORR(?:E)?|SINAL|RESOLVIDO)\)?[\.:\s]*\s*)+/i;
             const clientName = event.title.replace(prefixRegex, '').split(' - R$ ')[0].trim();
@@ -1357,7 +1365,7 @@ function showDashboardMessage(message, type = 'success') {
 
             if (parseFloat(paidAmount) > 0 && !document.getElementById('no-show-refund-area').classList.contains('hidden')) {
                 const refundChoice = document.querySelector('input[name="no_show_refund_choice"]:checked');
-
+                
                 // Se o radio for 'refund_all', deve estornar
                 shouldRefund = refundChoice && refundChoice.value === 'refund_all';
             }
@@ -1582,7 +1590,7 @@ function showDashboardMessage(message, type = 'success') {
                     {
                         // 1. TODAS AS RESERVAS DE CLIENTE (CONFIRMADAS, PENDENTES, PAGAS, FALTAS)
                         // A URL CONFIRMED_API_URL agora retorna TODOS os eventos de cliente.
-                        url: CONFIRMED_API_URL,
+                        url: CONFIRMED_API_URL,	
                         method: 'GET',
                         failure: function() {
                             console.error('Falha ao carregar reservas de clientes via API.');
@@ -1590,7 +1598,7 @@ function showDashboardMessage(message, type = 'success') {
                         eventDataTransform: function(eventData) {
                             // Filtra slots que o backend pode ter retornado por engano
                             if (eventData.extendedProps && eventData.extendedProps.status === 'available') {
-                                return null;
+                                return null;	
                             }
                             return eventData;
                         }
@@ -1665,11 +1673,11 @@ function showDashboardMessage(message, type = 'success') {
                     const prefixRegex = /^\s*(?:\(?(?:PAGO|FALTA|ATRASADO|CANCELADO|REJEITADA|PENDENTE|A\sVENCER\/FALTA|RECORR(?:E)?|SINAL|RESOLVIDO)\)?[\.:\s]*\s*)+/i;
 
                     let clientName = currentTitle;
-
+                    
                     // Remove o sufixo de preço antes de limpar o prefixo, se existir.
                     const priceSuffixMatch = currentTitle.match(/(\s-\sR\$\s[\d,\.]+)/);
                     const priceSuffix = priceSuffixMatch ? priceSuffixMatch[0] : '';
-
+                    
                     // Remove o sufixo e o prefixo do nome
                     clientName = clientName.replace(priceSuffix, '').replace(prefixRegex, '').trim();
 
@@ -1677,11 +1685,11 @@ function showDashboardMessage(message, type = 'success') {
                     const eventEndMoment = moment(event.end);
                     const isPastEvent = eventEndMoment.isBefore(moment()); // Se a hora final já passou
                     const isFutureOrTodayEvent = !isPastEvent;
-
+                    
                     const price = extendedProps.final_price || extendedProps.price || 0;
                     // isPaid é true se o valor pago for igual ao preço final (com tolerância)
                     const isTotalPaid = (Math.abs((extendedProps.total_paid || 0) - price) < 0.01) && (price > 0);
-
+                    
                     const isLate = isPastEvent && status === 'confirmed'; // ATRASADO: Passou do tempo E ainda está como confirmed
 
                     // Reset de classes críticas
@@ -1696,7 +1704,7 @@ function showDashboardMessage(message, type = 'success') {
                     } else if (status === 'confirmed') {
                          info.el.classList.add('fc-event-quick'); // Indigo
                     }
-
+                    
                     // ** Lógica de Prefixo e Faded (Visão Geral do Status) **
                     if (status === 'no_show') {
                         // ❌ FALTA (Vermelho forte)
@@ -1721,9 +1729,9 @@ function showDashboardMessage(message, type = 'success') {
                     } else if (!isFutureOrTodayEvent && status === 'confirmed') {
                         // Antigo A VENCER/FALTA (agora é ATRASADO, tratado acima, mas mantido para redundância)
                          info.el.classList.add('fc-event-paid');
-                         prefix = '(ATRASADO)';
+                         prefix = '(ATRASADO)';	
                     }
-
+                    
                     // 3. Aplicação do Título Final
                     const finalTitle = `${prefix} ${clientName}`.trim() + priceSuffix;
                     titleEl.textContent = finalTitle;
@@ -1731,7 +1739,7 @@ function showDashboardMessage(message, type = 'success') {
                     // 4. Forçar estilos para garantir que o Faded funcione
                     if (info.el.classList.contains('fc-event-paid') && !info.el.classList.contains('fc-event-no-show')) {
                         // Cor cinza escura para Faded (PAGO, ATRASADO, CANCELADO, REJEITADA)
-                        info.el.style.backgroundColor = '#6B7280';
+                        info.el.style.backgroundColor = '#6B7280';	
                         info.el.style.borderColor = '#4B5563';
                         info.el.style.color = 'white';
                     }
@@ -1780,8 +1788,8 @@ function showDashboardMessage(message, type = 'success') {
                         clientContactInput().value = '';
                         whatsappError().classList.add('hidden');
                         clientContactInput().classList.remove('border-red-500', 'border-green-500');
-                        reputationDisplay().innerHTML = '';
-                        currentClientStatus = { is_vip: false, reputation_tag: '' };
+                        reputationDisplay().innerHTML = '';	
+                        currentClientStatus = { is_vip: false, reputation_tag: '' };	
                         signalValueInputQuick().value = '0,00';
                         signalValueInputQuick().removeAttribute('title');
                         signalValueInputQuick().classList.remove('bg-indigo-50', 'border-indigo-400', 'text-indigo-800');
@@ -1798,7 +1806,7 @@ function showDashboardMessage(message, type = 'success') {
                         quickBookingModal.classList.remove('hidden');
                         return;
                     }
-
+                    
                     // 3. EVENTOS DE CLIENTE (CONFIRMADO, PAGO, FALTA, CANCELADO, ATRASADO) - Abrem o modal de Detalhes
                     else if (event.id) {
                         const startTime = event.start;
@@ -1806,20 +1814,20 @@ function showDashboardMessage(message, type = 'success') {
                         const reservaId = event.id;
 
                         const isRecurrent = extendedProps.is_recurrent;
-                        const paidAmount = extendedProps.total_paid || 0;
-                        const signalValue = extendedProps.signal_value || 0;
-                        const price = extendedProps.price || 0;
-
+                        const paidAmount = extendedProps.total_paid || 0;	
+                        const signalValue = extendedProps.signal_value || 0;	
+                        const price = extendedProps.price || 0;	
+                        
                         const isTotalPaid = (Math.abs(paidAmount - price) < 0.01) && (price > 0);
-                        const isPaid = extendedProps.is_paid === true || extendedProps.is_paid === 1 || isTotalPaid;
+                        const isPaid = extendedProps.is_paid === true || extendedProps.is_paid === 1 || isTotalPaid;	
 
                         const dateReservation = moment(startTime).format('YYYY-MM-DD');
                         const dateDisplay = moment(startTime).format('DD/MM/YYYY');
                         const eventEndMoment = moment(endTime);
                         const isPastEvent = eventEndMoment.isBefore(moment());
                         const isFutureEvent = !isPastEvent; // Simplificando
-
-                        const isLate = isPastEvent && status === 'confirmed';
+                        
+                        const isLate = isPastEvent && status === 'confirmed';	
 
                         // Define o valor a ser usado no modal de cancelamento/falta (usamos o total pago)
                         const valueForActionDecision = paidAmount;
@@ -1838,21 +1846,21 @@ function showDashboardMessage(message, type = 'success') {
 
                         let statusText = 'Confirmada';
                         let statusColor = 'text-indigo-600';
-
+                        
                         // LÓGICA DE STATUS TEXTUAL (para o modal)
                         if (isPaid || status === 'concluida' || status === 'lancada_caixa') {
                             statusText = 'PAGO / Baixada';
-                            statusColor = 'text-green-600';
+                            statusColor = 'text-green-600';	
                         } else if (status === 'no_show') {
                             statusText = 'FALTA (No-Show)';
-                            statusColor = 'text-red-600';
+                            statusColor = 'text-red-600';	
                         } else if (status === 'cancelada') {
                             statusText = 'Cancelada';
                             statusColor = 'text-gray-500';
                         } else if (status === 'rejeitada') {
                             statusText = 'Rejeitada';
                             statusColor = 'text-gray-500';
-                        } else if (isLate) {
+                        } else if (isLate) {	
                             statusText = 'ATRASADA (Requer Ação!)';
                             statusColor = 'text-red-700 font-extrabold';
                         }
@@ -1900,7 +1908,7 @@ function showDashboardMessage(message, type = 'success') {
                                 </a>
                             `;
                         }
-
+                        
                         // Botão de Detalhes
                         actionButtons += `
                             <a href="${showUrl}" class="w-full inline-block text-center mb-2 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition duration-150 text-sm">
@@ -1911,9 +1919,9 @@ function showDashboardMessage(message, type = 'success') {
                         // ===========================================
                         // 2. BOTÕES DE FLUXO (FALTA / CANCELAMENTO)
                         // ===========================================
-
+                        
                         // 2.1. Botão Marcar como FALTA (Aparece se: É Passado OU É Futuro/Pago)
-
+                        
                         const isCancellableNoShow = !isCanceledOrRejected;
 
                         if (isFutureEvent && isPaid && isCancellableNoShow) {
@@ -1936,7 +1944,7 @@ function showDashboardMessage(message, type = 'success') {
                         // 2.2. Botões de CANCELAMENTO (Aparece se: É Futuro E Não Cancelada/Rejeitada/Falta)
                         if (isFutureEvent && !isCanceledOrRejected && status !== 'no_show') {
                             const buttonText = isPaid ? 'Cancelar Reserva (Gerenciar Estorno)' : 'Cancelar Reserva';
-
+                            
                             if (isRecurrent) {
                                 actionButtons += `
                                     <button onclick="cancelarPontual(${reservaId}, true, ${valueForActionDecision}, ${isPaid})" class="w-full mb-2 px-4 py-2 bg-yellow-500 text-white font-medium rounded-lg hover:bg-yellow-600 transition duration-150 text-sm">

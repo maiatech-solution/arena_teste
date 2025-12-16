@@ -655,50 +655,58 @@
         /**
          * FUNÇÃO PARA EXIBIR MENSAGENS NO DASHBOARD (Substitui alerts e session flashes via JS)
          */
-        // Localize a função antiga e substitua por esta:
-function showDashboardMessage(message, type = 'success') {
-    const container = document.getElementById('dashboard-message-container');
-    if (!container) return;
+        function showDashboardMessage(message, type = 'success') {
+            const container = document.getElementById('dashboard-message-container');
+            let bgColor, borderColor, textColor;
 
-    // Definição de cores baseadas no tipo
-    const colors = {
-        error: 'bg-red-100 border-red-500 text-red-700',
-        warning: 'bg-yellow-100 border-yellow-500 text-yellow-700',
-        success: 'bg-green-100 border-green-500 text-green-700'
-    };
+            switch (type) {
+                case 'error':
+                    bgColor = 'bg-red-100';
+                    borderColor = 'border-red-500';
+                    textColor = 'text-red-700';
+                    break;
+                case 'warning':
+                    bgColor = 'bg-yellow-1-0';
+                    borderColor = 'border-yellow-500';
+                    textColor = 'text-yellow-700';
+                    break;
+                case 'success':
+                default:
+                    bgColor = 'bg-green-100';
+                    borderColor = 'border-green-500';
+                    textColor = 'text-green-700';
+            }
 
-    const colorClass = colors[type] || colors.success;
+            const alertHtml = `
+                <div class="${bgColor} border-l-4 ${borderColor} ${textColor} p-4 mb-4 rounded transition-opacity duration-300 opacity-0" role="alert">
+                    <p>${message}</p>
+                </div>
+            `;
 
-    // HTML do alerta - Começa invisível (opacity-0) e deslocado (translate-y)
-    const alertHtml = `
-        <div class="${colorClass} border-l-4 p-4 mb-4 rounded shadow-md transform transition-all duration-500 opacity-0 translate-y-[-10px]" role="alert">
-            <p class="font-bold">${message}</p>
-        </div>
-    `;
+            if (!container) return;
 
-    // Insere no topo da lista
-    container.insertAdjacentHTML('afterbegin', alertHtml);
-    const newAlert = container.firstElementChild;
+            container.insertAdjacentHTML('afterbegin', alertHtml);
+            const newAlert = container.firstChild;
 
-    // TRUQUE PARA CORRIGIR O BUG "INVISÍVEL":
-    // Usamos requestAnimationFrame para garantir que o navegador renderize o estado inicial (invisível)
-    // antes de removermos a classe opacity-0. Isso força a transição visual.
-    requestAnimationFrame(() => {
-        if (newAlert) {
-            newAlert.classList.remove('opacity-0', 'translate-y-[-10px]');
+            // Fade in
+            setTimeout(() => {
+                // ✅ CORREÇÃO DE BUG: Verifica se o elemento existe (e tem classList) antes de remover classes
+                if (newAlert && newAlert.classList) {
+                    newAlert.classList.remove('opacity-0');
+                }
+            }, 10);
+
+            // Fade out and remove after 5 seconds
+            setTimeout(() => {
+                // ✅ CORREÇÃO DE BUG: Verifica se o elemento existe (e tem classList) antes de adicionar classes
+                if (newAlert && newAlert.classList) {
+                    newAlert.classList.add('opacity-0');
+                    setTimeout(() => {
+                        if (newAlert) newAlert.remove();
+                    }, 300);
+                }
+            }, 5000);
         }
-    });
-
-    // Remove automaticamente após 5 segundos
-    setTimeout(() => {
-        if (newAlert) {
-            // Adiciona opacidade para sumir suavemente
-            newAlert.classList.add('opacity-0');
-            // Remove do DOM após a animação de sumir (500ms)
-            setTimeout(() => newAlert.remove(), 500);
-        }
-    }, 5000);
-}
 
         /**
          * FUNÇÃO PARA CHECAR AS RESERVAS PENDENTES EM TEMPO REAL (PERIÓDICO)
