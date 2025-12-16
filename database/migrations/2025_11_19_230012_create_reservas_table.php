@@ -36,6 +36,7 @@ return new class extends Migration
             $table->tinyInteger('week_index')->nullable()->comment('1, 2, 3... - ordem da reserva dentro da série');
             $table->unsignedBigInteger('manager_id')->nullable()->index('reservas_manager_id_foreign');
             $table->text('cancellation_reason')->nullable();
+             $table->text('no_show_reason')->nullable();
             $table->unsignedBigInteger('user_id')->nullable()->index('reservas_user_id_foreign');
 
             $table->foreign(['manager_id'])->references(['id'])->on('users')->onUpdate('restrict')->onDelete('restrict');

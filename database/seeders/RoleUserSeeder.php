@@ -21,6 +21,16 @@ class RoleUserSeeder extends Seeder
                 'name' => 'Admin Mestre',
                 'password' => Hash::make('password'), // Senha padrão 'password'
                 'role' => 'admin',
+            ],
+            [
+                'name' => 'Marcos Leal',
+                'password' => Hash::make('12345678'), 
+                'role' => 'admin',
+            ],
+            [
+                'name' => 'Adriano Maia',
+                'password' => Hash::make('26157795'), 
+                'role' => 'admin',
             ]
         );
 

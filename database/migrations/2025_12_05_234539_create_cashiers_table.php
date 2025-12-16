@@ -15,6 +15,7 @@ return new class extends Migration
             $table->decimal('calculated_amount', 10, 2); // Valor líquido que o sistema calculou
             $table->decimal('actual_amount', 10, 2);     // Valor que o gestor informou
             $table->string('status')->default('closed'); // 'open', 'closed', 'audited'
+            $table->text('notes')->nullable();
             $table->foreignId('closed_by_user_id')->constrained('users'); // Quem fechou
             $table->timestamp('closing_time');           // Quando foi fechado
             $table->timestamps();
