@@ -17,6 +17,11 @@
         $noShowCount = $noShowCount ?? 0;
     @endphp
 
+    @php
+        // ... suas variáveis existentes ...
+        $dataHoje = \Carbon\Carbon::today()->toDateString(); // 🎯 Adicione esta linha
+    @endphp
+
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
 
@@ -328,181 +333,138 @@
                                 </tr>
                             </thead>
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                @forelse ($reservas as $reserva)
-                                   @php
-    // 1. Cálculos Financeiros (Mantendo os dados originais)
-    $total = $reserva->final_price ?? $reserva->price;
-    $pago = $reserva->total_paid;
-    $restante = max(0, $total - $pago);
-    $currentStatus = $reserva->payment_status;
+    @forelse ($reservas as $reserva)
+        @php
+            // 1. Cálculos Financeiros
+            $total = $reserva->final_price ?? $reserva->price;
+            $pago = $reserva->total_paid;
+            $restante = max(0, $total - $pago);
+            $currentStatus = $reserva->payment_status;
 
-    // 2. Identificação de "Hoje" para Destaque Visual
-    $dataHoje = \Carbon\Carbon::today()->toDateString();
-    $dataReserva = \Carbon\Carbon::parse($reserva->date)->toDateString();
-    $eHoje = ($dataReserva === $dataHoje);
+            // 2. Identificação de HOJE (Comparação com o relógio do servidor)
+            $dataHoje = \Carbon\Carbon::today()->toDateString();
+            $dataReserva = \Carbon\Carbon::parse($reserva->date)->toDateString();
+            $eHoje = ($dataReserva === $dataHoje);
 
-    // 3. Lógica de Detecção de Atraso (Sincronizada com Reservas Confirmadas)
-    $isOverdue = false;
-    // Só checa atraso se não estiver pago, cancelado ou rejeitado
-    if (in_array($reserva->status, ['confirmed', 'pending']) && $currentStatus !== 'paid') {
-        $onlyTime = \Carbon\Carbon::parse($reserva->end_time)->format('H:i:s');
-        $dateTimeString = $dataReserva . ' ' . $onlyTime;
-
-        try {
-            $reservaEndTime = \Carbon\Carbon::parse($dateTimeString);
-            if ($reservaEndTime->isPast()) {
-                $isOverdue = true;
-            }
-        } catch (\Exception $e) {
+            // 3. Lógica de Atraso
             $isOverdue = false;
-        }
-    }
+            if (in_array($reserva->status, ['confirmed', 'pending'])) {
+                $onlyTime = \Carbon\Carbon::parse($reserva->end_time)->format('H:i:s');
+                $dateTimeString = $dataReserva . ' ' . $onlyTime;
+                try {
+                    $reservaEndTime = \Carbon\Carbon::parse($dateTimeString);
+                    if ($reservaEndTime->isPast()) { $isOverdue = true; }
+                } catch (\Exception $e) { $isOverdue = false; }
+            }
 
-    // 4. Definição de Cores e Labels de Status (A ordem aqui define a prioridade visual)
-    $statusClass = '';
-    $statusLabel = '';
+            // 4. Definição de Cores de Status
+            if ($reserva->status === 'no_show') {
+                $statusClass = 'bg-red-500 text-white font-bold';
+                $statusLabel = 'FALTA';
+            } elseif ($reserva->status === 'canceled' || $reserva->status === 'rejected') {
+                $statusClass = 'bg-gray-400 text-white font-bold';
+                $statusLabel = strtoupper($reserva->status);
+            } elseif ($currentStatus === 'paid' || $reserva->status === 'completed') {
+                $statusClass = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
+                $statusLabel = 'PAGO COMPLETO';
+            } elseif ($currentStatus === 'partial') {
+                $statusClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
+                $statusLabel = 'PAGO PARCIAL';
+            } elseif ($isOverdue) {
+                $statusClass = 'bg-red-700 text-white font-bold animate-pulse shadow-xl';
+                $statusLabel = 'ATRASADO';
+            } else {
+                $statusClass = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+                $statusLabel = $pago > 0 ? 'SINAL DADO' : 'PENDENTE';
+            }
 
-    if ($reserva->status === 'no_show') {
-        $statusClass = 'bg-red-500 text-white font-bold';
-        $statusLabel = 'FALTA';
-    } elseif ($reserva->status === 'canceled' || $reserva->status === 'rejected') {
-        $statusClass = 'bg-gray-400 text-white font-bold';
-        $statusLabel = strtoupper($reserva->status);
-    } elseif ($currentStatus === 'paid' || $reserva->status === 'completed') {
-        $statusClass = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
-        $statusLabel = 'PAGO COMPLETO';
-    } elseif ($isOverdue) {
-        // Se passou da hora e não pagou tudo: Pisca em Vermelho
-        $statusClass = 'bg-red-700 text-white font-bold animate-pulse shadow-xl';
-        $statusLabel = 'ATRASADO';
-    } elseif ($currentStatus === 'partial') {
-        $statusClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
-        $statusLabel = 'PAGO PARCIAL';
-    } else {
-        $statusClass = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-        $statusLabel = ($pago > 0) ? 'SINAL DADO' : 'PENDENTE';
-    }
+            // 5. DESTAQUE VISUAL (CORES AGRESSIVAS PARA TESTE)
+            if (isset($highlightReservaId) && $reserva->id == $highlightReservaId) {
+                // Destaque quando você clica no Dashboard (Amarelo)
+                $rowHighlight = 'bg-yellow-100 dark:bg-yellow-900/50 border-l-8 border-yellow-500';
+            } elseif ($eHoje) {
+                // DESTAQUE DE HOJE (Azul com borda lateral grossa)
+                $rowHighlight = 'bg-blue-100/70 dark:bg-blue-900/40 border-l-8 border-blue-600';
+            } else {
+                // Outros dias (Apenas hover normal)
+                $rowHighlight = 'hover:bg-gray-100 dark:hover:bg-gray-700';
+            }
+        @endphp
 
-    // 5. Lógica de Destaque da Linha (Zebra vs Hoje vs Dashboard)
-    if (isset($highlightReservaId) && $reserva->id == $highlightReservaId) {
-        $rowHighlight = 'bg-indigo-100 dark:bg-indigo-900/40 border-l-4 border-indigo-600 shadow-inner';
-    } elseif ($eHoje) {
-        $rowHighlight = 'bg-blue-50/70 dark:bg-blue-900/10 border-l-4 border-blue-500';
-    } else {
-        $rowHighlight = 'hover:bg-gray-50 dark:hover:bg-gray-700';
-    }
-@endphp
-                                    <tr class="{{ $rowHighlight }} transition">
-                                        <td class="px-4 py-4 whitespace-nowrap text-sm font-bold">
-                                            {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }} -
-                                            {{ \Carbon\Carbon::parse($reserva->end_time)->format('H:i') }}
-                                        </td>
-                                        <td class="px-4 py-4 whitespace-nowrap">
-                                            <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                                {{ $reserva->client_name }} (ID: {{ $reserva->id }})</div>
-                                            <div class="text-xs text-gray-500">
-                                                @if ($reserva->user && $reserva->user->is_vip)
-                                                    <span class="text-indigo-600 font-bold">★ VIP</span>
-                                                @endif
-                                                {{ $reserva->client_contact }}
-                                            </div>
-                                        </td>
-                                        <td class="px-4 py-4 whitespace-nowrap">
-                                            {{-- APLICANDO A CLASSE E O TEXTO DO NOVO STATUS --}}
-                                            <span
-                                                class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $statusClass }}">
-                                                {{ $statusLabel }}
-                                            </span>
-                                        </td>
-                                        {{-- ✅ Célula Tipo --}}
-                                        <td class="px-4 py-4 whitespace-nowrap text-sm">
-                                            @if ($reserva->is_recurrent)
-                                                <span class="font-semibold text-fuchsia-600">Recorrente</span>
-                                            @else
-                                                <span class="font-semibold text-blue-600">Pontual</span>
-                                            @endif
-                                        </td>
-                                        <td class="px-4 py-4 whitespace-nowrap text-sm text-right font-bold">
-                                            {{ number_format($total, 2, ',', '.') }}
-                                        </td>
-                                        {{-- Total Pago --}}
-                                        <td
-                                            class="px-4 py-4 whitespace-nowrap text-sm text-right text-green-600 font-medium">
-                                            {{ number_format($pago, 2, ',', '.') }}
-                                        </td>
-                                        {{-- Saldo a Pagar --}}
-                                        <td
-                                            class="px-4 py-4 whitespace-nowrap text-sm text-right font-bold {{ $restante > 0 ? 'text-red-600' : 'text-gray-400' }}">
-                                            {{ number_format($restante, 2, ',', '.') }}
-                                        </td>
-                                        <td class="px-4 py-4 whitespace-nowrap text-center text-sm font-medium">
-                                            @php
-                                                // --- Lógica de Habilitação dos Botões (Caixa) ---
+        <tr class="{{ $rowHighlight }} transition duration-150">
+            <td class="px-4 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white">
+                <div class="flex flex-col">
+                    <span>{{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }} - {{ \Carbon\Carbon::parse($reserva->end_time)->format('H:i') }}</span>
+                    @if($eHoje)
+                        <span class="text-[10px] text-blue-700 dark:text-blue-400 font-extrabold uppercase mt-1">● Agendado p/ Hoje</span>
+                    @endif
+                </div>
+            </td>
+            <td class="px-4 py-4 whitespace-nowrap">
+                <div class="text-sm font-medium text-gray-900 dark:text-white">{{ $reserva->client_name }} (ID: {{ $reserva->id }})</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                    @if ($reserva->user && $reserva->user->is_vip)
+                        <span class="text-indigo-600 dark:text-indigo-400 font-bold">★ VIP</span>
+                    @endif
+                    {{ $reserva->client_contact }}
+                </div>
+            </td>
+            <td class="px-4 py-4 whitespace-nowrap text-center">
+                <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full {{ $statusClass }}">
+                    {{ $statusLabel }}
+                </span>
+            </td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-center">
+                @if ($reserva->is_recurrent)
+                    <span class="font-semibold text-fuchsia-600">Recorrente</span>
+                @else
+                    <span class="font-semibold text-blue-600">Pontual</span>
+                @endif
+            </td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900 dark:text-white">
+                {{ number_format($total, 2, ',', '.') }}
+            </td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-right text-green-600 font-bold">
+                {{ number_format($pago, 2, ',', '.') }}
+            </td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-right font-black {{ $restante > 0 ? 'text-red-600' : 'text-gray-400' }}">
+                {{ number_format($restante, 2, ',', '.') }}
+            </td>
+            <td class="px-4 py-4 whitespace-nowrap text-center text-sm font-medium">
+                @php
+                    $canPay = $restante > 0 && !in_array($reserva->status, ['canceled', 'rejected']);
+                    $canBeNoShow = !in_array($reserva->status, ['no_show', 'canceled', 'rejected', 'completed']);
+                @endphp
 
-                                                // 1. Condição para o botão $ Baixar
-                                                // Permitido APENAS se houver saldo restante E a reserva não estiver em um estado terminal de cancelamento/rejeição
-                                                $canPay =
-                                                    $restante > 0 &&
-                                                    $reserva->status !== 'canceled' &&
-                                                    $reserva->status !== 'rejected';
+                @if ($canPay)
+                    <button onclick="openPaymentModal({{ $reserva->id }}, {{ $total }}, {{ $restante }}, {{ $pago }}, '{{ $reserva->client_name }}', {{ $reserva->is_recurrent ? 'true' : 'false' }})"
+                        class="text-white bg-green-600 hover:bg-green-700 rounded px-3 py-1 text-xs mr-2 transition {{ $isActionDisabled ? 'opacity-50 cursor-not-allowed' : '' }}"
+                        {{ $isActionDisabled ? 'disabled' : '' }}>
+                        $ Baixar
+                    </button>
+                @endif
 
-                                                // 2. Condição para o botão X Falta
-                                                // Permitido se a reserva não estiver em um estado terminal/finalizado (Falta/Cancelada/Rejeitada/Concluída)
-                                                $canBeNoShow =
-                                                    $reserva->status !== 'no_show' &&
-                                                    $reserva->status !== 'canceled' &&
-                                                    $reserva->status !== 'rejected' &&
-                                                    $reserva->status !== 'completed';
-                                            @endphp
-
-                                            @if ($canPay)
-                                                {{-- Botão Pagar: Aparece se houver saldo restante. --}}
-                                                <button
-                                                    onclick="openPaymentModal({{ $reserva->id }}, {{ $total }}, {{ $restante }}, {{ $pago }}, '{{ $reserva->client_name }}', {{ $reserva->is_recurrent ? 'true' : 'false' }})"
-                                                    class="text-white bg-green-600 hover:bg-green-700 rounded px-3 py-1 text-xs mr-2 transition duration-150 {{ $isActionDisabled ? 'opacity-50 cursor-not-allowed' : '' }}"
-                                                    {{ $isActionDisabled ? 'disabled' : '' }}>
-                                                    $ Baixar
-                                                </button>
-                                            @endif
-
-                                            @if ($canBeNoShow)
-                                                {{-- Botão Falta: Aparece se ainda não foi marcada Falta/Cancelada/Rejeitada/Concluída --}}
-                                                <button
-                                                    onclick="openNoShowModal({{ $reserva->id }}, '{{ $reserva->client_name }}', {{ $pago }})"
-                                                    class="text-white bg-red-600 hover:bg-red-700 rounded px-3 py-1 text-xs transition duration-150 {{ $isActionDisabled ? 'opacity-50 cursor-not-allowed' : '' }}"
-                                                    {{ $isActionDisabled ? 'disabled' : '' }}>
-                                                    X Falta
-                                                </button>
-                                            @elseif($reserva->status === 'no_show')
-                                                {{-- Se for FALTA, e não tiver mais saldo a pagar (R$ 0,00), mostra status final. --}}
-                                                @if ($restante <= 0)
-                                                    <span class="text-xs text-red-500 italic font-medium">Falta
-                                                        Registrada</span>
-                                                @else
-                                                    {{-- Caso contrário (FALTA, mas RESTANTE > 0), o botão de Baixar aparece acima para cobrar a dívida. --}}
-                                                    <span class="text-xs text-red-500 italic font-medium">Falta
-                                                        (Aguardando Pagamento)</span>
-                                                @endif
-                                            @elseif($reserva->status === 'canceled')
-                                                <span class="text-xs text-gray-500 italic font-medium">Cancelada</span>
-                                            @elseif($reserva->status === 'rejected')
-                                                <span class="text-xs text-gray-500 italic font-medium">Rejeitada</span>
-                                            @elseif($pago >= $total)
-                                                <span
-                                                    class="text-xs text-green-500 italic font-medium">Finalizado</span>
-                                            @endif
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        {{-- Colspan ajustado para 8 --}}
-                                        <td colspan="8"
-                                            class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                                            Nenhum agendamento encontrado para esta data ou termo de pesquisa.
-                                        </td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
+                @if ($canBeNoShow)
+                    <button onclick="openNoShowModal({{ $reserva->id }}, '{{ $reserva->client_name }}', {{ $pago }})"
+                        class="text-white bg-red-600 hover:bg-red-700 rounded px-3 py-1 text-xs transition {{ $isActionDisabled ? 'opacity-50 cursor-not-allowed' : '' }}"
+                        {{ $isActionDisabled ? 'disabled' : '' }}>
+                        X Falta
+                    </button>
+                @elseif($reserva->status === 'no_show')
+                    <span class="text-xs text-red-500 italic font-medium">Falta Registrada</span>
+                @elseif($pago >= $total)
+                    <span class="text-xs text-green-500 italic font-medium">Finalizado</span>
+                @endif
+            </td>
+        </tr>
+    @empty
+        <tr>
+            <td colspan="8" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400 font-medium italic">
+                Nenhum agendamento encontrado para esta data ou termo de pesquisa.
+            </td>
+        </tr>
+    @endforelse
+</tbody>
                         </table>
                     </div>
                 </div>
@@ -1661,7 +1623,7 @@
             const cashStatusEl = document.getElementById('cashStatus');
 
             if (!closeCashBtn || !cashStatusEl)
-        return; // Garante que o elemento existe (pois pode ser o botão de 'Abrir Caixa')
+                return; // Garante que o elemento existe (pois pode ser o botão de 'Abrir Caixa')
 
             closeCashBtn.disabled = !isReady;
             cashStatusEl.innerHTML = statusMessage;

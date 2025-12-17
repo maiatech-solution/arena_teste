@@ -53,7 +53,7 @@ class AdminController extends Controller
     }
 
     /**
-     * Exibe a lista de Reservas Pendentes.
+     * Exibe a lista de Reservas Pendentes (Ainda existe separada, se quiser usar).
      */
     public function indexReservas()
     {
@@ -70,7 +70,7 @@ class AdminController extends Controller
     }
 
     /**
-     * Exibe a lista de Reservas Confirmadas.
+     * ✅ MÉTODO ATUALIZADO: Exibe Pagas, Confirmadas, Pendentes e Atrasadas.
      */
     public function confirmed_index(Request $request)
     {
@@ -79,48 +79,40 @@ class AdminController extends Controller
         $endDate = $request->input('end_date');
         $isOnlyMine = $request->input('only_mine') === 'true';
 
-        // 🎯 LÓGICA DE OURO PARA EXIBIR TUDO:
-        // 1. WhereIn: Inclui Confirmadas, Pendentes E as Pagas (completed/concluida).
-        // 2. Removido o filtro whereDate >= today para que as ATRASADAS apareçam.
+        // 🎯 ALTERAÇÃO PRINCIPAL AQUI:
+        // 1. WhereIn: Inclui Confirmadas, Concluídas (Pagas) e Pendentes.
+        // 2. Atrasadas: Elas são Confirmadas/Pendentes com data passada.
+        //    Por isso removi o filtro "whereDate >= today" padrão, para que as atrasadas apareçam.
         $reservas = Reserva::whereIn('status', [
                 Reserva::STATUS_CONFIRMADA,
                 Reserva::STATUS_CONCLUIDA,
-                Reserva::STATUS_PENDENTE,
-                'completed',
-                'concluida'
+                Reserva::STATUS_PENDENTE
             ])
             ->where('is_fixed', false)
-
-            // FILTRO DE BUSCA (Nome ou Contato)
+            // ->whereDate('date', '>=', Carbon::today()->toDateString()) // 🛑 REMOVIDO para mostrar atrasadas
+            ->orderBy('date', 'asc') // Mudei para DESC para ver as mais recentes/futuras primeiro (ou ajuste conforme gosto)
+            ->orderBy('start_time', 'asc')
             ->when($search, function ($query, $search) {
                 return $query->where(function ($q) use ($search) {
                     $q->where('client_name', 'like', '%' . $search . '%')
                         ->orWhere('client_contact', 'like', '%' . $search . '%');
                 });
             })
-
-            // FILTROS DE DATA (Só aplica se o usuário preencher os campos "De" e "Até")
             ->when($startDate, function ($query, $startDate) {
                 return $query->whereDate('date', '>=', $startDate);
             })
             ->when($endDate, function ($query, $endDate) {
                 return $query->whereDate('date', '<=', $endDate);
             })
-
-            // FILTRO "MINHAS RESERVAS"
             ->when($isOnlyMine, function ($query) {
                 return $query->where('manager_id', Auth::id());
             })
-
-            // ORDENAÇÃO: Mostra as mais atuais e atrasadas recentes primeiro
-            ->orderBy('date', 'asc')
-            ->orderBy('start_time', 'asc')
             ->paginate(20)
             ->appends($request->except('page'));
 
         return view('admin.reservas.confirmed_index', [
             'reservas' => $reservas,
-            'pageTitle' => 'Gerenciamento de Reservas (Geral)',
+            'pageTitle' => 'Gerenciamento de Reservas (Geral)', // Título ajustado
             'search' => $search,
             'startDate' => $startDate,
             'endDate' => $endDate,
@@ -129,7 +121,7 @@ class AdminController extends Controller
     }
 
     /**
-     * ✅ NOVO: Exibe a lista de TODAS as reservas (clientes e slots fixos).
+     * Exibe a lista de TODAS as reservas (clientes e slots fixos/inventário).
      */
     public function indexTodas(Request $request)
     {
@@ -201,7 +193,7 @@ class AdminController extends Controller
     }
 
     /**
-     * ✅ CORRIGIDO: Cria uma nova reserva manual (Admin) - DELEGADO.
+     * Cria uma nova reserva manual (Admin) - DELEGADO.
      * Delega a lógica de criação complexa (consumir slot, criar cliente, transação) para ReservaController.
      */
     public function storeReserva(Request $request)
@@ -279,7 +271,7 @@ class AdminController extends Controller
     }
 
     /**
-     * ✅ CORRIGIDO: Registra a falta do cliente (No-Show) - DELEGADO.
+     * Registra a falta do cliente (No-Show) - DELEGADO.
      * Delega a manipulação de status e transações financeiras.
      */
     public function registerNoShow(Request $request, Reserva $reserva)
@@ -325,7 +317,7 @@ class AdminController extends Controller
 
 
     /**
-     * ✅ CORRIGIDO: Reativa uma reserva cancelada ou rejeitada para o status CONFIRMADA.
+     * Reativa uma reserva cancelada ou rejeitada para o status CONFIRMADA.
      */
     public function reativar(Request $request, Reserva $reserva)
     {
@@ -466,7 +458,7 @@ class AdminController extends Controller
 
 
     /**
-     * ✅ CORRIGIDO: Cancela uma reserva PONTUAL confirmada - DELEGADO.
+     * Cancela uma reserva PONTUAL confirmada - DELEGADO.
      * Delega a manipulação de status e transações financeiras.
      */
     public function cancelarReserva(Request $request, Reserva $reserva)
@@ -510,7 +502,7 @@ class AdminController extends Controller
 
 
     /**
-     * ✅ CORRIGIDO: Cancela UMA reserva de uma série recorrente (PATCH /admin/reservas/{reserva}/cancelar-pontual).
+     * Cancela UMA reserva de uma série recorrente (PATCH /admin/reservas/{reserva}/cancelar-pontual).
      * Delega a manipulação de status e transações financeiras.
      */
     public function cancelarReservaRecorrente(Request $request, Reserva $reserva)
@@ -554,7 +546,7 @@ class AdminController extends Controller
 
 
     /**
-     * ✅ CORRIGIDO: Cancela TODAS as reservas futuras de uma série recorrente (DELETE /admin/reservas/{reserva}/cancelar-serie).
+     * Cancela TODAS as reservas futuras de uma série recorrente (DELETE /admin/reservas/{reserva}/cancelar-serie).
      * Delega a lógica de loop e finanças.
      */
     public function cancelarSerieRecorrente(Request $request, Reserva $reserva)
@@ -972,86 +964,91 @@ class AdminController extends Controller
     /**
      * Exibe a lista de transações financeiras e o saldo.
      */
-    public function indexFinancialDashboard(Request $request)
+public function indexFinancialDashboard(Request $request)
     {
-        // 1. Definição da data de referência (hoje ou data do filtro)
+        // 1. Forçar a limpeza de cache de visualização para evitar dados antigos na tela
+        // \Illuminate\Support\Facades\Artisan::call('view:clear');
+
         $selectedDate = $request->input('date', Carbon::today()->toDateString());
         $date = Carbon::parse($selectedDate)->toDateString();
         $search = $request->input('search');
         $reservaId = $request->input('reserva_id');
 
-        // 2. Consulta de Reservas Agendadas para a Tabela
-        $reservasQuery = Reserva::where('is_fixed', false)
+        // 2. Consulta de Reservas com Eager Loading
+        $reservasQuery = Reserva::with('financialTransactions')
+            ->where('is_fixed', false)
             ->whereDate('date', $date)
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, Reserva::STATUS_CONCLUIDA, Reserva::STATUS_CANCELADA, Reserva::STATUS_NO_SHOW])
-            ->when($reservaId, function ($query, $reservaId) {
-                return $query->where('id', $reservaId);
-            })
+            ->whereIn('status', [
+                Reserva::STATUS_CONFIRMADA,
+                Reserva::STATUS_PENDENTE,
+                Reserva::STATUS_CONCLUIDA,
+                Reserva::STATUS_NO_SHOW
+            ])
             ->when($search, function ($query, $search) {
-                return $query->where(function ($q) use ($search) {
-                    $q->where('client_name', 'like', '%' . $search . '%')
-                        ->orWhere('client_contact', 'like', '%' . $search . '%');
-                });
+                return $query->where('client_name', 'like', '%' . $search . '%');
             })
             ->orderBy('start_time')
             ->get();
 
-        // 3. Cálculo dos KPIs Financeiros do Dia
-
-        // 3.1 Total Recebido HOJE (Cash in Hand - Saldo Líquido)
-        $totalReceived = FinancialTransaction::whereDate('paid_at', $date)
-            ->sum('amount');
-
-        // 🛑 NOVO: Busca todas as transações financeiras do dia para auditoria na view
+        // 3. Transações Reais de Caixa (Movimentação Líquida)
         $financialTransactions = FinancialTransaction::whereDate('paid_at', $date)
-            ->orderBy('paid_at', 'asc') // Ordena por data/hora para ver a ordem dos eventos
+            ->orderBy('paid_at', 'desc')
+            ->with(['reserva', 'payer'])
             ->get();
 
+        $totalReceived = (float) FinancialTransaction::whereDate('paid_at', $date)->sum('amount');
 
-        // 3.2 Total Esperado e Total Pendente (A receber)
-        $activeReservas = Reserva::where('is_fixed', false)
-            ->whereDate('date', $date)
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
-            ->get();
+        // 4. Variáveis de KPI para os Cards
+        $totalExpectedBruto = 0.00;
+        $totalSaldosPendentesParaCard = 0.00;
+        $noShowCount = 0;
+        $ativasCount = 0;
 
-        $totalExpected = 0.00;
-        $totalPaidBySignals = 0.00;
+        foreach ($reservasQuery as $reserva) {
+            // Se for No-Show, apenas conta e pula o financeiro
+            if ($reserva->status === Reserva::STATUS_NO_SHOW) {
+                $noShowCount++;
+                continue;
+            }
 
-        foreach ($activeReservas as $reserva) {
-            $totalExpected += $reserva->price;
-            $totalPaidBySignals += $reserva->total_paid;
+            $ativasCount++;
+            $precoReserva = (float) $reserva->price;
+
+            // ✅ CRÍTICO: Pegamos o total pago histórico desta reserva específica.
+            // Se o Gleidson pagou 50 de sinal + 50 de saldo, total_paid é 100.
+            $valorJaPago = (float) $reserva->total_paid;
+
+            // Diferença matemática
+            $saldoAPagarNestaLinha = $precoReserva - $valorJaPago;
+
+            // ✅ SEGUNDA TRAVA: Se a diferença for mínima (centavos) ou se a conta bater,
+            // ou se o status for Concluída, o saldo é ZERO.
+            if ($saldoAPagarNestaLinha < 0.01 || $reserva->status === Reserva::STATUS_CONCLUIDA) {
+                $saldoAPagarNestaLinha = 0;
+            }
+
+            $totalExpectedBruto += $precoReserva;
+            $totalSaldosPendentesParaCard += $saldoAPagarNestaLinha;
         }
 
-        $totalPending = $totalExpected - $totalPaidBySignals;
-
-        // 3.3 Contagem de Faltas (No-Show)
-        $noShowCount = Reserva::whereDate('date', $date)
-            ->where('is_fixed', false)
-            ->where('status', Reserva::STATUS_NO_SHOW)
-            ->count();
-
-        // 4. Saldo Total (Global)
-        $totalBalance = $this->calculateTotalBalance();
-
-        Log::info("DEBUG FINANCEIRO: KPIs do dia {$date} - Recebido: R$ {$totalReceived}, Pendente: R$ {$totalPending}, Esperado: R$ {$totalExpected}");
-
-
-        return view('admin.financial.index', [ // Assume que a view é admin.financial.index
-            'reservas' => $reservasQuery, // Tabela de agendamentos (inclui canceladas e no_show)
-            'financialTransactions' => $financialTransactions, // 🛑 NOVO: Transações para auditoria
+        // 5. Retorno para a View com as variáveis exatas que os seus cards pedem
+        return view('admin.financial.index', [
+            'reservas' => $reservasQuery,
+            'financialTransactions' => $financialTransactions,
             'selectedDate' => $selectedDate,
-            'highlightReservaId' => $reservaId, // Para destacar linha se vier do calendário
+            'highlightReservaId' => $reservaId,
 
-            // KPIs para a view
-            'totalReceived' => $totalReceived, // Recebido HOJE (agora Saldo Líquido)
-            'totalPending' => max(0, $totalPending), // Pendente (não pode ser negativo no display)
-            'totalExpected' => $totalExpected, // Receita total prevista
+            // Dados dos Cards
+            'totalReceived' => $totalReceived,              // Card: Receita Garantida
+            'totalPending' => $totalSaldosPendentesParaCard, // Card: Saldo Pendente (Deve dar R$ 50,00)
+            'totalExpected' => $totalExpectedBruto,         // Texto: Total Previsto
+
             'noShowCount' => $noShowCount,
-
-            // Variáveis globais/de filtro
+            'totalReservasDia' => $ativasCount,
             'pageTitle' => 'Gerenciamento de Caixa & Pagamentos',
             'search' => $search,
-            'totalGlobalBalance' => $totalBalance, // Opcional: para mostrar o saldo acumulado total
+            'totalGlobalBalance' => $this->calculateTotalBalance(),
         ]);
     }
+
 }

@@ -113,7 +113,7 @@ class AdminController extends Controller
             })
 
             // ORDENAÇÃO: Mostra as mais atuais e atrasadas recentes primeiro
-            ->orderBy('date', 'asc')
+            ->orderBy('date', 'desc')
             ->orderBy('start_time', 'asc')
             ->paginate(20)
             ->appends($request->except('page'));

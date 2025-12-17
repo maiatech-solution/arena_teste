@@ -45,38 +45,37 @@
                         Voltar ao Painel de Reservas
                     </a>
 
-                    @php
-                        $hoje = \Carbon\Carbon::today()->toDateString();
-                        // Verifica se o filtro de "Hoje" já está ativo
-                        $isFiltradoHoje = request('start_date') == $hoje && request('end_date') == $hoje;
-                    @endphp
+                     @php
+                                $hoje = \Carbon\Carbon::today()->toDateString();
+                                // Verifica se o filtro de "Hoje" já está ativo
+                                $isFiltradoHoje = request('start_date') == $hoje && request('end_date') == $hoje;
+                            @endphp
 
-                    <a href="{{ $isFiltradoHoje ? route('admin.reservas.confirmadas') : route('admin.reservas.confirmadas', ['start_date' => $hoje, 'end_date' => $hoje]) }}"
-                        class="inline-flex items-center px-4 py-2.5 rounded-lg font-bold text-xs uppercase tracking-widest transition duration-150 shadow-md border {{ $isFiltradoHoje ? 'bg-blue-600 text-white border-blue-700 hover:bg-blue-700' : 'bg-white border-blue-500 text-blue-600 hover:bg-blue-50' }}"
-                        title="{{ $isFiltradoHoje ? 'Remover filtro e ver tudo' : 'Mostrar apenas reservas de hoje' }}">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                            xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z">
-                            </path>
-                        </svg>
-                        {{ $isFiltradoHoje ? 'Ver Todas as Reservas' : 'Agendados para Hoje' }}
-                    </a>
+                            <a href="{{ $isFiltradoHoje ? route('admin.reservas.confirmadas') : route('admin.reservas.confirmadas', ['start_date' => $hoje, 'end_date' => $hoje]) }}"
+                                class="inline-flex items-center px-4 py-2.5 rounded-lg font-bold text-xs uppercase tracking-widest transition duration-150 shadow-md border {{ $isFiltradoHoje ? 'bg-blue-600 text-white border-blue-700 hover:bg-blue-700' : 'bg-white border-blue-500 text-blue-600 hover:bg-blue-50' }}"
+                                title="{{ $isFiltradoHoje ? 'Remover filtro e ver tudo' : 'Mostrar apenas reservas de hoje' }}">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                    xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z">
+                                    </path>
+                                </svg>
+                                {{ $isFiltradoHoje ? 'Ver Todas as Reservas' : 'Agendados para Hoje' }}
+                            </a>
                 </div>
 
 
                 <div class="flex flex-col mb-8 space-y-4">
                     {{-- GRUPO DE FILTROS E PESQUISA --}}
 
-                    <div
-                        class="flex flex-col md:flex-row items-center md:items-center space-y-4 md:space-y-0 md:space-x-6 ">
+                    <div class="flex flex-col md:flex-row items-center md:items-center space-y-4 md:space-y-0 md:space-x-6 w-full">
 
                         {{-- 🎯 BOTÃO FILTRO RÁPIDO: HOJE --}}
 
 
                         {{-- Formulário de Pesquisa e Datas --}}
                         <form method="GET" action="{{ route('admin.reservas.confirmadas') }}"
-                            class="flex flex-col md:flex-row items-end md:items-center space-y-4 md:space-y-0 md:space-x-4 w-full md:justify-start">
+                            class="flex flex-col md:flex-row items-end md:items-center space-y-4 md:space-y-0 md:space-x-4 w-full md:justify-end">
                             <input type="hidden" name="only_mine" value="{{ $isOnlyMine ? 'true' : 'false' }}">
 
                             {{-- FILTROS DE DATA --}}
@@ -97,7 +96,7 @@
                             </div>
 
                             {{-- Pesquisa de Texto e Botões --}}
-                            <div class="flex space-x-2 w-full md:w-full items-end flex-grow md:flex-grow-0">
+                            <div class="flex space-x-2 w-full md:w-auto items-end flex-grow md:flex-grow-0">
                                 <div class="flex-grow">
                                     <label for="search"
                                         class="block text-xs font-semibold text-gray-500 mb-1">Pesquisar:</label>

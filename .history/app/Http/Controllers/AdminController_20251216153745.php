@@ -77,50 +77,34 @@ class AdminController extends Controller
         $search = $request->input('search');
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
-        $isOnlyMine = $request->input('only_mine') === 'true';
+        $isOnlyMine = $request->input('only_mine') === 'true'; 
 
-        // 🎯 LÓGICA DE OURO PARA EXIBIR TUDO:
-        // 1. WhereIn: Inclui Confirmadas, Pendentes E as Pagas (completed/concluida).
-        // 2. Removido o filtro whereDate >= today para que as ATRASADAS apareçam.
-        $reservas = Reserva::whereIn('status', [
-                Reserva::STATUS_CONFIRMADA,
-                Reserva::STATUS_CONCLUIDA,
-                Reserva::STATUS_PENDENTE,
-                'completed',
-                'concluida'
-            ])
+        $reservas = Reserva::where('status', Reserva::STATUS_CONFIRMADA)
             ->where('is_fixed', false)
-
-            // FILTRO DE BUSCA (Nome ou Contato)
+            ->whereDate('date', '>=', Carbon::today()->toDateString())
+            ->orderBy('date')
+            ->orderBy('start_time')
             ->when($search, function ($query, $search) {
                 return $query->where(function ($q) use ($search) {
                     $q->where('client_name', 'like', '%' . $search . '%')
                         ->orWhere('client_contact', 'like', '%' . $search . '%');
                 });
             })
-
-            // FILTROS DE DATA (Só aplica se o usuário preencher os campos "De" e "Até")
             ->when($startDate, function ($query, $startDate) {
                 return $query->whereDate('date', '>=', $startDate);
             })
             ->when($endDate, function ($query, $endDate) {
                 return $query->whereDate('date', '<=', $endDate);
             })
-
-            // FILTRO "MINHAS RESERVAS"
             ->when($isOnlyMine, function ($query) {
                 return $query->where('manager_id', Auth::id());
             })
-
-            // ORDENAÇÃO: Mostra as mais atuais e atrasadas recentes primeiro
-            ->orderBy('date', 'asc')
-            ->orderBy('start_time', 'asc')
             ->paginate(20)
             ->appends($request->except('page'));
 
         return view('admin.reservas.confirmed_index', [
             'reservas' => $reservas,
-            'pageTitle' => 'Gerenciamento de Reservas (Geral)',
+            'pageTitle' => 'Reservas Confirmadas',
             'search' => $search,
             'startDate' => $startDate,
             'endDate' => $endDate,
@@ -171,7 +155,7 @@ class AdminController extends Controller
             ->paginate(20)
             ->appends($request->except('page'));
 
-        // 6. Retorna a view 'admin.reservas.todas'
+        // 6. Retorna a view 'admin.reservas.todas' 
         return view('admin.reservas.todas', [
             'reservas' => $reservas,
             'pageTitle' => 'Todas as Reservas (Inventário e Clientes)',
@@ -221,7 +205,7 @@ class AdminController extends Controller
         ]);
 
         $clientContact = $validated['client_contact'];
-
+        
         DB::beginTransaction();
         try {
             // 1. Encontra/Cria o cliente
@@ -239,7 +223,7 @@ class AdminController extends Controller
                 ->where('date', $validated['date'])
                 ->where('start_time', $startTimeNormalized)
                 ->where('end_time', $endTimeNormalized)
-                ->where('status', Reserva::STATUS_FREE)
+                ->where('status', Reserva::STATUS_FREE) 
                 ->first();
              $fixedSlotId = $fixedSlot ? $fixedSlot->id : null;
 
@@ -290,21 +274,21 @@ class AdminController extends Controller
 
         $validated = $request->validate([
             'no_show_reason' => 'required|string|min:5|max:255',
-            'should_refund' => 'required|boolean',
-            'paid_amount' => 'required|numeric|min:0',
+            'should_refund' => 'required|boolean', 
+            'paid_amount' => 'required|numeric|min:0', 
         ]);
 
         DB::beginTransaction();
         try {
             // 🛑 DELEGA A LÓGICA CENTRALIZADA
             $result = $this->reservaController->finalizeStatus(
-                $reserva,
-                Reserva::STATUS_NO_SHOW,
-                '[Gestor] ' . $validated['no_show_reason'],
-                $validated['should_refund'],
+                $reserva, 
+                Reserva::STATUS_NO_SHOW, 
+                '[Gestor] ' . $validated['no_show_reason'], 
+                $validated['should_refund'], 
                 (float) $validated['paid_amount']
             );
-
+            
             DB::commit();
             $message = "Reserva marcada como Falta." . $result['message_finance'];
             return response()->json(['success' => true, 'message' => $message], 200);
@@ -481,17 +465,17 @@ class AdminController extends Controller
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
             'should_refund' => 'required|boolean',
-            'paid_amount_ref' => 'required|numeric|min:0',
+            'paid_amount_ref' => 'required|numeric|min:0', 
         ]);
 
         DB::beginTransaction();
         try {
             // 🛑 DELEGA A LÓGICA CENTRALIZADA (Cancelamento Pontual)
             $result = $this->reservaController->finalizeStatus(
-                $reserva,
-                Reserva::STATUS_CANCELADA,
-                '[Gestor] ' . $validated['cancellation_reason'],
-                $validated['should_refund'],
+                $reserva, 
+                Reserva::STATUS_CANCELADA, 
+                '[Gestor] ' . $validated['cancellation_reason'], 
+                $validated['should_refund'], 
                 (float) $validated['paid_amount_ref']
             );
 
@@ -525,17 +509,17 @@ class AdminController extends Controller
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
             'should_refund' => 'required|boolean',
-            'paid_amount_ref' => 'required|numeric|min:0',
+            'paid_amount_ref' => 'required|numeric|min:0', 
         ]);
 
         DB::beginTransaction();
         try {
             // 🛑 DELEGA A LÓGICA CENTRALIZADA (Usa a mesma lógica de cancelamento pontual)
             $result = $this->reservaController->finalizeStatus(
-                $reserva,
-                Reserva::STATUS_CANCELADA,
-                '[Gestor - Pontual Recorrência] ' . $validated['cancellation_reason'],
-                $validated['should_refund'],
+                $reserva, 
+                Reserva::STATUS_CANCELADA, 
+                '[Gestor - Pontual Recorrência] ' . $validated['cancellation_reason'], 
+                $validated['should_refund'], 
                 (float) $validated['paid_amount_ref']
             );
 
@@ -570,7 +554,7 @@ class AdminController extends Controller
         ]);
 
         $masterId = $reserva->recurrent_series_id ?? $reserva->id;
-
+        
         DB::beginTransaction();
         try {
             // 🛑 DELEGAÇÃO COMPLETA da lógica de loop e finanças.
@@ -615,7 +599,7 @@ class AdminController extends Controller
             $reserva->delete();
 
             DB::commit();
-            Log::warning("Reserva ID: {$reserva->id} excluída permanentemente pelo gestor ID: " . auth()->user()->id);
+            Log::warning("Reserva ID: {$reserva->id} excluída permanentemente pelo gestor ID: " . auth()->user()->id); 
             return redirect()->route('admin.reservas.confirmadas')->with('success', 'Reserva excluída permanentemente.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -635,7 +619,7 @@ class AdminController extends Controller
     {
         // 1. Obtém o filtro de função e a busca da query string
         $roleFilter = $request->query('role_filter');
-        $search = $request->query('search');
+        $search = $request->query('search'); 
 
         $query = User::query();
 
@@ -651,7 +635,7 @@ class AdminController extends Controller
         // 3. Aplica o filtro de pesquisa (Search)
         if ($search) {
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', '%' . $search . '%')
+                $q->where('name', 'like', '%' . $search . '%') 
                     ->orWhere('whatsapp_contact', 'like', '%' . $search . '%')
                     ->orWhere('email', 'like', '%' . $search . '%');
             });
@@ -668,7 +652,7 @@ class AdminController extends Controller
             'users' => $users,
             'pageTitle' => 'Gerenciamento de Usuários',
             'roleFilter' => $roleFilter,
-            'search' => $search,
+            'search' => $search, 
         ]);
     }
 
@@ -678,7 +662,7 @@ class AdminController extends Controller
     public function createUser()
     {
         return view('admin.users.create', [
-             // ...
+             // ... 
         ]);
     }
 
@@ -773,7 +757,7 @@ class AdminController extends Controller
         $activeReservationsExist = Reserva::where('user_id', $user->id)
             ->where('is_fixed', false) // Apenas reservas reais de clientes, não slots de disponibilidade
             ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-            ->exists();
+            ->exists(); 
 
         if ($activeReservationsExist) {
             $errorMessage = "Impossível excluir o usuário '{$user->name}'. Ele(a) possui reservas ativas (pendentes ou confirmadas). Cancele ou rejeite todas as reservas dele(a) antes de prosseguir com a exclusão.";
@@ -875,7 +859,7 @@ class AdminController extends Controller
         // NOTA: Para cancelamento de série por cliente, assumimos que o pagamento do sinal já foi tratado
         // ou retido, pois o Admin deve usar a rota `cancelarSerieRecorrente` com a lógica financeira.
         // Este método aqui faz apenas a atualização de status para a view de histórico do cliente.
-
+        
         DB::beginTransaction();
         try {
             // Busca todas as reservas da série (incluindo a mestra) que estão no futuro
@@ -972,7 +956,7 @@ class AdminController extends Controller
     /**
      * Exibe a lista de transações financeiras e o saldo.
      */
-    public function indexFinancialDashboard(Request $request)
+    public function indexFinancialDashboard(Request $request) 
     {
         // 1. Definição da data de referência (hoje ou data do filtro)
         $selectedDate = $request->input('date', Carbon::today()->toDateString());

@@ -44,42 +44,26 @@
                         </svg>
                         Voltar ao Painel de Reservas
                     </a>
-
-                    @php
-                        $hoje = \Carbon\Carbon::today()->toDateString();
-                        // Verifica se o filtro de "Hoje" já está ativo
-                        $isFiltradoHoje = request('start_date') == $hoje && request('end_date') == $hoje;
-                    @endphp
-
-                    <a href="{{ $isFiltradoHoje ? route('admin.reservas.confirmadas') : route('admin.reservas.confirmadas', ['start_date' => $hoje, 'end_date' => $hoje]) }}"
-                        class="inline-flex items-center px-4 py-2.5 rounded-lg font-bold text-xs uppercase tracking-widest transition duration-150 shadow-md border {{ $isFiltradoHoje ? 'bg-blue-600 text-white border-blue-700 hover:bg-blue-700' : 'bg-white border-blue-500 text-blue-600 hover:bg-blue-50' }}"
-                        title="{{ $isFiltradoHoje ? 'Remover filtro e ver tudo' : 'Mostrar apenas reservas de hoje' }}">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                            xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z">
-                            </path>
-                        </svg>
-                        {{ $isFiltradoHoje ? 'Ver Todas as Reservas' : 'Agendados para Hoje' }}
-                    </a>
                 </div>
 
 
                 <div class="flex flex-col mb-8 space-y-4">
+
                     {{-- GRUPO DE FILTROS E PESQUISA --}}
-
+                    {{-- Usando um layout mais espaçado (gap-4) e flexível --}}
                     <div
-                        class="flex flex-col md:flex-row items-center md:items-center space-y-4 md:space-y-0 md:space-x-6 ">
+                        class="flex flex-col md:flex-row items-center md:items-center space-y-4 md:space-y-0 md:space-x-6 w-full">
 
-                        {{-- 🎯 BOTÃO FILTRO RÁPIDO: HOJE --}}
+                        {{-- Botão de Filtro Rápido --}}
 
 
                         {{-- Formulário de Pesquisa e Datas --}}
+                        {{-- O formulário é a peça central dos filtros --}}
                         <form method="GET" action="{{ route('admin.reservas.confirmadas') }}"
-                            class="flex flex-col md:flex-row items-end md:items-center space-y-4 md:space-y-0 md:space-x-4 w-full md:justify-start">
+                            class="flex flex-col md:flex-row items-end md:items-center space-y-4 md:space-y-0 md:space-x-4 w-full">
                             <input type="hidden" name="only_mine" value="{{ $isOnlyMine ? 'true' : 'false' }}">
 
-                            {{-- FILTROS DE DATA --}}
+                            {{-- ✅ FILTROS DE DATA (Agrupados e com bom espaçamento) --}}
                             <div class="flex space-x-3 w-full md:w-auto flex-shrink-0">
                                 <div class="w-1/2 md:w-32">
                                     <label for="start_date"
@@ -96,8 +80,8 @@
                                 </div>
                             </div>
 
-                            {{-- Pesquisa de Texto e Botões --}}
-                            <div class="flex space-x-2 w-full md:w-full items-end flex-grow md:flex-grow-0">
+                            {{-- Pesquisa de Texto e Botões de Ação (Agrupados) --}}
+                            <div class="flex space-x-2 w-full md:w-auto items-end flex-grow md:flex-grow-0">
                                 <div class="flex-grow">
                                     <label for="search"
                                         class="block text-xs font-semibold text-gray-500 mb-1">Pesquisar:</label>
@@ -119,9 +103,10 @@
                                     </button>
 
                                     @if ((isset($search) && $search) || $startDate || $endDate)
+                                        {{-- Botão Limpar Filtros/Busca (mantém o only_mine) --}}
                                         <a href="{{ route('admin.reservas.confirmadas', ['only_mine' => $isOnlyMine ? 'true' : 'false']) }}"
                                             class="text-red-500 hover:text-red-700 h-full p-2 transition duration-150 flex-shrink-0 flex items-center justify-center rounded-lg border border-red-200"
-                                            title="Limpar Busca e Filtros">
+                                            title="Limpar Busca e Filtros de Data">
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20"
                                                 fill="currentColor">
                                                 <path fill-rule="evenodd"
@@ -134,6 +119,7 @@
                             </div>
                         </form>
                     </div>
+
                 </div>
 
                 <div class="overflow-x-auto border border-gray-200 rounded-xl shadow-lg">
@@ -163,178 +149,150 @@
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-100">
-                            @forelse ($reservas as $reserva)
-                                @php
-                                    // 1. Identificação de HOJE (Comparação exata)
-                                    $dataHoje = \Carbon\Carbon::today()->toDateString();
-                                    $dataReserva = \Carbon\Carbon::parse($reserva->date)->toDateString();
-                                    $eHoje = $dataReserva === $dataHoje;
+    @forelse ($reservas as $reserva)
+        @php
+            // 1. Identificação de HOJE (Comparação exata)
+            $dataHoje = \Carbon\Carbon::today()->toDateString();
+            $dataReserva = \Carbon\Carbon::parse($reserva->date)->toDateString();
+            $eHoje = ($dataReserva === $dataHoje);
 
-                                    // 2. Lógica de Status de Pagamento e Atraso
-                                    $status = $reserva->payment_status;
-                                    $badgeClass = '';
-                                    $badgeText = '';
-                                    $isOverdue = false;
+            // 2. Lógica de Status de Pagamento e Atraso
+            $status = $reserva->payment_status;
+            $badgeClass = '';
+            $badgeText = '';
+            $isOverdue = false;
 
-                                    if (in_array($status, ['pending', 'unpaid', 'partial'])) {
-                                        try {
-                                            $onlyTime = \Carbon\Carbon::parse($reserva->end_time)->format('H:i:s');
-                                            $reservaEndTime = \Carbon\Carbon::parse($dataReserva . ' ' . $onlyTime);
-                                            if ($reservaEndTime->isPast()) {
-                                                $isOverdue = true;
-                                            }
-                                        } catch (\Exception $e) {
-                                            $isOverdue = false;
-                                        }
-                                    }
+            if (in_array($status, ['pending', 'unpaid', 'partial'])) {
+                try {
+                    $onlyTime = \Carbon\Carbon::parse($reserva->end_time)->format('H:i:s');
+                    $reservaEndTime = \Carbon\Carbon::parse($dataReserva . ' ' . $onlyTime);
+                    if ($reservaEndTime->isPast()) {
+                        $isOverdue = true;
+                    }
+                } catch (\Exception $e) { $isOverdue = false; }
+            }
 
-                                    // 3. Definição das Badges
-                                    $saldoParaExibir = (float) $reserva->price - (float) ($reserva->total_paid ?? 0);
+            // 3. Definição das Badges
+            $saldoParaExibir = (float)$reserva->price - (float)($reserva->total_paid ?? 0);
 
-                                    if (
-                                        $status === 'paid' ||
-                                        $status === 'completed' ||
-                                        $reserva->status === 'completed'
-                                    ) {
-                                        $badgeClass = 'bg-green-100 text-green-800 border border-green-200';
-                                        $badgeText = 'Pago';
-                                    } elseif ($isOverdue) {
-                                        $badgeClass = 'bg-red-700 text-white font-bold animate-pulse shadow-lg';
-                                        $badgeText = 'ATRASADO';
-                                    } elseif ($status === 'partial') {
-                                        $badgeClass = 'bg-yellow-100 text-yellow-800 border border-yellow-200';
-                                        $badgeText =
-                                            'Parcial (R$ ' . number_format($saldoParaExibir, 2, ',', '.') . ')';
-                                    } else {
-                                        $badgeClass = 'bg-red-100 text-red-800';
-                                        $badgeText = 'Aguardando Pagamento';
-                                    }
+            if ($status === 'paid' || $status === 'completed' || $reserva->status === 'completed') {
+                $badgeClass = 'bg-green-100 text-green-800 border border-green-200';
+                $badgeText = 'Pago';
+            } elseif ($isOverdue) {
+                $badgeClass = 'bg-red-700 text-white font-bold animate-pulse shadow-lg';
+                $badgeText = 'ATRASADO';
+            } elseif ($status === 'partial') {
+                $badgeClass = 'bg-yellow-100 text-yellow-800 border border-yellow-200';
+                $badgeText = 'Parcial (R$ ' . number_format($saldoParaExibir, 2, ',', '.') . ')';
+            } else {
+                $badgeClass = 'bg-red-100 text-red-800';
+                $badgeText = 'Aguardando Pagamento';
+            }
 
-                                    // 4. Lógica de Destaque da Linha (Aqui resolve o seu problema visual)
-                                    // Se for HOJE, aplica fundo azul suave e borda lateral grossa
-                                    $rowHighlight = $eHoje
-                                        ? 'bg-blue-50/80 border-l-4 border-blue-600 shadow-sm'
-                                        : 'odd:bg-white even:bg-gray-50';
-                                @endphp
+            // 4. Lógica de Destaque da Linha (Aqui resolve o seu problema visual)
+            // Se for HOJE, aplica fundo azul suave e borda lateral grossa
+            $rowHighlight = $eHoje
+                ? 'bg-blue-50/80 border-l-4 border-blue-600 shadow-sm'
+                : 'odd:bg-white even:bg-gray-50';
+        @endphp
 
-                                <tr class="{{ $rowHighlight }} hover:bg-indigo-50 transition duration-150">
-                                    {{-- DATA E HORA --}}
-                                    <td class="px-4 py-3 whitespace-nowrap min-w-[120px]">
-                                        <div
-                                            class="text-sm font-bold {{ $eHoje ? 'text-blue-700' : 'text-gray-900' }}">
-                                            {{ \Carbon\Carbon::parse($reserva->date)->format('d/m/y') }}
-                                            @if ($eHoje)
-                                                <span
-                                                    class="ml-1 inline-block bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-tighter shadow-sm">Hoje</span>
-                                            @endif
-                                        </div>
-                                        <div class="text-indigo-600 text-xs font-semibold">
-                                            {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }} -
-                                            {{ \Carbon\Carbon::parse($reserva->end_time)->format('H:i') }}
-                                        </div>
+        <tr class="{{ $rowHighlight }} hover:bg-indigo-50 transition duration-150">
+            {{-- DATA E HORA --}}
+            <td class="px-4 py-3 whitespace-nowrap min-w-[120px]">
+                <div class="text-sm font-bold {{ $eHoje ? 'text-blue-700' : 'text-gray-900' }}">
+                    {{ \Carbon\Carbon::parse($reserva->date)->format('d/m/y') }}
+                    @if($eHoje)
+                        <span class="ml-1 inline-block bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-tighter shadow-sm">Hoje</span>
+                    @endif
+                </div>
+                <div class="text-indigo-600 text-xs font-semibold">
+                    {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }} - {{ \Carbon\Carbon::parse($reserva->end_time)->format('H:i') }}
+                </div>
 
-                                        @if ($reserva->is_recurrent)
-                                            <span
-                                                class="mt-1 inline-block text-[10px] font-bold text-indigo-700 bg-indigo-200 px-1 rounded">RECORRENTE</span>
-                                        @else
-                                            <span
-                                                class="mt-1 inline-block text-[10px] font-bold text-blue-700 bg-blue-200 px-1 rounded">PONTUAL</span>
-                                        @endif
-                                    </td>
+                @if ($reserva->is_recurrent)
+                    <span class="mt-1 inline-block text-[10px] font-bold text-indigo-700 bg-indigo-200 px-1 rounded">RECORRENTE</span>
+                @else
+                    <span class="mt-1 inline-block text-[10px] font-bold text-blue-700 bg-blue-200 px-1 rounded">PONTUAL</span>
+                @endif
+            </td>
 
-                                    {{-- CLIENTE --}}
-                                    <td class="px-4 py-3 text-left">
-                                        @if ($reserva->user)
-                                            <div class="text-sm font-semibold text-gray-900">
-                                                {{ $reserva->user->name }}</div>
-                                            <div class="text-xs text-green-600 font-medium">Agendamento de Cliente
-                                            </div>
-                                        @else
-                                            <div class="text-sm font-bold text-indigo-700">
-                                                {{ $reserva->client_name ?? 'Cliente (Manual)' }}</div>
-                                            <div class="text-xs text-gray-500 font-medium">
-                                                {{ $reserva->client_contact ?? 'Contato não informado' }}</div>
-                                        @endif
-                                    </td>
+            {{-- CLIENTE --}}
+            <td class="px-4 py-3 text-left">
+                @if ($reserva->user)
+                    <div class="text-sm font-semibold text-gray-900">{{ $reserva->user->name }}</div>
+                    <div class="text-xs text-green-600 font-medium">Agendamento de Cliente</div>
+                @else
+                    <div class="text-sm font-bold text-indigo-700">{{ $reserva->client_name ?? 'Cliente (Manual)' }}</div>
+                    <div class="text-xs text-gray-500 font-medium">{{ $reserva->client_contact ?? 'Contato não informado' }}</div>
+                @endif
+            </td>
 
-                                    {{-- PREÇO --}}
-                                    <td
-                                        class="px-4 py-3 whitespace-nowrap min-w-[90px] text-sm font-bold text-green-700 text-right">
-                                        R$ {{ number_format($reserva->price ?? 0, 2, ',', '.') }}
-                                    </td>
+            {{-- PREÇO --}}
+            <td class="px-4 py-3 whitespace-nowrap min-w-[90px] text-sm font-bold text-green-700 text-right">
+                R$ {{ number_format($reserva->price ?? 0, 2, ',', '.') }}
+            </td>
 
-                                    {{-- STATUS PAGAMENTO --}}
-                                    <td class="px-4 py-3 text-center whitespace-nowrap">
-                                        <span
-                                            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $badgeClass }}">
-                                            {{ $badgeText }}
-                                        </span>
-                                    </td>
+            {{-- STATUS PAGAMENTO --}}
+            <td class="px-4 py-3 text-center whitespace-nowrap">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $badgeClass }}">
+                    {{ $badgeText }}
+                </span>
+            </td>
 
-                                    {{-- GESTOR --}}
-                                    <td class="px-4 py-3 text-left min-w-[120px]">
-                                        @if ($reserva->manager)
-                                            <span
-                                                class="font-medium text-purple-700 bg-purple-100 px-2 py-0.5 text-xs rounded-full whitespace-nowrap shadow-sm">
-                                                {{ \Illuminate\Support\Str::limit($reserva->manager->name, 10, '...') }}
-                                                (Gestor)
-                                            </span>
-                                        @else
-                                            <span
-                                                class="text-gray-600 bg-gray-100 px-2 py-0.5 text-xs rounded-full whitespace-nowrap shadow-sm">Cliente
-                                                via Web</span>
-                                        @endif
-                                    </td>
+            {{-- GESTOR --}}
+            <td class="px-4 py-3 text-left min-w-[120px]">
+                @if ($reserva->manager)
+                    <span class="font-medium text-purple-700 bg-purple-100 px-2 py-0.5 text-xs rounded-full whitespace-nowrap shadow-sm">
+                        {{ \Illuminate\Support\Str::limit($reserva->manager->name, 10, '...') }} (Gestor)
+                    </span>
+                @else
+                    <span class="text-gray-600 bg-gray-100 px-2 py-0.5 text-xs rounded-full whitespace-nowrap shadow-sm">Cliente via Web</span>
+                @endif
+            </td>
 
-                                    {{-- AÇÕES --}}
-                                    <td class="px-4 py-3 text-sm font-medium min-w-[100px]">
-                                        <div class="flex flex-col space-y-1">
-                                            <a href="{{ route('admin.reservas.show', $reserva) }}"
-                                                class="inline-block w-full text-center bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
-                                                Detalhes
-                                            </a>
+            {{-- AÇÕES --}}
+            <td class="px-4 py-3 text-sm font-medium min-w-[100px]">
+                <div class="flex flex-col space-y-1">
+                    <a href="{{ route('admin.reservas.show', $reserva) }}"
+                        class="inline-block w-full text-center bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                        Detalhes
+                    </a>
 
-                                            <a href="{{ route('admin.payment.index', [
-                                                'reserva_id' => $reserva->id,
-                                                'data_reserva' => \Carbon\Carbon::parse($reserva->date)->format('Y-m-d'),
-                                                'signal_value' => $reserva->signal_value ?? 0,
-                                            ]) }}"
-                                                class="inline-block w-full text-center bg-green-600 hover:bg-green-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
-                                                Lançar no Caixa
-                                            </a>
+                    <a href="{{ route('admin.payment.index', [
+                        'reserva_id' => $reserva->id,
+                        'data_reserva' => \Carbon\Carbon::parse($reserva->date)->format('Y-m-d'),
+                        'signal_value' => $reserva->signal_value ?? 0
+                    ]) }}"
+                        class="inline-block w-full text-center bg-green-600 hover:bg-green-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                        Lançar no Caixa
+                    </a>
 
-                                            @if ($reserva->is_recurrent)
-                                                <button
-                                                    onclick="openCancellationModal({{ $reserva->id }}, 'PATCH', '{{ route('admin.reservas.cancelar_pontual', ':id') }}', 'Cancelar SOMENTE ESTA reserva recorrente.', 'Cancelar ESTE DIA')"
-                                                    class="inline-block w-full text-center bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
-                                                    Cancelar ESTE DIA
-                                                </button>
-                                                <button
-                                                    onclick="openCancellationModal({{ $reserva->id }}, 'DELETE', '{{ route('admin.reservas.cancelar_serie', ':id') }}', 'Cancelar TODA A SÉRIE (futura) para este cliente?', 'Cancelar SÉRIE')"
-                                                    class="inline-block w-full text-center bg-red-800 hover:bg-red-900 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
-                                                    Cancelar SÉRIE
-                                                </button>
-                                            @else
-                                                <button
-                                                    onclick="openCancellationModal({{ $reserva->id }}, 'PATCH', '{{ route('admin.reservas.cancelar', ':id') }}', 'Deseja CANCELAR esta reserva PONTUAL?', 'Cancelar')"
-                                                    class="inline-block w-full text-center bg-red-600 hover:bg-red-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
-                                                    Cancelar
-                                                </button>
-                                            @endif
-                                        </div>
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="6"
-                                        class="px-6 py-8 whitespace-nowrap text-center text-base text-gray-500 italic">
-                                        Nenhuma reserva confirmada encontrada @if (isset($search) && $search)
-                                            para a busca por "{{ $search }}".
-                                        @endif
-                                    </td>
-                                </tr>
-                            @endforelse
-                        </tbody>
+                    @if ($reserva->is_recurrent)
+                        <button onclick="openCancellationModal({{ $reserva->id }}, 'PATCH', '{{ route('admin.reservas.cancelar_pontual', ':id') }}', 'Cancelar SOMENTE ESTA reserva recorrente.', 'Cancelar ESTE DIA')"
+                            class="inline-block w-full text-center bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                            Cancelar ESTE DIA
+                        </button>
+                        <button onclick="openCancellationModal({{ $reserva->id }}, 'DELETE', '{{ route('admin.reservas.cancelar_serie', ':id') }}', 'Cancelar TODA A SÉRIE (futura) para este cliente?', 'Cancelar SÉRIE')"
+                            class="inline-block w-full text-center bg-red-800 hover:bg-red-900 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                            Cancelar SÉRIE
+                        </button>
+                    @else
+                        <button onclick="openCancellationModal({{ $reserva->id }}, 'PATCH', '{{ route('admin.reservas.cancelar', ':id') }}', 'Deseja CANCELAR esta reserva PONTUAL?', 'Cancelar')"
+                            class="inline-block w-full text-center bg-red-600 hover:bg-red-700 text-white px-3 py-1 text-xs font-semibold rounded-md shadow transition duration-150">
+                            Cancelar
+                        </button>
+                    @endif
+                </div>
+            </td>
+        </tr>
+    @empty
+        <tr>
+            <td colspan="6" class="px-6 py-8 whitespace-nowrap text-center text-base text-gray-500 italic">
+                Nenhuma reserva confirmada encontrada @if (isset($search) && $search) para a busca por "{{ $search }}". @endif
+            </td>
+        </tr>
+    @endforelse
+</tbody>
                     </table>
                 </div>
 

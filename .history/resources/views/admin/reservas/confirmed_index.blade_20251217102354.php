@@ -97,7 +97,7 @@
                             </div>
 
                             {{-- Pesquisa de Texto e Botões --}}
-                            <div class="flex space-x-2 w-full md:w-full items-end flex-grow md:flex-grow-0">
+                            <div class="flex space-x-2 w-full md:w-auto items-end flex-grow md:flex-grow-0">
                                 <div class="flex-grow">
                                     <label for="search"
                                         class="block text-xs font-semibold text-gray-500 mb-1">Pesquisar:</label>

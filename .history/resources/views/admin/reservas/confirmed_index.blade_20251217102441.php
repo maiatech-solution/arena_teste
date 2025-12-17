@@ -69,14 +69,14 @@
                     {{-- GRUPO DE FILTROS E PESQUISA --}}
 
                     <div
-                        class="flex flex-col md:flex-row items-center md:items-center space-y-4 md:space-y-0 md:space-x-6 ">
+                        class="flex flex-col md:flex-row items-center md:items-center space-y-4 md:space-y-0 md:space-x-6 w-full">
 
                         {{-- 🎯 BOTÃO FILTRO RÁPIDO: HOJE --}}
 
 
                         {{-- Formulário de Pesquisa e Datas --}}
                         <form method="GET" action="{{ route('admin.reservas.confirmadas') }}"
-                            class="flex flex-col md:flex-row items-end md:items-center space-y-4 md:space-y-0 md:space-x-4 w-full md:justify-start">
+                            class="flex flex-col md:flex-row  md:items-center space-y-4 md:space-y-0 md:space-x-4 w-full md:justify-end">
                             <input type="hidden" name="only_mine" value="{{ $isOnlyMine ? 'true' : 'false' }}">
 
                             {{-- FILTROS DE DATA --}}
@@ -97,7 +97,7 @@
                             </div>
 
                             {{-- Pesquisa de Texto e Botões --}}
-                            <div class="flex space-x-2 w-full md:w-full items-end flex-grow md:flex-grow-0">
+                            <div class="flex space-x-2 w-full md:w-auto items-end flex-grow md:flex-grow-0">
                                 <div class="flex-grow">
                                     <label for="search"
                                         class="block text-xs font-semibold text-gray-500 mb-1">Pesquisar:</label>
