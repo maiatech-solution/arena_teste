@@ -31,7 +31,7 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
 
-                <a href="{{ route('admin.financeiro.relatorio_faturamento') }}" class="flex items-center p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-2 border-transparent hover:border-indigo-500 transition-all group">
+                <a href="href="{{ route('admin.financeiro.relatorio_faturamento') }}"" class="flex items-center p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-2 border-transparent hover:border-indigo-500 transition-all group">
                     <div class="p-4 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-xl mr-5">
                         <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                     </div>

@@ -35,33 +35,6 @@ class FinanceiroController extends Controller
     return view('admin.financeiro.index', compact('faturamentoMensal', 'totalReservasMes', 'canceladasMes'));
 }
 
-public function relatorioFaturamento(Request $request)
-{
-    // 1. Definir datas (Padrão: início do mês até hoje)
-    $dataInicio = $request->input('data_inicio') ? Carbon::parse($request->input('data_inicio'))->startOfDay() : now()->startOfMonth();
-    $dataFim = $request->input('data_fim') ? Carbon::parse($request->input('data_fim'))->endOfDay() : now()->endOfDay();
-
-    // 2. Buscar Transações no período (Ignorando estornos para o cálculo bruto, ou incluindo conforme sua regra)
-    $query = FinancialTransaction::whereBetween('paid_at', [$dataInicio, $dataFim]);
-
-    $transacoes = $query->with('reserva')->orderBy('paid_at', 'desc')->get();
-
-    // 3. Agrupar Totais por Método de Pagamento
-    $totaisPorMetodo = $transacoes->groupBy('payment_method')->map(function ($row) {
-        return $row->sum('amount');
-    });
-
-    $faturamentoTotal = $transacoes->sum('amount');
-
-    return view('admin.financeiro.relatorio_faturamento', compact(
-        'transacoes',
-        'totaisPorMetodo',
-        'faturamentoTotal',
-        'dataInicio',
-        'dataFim'
-    ));
-}
-
     /**
      * Helper para determinar o range de datas com base no período.
      * @param string $periodo O período solicitado ('hoje', 'semana', 'mes').

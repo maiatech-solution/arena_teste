@@ -17,50 +17,71 @@ class FinanceiroController extends Controller
      * Carrega a view principal do dashboard financeiro.
      * 🎯 ATUALIZADO: Agora alimenta a página de Relatórios (index.blade.php)
      */
-   public function index()
-{
-    $mesAtual = now()->month;
-    $anoAtual = now()->year;
+    public function index()
+    {
+        $hoje = Carbon::today();
+        $mesAtual = Carbon::now()->month;
+        $anoAtual = Carbon::now()->year;
 
-    // Faturamento Mensal (Entradas - Estornos)
-    $faturamentoMensal = FinancialTransaction::whereMonth('paid_at', $mesAtual)
-        ->whereYear('paid_at', $anoAtual)
-        ->sum('amount');
+        // 1. KPIs de Sinais (Baseado na sua lógica de getResumo)
+        $sinalHoje = FinancialTransaction::whereDate('paid_at', $hoje)
+            ->where('type', 'signal')
+            ->sum('amount');
 
-    // Estatísticas de Ocupação
-    $totalReservasMes = Reserva::whereMonth('date', $mesAtual)->whereYear('date', $anoAtual)->count();
-    $canceladasMes = Reserva::whereMonth('date', $mesAtual)->whereYear('date', $anoAtual)
-        ->whereIn('status', ['cancelled', 'rejected', 'no_show'])->count();
+        $sinalSemana = FinancialTransaction::whereBetween('paid_at', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()])
+            ->where('type', 'signal')
+            ->sum('amount');
 
-    return view('admin.financeiro.index', compact('faturamentoMensal', 'totalReservasMes', 'canceladasMes'));
-}
+        $sinalMes = FinancialTransaction::whereMonth('paid_at', $mesAtual)
+            ->whereYear('paid_at', $anoAtual)
+            ->where('type', 'signal')
+            ->sum('amount');
 
-public function relatorioFaturamento(Request $request)
-{
-    // 1. Definir datas (Padrão: início do mês até hoje)
-    $dataInicio = $request->input('data_inicio') ? Carbon::parse($request->input('data_inicio'))->startOfDay() : now()->startOfMonth();
-    $dataFim = $request->input('data_fim') ? Carbon::parse($request->input('data_fim'))->endOfDay() : now()->endOfDay();
+        // 2. Faturamento Bruto Mensal
+        $faturamentoMensal = FinancialTransaction::whereMonth('paid_at', $mesAtual)
+            ->whereYear('paid_at', $anoAtual)
+            ->sum('amount');
 
-    // 2. Buscar Transações no período (Ignorando estornos para o cálculo bruto, ou incluindo conforme sua regra)
-    $query = FinancialTransaction::whereBetween('paid_at', [$dataInicio, $dataFim]);
+        // 3. Estatísticas de Reservas (Mês Atual)
+        $totalReservasMes = Reserva::whereMonth('date', $mesAtual)
+            ->whereYear('date', $anoAtual)
+            ->where('is_fixed', false)
+            ->count();
 
-    $transacoes = $query->with('reserva')->orderBy('paid_at', 'desc')->get();
+        $pagasMes = Reserva::whereMonth('date', $mesAtual)
+            ->whereYear('date', $anoAtual)
+            ->where('status', 'completed')
+            ->count();
 
-    // 3. Agrupar Totais por Método de Pagamento
-    $totaisPorMetodo = $transacoes->groupBy('payment_method')->map(function ($row) {
-        return $row->sum('amount');
-    });
+        $canceladasMes = Reserva::whereMonth('date', $mesAtual)
+            ->whereYear('date', $anoAtual)
+            ->whereIn('status', ['cancelled', 'rejected'])
+            ->count();
 
-    $faturamentoTotal = $transacoes->sum('amount');
+        // 4. Reservas com Pagamento Pendente (Para a tabela na View)
+        // Usa a sua lógica de getPagamentosPendentes para manter consistência
+        $reservasPendentes = Reserva::query()
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->where('is_fixed', false)
+            ->where(function ($query) {
+                $query->whereRaw('COALESCE(total_paid, 0) < price')
+                      ->orWhereNull('total_paid');
+            })
+            ->where('date', '>=', $hoje->toDateString())
+            ->orderBy('date', 'asc')
+            ->paginate(10); // Adicionado paginação para a View
 
-    return view('admin.financeiro.relatorio_faturamento', compact(
-        'transacoes',
-        'totaisPorMetodo',
-        'faturamentoTotal',
-        'dataInicio',
-        'dataFim'
-    ));
-}
+        return view('admin.financeiro.index', compact(
+            'sinalHoje',
+            'sinalSemana',
+            'sinalMes',
+            'faturamentoMensal',
+            'totalReservasMes',
+            'pagasMes',
+            'canceladasMes',
+            'reservasPendentes'
+        ));
+    }
 
     /**
      * Helper para determinar o range de datas com base no período.

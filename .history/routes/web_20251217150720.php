@@ -89,6 +89,8 @@ Route::middleware(['auth', 'gestor'])->group(function () {
     Route::get('/api/users/reputation/{contact}', [UserController::class, 'getReputation'])
         ->name('api.users.reputation');
 
+    Route::get('/admin/financeiro/relatorio-faturamento', [FinanceiroController::class, 'relatorioFaturamento'])
+    ->name('admin.financeiro.relatorio_faturamento');
 
     // =========================================================================
     // 🗓️ ROTAS API PARA AGENDAMENTO RÁPIDO/RECORRENTE (DO DASHBOARD)
@@ -213,9 +215,6 @@ Route::middleware(['auth', 'gestor'])->group(function () {
     Route::get('/admin/financeiro', [FinanceiroController::class, 'index'])->name('admin.financeiro.dashboard');
     Route::get('/api/financeiro/resumo', [FinanceiroController::class, 'getResumo'])->name('api.financeiro.resumo');
     Route::get('/api/financeiro/pagamentos-pendentes', [FinanceiroController::class, 'getPagamentosPendentes'])->name('api.financeiro.pagamentos-pendentes');
-
-    Route::get('/admin/financeiro/relatorio-faturamento', [FinanceiroController::class, 'relatorioFaturamento'])
-    ->name('admin.financeiro.relatorio_faturamento');
 
 });
 // FIM DO GRUPO DE ROTAS PROTEGIDAS PELO MIDDLEWARE 'gestor'
