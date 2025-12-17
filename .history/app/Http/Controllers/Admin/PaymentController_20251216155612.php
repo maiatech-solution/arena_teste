@@ -134,21 +134,25 @@ class PaymentController extends Controller
         ])->count();
 
         // --- 🎯 CORREÇÃO CRÍTICA PARA KPIS: SALDO PENDENTE / TOTAL PREVISTO ---
+        // Filtrar as reservas que REALMENTE importam para a projeção de receita AINDA NÃO PAGA.
 
-        // 1. Receita Bruta Total (TOTAL PREVISTO)
-        // ✅ CORREÇÃO: Deve incluir o valor total esperado, mas ignorar o que foi cancelado definitivamente.
-        $totalExpected = $reservas->whereNotIn('status', ['canceled', 'rejected'])
-            ->sum(fn($r) => $r->final_price ?? $r->price);
+        $reservasKPI = Reserva::query()
+            ->whereDate('date', $dateObject)
+            ->whereNotIn('status', ['no_show', 'canceled', 'rejected']) // Filtra para o Saldo Pendente
+            ->where('is_fixed', false)
+            ->get();
 
-        // 2. Saldo Pendente (SALDO PENDENTE A RECEBER)
-        // ✅ CORREÇÃO: Só somamos o saldo de reservas que ainda estão ATIVAS (confirmed ou pending).
-        // Se já é 'completed' ou 'no_show', a pendência financeira foi resolvida (paga ou assumida como perda).
-        $totalPendingLiquido = $reservas->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
-            ->sum(function ($r) {
-                $total = $r->final_price ?? $r->price;
-                $pago = $r->total_paid ?? 0;
-                return max(0, $total - $pago);
-            });
+        // 1. Receita Bruta Total (TOTAL PREVISTO) - Deve incluir todas as reservas agendadas, concluídas ou não.
+        // Usamos a coleção original $reservas para refletir o valor total negociado (R$ 350,00).
+        $totalExpected = $reservas->sum(fn($r) => $r->final_price ?? $r->price); // ✅ CORREÇÃO APLICADA AQUI
+
+        // 2. Saldo Pendente (SALDO PENDENTE A RECEBER) - Usa a coleção FILTRADA $reservasKPI
+        // Deve ser R$ 0,00 se tudo foi resolvido.
+        $totalPendingLiquido = $reservasKPI->sum(function ($r) {
+            $total = $r->final_price ?? $r->price;
+            $pago = $r->total_paid ?? 0;
+            return max(0, $total - $pago);
+        });
 
         // Faltas (No-Show) - Usa a coleção original 'reservas' para contagem correta
         $noShowCount = $reservas->where('status', 'no_show')->count();
@@ -176,14 +180,14 @@ class PaymentController extends Controller
             'totalAntecipadoReservasDia' => $totalAntecipadoReservasDia,
             'totalReservasDia' => $totalReservasDia,
 
-            // --- VARIÁVEIS PARA DESTAQUE ---
-            'totalPending' => $totalPendingLiquido,
+            // --- VARIÁVEIS PARA DESTAQUE (AGORA CORRETAS) ---
+            'totalPending' => $totalPendingLiquido, // ✅ SALDO PENDENTE A RECEBER (R$ 0,00 no seu cenário)
             'saldoPendenteLiquido' => $totalPendingLiquido,
-            'totalExpected' => $totalExpected,
+            'totalExpected' => $totalExpected, // ✅ RECEITA BRUTA (R$ 350,00 no seu cenário)
             'noShowCount' => $noShowCount,
             'highlightReservaId' => $selectedReservaId,
             'financialTransactions' => $financialTransactions,
-            'cashierStatus' => $cashierStatus,
+            'cashierStatus' => $cashierStatus, // 🎯 Status do caixa
         ]);
     }
 
@@ -210,7 +214,7 @@ class PaymentController extends Controller
             ], 403);
         }
 
-        // 2. Validação de dados
+        // 2. Validação de dados (movido para depois da checagem de segurança)
         $request->validate([
             'final_price' => 'required|numeric|min:0',
             'amount_paid' => 'required|numeric|min:0',
@@ -322,7 +326,7 @@ class PaymentController extends Controller
             ], 403);
         }
 
-        // 2. Validação de dados
+        // 2. Validação de dados (movido para depois da checagem de segurança)
         $request->validate([
             'notes' => 'nullable|string|max:500',
             'block_user' => 'nullable|boolean',
@@ -350,10 +354,12 @@ class PaymentController extends Controller
                     } else {
                         $reserva->payment_status = 'retained';
                         $reserva->final_price = $paidAmount;
+                        // total_paid já está no valor correto (ou foi atualizado pelo processo de pagamento anterior)
                     }
                 } else {
                     $reserva->payment_status = 'unpaid';
                     $reserva->total_paid = 0.00;
+                    // final_price deve ser mantido para que a linha da tabela reflita a perda total.
                 }
                 $reserva->save();
 

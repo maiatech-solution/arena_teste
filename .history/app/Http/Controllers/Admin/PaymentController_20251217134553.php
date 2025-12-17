@@ -136,13 +136,13 @@ class PaymentController extends Controller
         // --- 🎯 CORREÇÃO CRÍTICA PARA KPIS: SALDO PENDENTE / TOTAL PREVISTO ---
 
         // 1. Receita Bruta Total (TOTAL PREVISTO)
-        // ✅ CORREÇÃO: Deve incluir o valor total esperado, mas ignorar o que foi cancelado definitivamente.
+        // Deve incluir todas as reservas agendadas, concluídas ou no-show, mas IGNORAR canceladas.
         $totalExpected = $reservas->whereNotIn('status', ['canceled', 'rejected'])
             ->sum(fn($r) => $r->final_price ?? $r->price);
 
         // 2. Saldo Pendente (SALDO PENDENTE A RECEBER)
         // ✅ CORREÇÃO: Só somamos o saldo de reservas que ainda estão ATIVAS (confirmed ou pending).
-        // Se já é 'completed' ou 'no_show', a pendência financeira foi resolvida (paga ou assumida como perda).
+        // Se já é completed ou no_show, o saldo pendente para o dia é zerado.
         $totalPendingLiquido = $reservas->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
             ->sum(function ($r) {
                 $total = $r->final_price ?? $r->price;
@@ -176,14 +176,14 @@ class PaymentController extends Controller
             'totalAntecipadoReservasDia' => $totalAntecipadoReservasDia,
             'totalReservasDia' => $totalReservasDia,
 
-            // --- VARIÁVEIS PARA DESTAQUE ---
+            // --- VARIÁVEIS PARA DESTAQUE (AGORA CORRETAS) ---
             'totalPending' => $totalPendingLiquido,
             'saldoPendenteLiquido' => $totalPendingLiquido,
             'totalExpected' => $totalExpected,
             'noShowCount' => $noShowCount,
             'highlightReservaId' => $selectedReservaId,
             'financialTransactions' => $financialTransactions,
-            'cashierStatus' => $cashierStatus,
+            'cashierStatus' => $cashierStatus, // 🎯 Status do caixa
         ]);
     }
 
@@ -210,7 +210,7 @@ class PaymentController extends Controller
             ], 403);
         }
 
-        // 2. Validação de dados
+        // 2. Validação de dados (movido para depois da checagem de segurança)
         $request->validate([
             'final_price' => 'required|numeric|min:0',
             'amount_paid' => 'required|numeric|min:0',
@@ -322,7 +322,7 @@ class PaymentController extends Controller
             ], 403);
         }
 
-        // 2. Validação de dados
+        // 2. Validação de dados (movido para depois da checagem de segurança)
         $request->validate([
             'notes' => 'nullable|string|max:500',
             'block_user' => 'nullable|boolean',
