@@ -121,7 +121,6 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::get('/caixa', [FinanceiroController::class, 'relatorioCaixa'])->name('relatorio_caixa');
             Route::get('/cancelamentos', [FinanceiroController::class, 'relatorioCancelamentos'])->name('relatorio_cancelamentos');
             Route::get('/ocupacao', [FinanceiroController::class, 'relatorioOcupacao'])->name('relatorio_ocupacao');
-            Route::get('/ranking', [FinanceiroController::class, 'relatorioRanking'])->name('relatorio_ranking'); // 🏆 Nova rota adicionada
         });
     });
 

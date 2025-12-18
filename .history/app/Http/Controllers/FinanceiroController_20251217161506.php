@@ -15,6 +15,7 @@ class FinanceiroController extends Controller
 {
     /**
      * Dashboard Principal (Hub de Relatórios)
+     * Alimenta a View Central com as estatísticas do mês atual.
      */
     public function index()
     {
@@ -23,10 +24,12 @@ class FinanceiroController extends Controller
         $mesAtual = now()->month;
         $anoAtual = now()->year;
 
+        // Faturamento Mensal Líquido (Soma de transações no mês)
         $faturamentoMensal = FinancialTransaction::whereMonth('paid_at', $mesAtual)
             ->whereYear('paid_at', $anoAtual)
             ->sum('amount');
 
+        // Contagem de Reservas (Ocupação vs Cancelamentos)
         $totalReservasMes = Reserva::whereMonth('date', $mesAtual)
             ->whereYear('date', $anoAtual)
             ->where('is_fixed', false)
@@ -41,7 +44,7 @@ class FinanceiroController extends Controller
     }
 
     /**
-     * Relatório 01: Faturamento Detalhado
+     * Relatório 01: Faturamento Detalhado por Período e Método
      */
     public function relatorioFaturamento(Request $request)
     {
@@ -60,7 +63,7 @@ class FinanceiroController extends Controller
     }
 
     /**
-     * Relatório 02: Histórico de Caixa
+     * Relatório 02: Histórico de Caixa e Conferência de Movimentação
      */
     public function relatorioCaixa(Request $request)
     {
@@ -71,11 +74,11 @@ class FinanceiroController extends Controller
             ->orderBy('paid_at', 'asc')
             ->get();
 
-        return view('admin.financeiro.caixa', compact('movimentacoes', 'data'));
+        return view('admin.financeiro.relatorios.caixa', compact('movimentacoes', 'data'));
     }
 
     /**
-     * Relatório 03: Cancelamentos
+     * Relatório 03: Análise de Cancelamentos, Rejeições e No-Show
      */
     public function relatorioCancelamentos(Request $request)
     {
@@ -89,49 +92,27 @@ class FinanceiroController extends Controller
             ->orderBy('date', 'desc')
             ->get();
 
-        return view('admin.financeiro.cancelamentos', compact('cancelamentos', 'mes', 'ano'));
+        return view('admin.financeiro.relatorios.cancelamentos', compact('cancelamentos', 'mes', 'ano'));
     }
 
     /**
-     * Relatório 04: Mapa de Ocupação & Histórico
+     * Relatório 04: Mapa de Ocupação (Agenda de Jogos Confirmados)
      */
     public function relatorioOcupacao(Request $request)
     {
-        $dataInicio = $request->input('data_inicio') ? Carbon::parse($request->input('data_inicio'))->startOfDay() : now()->startOfMonth();
-        $dataFim = $request->input('data_fim') ? Carbon::parse($request->input('data_fim'))->endOfDay() : now()->endOfMonth();
+        $dataInicio = $request->input('data_inicio', now()->format('Y-m-d'));
 
-        $reservas = Reserva::whereBetween('date', [$dataInicio, $dataFim])
-            ->where('status', Reserva::STATUS_CONFIRMADA)
-            ->orderBy('date', 'desc')
+        $reservas = Reserva::where('status', Reserva::STATUS_CONFIRMADA)
+            ->whereDate('date', '>=', $dataInicio)
+            ->orderBy('date', 'asc')
             ->orderBy('start_time', 'asc')
             ->get();
 
-        return view('admin.financeiro.ocupacao', compact('reservas', 'dataInicio', 'dataFim'));
-    }
-
-    /**
-     * Relatório 05: Ranking de Clientes (Fidelidade Real)
-     * AJUSTADO: Conta apenas partidas passadas/atuais com pagamentos efetivados.
-     */
-    public function relatorioRanking()
-    {
-        $ranking = Reserva::select('client_name', 'client_contact',
-                    DB::raw('SUM(total_paid) as total_gasto'),
-                    // Conta apenas registros onde o pagamento foi maior que zero e a data já passou ou é hoje
-                    DB::raw('COUNT(CASE WHEN total_paid > 0 AND date <= "'.now()->format('Y-m-d').'" THEN 1 END) as total_reservas'))
-            ->where('status', Reserva::STATUS_CONFIRMADA)
-            ->whereNotNull('total_paid')
-            ->where('total_paid', '>', 0)
-            ->groupBy('client_name', 'client_contact')
-            ->orderBy('total_gasto', 'desc')
-            ->limit(15)
-            ->get();
-
-        return view('admin.financeiro.ranking', compact('ranking'));
+        return view('admin.financeiro.relatorios.ocupacao', compact('reservas', 'dataInicio'));
     }
 
     // =========================================================================
-    // 🔒 MÉTODOS DE GESTÃO DE CAIXA E APIs
+    // 🔒 MÉTODOS ORIGINAIS DE GESTÃO DE CAIXA (SISTEMA OPERACIONAL)
     // =========================================================================
 
     private function getDateRange(string $periodo): array
@@ -150,6 +131,7 @@ class FinanceiroController extends Controller
                 $end = $now->copy()->endOfMonth();
                 break;
         }
+
         return [$start, $end->endOfDay()];
     }
 
@@ -160,6 +142,7 @@ class FinanceiroController extends Controller
 
     public function getResumo(Request $request)
     {
+        Log::info('FinanceiroController: getResumo via AJAX iniciado.');
         try {
             $periodos = ['hoje', 'semana', 'mes'];
             $resultados = ['total_recebido' => [], 'sinais' => [], 'reservas' => []];
@@ -211,7 +194,11 @@ class FinanceiroController extends Controller
 
     public function closeCash(Request $request)
     {
-        $request->validate(['date' => 'required|date_format:Y-m-d', 'actual_amount' => 'required|numeric']);
+        $request->validate([
+            'date' => 'required|date_format:Y-m-d',
+            'actual_amount' => 'required|numeric'
+        ]);
+
         DB::beginTransaction();
         try {
             $dateString = $request->date;
@@ -225,34 +212,44 @@ class FinanceiroController extends Controller
                 'closing_time' => now(),
             ]);
 
-            Log::info("Caixa fechado para {$dateString} por " . auth()->id());
+            Log::info("Caixa fechado para a data {$dateString} pelo usuário " . auth()->id());
             DB::commit();
             return response()->json(['success' => true, 'message' => "Caixa fechado com sucesso."]);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Erro ao fechar caixa: ' . $e->getMessage());
-            return response()->json(['success' => false], 500);
+            return response()->json(['success' => false, 'message' => 'Erro interno ao fechar caixa.'], 500);
         }
     }
 
     public function openCash(Request $request)
     {
-        $request->validate(['date' => 'required|date_format:Y-m-d', 'reason' => 'required|string|max:500']);
+        $request->validate([
+            'date' => 'required|date_format:Y-m-d',
+            'reason' => 'required|string|max:500'
+        ]);
+
         DB::beginTransaction();
         try {
             $cashier = Cashier::where('date', $request->date)->first();
-            if (!$cashier) return response()->json(['success' => false], 404);
+            if (!$cashier) {
+                return response()->json(['success' => false, 'message' => "Registro de caixa não encontrado."], 404);
+            }
 
-            $reopenNote = "[REABERTURA por " . Auth::user()->name . " em " . now()->format('d/m/Y H:i:s') . "]: {$request->reason}";
+            $managerName = Auth::user()->name;
+            $reopenNote = "[REABERTURA por {$managerName} em " . now()->format('d/m/Y H:i:s') . "]: {$request->reason}";
+
             $cashier->update([
                 'status' => 'open',
                 'notes' => $cashier->notes ? $cashier->notes . "\n---\n" . $reopenNote : $reopenNote,
             ]);
 
+            Log::warning("Caixa reaberto para a data {$request->date}. Motivo: {$request->reason}");
             DB::commit();
             return response()->json(['success' => true, 'message' => "Caixa reaberto com sucesso."]);
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error('Erro ao reabrir caixa: ' . $e->getMessage());
             return response()->json(['success' => false], 500);
         }
     }

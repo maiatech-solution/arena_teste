@@ -23,10 +23,12 @@ class FinanceiroController extends Controller
         $mesAtual = now()->month;
         $anoAtual = now()->year;
 
+        // Faturamento Mensal Líquido
         $faturamentoMensal = FinancialTransaction::whereMonth('paid_at', $mesAtual)
             ->whereYear('paid_at', $anoAtual)
             ->sum('amount');
 
+        // Contagem de Reservas (Ocupação vs Cancelamentos)
         $totalReservasMes = Reserva::whereMonth('date', $mesAtual)
             ->whereYear('date', $anoAtual)
             ->where('is_fixed', false)
@@ -94,44 +96,25 @@ class FinanceiroController extends Controller
 
     /**
      * Relatório 04: Mapa de Ocupação & Histórico
+     * AJUSTADO: Agora permite visualizar reservas antigas e futuras através do filtro de data.
      */
     public function relatorioOcupacao(Request $request)
     {
+        // Padrão: Início do mês atual até o fim do mês atual
         $dataInicio = $request->input('data_inicio') ? Carbon::parse($request->input('data_inicio'))->startOfDay() : now()->startOfMonth();
         $dataFim = $request->input('data_fim') ? Carbon::parse($request->input('data_fim'))->endOfDay() : now()->endOfMonth();
 
         $reservas = Reserva::whereBetween('date', [$dataInicio, $dataFim])
             ->where('status', Reserva::STATUS_CONFIRMADA)
-            ->orderBy('date', 'desc')
+            ->orderBy('date', 'desc') // Mais recentes primeiro para auditoria histórica
             ->orderBy('start_time', 'asc')
             ->get();
 
         return view('admin.financeiro.ocupacao', compact('reservas', 'dataInicio', 'dataFim'));
     }
 
-    /**
-     * Relatório 05: Ranking de Clientes (Fidelidade Real)
-     * AJUSTADO: Conta apenas partidas passadas/atuais com pagamentos efetivados.
-     */
-    public function relatorioRanking()
-    {
-        $ranking = Reserva::select('client_name', 'client_contact',
-                    DB::raw('SUM(total_paid) as total_gasto'),
-                    // Conta apenas registros onde o pagamento foi maior que zero e a data já passou ou é hoje
-                    DB::raw('COUNT(CASE WHEN total_paid > 0 AND date <= "'.now()->format('Y-m-d').'" THEN 1 END) as total_reservas'))
-            ->where('status', Reserva::STATUS_CONFIRMADA)
-            ->whereNotNull('total_paid')
-            ->where('total_paid', '>', 0)
-            ->groupBy('client_name', 'client_contact')
-            ->orderBy('total_gasto', 'desc')
-            ->limit(15)
-            ->get();
-
-        return view('admin.financeiro.ranking', compact('ranking'));
-    }
-
     // =========================================================================
-    // 🔒 MÉTODOS DE GESTÃO DE CAIXA E APIs
+    // 🔒 MÉTODOS DE GESTÃO DE CAIXA E APIs (MANTIDOS)
     // =========================================================================
 
     private function getDateRange(string $periodo): array
@@ -150,6 +133,7 @@ class FinanceiroController extends Controller
                 $end = $now->copy()->endOfMonth();
                 break;
         }
+
         return [$start, $end->endOfDay()];
     }
 
@@ -225,12 +209,10 @@ class FinanceiroController extends Controller
                 'closing_time' => now(),
             ]);
 
-            Log::info("Caixa fechado para {$dateString} por " . auth()->id());
             DB::commit();
             return response()->json(['success' => true, 'message' => "Caixa fechado com sucesso."]);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Erro ao fechar caixa: ' . $e->getMessage());
             return response()->json(['success' => false], 500);
         }
     }
@@ -243,7 +225,9 @@ class FinanceiroController extends Controller
             $cashier = Cashier::where('date', $request->date)->first();
             if (!$cashier) return response()->json(['success' => false], 404);
 
-            $reopenNote = "[REABERTURA por " . Auth::user()->name . " em " . now()->format('d/m/Y H:i:s') . "]: {$request->reason}";
+            $managerName = Auth::user()->name;
+            $reopenNote = "[REABERTURA por {$managerName} em " . now()->format('d/m/Y H:i:s') . "]: {$request->reason}";
+
             $cashier->update([
                 'status' => 'open',
                 'notes' => $cashier->notes ? $cashier->notes . "\n---\n" . $reopenNote : $reopenNote,

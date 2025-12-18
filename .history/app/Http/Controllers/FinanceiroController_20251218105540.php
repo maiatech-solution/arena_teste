@@ -110,18 +110,15 @@ class FinanceiroController extends Controller
     }
 
     /**
-     * Relatório 05: Ranking de Clientes (Fidelidade Real)
-     * AJUSTADO: Conta apenas partidas passadas/atuais com pagamentos efetivados.
+     * Relatório 05: Ranking de Clientes (Fidelidade)
      */
     public function relatorioRanking()
     {
         $ranking = Reserva::select('client_name', 'client_contact',
                     DB::raw('SUM(total_paid) as total_gasto'),
-                    // Conta apenas registros onde o pagamento foi maior que zero e a data já passou ou é hoje
-                    DB::raw('COUNT(CASE WHEN total_paid > 0 AND date <= "'.now()->format('Y-m-d').'" THEN 1 END) as total_reservas'))
+                    DB::raw('COUNT(*) as total_reservas'))
             ->where('status', Reserva::STATUS_CONFIRMADA)
             ->whereNotNull('total_paid')
-            ->where('total_paid', '>', 0)
             ->groupBy('client_name', 'client_contact')
             ->orderBy('total_gasto', 'desc')
             ->limit(15)
