@@ -242,8 +242,7 @@
                                         @endphp
                                         <div class="text-xs text-gray-700">
                                             <strong>{{ $seriesItem['client_name'] }}</strong>
-                                            ({{ $seriesItem['slot_time'] }})
-                                            expira em
+                                            ({{ $seriesItem['slot_time'] }}) expira em
                                             {{ $lastDate->format('d/m/Y') }}.
                                             <span class="font-bold text-green-600">Renovação sugerida até
                                                 {{ $suggestedNewDate->format('d/m/Y') }}.</span>
@@ -923,7 +922,7 @@
                     signalInput.classList.add('bg-indigo-50', 'border-indigo-400', 'text-indigo-800');
                     displayEl.insertAdjacentHTML('beforeend',
                         '<span class="text-xs ml-2 text-indigo-600 font-bold p-1 bg-indigo-100 rounded">✅ VIP DETECTADO</span>'
-                    );
+                        );
                 } else {
                     // Se não for VIP, restaura para 0,00 ou o valor inicial
                     signalInput.value = '0,00';
@@ -1816,7 +1815,7 @@
 
                     if (isAvailable || !titleEl) return;
 
-                    // 1. Limpeza de prefixos antigos e formatação do nome
+                    // 1. Limpeza de prefixos antigos
                     const prefixRegex =
                         /^\s*(?:\(?(?:PAGO|FALTA|ATRASADO|CANCELADO|REJEITADA|PENDENTE|A\sVENCER\/FALTA|RECORR(?:E)?|SINAL|RESOLVIDO)\)?[\.:\s]*\s*)+/i;
                     let currentTitle = titleEl.textContent;
@@ -1830,54 +1829,43 @@
                     const price = parseFloat(extendedProps.final_price || extendedProps.price || 0);
                     const totalPaid = parseFloat(extendedProps.total_paid || 0);
 
+                    // Consideramos pago se o valor total bater ou se o status for explícito
                     const isTotalPaid = (Math.abs(totalPaid - price) < 0.1) && (price > 0);
                     const isResolvedStatus = ['concluida', 'lancada_caixa', 'cancelada', 'rejeitada',
                         'no_show'
                     ].includes(status);
                     const isLate = isPastEvent && status === 'confirmed';
 
-                    // Condição mestra para visual cinza (Faded)
-                    const shouldBeGrey = isTotalPaid || isResolvedStatus || isLate || isPastEvent;
-
-                    // 3. Aplicação de Classes e Cores
-                    // Reset inicial
+                    // 3. Aplicação de Cores Base (Tipo de Reserva)
                     info.el.classList.remove('fc-event-paid', 'fc-event-no-show', 'fc-event-recurrent',
                         'fc-event-quick', 'fc-event-pending');
 
+                    if (extendedProps.is_recurrent && status !== 'pending') {
+                        info.el.classList.add('fc-event-recurrent'); // Roxo
+                    } else {
+                        info.el.classList.add('fc-event-quick'); // Azul
+                    }
+
+                    // 4. SOBREPOSIÇÃO DE STATUS (A cor cinza/faded entra aqui)
                     let prefix = '';
 
                     if (status === 'pending') {
-                        // PENDENTE: Laranja vibrante sempre (prioridade visual para ação do admin)
-                        info.el.classList.add('fc-event-pending');
+                        info.el.classList.add('fc-event-pending'); // Laranja (Alta prioridade visual)
                         prefix = '(PENDENTE)';
-                    } else if (shouldBeGrey) {
-                        // RESOLVIDO OU PASSADO: Aplica o cinza e remove cores de fundo
+                    } else if (status === 'no_show') {
+                        info.el.classList.add('fc-event-no-show'); // Vermelho
+                        info.el.classList.add('fc-event-paid'); // Cinza/Faded por cima
+                        prefix = '(FALTA)';
+                    } else if (isLate) {
                         info.el.classList.add('fc-event-paid');
-
-                        // Define o prefixo específico dentro do estado cinza
-                        if (status === 'no_show') {
-                            prefix = '(FALTA)';
-                            info.el.classList.add(
-                            'fc-event-no-show'); // Mantém a borda vermelha se houver no CSS
-                        } else if (isLate) {
-                            prefix = '(ATRASADO)';
-                        } else if (status === 'cancelada') {
-                            prefix = '(CANCEL)';
-                        } else if (status === 'rejeitada') {
-                            prefix = '(REJEIT)';
-                        } else {
-                            prefix = '(PAGO)';
-                        }
-                    } else {
-                        // FUTURO E ATIVO: Aplica cores vibrantes (Roxo ou Azul)
-                        if (extendedProps.is_recurrent) {
-                            info.el.classList.add('fc-event-recurrent');
-                        } else {
-                            info.el.classList.add('fc-event-quick');
-                        }
+                        prefix = '(ATRASADO)';
+                    } else if (isTotalPaid || isResolvedStatus) {
+                        info.el.classList.add('fc-event-paid'); // Aplica o Cinza (PAGO/CANCELADO/REJEITADO)
+                        prefix = status === 'cancelada' ? '(CANCEL)' : (status === 'rejeitada' ?
+                            '(REJEIT)' : '(PAGO)');
                     }
 
-                    // 4. Renderização do Título Final
+                    // 5. Renderização do Título Final
                     titleEl.textContent = `${prefix} ${clientName}${priceSuffix}`;
                 },
 
