@@ -70,7 +70,7 @@ class Reserva extends Model
         'signal_value' => 'float',
         'total_paid' => 'float',
         // ✅ CORRIGIDO: Garante que as horas são tratadas como objetos Carbon
-        'start_time' => 'datetime',
+        'start_time' => 'datetime', 
         'end_time' => 'datetime',
     ];
 
@@ -144,28 +144,5 @@ class Reserva extends Model
     ): void {
         $query->where('is_fixed', true)
               ->whereIn('status', [self::STATUS_FREE, self::STATUS_MAINTENANCE]);
-    }
-
-    public function scopeIsOccupied($query, $date, $startTime, $endTime)
-    {
-        return $query->where('date', $date)
-            ->whereIn('status', [self::STATUS_CONFIRMADA, self::STATUS_PENDENTE, self::STATUS_CONCLUIDA])
-            ->where(function ($q) use ($startTime, $endTime) {
-                $q->where(function ($inner) use ($startTime, $endTime) {
-                    // Caso 1: O início da nova reserva está entre uma reserva existente
-                    $inner->where('start_time', '>=', $startTime)
-                          ->where('start_time', '<', $endTime);
-                })
-                ->orWhere(function ($inner) use ($startTime, $endTime) {
-                    // Caso 2: O fim da nova reserva está entre uma reserva existente
-                    $inner->where('end_time', '>', $startTime)
-                          ->where('end_time', '<=', $endTime);
-                })
-                ->orWhere(function ($inner) use ($startTime, $endTime) {
-                    // Caso 3: A nova reserva engloba totalmente uma reserva existente
-                    $inner->where('start_time', '<=', $startTime)
-                          ->where('end_time', '>=', $endTime);
-                });
-            });
     }
 }
