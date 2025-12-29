@@ -857,47 +857,41 @@
                 },
 
                 eventDidMount: function(info) {
-    const event = info.event;
-    const isAvailable = event.classNames.includes('fc-event-available');
+                    const event = info.event;
+                    const isAvailable = event.classNames.includes('fc-event-available');
 
-    // 1. Visão de Mês
-    if (info.view.type === 'dayGridMonth') {
-        info.el.style.display = 'none';
-        return;
-    }
+                    // 1. Visão de Mês
+                    if (info.view.type === 'dayGridMonth') {
+                        info.el.style.display = 'none';
+                        return;
+                    }
 
-    // 2. Visão de Dia (TimeGrid)
-    if (info.view.type === 'timeGridDay') {
-        const harness = info.el.closest('.fc-timegrid-event-harness');
+                    // 2. Visão de Dia (TimeGrid)
+                    if (info.view.type === 'timeGridDay') {
+                        const harness = info.el.closest('.fc-timegrid-event-harness');
 
-        // Limpeza visual do horário dentro do card (Remove os :00 segundos)
-        const timeTextEl = info.el.querySelector('.fc-event-time');
-        if (timeTextEl) {
-            let timeText = timeTextEl.innerText;
-            // Transforma "12:00 - 13:00" em "12:00 - 13:00" (limpa se vier com segundos do backend)
-            timeTextEl.innerText = timeText.replace(/:00/g, '');
-        }
+                        if (!isAvailable) {
+                            // Esconde completamente a reserva pendente/confirmada para não bloquear clique
+                            info.el.style.display = 'none';
+                            if (harness) {
+                                harness.style.display = 'none';
+                                harness.style.zIndex = '1';
+                            }
+                            return;
+                        }
 
-        if (!isAvailable) {
-            info.el.style.display = 'none';
-            if (harness) {
-                harness.style.display = 'none';
-                harness.style.zIndex = '1';
-            }
-            return;
-        }
+                        // Slot Disponível (Verde)
+                        info.el.style.display = 'block';
+                        info.el.style.cursor = 'pointer';
 
-        // Slot Disponível (Verde)
-        info.el.style.display = 'block';
-        info.el.style.cursor = 'pointer';
-
-        if (harness) {
-            harness.style.display = 'block';
-            harness.style.zIndex = '99'; // Joga o slot verde para a frente de tudo
-            harness.style.pointerEvents = 'auto';
-        }
-    }
-},
+                        // Forçar o container pai a ficar visível e aceitar cliques
+                        if (harness) {
+                            harness.style.display = 'block';
+                            harness.style.zIndex = '99';
+                            harness.style.pointerEvents = 'auto';
+                        }
+                    }
+                },
 
                 // 🛑 dateClick: Bloqueia o clique em dias esgotados (Mês -> Dia) 🛑
                 dateClick: function(info) {

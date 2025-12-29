@@ -75,21 +75,20 @@
             }
         }
 
-        /* 🛑 CORREÇÃO DE COLISÃO: Garante que o container não bloqueie o clique 🛑 */
+        /* 🛑 IMPORTANTE: Reset de colisão e ponteiros 🛑 */
         .fc-timegrid-col-events>div,
         .fc-timegrid-event-harness {
             width: 100% !important;
             left: 0 !important;
             right: 0 !important;
             margin-left: 0 !important;
+            /* Permitir que o clique passe através do harness se ele não tiver um evento ativo */
             pointer-events: none !important;
-            /* O container fica "transparente" ao mouse */
         }
 
-        /* Reativar clique APENAS no evento verde e garantir que ele fique na frente */
+        /* Reativar clique apenas no evento verde */
         .fc-event-available {
             pointer-events: auto !important;
-            /* O evento verde captura o mouse */
             cursor: pointer !important;
             z-index: 50 !important;
             background-color: #10B981 !important;
@@ -250,140 +249,92 @@
     </div>
 
     {{-- --- Modal de Confirmação de Dados --- --}}
-    {{-- --- MODAL DE CONFIRMAÇÃO (O QUE CORRIGIMOS) --- --}}
-    <div id="booking-modal"
-        class="modal-overlay hidden fixed inset-0 items-center justify-center z-50 p-4 backdrop-blur-sm bg-black/50">
-        <div id="modal-content"
-            class="bg-white dark:bg-gray-800 p-8 sm:p-10 rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto transform transition-all duration-300 scale-100 border-t-[10px]
-            @if ($errors->any()) border-red-600 dark:border-red-500 @else border-indigo-600 dark:border-indigo-500 @endif"
-            onclick="event.stopPropagation()">
+<div id="booking-modal" class="modal-overlay hidden items-center justify-center z-50 p-2 sm:p-4">
+    {{-- max-w-lg é o equilíbrio ideal entre o md e o xl --}}
+    <div id="modal-content" class="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-[1.5rem] shadow-2xl w-full max-w-lg max-h-[95vh] overflow-y-auto transform transition-all duration-300 border-t-[8px]
+        @if ($errors->any() && old('data_reserva')) border-red-600 dark:border-red-500 @else border-indigo-600 dark:border-indigo-500 @endif" onclick="event.stopPropagation()">
 
-            {{-- Erros de Validação do Laravel --}}
-            @if ($errors->any())
-                <div
-                    class="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-300 rounded-r-xl shadow-sm">
-                    <p class="font-black flex items-center text-lg uppercase tracking-tight">
-                        <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd"
-                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                                clip-rule="evenodd" />
-                        </svg>
-                        Atenção
-                    </p>
-                    <ul class="mt-1 text-sm font-semibold">
-                        @foreach ($errors->all() as $error)
-                            <li>{{ $error }}</li>
-                        @endforeach
-                    </ul>
-                </div>
-            @endif
+        @if (!Auth::check() || (Auth::check() && Auth::user()->isClient()))
 
-            <div class="mb-8 text-center sm:text-left">
-                <h4 class="text-3xl font-black text-gray-900 dark:text-gray-100 tracking-tight leading-none">Dados da
-                    Reserva</h4>
-                <p class="text-gray-500 dark:text-gray-400 mt-2 font-medium italic">Elite Soccer - Onde o jogo acontece
-                </p>
+            <div class="text-center mb-6">
+                <h4 class="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">Dados da Reserva</h4>
             </div>
 
             <form id="booking-form" method="POST" action="{{ route('reserva.store') }}">
                 @csrf
 
-                {{-- CAMPOS HIDDEN (Fundamentais para o Controller) --}}
                 <input type="hidden" name="data_reserva" id="form-date" value="{{ old('data_reserva') }}">
                 <input type="hidden" name="hora_inicio" id="form-start" value="{{ old('hora_inicio') }}">
                 <input type="hidden" name="hora_fim" id="form-end" value="{{ old('hora_fim') }}">
                 <input type="hidden" name="price" id="form-price" value="{{ old('price') }}">
                 <input type="hidden" name="schedule_id" id="form-schedule-id" value="{{ old('schedule_id') }}">
-                <input type="hidden" name="reserva_conflito_id" value="" />
 
-                {{-- 🎯 CORREÇÃO DO ERRO 500: Campo de e-mail --}}
-                <input type="hidden" name="email_cliente"
-                    value="{{ Auth::check() ? Auth::user()->email : old('email_cliente') }}">
-
-                {{-- Resumo Visual do Horário --}}
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-                    <div
-                        class="bg-indigo-50 dark:bg-indigo-900/20 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-800">
-                        <span class="text-[10px] font-black uppercase tracking-widest text-indigo-500 block mb-1">Data
-                            Agendada</span>
-                        <span id="modal-date"
-                            class="font-bold text-gray-800 dark:text-gray-100 block leading-tight text-lg"></span>
-                    </div>
-                    <div
-                        class="bg-indigo-50 dark:bg-indigo-900/20 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-800 text-center sm:text-left">
-                        <span
-                            class="text-[10px] font-black uppercase tracking-widest text-indigo-500 block mb-1">Horário</span>
-                        <span id="modal-time"
-                            class="font-black text-3xl text-indigo-600 dark:text-indigo-400 block leading-none"></span>
-                    </div>
-                </div>
-
-                {{-- Dados do Cliente --}}
-                <div class="mb-8">
-                    @if (Auth::check() && Auth::user()->isClient())
-                        <div
-                            class="p-6 bg-green-50 dark:bg-green-900/20 rounded-2xl border border-green-200 dark:border-green-800 flex items-center justify-between">
+                {{-- INFO BOX --}}
+                <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700">
+                    <div class="flex flex-col gap-3">
+                        <div class="flex items-start gap-3">
+                            <span class="p-2 bg-indigo-100 dark:bg-indigo-900/40 rounded-lg text-indigo-600 dark:text-indigo-400">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            </span>
                             <div>
-                                <p class="text-xs font-bold text-green-600 uppercase tracking-widest mb-1">Reserva
-                                    vinculada a:</p>
-                                <p class="text-xl font-black text-gray-900 dark:text-gray-100 leading-none">
-                                    {{ Auth::user()->name }}</p>
-                                <p class="text-sm text-green-700 dark:text-green-400 font-medium mt-2 italic">
-                                    {{ Auth::user()->contato_cliente }}</p>
-                            </div>
-                            <input type="hidden" name="nome_cliente" value="{{ Auth::user()->name }}">
-                            <input type="hidden" name="contato_cliente"
-                                value="{{ Auth::user()->contato_cliente }}">
-                        </div>
-                    @else
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                            <div>
-                                <label
-                                    class="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">Nome
-                                    Completo</label>
-                                <input type="text" name="nome_cliente" placeholder="Seu nome" required
-                                    value="{{ old('nome_cliente') }}"
-                                    class="w-full bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 dark:text-white rounded-xl p-4 focus:border-indigo-500 outline-none transition shadow-sm">
-                            </div>
-                            <div>
-                                <label
-                                    class="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">WhatsApp</label>
-                                <input type="tel" name="contato_cliente" id="guest-contact"
-                                    placeholder="919XXXXXXXX" required value="{{ old('contato_cliente') }}"
-                                    class="w-full bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 dark:text-white rounded-xl p-4 focus:border-indigo-500 outline-none transition shadow-sm"
-                                    maxlength="11">
+                                <p class="text-[10px] uppercase tracking-widest font-bold text-gray-400">Data do Jogo</p>
+                                {{-- whitespace-normal permite quebrar a linha se a data for muito grande --}}
+                                <p id="modal-date" class="text-base font-bold text-gray-800 dark:text-gray-200 leading-tight whitespace-normal"></p>
                             </div>
                         </div>
-                    @endif
+                        <div class="flex items-start gap-3">
+                            <span class="p-2 bg-indigo-100 dark:bg-indigo-900/40 rounded-lg text-indigo-600 dark:text-indigo-400">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </span>
+                            <div>
+                                <p class="text-[10px] uppercase tracking-widest font-bold text-gray-400">Horário Selecionado</p>
+                                <p id="modal-time" class="text-lg font-black text-indigo-600 dark:text-indigo-400"></p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                {{-- Aviso de Pagamento --}}
-                <div class="mb-8 p-6 bg-red-50 dark:bg-red-900/20 border-l-8 border-red-600 rounded-r-2xl shadow-sm">
-                    <p class="text-xs sm:text-sm text-red-800 dark:text-red-300 font-bold leading-relaxed">
-                        Sua vaga só é garantida após o envio imediato do comprovante de sinal via WhatsApp.
-                    </p>
+                {{-- FORMULÁRIO --}}
+                @if (Auth::check() && Auth::user()->isClient())
+                    <div class="mb-6 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-100 dark:border-green-800">
+                        <p class="text-green-800 dark:text-green-300 font-bold text-center">{{ Auth::user()->name }}</p>
+                        <input type="hidden" name="nome_cliente" value="{{ Auth::user()->name }}">
+                        <input type="hidden" name="contato_cliente" value="{{ Auth::user()->contato_cliente }}">
+                    </div>
+                @else
+                    <div class="space-y-4 mb-6">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Seu Nome</label>
+                            <input type="text" name="nome_cliente" placeholder="Nome completo" required value="{{ old('nome_cliente') }}"
+                                class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">WhatsApp</label>
+                            <input type="tel" name="contato_cliente" id="guest-contact" placeholder="919XXXXXXXX" required value="{{ old('contato_cliente') }}"
+                                class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition" maxlength="11">
+                        </div>
+                    </div>
+                @endif
+
+                {{-- PREÇO --}}
+                <div class="flex items-center justify-between mb-6 bg-green-50 dark:bg-green-900/10 p-4 rounded-2xl">
+                    <span class="font-bold text-gray-600 dark:text-gray-400">Total:</span>
+                    <span class="text-2xl font-black text-green-600 dark:text-green-400">R$ <span id="modal-price"></span></span>
                 </div>
 
-                {{-- Rodapé --}}
-                <div
-                    class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-6 border-t border-gray-100 dark:border-gray-700">
-                    <div>
-                        <span
-                            class="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Investimento</span>
-                        <span class="text-4xl font-black text-green-600 dark:text-green-400 leading-none">R$ <span
-                                id="modal-price"></span></span>
-                    </div>
-                    <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                        <button type="button" id="close-modal"
-                            class="px-8 py-4 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 font-black rounded-2xl hover:bg-gray-200 transition uppercase text-xs tracking-widest">Cancelar</button>
-                        <button type="submit"
-                            class="px-8 py-4 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-500/40 transition transform hover:scale-105 active:scale-95 uppercase text-xs tracking-widest">Confirmar
-                            Jogo</button>
-                    </div>
+                {{-- BOTÕES --}}
+                <div class="flex flex-col gap-3">
+                    <button type="submit" class="w-full p-4 bg-indigo-600 text-white font-black rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-500/30 transition duration-300 uppercase tracking-widest text-sm">
+                        Confirmar Pré-Reserva
+                    </button>
+                    <button type="button" id="close-modal" class="w-full p-3 bg-transparent text-gray-400 dark:text-gray-500 font-bold rounded-xl hover:text-gray-600 transition text-sm">
+                        Voltar ao calendário
+                    </button>
                 </div>
             </form>
-        </div>
+        @endif
     </div>
+</div>
 
     {{-- FullCalendar, Moment.js e Scripts Customizados --}}
     <script src='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js'></script>
@@ -857,47 +808,41 @@
                 },
 
                 eventDidMount: function(info) {
-    const event = info.event;
-    const isAvailable = event.classNames.includes('fc-event-available');
+                    const event = info.event;
+                    const isAvailable = event.classNames.includes('fc-event-available');
 
-    // 1. Visão de Mês
-    if (info.view.type === 'dayGridMonth') {
-        info.el.style.display = 'none';
-        return;
-    }
+                    // 1. Visão de Mês
+                    if (info.view.type === 'dayGridMonth') {
+                        info.el.style.display = 'none';
+                        return;
+                    }
 
-    // 2. Visão de Dia (TimeGrid)
-    if (info.view.type === 'timeGridDay') {
-        const harness = info.el.closest('.fc-timegrid-event-harness');
+                    // 2. Visão de Dia (TimeGrid)
+                    if (info.view.type === 'timeGridDay') {
+                        const harness = info.el.closest('.fc-timegrid-event-harness');
 
-        // Limpeza visual do horário dentro do card (Remove os :00 segundos)
-        const timeTextEl = info.el.querySelector('.fc-event-time');
-        if (timeTextEl) {
-            let timeText = timeTextEl.innerText;
-            // Transforma "12:00 - 13:00" em "12:00 - 13:00" (limpa se vier com segundos do backend)
-            timeTextEl.innerText = timeText.replace(/:00/g, '');
-        }
+                        if (!isAvailable) {
+                            // Esconde completamente a reserva pendente/confirmada para não bloquear clique
+                            info.el.style.display = 'none';
+                            if (harness) {
+                                harness.style.display = 'none';
+                                harness.style.zIndex = '1';
+                            }
+                            return;
+                        }
 
-        if (!isAvailable) {
-            info.el.style.display = 'none';
-            if (harness) {
-                harness.style.display = 'none';
-                harness.style.zIndex = '1';
-            }
-            return;
-        }
+                        // Slot Disponível (Verde)
+                        info.el.style.display = 'block';
+                        info.el.style.cursor = 'pointer';
 
-        // Slot Disponível (Verde)
-        info.el.style.display = 'block';
-        info.el.style.cursor = 'pointer';
-
-        if (harness) {
-            harness.style.display = 'block';
-            harness.style.zIndex = '99'; // Joga o slot verde para a frente de tudo
-            harness.style.pointerEvents = 'auto';
-        }
-    }
-},
+                        // Forçar o container pai a ficar visível e aceitar cliques
+                        if (harness) {
+                            harness.style.display = 'block';
+                            harness.style.zIndex = '99';
+                            harness.style.pointerEvents = 'auto';
+                        }
+                    }
+                },
 
                 // 🛑 dateClick: Bloqueia o clique em dias esgotados (Mês -> Dia) 🛑
                 dateClick: function(info) {

@@ -1267,36 +1267,40 @@ class ReservaController extends Controller
         if ($financeiroController->isCashClosed($reservaDate)) {
             return redirect()->back()->with('error', 'Erro: Não é possível confirmar esta reserva. O caixa do dia ' . Carbon::parse($reservaDate)->format('d/m/Y') . ' está fechado. Reabra o caixa para continuar.');
         }
+        // FIM DA VALIDAÇÃO DE SEGURANÇA
 
-        // 1. Validação dos dados vindos do Modal
+        // 1. Validação
         $validated = $request->validate([
             'signal_value' => 'nullable|numeric|min:0',
             'is_recurrent' => ['nullable', 'sometimes'],
             'payment_method' => 'required|string',
+        ], [
+            'signal_value.numeric' => 'O valor do sinal deve ser um número.',
+            'signal_value.min' => 'O valor do sinal não pode ser negativo.',
         ]);
 
         if ($reserva->status !== Reserva::STATUS_PENDENTE) {
             return redirect()->back()->with('error', 'Esta reserva já foi processada.');
         }
 
-        // Checagem de recorrência
+        // LÓGICA FINAL: Checagem robusta contra string ou array
         $isRecurrent = count(array_filter((array)$request->input('is_recurrent'), function ($value) {
             return $value === '1' || $value === true;
         })) > 0;
 
         $signalValue = (float)($validated['signal_value'] ?? 0.00);
 
-        // 2. Checagem de Conflito (Contra quem já está CONFIRMADO/PAGO)
+        // 2. Checagem de Conflito (Contra outras reservas ativas, exceto a própria reserva que está sendo confirmada)
         if ($this->checkOverlap($reserva->date, $reserva->start_time, $reserva->end_time, true, $reserva->id)) {
             $conflictingIds = $this->getConflictingReservaIds($reserva->date, $reserva->start_time, $reserva->end_time, $reserva->id);
-            return redirect()->back()->with('error', "Conflito: Este horário já foi ocupado por outra reserva confirmada. (IDs: {$conflictingIds})");
+            return redirect()->back()->with('error', "Conflito: Não é possível confirmar. O horário está ocupado por outra reserva. (IDs: {$conflictingIds})");
         }
 
         DB::beginTransaction();
         try {
             $originalFixedSlotId = $reserva->fixed_slot_id;
 
-            // 3. Atualiza a reserva atual para CONFIRMADA
+            // 3. Atualiza a reserva atual para 'confirmed'
             $reserva->status = Reserva::STATUS_CONFIRMADA;
             $reserva->signal_value = $signalValue;
             $reserva->total_paid = $signalValue;
@@ -1304,38 +1308,137 @@ class ReservaController extends Controller
             $reserva->manager_id = Auth::id();
             $reserva->final_price = $reserva->price;
 
-            // Define status de pagamento
-            if (abs($signalValue - $reserva->price) < 0.01 || $signalValue > $reserva->price) {
-                $reserva->payment_status = 'paid';
+            // Define o status de pagamento
+            $paymentStatus = 'pending';
+            if ($signalValue > 0 && $signalValue < $reserva->price) {
+                $paymentStatus = 'partial';
+            } elseif (abs($signalValue - $reserva->price) < 0.01 || $signalValue > $reserva->price) { // ✅ AJUSTE DE PRECISÃO
+                $paymentStatus = 'paid';
+                // 🎯 Se totalmente pago, conclui a reserva
                 $reserva->status = Reserva::STATUS_CONCLUIDA;
-            } else {
-                $reserva->payment_status = $signalValue > 0 ? 'partial' : 'pending';
             }
+            $reserva->payment_status = $paymentStatus;
 
+            // Se for recorrente, ela se tornará a reserva Mestra
             if ($isRecurrent) {
-                $reserva->save();
+                $reserva->save(); // Salva antes de usar o ID
                 $reserva->recurrent_series_id = $reserva->id;
+                $reserva->save();
+            } else {
+                $reserva->save();
             }
-            $reserva->save();
 
-            // 4. 🎯 LIMPEZA AUTOMÁTICA: Rejeita os outros interessados no mesmo horário
-            Reserva::where('date', $reserva->date)
-                ->where('start_time', $reserva->start_time)
-                ->where('end_time', $reserva->end_time)
-                ->where('id', '!=', $reserva->id) // Não mexe na que confirmamos agora
-                ->where('status', Reserva::STATUS_PENDENTE)
-                ->update([
-                    'status' => Reserva::STATUS_REJEITADA,
-                    'cancellation_reason' => 'Horário ocupado por outra reserva confirmada pelo administrador.',
-                    'manager_id' => Auth::id()
-                ]);
-
-            // 5. Consome o slot fixo original (Verde)
+            // 4. Consome o slot fixo original (se existir)
             if ($originalFixedSlotId) {
-                Reserva::where('id', $originalFixedSlotId)->where('is_fixed', true)->delete();
+                Reserva::where('id', $originalFixedSlotId)
+                    ->where('is_fixed', true)
+                    ->where('status', Reserva::STATUS_FREE)
+                    ->delete();
             }
 
-            // 6. Registra o Sinal no Financeiro
+            $successMessage = "Reserva de {$reserva->client_name} confirmada com sucesso!";
+            $recurrentCount = 0;
+            $conflictedOrSkippedCount = 0;
+
+            // 5. LÓGICA CRÍTICA: CRIAÇÃO DA SÉRIE RECORRENTE (6 meses)
+            if ($isRecurrent) {
+                $masterReserva = $reserva;
+
+                // CORREÇÃO CRÍTICA: Obtém a data da reserva mestra como objeto Carbon
+                $masterDate = Carbon::parse($masterReserva->date);
+
+                // 5.1. Definir a janela de renovação: Da próxima semana até 6 meses
+                $startDate = $masterDate->copy()->addWeek(); // Começa na próxima semana
+                $endDate = $masterDate->copy()->addMonths(6); // 6 meses a partir da data da reserva mestra
+
+                // Parâmetros da série
+                $dayOfWeek = $masterReserva->day_of_week;
+                $startTime = $masterReserva->start_time;
+                $endTime = $masterReserva->end_time;
+                $price = $masterReserva->price;
+                $clientName = $masterReserva->client_name;
+                $clientContact = $masterReserva->client_contact;
+                $userId = $masterReserva->user_id;
+                $masterId = $reserva->id; // Usa o ID já salvo da mestra
+                $managerId = Auth::id();
+
+                $newReservasToCreate = [];
+                $currentDate = $startDate->copy();
+
+                // Garante que o loop só comece APÓS a data da reserva mestra
+                while ($currentDate->lessThanOrEqualTo($endDate)) {
+                    $dateString = $currentDate->toDateString();
+                    $isConflict = false;
+
+                    // Checagem de Conflito (Outros Clientes: confirmed/pending)
+                    $isOccupiedByOtherCustomer = Reserva::whereDate('date', $dateString)
+                        ->where('start_time', '<', $endTime)
+                        ->where('end_time', '>', $startTime)
+                        ->where('is_fixed', false)
+                        ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+                        ->exists();
+
+                    if ($isOccupiedByOtherCustomer) {
+                        $isConflict = true;
+                    }
+
+                    // NOVO FLUXO: Busca o slot fixo, se existir, para DELETAR (consumir)
+                    $fixedSlot = null;
+                    if (!$isConflict) {
+                        $fixedSlot = Reserva::where('is_fixed', true)
+                            ->whereDate('date', $dateString)
+                            ->where('start_time', $startTime)
+                            ->where('end_time', $endTime)
+                            ->where('status', Reserva::STATUS_FREE)
+                            ->first();
+                    }
+
+                    // Cria a nova reserva se não houver conflito real
+                    if (!$isConflict && $fixedSlot) { // Adicionado check for $fixedSlot
+                        $newReservasToCreate[] = [
+                            'user_id' => $userId,
+                            'manager_id' => $managerId,
+                            'date' => $dateString,
+                            'day_of_week' => $dayOfWeek,
+                            'start_time' => $startTime,
+                            'end_time' => $endTime,
+                            'price' => $price,
+                            'final_price' => $price,
+                            'signal_value' => 0.00,
+                            'total_paid' => 0.00,
+                            'payment_status' => 'pending',
+                            'client_name' => $clientName,
+                            'client_contact' => $clientContact,
+                            'notes' => $masterReserva->notes,
+                            'status' => Reserva::STATUS_CONFIRMADA,
+                            'is_fixed' => false,
+                            'is_recurrent' => true,
+                            'recurrent_series_id' => $masterId,
+                            'created_at' => Carbon::now(),
+                            'updated_at' => Carbon::now(),
+                        ];
+
+                        $fixedSlot->delete(); // Consome o slot verde/FREE
+                    } else {
+                        $conflictedOrSkippedCount++;
+                    }
+
+                    $currentDate->addWeek();
+                }
+
+                if (!empty($newReservasToCreate)) {
+                    Reserva::insert($newReservasToCreate);
+                    $recurrentCount = count($newReservasToCreate);
+                }
+
+                $successMessage .= " Série recorrente de " . ($recurrentCount + 1) . " reservas (incluindo a mestra) adicionada até " . $endDate->format('d/m/Y') . ".";
+                if ($conflictedOrSkippedCount > 0) {
+                    $successMessage .= " Atenção: {$conflictedOrSkippedCount} slots foram pulados devido a conflitos ou ausência de slot fixo.";
+                }
+            }
+            // FIM DA LÓGICA DE RECORRÊNCIA
+
+            // 6. NOVO: GERA TRANSAÇÃO FINANCEIRA (SINAL)
             if ($signalValue > 0) {
                 FinancialTransaction::create([
                     'reserva_id' => $reserva->id,
@@ -1343,22 +1446,24 @@ class ReservaController extends Controller
                     'manager_id' => Auth::id(),
                     'amount' => $signalValue,
                     'type' => FinancialTransaction::TYPE_SIGNAL,
-                    'payment_method' => $validated['payment_method'],
-                    'description' => 'Sinal recebido na confirmação da reserva (Limpeza de concorrentes)',
+                    'payment_method' => $validated['payment_method'] ?? 'pix',
+                    'description' => 'Sinal recebido na confirmação da reserva/série',
                     'paid_at' => Carbon::now(),
                 ]);
             }
 
-            // Lógica de criação de série recorrente se marcado (Omiti o loop aqui por brevidade, mas deve seguir o seu original)
-            // ... (Seu código de $isRecurrent continua aqui) ...
-
             DB::commit();
 
-            return redirect()->back()->with('success', "Reserva de {$reserva->client_name} confirmada! As demais pré-reservas deste horário foram marcadas como REJEITADAS.");
+            if ($signalValue > 0) {
+                $successMessage .= " Sinal de R$ " . number_format($signalValue, 2, ',', '.') . " registrado.";
+            }
+
+            return redirect()->back()->with('success', $successMessage);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Erro fatal ao confirmar reserva ID: {$reserva->id}: " . $e->getMessage());
-            return redirect()->back()->with('error', 'Erro interno ao processar: ' . $e->getMessage());
+            $logMessage = "Erro fatal ao confirmar reserva ID: {$reserva->id}: " . $e->getMessage();
+            Log::error($logMessage, ['exception' => $e]);
+            return redirect()->back()->with('error', 'Erro interno ao processar a confirmação: ' . $e->getMessage());
         }
     }
 

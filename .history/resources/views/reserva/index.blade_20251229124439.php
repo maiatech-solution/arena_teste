@@ -75,21 +75,20 @@
             }
         }
 
-        /* 🛑 CORREÇÃO DE COLISÃO: Garante que o container não bloqueie o clique 🛑 */
+        /* 🛑 IMPORTANTE: Reset de colisão e ponteiros 🛑 */
         .fc-timegrid-col-events>div,
         .fc-timegrid-event-harness {
             width: 100% !important;
             left: 0 !important;
             right: 0 !important;
             margin-left: 0 !important;
+            /* Permitir que o clique passe através do harness se ele não tiver um evento ativo */
             pointer-events: none !important;
-            /* O container fica "transparente" ao mouse */
         }
 
-        /* Reativar clique APENAS no evento verde e garantir que ele fique na frente */
+        /* Reativar clique apenas no evento verde */
         .fc-event-available {
             pointer-events: auto !important;
-            /* O evento verde captura o mouse */
             cursor: pointer !important;
             z-index: 50 !important;
             background-color: #10B981 !important;
@@ -586,7 +585,7 @@
                 // Reordena o cache para garantir que a navegação funcione
                 availableDaysCache.sort();
                 console.log(
-                    `[CACHE SYNC] Cache sincronizado para mês visível. Total: ${availableDaysCache.length}`);
+                `[CACHE SYNC] Cache sincronizado para mês visível. Total: ${availableDaysCache.length}`);
             }
 
             // ----------------------------------------------------------------------
@@ -857,47 +856,41 @@
                 },
 
                 eventDidMount: function(info) {
-    const event = info.event;
-    const isAvailable = event.classNames.includes('fc-event-available');
+                    const event = info.event;
+                    const isAvailable = event.classNames.includes('fc-event-available');
 
-    // 1. Visão de Mês
-    if (info.view.type === 'dayGridMonth') {
-        info.el.style.display = 'none';
-        return;
-    }
+                    // 1. Visão de Mês
+                    if (info.view.type === 'dayGridMonth') {
+                        info.el.style.display = 'none';
+                        return;
+                    }
 
-    // 2. Visão de Dia (TimeGrid)
-    if (info.view.type === 'timeGridDay') {
-        const harness = info.el.closest('.fc-timegrid-event-harness');
+                    // 2. Visão de Dia (TimeGrid)
+                    if (info.view.type === 'timeGridDay') {
+                        const harness = info.el.closest('.fc-timegrid-event-harness');
 
-        // Limpeza visual do horário dentro do card (Remove os :00 segundos)
-        const timeTextEl = info.el.querySelector('.fc-event-time');
-        if (timeTextEl) {
-            let timeText = timeTextEl.innerText;
-            // Transforma "12:00 - 13:00" em "12:00 - 13:00" (limpa se vier com segundos do backend)
-            timeTextEl.innerText = timeText.replace(/:00/g, '');
-        }
+                        if (!isAvailable) {
+                            // Esconde completamente a reserva pendente/confirmada para não bloquear clique
+                            info.el.style.display = 'none';
+                            if (harness) {
+                                harness.style.display = 'none';
+                                harness.style.zIndex = '1';
+                            }
+                            return;
+                        }
 
-        if (!isAvailable) {
-            info.el.style.display = 'none';
-            if (harness) {
-                harness.style.display = 'none';
-                harness.style.zIndex = '1';
-            }
-            return;
-        }
+                        // Slot Disponível (Verde)
+                        info.el.style.display = 'block';
+                        info.el.style.cursor = 'pointer';
 
-        // Slot Disponível (Verde)
-        info.el.style.display = 'block';
-        info.el.style.cursor = 'pointer';
-
-        if (harness) {
-            harness.style.display = 'block';
-            harness.style.zIndex = '99'; // Joga o slot verde para a frente de tudo
-            harness.style.pointerEvents = 'auto';
-        }
-    }
-},
+                        // Forçar o container pai a ficar visível e aceitar cliques
+                        if (harness) {
+                            harness.style.display = 'block';
+                            harness.style.zIndex = '99';
+                            harness.style.pointerEvents = 'auto';
+                        }
+                    }
+                },
 
                 // 🛑 dateClick: Bloqueia o clique em dias esgotados (Mês -> Dia) 🛑
                 dateClick: function(info) {
@@ -919,7 +912,7 @@
                         // Se estiver esgotado, exibe alerta e não muda a view
                         showFrontendAlert(
                             `❌ O dia ${formatarDataBrasileira(clickedDateStr)} está esgotado ou não tem horários disponíveis.`
-                        );
+                            );
                     }
                 },
 
@@ -934,7 +927,7 @@
                         if (IS_AUTHENTICATED_AS_GESTOR) {
                             showFrontendAlert(
                                 "❌ Você está logado como Gestor/Admin. Use o Dashboard para agendamentos rápidos ou deslogue."
-                            );
+                                );
                             return;
                         }
 
@@ -946,7 +939,7 @@
                             .price === undefined) {
                             showFrontendAlert(
                                 "❌ Não foi possível carregar os detalhes do horário. Tente novamente."
-                            );
+                                );
                             return;
                         }
 
@@ -982,7 +975,7 @@
                         if (modal.classList.contains('hidden')) {
                             showFrontendAlert(
                                 "❌ Este horário está ocupado ou é uma pré-reserva. Por favor, clique em um slot verde (disponível)."
-                            );
+                                );
                         } else {
                             console.log("Usuário clicou em slot ocupado, modal já estava visível.");
                         }

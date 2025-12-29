@@ -12,142 +12,90 @@
     {{-- FullCalendar Imports --}}
     <link href='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/main.min.css' rel='stylesheet' />
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
 
-        * {
-            font-family: 'Inter', sans-serif;
-        }
+    * { font-family: 'Inter', sans-serif; }
 
-        .arena-bg {
-            background: linear-gradient(135deg, #4f46e5 0%, #10b981 100%);
-        }
+    .arena-bg {
+        background: linear-gradient(135deg, #4f46e5 0%, #10b981 100%);
+    }
 
-        .calendar-container {
-            background-color: #ffffff;
-            border-radius: 16px;
-            box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.2), 0 5px 15px -5px rgba(0, 0, 0, 0.1);
-        }
+    .calendar-container {
+        background-color: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.2), 0 5px 15px -5px rgba(0, 0, 0, 0.1);
+    }
 
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
-            z-index: 9999;
-            /* Garantir que o modal fique acima do calendário */
-            overflow-y: auto;
-        }
+    .modal-overlay {
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background-color: rgba(0, 0, 0, 0.6);
+        z-index: 9999; /* Garantir que o modal fique acima do calendário */
+        overflow-y: auto;
+    }
 
-        .fc {
-            color: #333;
-        }
+    .fc { color: #333; }
+    .fc-toolbar { flex-wrap: wrap; gap: 0.5rem; padding-bottom: 10px; }
+    .fc-toolbar-title { font-size: 1.5rem !important; white-space: normal; text-align: center; }
 
-        .fc-toolbar {
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            padding-bottom: 10px;
-        }
+    @media (max-width: 640px) {
+        .fc-header-toolbar { flex-direction: column; align-items: center; }
+        .fc-toolbar-chunk { margin-top: 10px; width: 100%; text-align: center; display: flex; justify-content: center; }
+        .fc-button { padding: 0.25rem 0.5rem; }
+    }
 
-        .fc-toolbar-title {
-            font-size: 1.5rem !important;
-            white-space: normal;
-            text-align: center;
-        }
+    /* 🛑 IMPORTANTE: Reset de colisão e ponteiros 🛑 */
+    .fc-timegrid-col-events > div,
+    .fc-timegrid-event-harness {
+        width: 100% !important;
+        left: 0 !important;
+        right: 0 !important;
+        margin-left: 0 !important;
+        /* Permitir que o clique passe através do harness se ele não tiver um evento ativo */
+        pointer-events: none !important;
+    }
 
-        @media (max-width: 640px) {
-            .fc-header-toolbar {
-                flex-direction: column;
-                align-items: center;
-            }
+    /* Reativar clique apenas no evento verde */
+    .fc-event-available {
+        pointer-events: auto !important;
+        cursor: pointer !important;
+        z-index: 50 !important;
+        background-color: #10B981 !important;
+        border-color: #059669 !important;
+        color: white !important;
+        padding: 2px 5px;
+        border-radius: 6px;
+        opacity: 0.95;
+        transition: all 0.2s;
+        font-size: 0.85rem;
+        line-height: 1.3;
+        font-weight: 700;
+    }
 
-            .fc-toolbar-chunk {
-                margin-top: 10px;
-                width: 100%;
-                text-align: center;
-                display: flex;
-                justify-content: center;
-            }
+    .fc-event-available:hover {
+        opacity: 1;
+        transform: scale(1.01);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    }
 
-            .fc-button {
-                padding: 0.25rem 0.5rem;
-            }
-        }
+    /* Ocultar eventos que não são verdes no modo Dia */
+    .fc-timegrid-event:not(.fc-event-available) {
+        display: none !important;
+    }
 
-        /* 🛑 CORREÇÃO DE COLISÃO: Garante que o container não bloqueie o clique 🛑 */
-        .fc-timegrid-col-events>div,
-        .fc-timegrid-event-harness {
-            width: 100% !important;
-            left: 0 !important;
-            right: 0 !important;
-            margin-left: 0 !important;
-            pointer-events: none !important;
-            /* O container fica "transparente" ao mouse */
-        }
+    /* Estilos do marcador do mês */
+    .day-marker {
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.8rem; font-weight: bold; padding: 6px;
+        border-radius: 8px; margin-top: 2px; text-align: center;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
+    }
 
-        /* Reativar clique APENAS no evento verde e garantir que ele fique na frente */
-        .fc-event-available {
-            pointer-events: auto !important;
-            /* O evento verde captura o mouse */
-            cursor: pointer !important;
-            z-index: 50 !important;
-            background-color: #10B981 !important;
-            border-color: #059669 !important;
-            color: white !important;
-            padding: 2px 5px;
-            border-radius: 6px;
-            opacity: 0.95;
-            transition: all 0.2s;
-            font-size: 0.85rem;
-            line-height: 1.3;
-            font-weight: 700;
-        }
-
-        .fc-event-available:hover {
-            opacity: 1;
-            transform: scale(1.01);
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-        }
-
-        /* Ocultar eventos que não são verdes no modo Dia */
-        .fc-timegrid-event:not(.fc-event-available) {
-            display: none !important;
-        }
-
-        /* Estilos do marcador do mês */
-        .day-marker {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.8rem;
-            font-weight: bold;
-            padding: 6px;
-            border-radius: 8px;
-            margin-top: 2px;
-            text-align: center;
-            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
-        }
-
-        .fc-daygrid-day.has-slots {
-            cursor: pointer;
-        }
-
-        .marker-available {
-            background-color: #10B981;
-            color: white;
-        }
-
-        .marker-none {
-            background-color: #FEE2E2;
-            color: #991B1B;
-            border: 1px solid #FCA5A5;
-        }
-
-        .fc-daygrid-more-link {
-            display: none !important;
-        }
-    </style>
+    .fc-daygrid-day.has-slots { cursor: pointer; }
+    .marker-available { background-color: #10B981; color: white; }
+    .marker-none { background-color: #FEE2E2; color: #991B1B; border: 1px solid #FCA5A5; }
+    .fc-daygrid-more-link { display: none !important; }
+</style>
 </head>
 
 <body class="font-sans antialiased arena-bg">
@@ -250,138 +198,253 @@
     </div>
 
     {{-- --- Modal de Confirmação de Dados --- --}}
-    {{-- --- MODAL DE CONFIRMAÇÃO (O QUE CORRIGIMOS) --- --}}
-    <div id="booking-modal"
-        class="modal-overlay hidden fixed inset-0 items-center justify-center z-50 p-4 backdrop-blur-sm bg-black/50">
+    <div id="booking-modal" class="modal-overlay hidden items-center justify-center z-50 p-4">
+        {{-- 🛑 MUDANÇA: max-w-md para modal mais apertado 🛑 --}}
         <div id="modal-content"
-            class="bg-white dark:bg-gray-800 p-8 sm:p-10 rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto transform transition-all duration-300 scale-100 border-t-[10px]
-            @if ($errors->any()) border-red-600 dark:border-red-500 @else border-indigo-600 dark:border-indigo-500 @endif"
+            class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto transform transition-all duration-300 scale-100 border-t-8
+        @if ($errors->any() && old('data_reserva')) border-red-600 dark:border-red-500 @else border-indigo-600 dark:border-indigo-500 @endif"
             onclick="event.stopPropagation()">
 
-            {{-- Erros de Validação do Laravel --}}
-            @if ($errors->any())
-                <div
-                    class="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-300 rounded-r-xl shadow-sm">
-                    <p class="font-black flex items-center text-lg uppercase tracking-tight">
-                        <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd"
-                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                                clip-rule="evenodd" />
-                        </svg>
-                        Atenção
-                    </p>
-                    <ul class="mt-1 text-sm font-semibold">
-                        @foreach ($errors->all() as $error)
-                            <li>{{ $error }}</li>
-                        @endforeach
-                    </ul>
-                </div>
+            {{-- Área de Mensagens de Erro (reutilizada) --}}
+            @if ($errors->any() && old('data_reserva'))
+                @if ($errors->has('reserva_conflito_id'))
+                    <div class="mb-6 p-4 bg-yellow-100 dark:bg-yellow-900/30 border-l-4 border-yellow-500 text-yellow-700 dark:text-yellow-300 rounded-xl relative shadow-md"
+                        role="alert">
+                        <p class="font-bold flex items-center text-lg">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            Vaga Ocupada!
+                        </p>
+                        <p class="mt-1 font-semibold">
+                            Este horário **acabou de ser reservado** por outro cliente ou está em conflito. Por favor,
+                            feche o modal e escolha um slot verde diferente no calendário.
+                        </p>
+                    </div>
+                @else
+                    <div class="mb-6 p-4 bg-red-100 dark:bg-red-900/50 border-l-4 border-red-500 text-red-700 dark:text-red-300 rounded-xl relative shadow-md"
+                        role="alert">
+                        <p class="font-bold flex items-center text-lg">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            Correção Necessária!
+                        </p>
+                        <p class="mt-1">
+                            Por favor, verifique os campos destacados em vermelho e tente novamente.
+                        </p>
+                    </div>
+                @endif
             @endif
 
-            <div class="mb-8 text-center sm:text-left">
-                <h4 class="text-3xl font-black text-gray-900 dark:text-gray-100 tracking-tight leading-none">Dados da
-                    Reserva</h4>
-                <p class="text-gray-500 dark:text-gray-400 mt-2 font-medium italic">Elite Soccer - Onde o jogo acontece
+            {{-- Alerta para Erros de Validação Front-End (Substituto de alert()) --}}
+            <div class="mb-6 p-4 bg-red-100 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-300 rounded-xl relative shadow-md hidden"
+                role="alert" id="frontend-alert-box">
+                <p id="frontend-alert-message" class="font-bold flex items-center text-lg">
+                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                            clip-rule="evenodd" />
+                    </svg>
+                    <span class="text-base">Atenção</span>: <span class="ml-1 text-sm font-normal"></span>
                 </p>
             </div>
 
-            <form id="booking-form" method="POST" action="{{ route('reserva.store') }}">
-                @csrf
-
-                {{-- CAMPOS HIDDEN (Fundamentais para o Controller) --}}
-                <input type="hidden" name="data_reserva" id="form-date" value="{{ old('data_reserva') }}">
-                <input type="hidden" name="hora_inicio" id="form-start" value="{{ old('hora_inicio') }}">
-                <input type="hidden" name="hora_fim" id="form-end" value="{{ old('hora_fim') }}">
-                <input type="hidden" name="price" id="form-price" value="{{ old('price') }}">
-                <input type="hidden" name="schedule_id" id="form-schedule-id" value="{{ old('schedule_id') }}">
-                <input type="hidden" name="reserva_conflito_id" value="" />
-
-                {{-- 🎯 CORREÇÃO DO ERRO 500: Campo de e-mail --}}
-                <input type="hidden" name="email_cliente"
-                    value="{{ Auth::check() ? Auth::user()->email : old('email_cliente') }}">
-
-                {{-- Resumo Visual do Horário --}}
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-                    <div
-                        class="bg-indigo-50 dark:bg-indigo-900/20 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-800">
-                        <span class="text-[10px] font-black uppercase tracking-widest text-indigo-500 block mb-1">Data
-                            Agendada</span>
-                        <span id="modal-date"
-                            class="font-bold text-gray-800 dark:text-gray-100 block leading-tight text-lg"></span>
+            {{-- 🛑 BLOQUEIO PARA GESTOR/ADMIN LOGADO 🛑 --}}
+            @auth
+                @if (Auth::user()->isGestor())
+                    <div class="p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded mb-4" role="alert">
+                        <p class="font-bold">Acesso Negado</p>
+                        <p>Contas de Gestor/Admin não podem fazer reservas pelo painel público. Por favor, deslogue ou use o
+                            agendamento rápido no Dashboard.</p>
+                        <form method="POST" action="{{ route('logout') }}" class="mt-2">
+                            @csrf
+                            <button type="submit"
+                                class="text-red-500 underline hover:text-red-700 text-sm">Deslogar</button>
+                        </form>
                     </div>
-                    <div
-                        class="bg-indigo-50 dark:bg-indigo-900/20 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-800 text-center sm:text-left">
-                        <span
-                            class="text-[10px] font-black uppercase tracking-widest text-indigo-500 block mb-1">Horário</span>
-                        <span id="modal-time"
-                            class="font-black text-3xl text-indigo-600 dark:text-indigo-400 block leading-none"></span>
-                    </div>
-                </div>
+                @endif
+            @endauth
+            {{-- FIM DO BLOQUEIO PARA GESTOR/ADMIN --}}
 
-                {{-- Dados do Cliente --}}
-                <div class="mb-8">
+
+            {{-- 🛑 FORMULÁRIO PRINCIPAL (Visível para Guest E Cliente Logado) 🛑 --}}
+            @if (!Auth::check() || (Auth::check() && Auth::user()->isClient()))
+
+                <h4 class="text-2xl font-extrabold mb-5 text-gray-900 dark:text-gray-100 border-b pb-2">Confirme Sua
+                    Pré-Reserva</h4>
+
+                <form id="booking-form" method="POST" action="{{ route('reserva.store') }}">
+                    @csrf
+
+                    {{-- Campos Hidden da Reserva (Sempre obrigatórios) --}}
+                    <input type="hidden" name="data_reserva" id="form-date" value="{{ old('data_reserva') }}">
+                    <input type="hidden" name="hora_inicio" id="form-start" value="{{ old('hora_inicio') }}">
+                    <input type="hidden" name="hora_fim" id="form-end" value="{{ old('hora_fim') }}">
+                    <input type="hidden" name="price" id="form-price" value="{{ old('price') }}">
+                    <input type="hidden" name="reserva_conflito_id" value="" />
+                    <input type="hidden" name="schedule_id" id="form-schedule-id"
+                        value="{{ old('schedule_id') }}">
+
+                    {{-- ========================================================= --}}
+                    {{-- 🛑 LÓGICA CONDICIONAL: DADOS DO CLIENTE 🛑 --}}
+                    {{-- ========================================================= --}}
+
                     @if (Auth::check() && Auth::user()->isClient())
+                        {{-- CLIENTE LOGADO: Exibe os dados estaticamente e envia via hidden fields --}}
                         <div
-                            class="p-6 bg-green-50 dark:bg-green-900/20 rounded-2xl border border-green-200 dark:border-green-800 flex items-center justify-between">
-                            <div>
-                                <p class="text-xs font-bold text-green-600 uppercase tracking-widest mb-1">Reserva
-                                    vinculada a:</p>
-                                <p class="text-xl font-black text-gray-900 dark:text-gray-100 leading-none">
-                                    {{ Auth::user()->name }}</p>
-                                <p class="text-sm text-green-700 dark:text-green-400 font-medium mt-2 italic">
-                                    {{ Auth::user()->contato_cliente }}</p>
-                            </div>
-                            <input type="hidden" name="nome_cliente" value="{{ Auth::user()->name }}">
-                            <input type="hidden" name="contato_cliente"
-                                value="{{ Auth::user()->contato_cliente }}">
-                        </div>
+                            class="mb-8 p-6 bg-green-50 dark:bg-green-900/30 rounded-2xl border border-green-300 dark:border-green-700 shadow-xl">
+                            <h5 class="text-xl font-bold mb-3 text-green-700 dark:text-green-400 flex items-center">
+                                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                    xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z">
+                                    </path>
+                                </svg>
+                                Reserva para sua conta
+                                </h4>
+                                <p class="text-gray-700 dark:text-gray-300 mb-2">
+                                    Esta pré-reserva será vinculada automaticamente ao seu cadastro:
+                                </p>
+                                <ul class="list-none space-y-1 text-sm text-gray-800 dark:text-gray-200 font-semibold">
+                                    <li>Nome: **{{ Auth::user()->name }}**</li>
+                                    <li>WhatsApp: **{{ Auth::user()->contato_cliente }}**</li>
+                                </ul>
+                                {{-- Inputs Hidden para garantir que o backend receba os dados SEM FALHAR A VALIDAÇÃO UNIQUE --}}
+                                <input type="hidden" name="nome_cliente" value="{{ Auth::user()->name }}">
+                                <input type="hidden" name="contato_cliente"
+                                    value="{{ Auth::user()->contato_cliente }}">
+                                <input type="hidden" name="email_cliente" value="{{ Auth::user()->email }}">
+                        </div> {{-- Fim do Bloco CLIENTE LOGADO --}}
                     @else
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <p class="text-gray-700 dark:text-gray-300 mb-6 text-sm">
+                            Preencha seus dados para registrar sua pré-reserva. Seus dados serão usados para **criar ou
+                            identificar sua conta**.
+                        </p>
+                        <div
+                            class="space-y-4 p-4 bg-indigo-50 dark:bg-gray-900 rounded-xl border border-indigo-200 dark:border-gray-700 mb-8 shadow-inner">
+                            <h5 class="text-lg font-bold text-indigo-700 dark:text-indigo-400 border-b pb-2 mb-2">Seus
+                                Dados</h5>
+
+                            {{-- Nome Completo --}}
                             <div>
-                                <label
-                                    class="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">Nome
-                                    Completo</label>
-                                <input type="text" name="nome_cliente" placeholder="Seu nome" required
+                                <label for="guest-name"
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome
+                                    Completo <span class="text-red-500">*</span></label>
+                                <input type="text" name="nome_cliente" id="guest-name" required
                                     value="{{ old('nome_cliente') }}"
-                                    class="w-full bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 dark:text-white rounded-xl p-4 focus:border-indigo-500 outline-none transition shadow-sm">
+                                    class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 rounded-xl shadow-md p-3 @error('nome_cliente') border-red-500 ring-1 ring-red-500 @enderror">
+                                @error('nome_cliente')
+                                    <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
+                                @enderror
                             </div>
+
+                            {{-- WhatsApp (Contato) --}}
                             <div>
-                                <label
-                                    class="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">WhatsApp</label>
-                                <input type="tel" name="contato_cliente" id="guest-contact"
-                                    placeholder="919XXXXXXXX" required value="{{ old('contato_cliente') }}"
-                                    class="w-full bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 dark:text-white rounded-xl p-4 focus:border-indigo-500 outline-none transition shadow-sm"
-                                    maxlength="11">
+                                <label for="guest-contact"
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">WhatsApp
+                                    (Apenas números, DDD+numero) <span class="text-red-500">*</span></label>
+                                <input type="tel" name="contato_cliente" id="guest-contact" required
+                                    value="{{ old('contato_cliente') }}"
+                                    class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 rounded-xl shadow-md p-3 @error('contato_cliente') border-red-500 ring-1 ring-red-500 @enderror"
+                                    minlength="10" maxlength="11"
+                                    oninput="this.value = this.value.replace(/\D/g, '')">
+                                @error('contato_cliente')
+                                    <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            {{-- Email (Opcional) --}}
+                            <div>
+                                <label for="guest-email"
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email
+                                    (Opcional)</label>
+                                <input type="email" name="email_cliente" id="guest-email"
+                                    value="{{ old('email_cliente') }}"
+                                    class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 rounded-xl shadow-md p-3 @error('email_cliente') border-red-500 ring-1 ring-red-500 @enderror">
+                                @error('email_cliente')
+                                    <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
+                                @enderror
+                            </div>
+                        </div> {{-- Fim do Bloco GUEST --}}
+                    @endif
+
+
+                    {{-- ========================================================= --}}
+                    {{-- DETALHES DA RESERVA (VISUAL) --}}
+                    {{-- ========================================================= --}}
+                    <div
+                        class="mb-8 p-6 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl border border-indigo-300 dark:border-indigo-700 shadow-xl">
+                        <div class="space-y-4">
+                            <div
+                                class="flex justify-between items-center py-2 border-b border-indigo-100 dark:border-indigo-800">
+                                <span class="font-medium text-lg text-indigo-800 dark:text-indigo-300">Data:</span>
+                                <span id="modal-date"
+                                    class="font-extrabold text-xl text-gray-900 dark:text-gray-100"></span>
+                            </div>
+                            <div class="flex justify-between items-center py-2">
+                                <span class="font-medium text-xl text-indigo-800 dark:text-indigo-300">Horário:</span>
+                                <span id="modal-time"
+                                    class="font-extrabold text-2xl text-gray-900 dark:text-gray-100"></span>
                             </div>
                         </div>
-                    @endif
-                </div>
-
-                {{-- Aviso de Pagamento --}}
-                <div class="mb-8 p-6 bg-red-50 dark:bg-red-900/20 border-l-8 border-red-600 rounded-r-2xl shadow-sm">
-                    <p class="text-xs sm:text-sm text-red-800 dark:text-red-300 font-bold leading-relaxed">
-                        Sua vaga só é garantida após o envio imediato do comprovante de sinal via WhatsApp.
-                    </p>
-                </div>
-
-                {{-- Rodapé --}}
-                <div
-                    class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-6 border-t border-gray-100 dark:border-gray-700">
-                    <div>
-                        <span
-                            class="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Investimento</span>
-                        <span class="text-4xl font-black text-green-600 dark:text-green-400 leading-none">R$ <span
-                                id="modal-price"></span></span>
+                        <hr class="border-indigo-200 dark:border-indigo-700 mt-4 mb-4">
+                        <div class="flex justify-between items-center pt-2">
+                            <span
+                                class="font-extrabold text-3xl sm:text-4xl text-green-700 dark:text-green-400">Total:</span>
+                            <span class="font-extrabold text-3xl sm:text-4xl text-green-700 dark:text-green-400">R$
+                                <span id="modal-price"></span></span>
+                        </div>
                     </div>
-                    <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+
+                    <div
+                        class="mb-8 p-6 bg-red-50 dark:bg-red-900/30 border-l-4 border-red-600 text-red-800 rounded-xl shadow-md dark:border-red-400 dark:text-red-200">
+                        <div class="flex items-center mb-2">
+                            <svg class="w-6 h-6 mr-3 text-red-600 flex-shrink-0 dark:text-red-400" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <p class="font-black text-lg uppercase tracking-wider">Atenção!</p>
+                        </div>
+                        <p class="mt-2 text-sm leading-relaxed font-semibold">
+                            Sua vaga é garantida **apenas** após o **envio imediato do comprovante do sinal** via
+                            WhatsApp.
+                        </p>
+                    </div>
+
+                    {{-- Observações --}}
+                    <div class="mb-8">
+                        <label for="notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Observações (Opcional):
+                        </label>
+                        <textarea name="notes" id="notes" rows="3"
+                            class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 rounded-xl shadow-md p-3 focus:border-indigo-500 focus:ring-indigo-500 @error('notes') border-red-500 ring-1 ring-red-500 @enderror">{{ old('notes') }}</textarea>
+                        @error('notes')
+                            <p class="text-xs text-red-500 mt-1 font-semibold">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div
+                        class="flex flex-col sm:flex-row gap-4 justify-end space-y-4 sm:space-y-0 sm:space-x-6 pt-8 border-t dark:border-gray-700">
                         <button type="button" id="close-modal"
-                            class="px-8 py-4 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 font-black rounded-2xl hover:bg-gray-200 transition uppercase text-xs tracking-widest">Cancelar</button>
-                        <button type="submit"
-                            class="px-8 py-4 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-500/40 transition transform hover:scale-105 active:scale-95 uppercase text-xs tracking-widest">Confirmar
-                            Jogo</button>
+                            class="order-2 sm:order-1 p-4 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-semibold rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+                            Voltar / Cancelar
+                        </button>
+                        <button type="submit" id="submit-booking-button"
+                            class="order-1 sm:order-2 p-4 bg-indigo-600 text-white font-extrabold rounded-full hover:bg-indigo-700 transition shadow-xl shadow-indigo-500/50 transform hover:scale-[1.03] active:scale-[0.97]">
+                            Confirmar Pré-Reserva
+                        </button>
                     </div>
-                </div>
-            </form>
+                </form>
+
+            @endif
+            {{-- FIM DO FORMULÁRIO PRINCIPAL --}}
+
         </div>
     </div>
 
@@ -857,47 +920,32 @@
                 },
 
                 eventDidMount: function(info) {
-    const event = info.event;
-    const isAvailable = event.classNames.includes('fc-event-available');
+                    const event = info.event;
+                    const isAvailable = event.classNames.includes('fc-event-available');
 
-    // 1. Visão de Mês
-    if (info.view.type === 'dayGridMonth') {
-        info.el.style.display = 'none';
-        return;
-    }
+                    // 1. Visão de Mês: Esconde os blocos para priorizar o marcador de resumo
+                    if (info.view.type === 'dayGridMonth') {
+                        info.el.style.display = 'none';
+                        return;
+                    }
 
-    // 2. Visão de Dia (TimeGrid)
-    if (info.view.type === 'timeGridDay') {
-        const harness = info.el.closest('.fc-timegrid-event-harness');
+                    // 2. Visão de Dia (TimeGrid)
+                    if (info.view.type === 'timeGridDay') {
 
-        // Limpeza visual do horário dentro do card (Remove os :00 segundos)
-        const timeTextEl = info.el.querySelector('.fc-event-time');
-        if (timeTextEl) {
-            let timeText = timeTextEl.innerText;
-            // Transforma "12:00 - 13:00" em "12:00 - 13:00" (limpa se vier com segundos do backend)
-            timeTextEl.innerText = timeText.replace(/:00/g, '');
-        }
+                        // Se NÃO for um slot verde (Disponível), esconde (reservas reais ficam invisíveis aqui)
+                        if (!isAvailable) {
+                            info.el.style.display = 'none';
+                            return;
+                        }
 
-        if (!isAvailable) {
-            info.el.style.display = 'none';
-            if (harness) {
-                harness.style.display = 'none';
-                harness.style.zIndex = '1';
-            }
-            return;
-        }
-
-        // Slot Disponível (Verde)
-        info.el.style.display = 'block';
-        info.el.style.cursor = 'pointer';
-
-        if (harness) {
-            harness.style.display = 'block';
-            harness.style.zIndex = '99'; // Joga o slot verde para a frente de tudo
-            harness.style.pointerEvents = 'auto';
-        }
-    }
-},
+                        // 🎯 A MUDANÇA ESTÁ AQUI:
+                        // Removemos a checagem 'isCoveredByRealReservation'.
+                        // Se o Back-end enviou o evento, ele DEVE ser mostrado.
+                        info.el.style.display = 'block';
+                        info.el.style.cursor = 'pointer';
+                        info.el.style.zIndex = '10';
+                    }
+                },
 
                 // 🛑 dateClick: Bloqueia o clique em dias esgotados (Mês -> Dia) 🛑
                 dateClick: function(info) {
