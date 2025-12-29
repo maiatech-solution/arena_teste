@@ -30,7 +30,6 @@ class FinanceiroController extends Controller
         $totalReservasMes = Reserva::whereMonth('date', $mesAtual)
             ->whereYear('date', $anoAtual)
             ->where('is_fixed', false)
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA, Reserva::STATUS_LANCADA_CAIXA])
             ->count();
 
         $canceladasMes = Reserva::whereMonth('date', $mesAtual)
@@ -102,7 +101,7 @@ class FinanceiroController extends Controller
         $dataFim = $request->input('data_fim') ? Carbon::parse($request->input('data_fim'))->endOfDay() : now()->endOfMonth();
 
         $reservas = Reserva::whereBetween('date', [$dataInicio, $dataFim])
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA, Reserva::STATUS_LANCADA_CAIXA])
+            ->where('status', Reserva::STATUS_CONFIRMADA)
             ->orderBy('date', 'desc')
             ->orderBy('start_time', 'asc')
             ->get();
@@ -112,18 +111,19 @@ class FinanceiroController extends Controller
 
     /**
      * Relatório 05: Ranking de Clientes (Fidelidade Real)
+     * AJUSTADO: Conta apenas partidas passadas/atuais com pagamentos efetivados.
      */
     public function relatorioRanking()
     {
-        $hoje = now()->format('Y-m-d');
-
         $ranking = Reserva::select(
             'client_name',
             'client_contact',
             DB::raw('SUM(total_paid) as total_gasto'),
-            DB::raw("COUNT(CASE WHEN total_paid > 0 AND date <= '$hoje' THEN 1 END) as total_reservas")
+            // Conta apenas registros onde o pagamento foi maior que zero e a data já passou ou é hoje
+            DB::raw('COUNT(CASE WHEN total_paid > 0 AND date <= "' . now()->format('Y-m-d') . '" THEN 1 END) as total_reservas')
         )
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA, Reserva::STATUS_LANCADA_CAIXA])
+            ->where('status', Reserva::STATUS_CONFIRMADA)
+            ->whereNotNull('total_paid')
             ->where('total_paid', '>', 0)
             ->groupBy('client_name', 'client_contact')
             ->orderBy('total_gasto', 'desc')
@@ -134,77 +134,8 @@ class FinanceiroController extends Controller
     }
 
     // =========================================================================
-    // 🔒 GESTÃO DE CAIXA E APIs
+    // 🔒 MÉTODOS DE GESTÃO DE CAIXA E APIs
     // =========================================================================
-
-    public function closeCash(Request $request)
-    {
-        $request->validate([
-            'date' => 'required|date_format:Y-m-d',
-            'actual_amount' => 'required|numeric'
-        ]);
-
-        DB::beginTransaction();
-        try {
-            $dateString = $request->date;
-            $calculatedAmount = $this->calculateLiquidCash($dateString);
-
-            Cashier::updateOrCreate(['date' => $dateString], [
-                'calculated_amount' => $calculatedAmount,
-                'actual_amount' => (float)$request->actual_amount,
-                'status' => 'closed',
-                'closed_by_user_id' => Auth::id(),
-                'closing_time' => now(),
-            ]);
-
-            DB::commit();
-            return response()->json(['success' => true, 'message' => "Caixa fechado com sucesso."]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Erro ao fechar caixa: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Erro ao processar fechamento.'], 500);
-        }
-    }
-
-    public function openCash(Request $request)
-    {
-        $request->validate([
-            'date' => 'required|date_format:Y-m-d',
-            'reason' => 'required|string|max:500'
-        ]);
-
-        DB::beginTransaction();
-        try {
-            $cashier = Cashier::where('date', $request->date)->first();
-            if (!$cashier) return response()->json(['success' => false, 'message' => 'Caixa não localizado.'], 404);
-
-            $userName = Auth::user()->name ?? 'Admin';
-            $reopenNote = "[REABERTURA por {$userName} em " . now()->format('d/m/Y H:i:s') . "]: {$request->reason}";
-
-            $cashier->update([
-                'status' => 'open',
-                'notes' => $cashier->notes ? $cashier->notes . "\n---\n" . $reopenNote : $reopenNote,
-            ]);
-
-            DB::commit();
-            return response()->json(['success' => true, 'message' => "Caixa reaberto com sucesso."]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Erro ao reabrir.'], 500);
-        }
-    }
-
-    public function isCashClosed(string $dateString): bool
-    {
-        return Cashier::whereDate('date', $dateString)
-                    ->where('status', 'closed')
-                    ->exists();
-    }
-
-    private function calculateLiquidCash(string $dateString): float
-    {
-        return (float) FinancialTransaction::whereDate('paid_at', $dateString)->sum('amount');
-    }
 
     private function getDateRange(string $periodo): array
     {
@@ -223,5 +154,117 @@ class FinanceiroController extends Controller
                 break;
         }
         return [$start, $end->endOfDay()];
+    }
+
+    private function calculateLiquidCash(string $dateString): float
+    {
+        return (float) FinancialTransaction::whereDate('paid_at', $dateString)->sum('amount');
+    }
+
+    public function getResumo(Request $request)
+    {
+        try {
+            $periodos = ['hoje', 'semana', 'mes'];
+            $resultados = ['total_recebido' => [], 'sinais' => [], 'reservas' => []];
+            $incomeTypes = ['signal', 'full_payment', 'partial_payment', 'payment_settlement', 'RETEN_CANC_COMP', 'RETEN_CANC_P_COMP', 'RETEN_CANC_S_COMP', 'RETEN_NOSHOW_COMP'];
+
+            foreach ($periodos as $periodo) {
+                list($start, $end) = $this->getDateRange($periodo);
+                $transacoes = FinancialTransaction::whereBetween('paid_at', [$start, $end])->whereIn('type', $incomeTypes)->get();
+                $resultados['total_recebido'][$periodo] = (float) $transacoes->sum('amount');
+                $resultados['sinais'][$periodo] = (float) $transacoes->where('type', 'signal')->sum('amount');
+                $resultados['reservas'][$periodo] = Reserva::whereBetween('date', [$start, $end])->where('is_fixed', false)->count();
+            }
+            return response()->json(['success' => true, 'data' => $resultados]);
+        } catch (\Exception $e) {
+            Log::error('Erro getResumo: ' . $e->getMessage());
+            return response()->json(['success' => false], 500);
+        }
+    }
+
+    public function getPagamentosPendentes()
+    {
+        try {
+            $reservas = Reserva::whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
+                ->where('is_fixed', false)
+                ->where(function ($q) {
+                    $q->whereRaw('COALESCE(total_paid, 0) < price')->orWhereNull('total_paid');
+                })
+                ->where('date', '>=', Carbon::today())
+                ->orderBy('date', 'asc')->limit(30)->get();
+
+            $data = $reservas->map(fn($r) => [
+                'id' => $r->id,
+                'cliente' => $r->client_name,
+                'contato' => $r->client_contact,
+                'data' => Carbon::parse($r->date)->format('d/m/Y'),
+                'horario' => Carbon::parse($r->start_time)->format('H:i'),
+                'valor_total' => (float) $r->price,
+                'total_pago' => (float) ($r->total_paid ?? 0),
+                'valor_restante' => max(0, $r->price - ($r->total_paid ?? 0)),
+                'status_pagamento_texto' => ($r->total_paid ?? 0) == 0 ? 'Não Iniciado' : 'Parcial',
+                'link_acoes' => route('admin.reservas.show', $r->id),
+            ]);
+            return response()->json(['success' => true, 'data' => $data]);
+        } catch (\Exception $e) {
+            Log::error('Erro getPagamentosPendentes: ' . $e->getMessage());
+            return response()->json(['success' => false], 500);
+        }
+    }
+
+    public function closeCash(Request $request)
+    {
+        $request->validate(['date' => 'required|date_format:Y-m-d', 'actual_amount' => 'required|numeric']);
+        DB::beginTransaction();
+        try {
+            $dateString = $request->date;
+            $calculatedAmount = $this->calculateLiquidCash($dateString);
+
+            Cashier::updateOrCreate(['date' => $dateString], [
+                'calculated_amount' => $calculatedAmount,
+                'actual_amount' => (float)$request->actual_amount,
+                'status' => 'closed',
+                'closed_by_user_id' => auth()->id(),
+                'closing_time' => now(),
+            ]);
+
+            Log::info("Caixa fechado para {$dateString} por " . auth()->id());
+            DB::commit();
+            return response()->json(['success' => true, 'message' => "Caixa fechado com sucesso."]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Erro ao fechar caixa: ' . $e->getMessage());
+            return response()->json(['success' => false], 500);
+        }
+    }
+
+    public function openCash(Request $request)
+    {
+        $request->validate(['date' => 'required|date_format:Y-m-d', 'reason' => 'required|string|max:500']);
+        DB::beginTransaction();
+        try {
+            $cashier = Cashier::where('date', $request->date)->first();
+            if (!$cashier) return response()->json(['success' => false], 404);
+
+            $reopenNote = "[REABERTURA por " . Auth::user()->name . " em " . now()->format('d/m/Y H:i:s') . "]: {$request->reason}";
+            $cashier->update([
+                'status' => 'open',
+                'notes' => $cashier->notes ? $cashier->notes . "\n---\n" . $reopenNote : $reopenNote,
+            ]);
+
+            DB::commit();
+            return response()->json(['success' => true, 'message' => "Caixa reaberto com sucesso."]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['success' => false], 500);
+        }
+    }
+
+    public function isCashClosed(string $dateString): bool
+    {
+        // Usamos exists() que é mais rápido que carregar o objeto todo
+        return Cashier::whereDate('date', $dateString)
+                    ->where('status', 'closed')
+                    ->exists();
     }
 }

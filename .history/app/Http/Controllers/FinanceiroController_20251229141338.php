@@ -30,7 +30,6 @@ class FinanceiroController extends Controller
         $totalReservasMes = Reserva::whereMonth('date', $mesAtual)
             ->whereYear('date', $anoAtual)
             ->where('is_fixed', false)
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA, Reserva::STATUS_LANCADA_CAIXA])
             ->count();
 
         $canceladasMes = Reserva::whereMonth('date', $mesAtual)
@@ -76,54 +75,21 @@ class FinanceiroController extends Controller
     }
 
     /**
-     * Relatório 03: Cancelamentos
-     */
-    public function relatorioCancelamentos(Request $request)
-    {
-        $mes = $request->input('mes', now()->month);
-        $ano = $request->input('ano', now()->year);
-
-        $cancelamentos = Reserva::whereIn('status', [Reserva::STATUS_CANCELADA, Reserva::STATUS_NO_SHOW, Reserva::STATUS_REJEITADA])
-            ->whereMonth('date', $mes)
-            ->whereYear('date', $ano)
-            ->with('user')
-            ->orderBy('date', 'desc')
-            ->get();
-
-        return view('admin.financeiro.cancelamentos', compact('cancelamentos', 'mes', 'ano'));
-    }
-
-    /**
-     * Relatório 04: Mapa de Ocupação & Histórico
-     */
-    public function relatorioOcupacao(Request $request)
-    {
-        $dataInicio = $request->input('data_inicio') ? Carbon::parse($request->input('data_inicio'))->startOfDay() : now()->startOfMonth();
-        $dataFim = $request->input('data_fim') ? Carbon::parse($request->input('data_fim'))->endOfDay() : now()->endOfMonth();
-
-        $reservas = Reserva::whereBetween('date', [$dataInicio, $dataFim])
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA, Reserva::STATUS_LANCADA_CAIXA])
-            ->orderBy('date', 'desc')
-            ->orderBy('start_time', 'asc')
-            ->get();
-
-        return view('admin.financeiro.ocupacao', compact('reservas', 'dataInicio', 'dataFim'));
-    }
-
-    /**
-     * Relatório 05: Ranking de Clientes (Fidelidade Real)
+     * Relatório 03: Ranking de Clientes
      */
     public function relatorioRanking()
     {
-        $hoje = now()->format('Y-m-d');
+        $hoje = now()->format('Y-m-d'); // Extraído para evitar erro de aspas no DB::raw
 
         $ranking = Reserva::select(
             'client_name',
             'client_contact',
             DB::raw('SUM(total_paid) as total_gasto'),
+            // Corrigido: Uso de aspas simples para SQL e concatenação limpa
             DB::raw("COUNT(CASE WHEN total_paid > 0 AND date <= '$hoje' THEN 1 END) as total_reservas")
         )
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA, Reserva::STATUS_LANCADA_CAIXA])
+            ->where('status', Reserva::STATUS_CONFIRMADA)
+            ->whereNotNull('total_paid')
             ->where('total_paid', '>', 0)
             ->groupBy('client_name', 'client_contact')
             ->orderBy('total_gasto', 'desc')
@@ -133,17 +99,12 @@ class FinanceiroController extends Controller
         return view('admin.financeiro.ranking', compact('ranking'));
     }
 
-    // =========================================================================
-    // 🔒 GESTÃO DE CAIXA E APIs
-    // =========================================================================
-
+    /**
+     * Gestão de Abertura/Fechamento de Caixa
+     */
     public function closeCash(Request $request)
     {
-        $request->validate([
-            'date' => 'required|date_format:Y-m-d',
-            'actual_amount' => 'required|numeric'
-        ]);
-
+        $request->validate(['date' => 'required|date_format:Y-m-d', 'actual_amount' => 'required|numeric']);
         DB::beginTransaction();
         try {
             $dateString = $request->date;
@@ -153,7 +114,7 @@ class FinanceiroController extends Controller
                 'calculated_amount' => $calculatedAmount,
                 'actual_amount' => (float)$request->actual_amount,
                 'status' => 'closed',
-                'closed_by_user_id' => Auth::id(),
+                'closed_by_user_id' => auth()->id(),
                 'closing_time' => now(),
             ]);
 
@@ -162,23 +123,20 @@ class FinanceiroController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Erro ao fechar caixa: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Erro ao processar fechamento.'], 500);
+            return response()->json(['success' => false], 500);
         }
     }
 
     public function openCash(Request $request)
     {
-        $request->validate([
-            'date' => 'required|date_format:Y-m-d',
-            'reason' => 'required|string|max:500'
-        ]);
-
+        $request->validate(['date' => 'required|date_format:Y-m-d', 'reason' => 'required|string|max:500']);
         DB::beginTransaction();
         try {
             $cashier = Cashier::where('date', $request->date)->first();
-            if (!$cashier) return response()->json(['success' => false, 'message' => 'Caixa não localizado.'], 404);
+            if (!$cashier) return response()->json(['success' => false, 'message' => 'Caixa não encontrado'], 404);
 
-            $userName = Auth::user()->name ?? 'Admin';
+            // Corrigido: Uso de auth()->user() para evitar erro de nulo
+            $userName = auth()->user()->name ?? 'Administrador';
             $reopenNote = "[REABERTURA por {$userName} em " . now()->format('d/m/Y H:i:s') . "]: {$request->reason}";
 
             $cashier->update([
@@ -190,10 +148,13 @@ class FinanceiroController extends Controller
             return response()->json(['success' => true, 'message' => "Caixa reaberto com sucesso."]);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Erro ao reabrir.'], 500);
+            return response()->json(['success' => false], 500);
         }
     }
 
+    /**
+     * Helper para verificar status
+     */
     public function isCashClosed(string $dateString): bool
     {
         return Cashier::whereDate('date', $dateString)

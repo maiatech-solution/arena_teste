@@ -19,77 +19,116 @@
 
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-           {{-- 1. ESTRUTURA DE KPIS (RESPONSIVO COM DESCRIÇÕES) --}}
-<div class="space-y-4">
-    <div class="grid grid-cols-1 lg:grid-cols-5 gap-3 lg:gap-4">
 
-        {{-- CARD 1: SALDO EM CAIXA (LÍQUIDO REAL) --}}
-        <div class="bg-green-600 dark:bg-green-700 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center border-b-4 border-green-900">
-            <div class="text-[10px] font-bold text-green-50 uppercase tracking-tighter truncate">
-                💰 Saldo Caixa
-            </div>
-            <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-white truncate">
-                R$ {{ number_format($totalRecebidoDiaLiquido, 2, ',', '.') }}
-            </div>
-            <div class="text-[9px] text-green-100 mt-1 italic leading-tight">
-                Total real em dinheiro/pix hoje.
-            </div>
-        </div>
+            {{-- 1. ESTRUTURA DE KPIS --}}
+            <div class="space-y-4">
 
-        {{-- CARD 2: RECEITA JOGOS HOJE --}}
-        <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-300 dark:border-indigo-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
-            <div class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
-                🎾 Receita Agenda
-            </div>
-            <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-indigo-700 dark:text-indigo-300 truncate">
-                R$ {{ number_format($totalAntecipadoReservasDia, 2, ',', '.') }}
-            </div>
-            <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                Faturamento dos jogos de hoje.
-            </div>
-        </div>
+                {{-- Linha dos KPIs (4 colunas em telas grandes) --}}
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4">
 
-        {{-- CARD 3: PENDENTE A RECEBER --}}
-        <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
-            <div class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
-                ⏳ Pendente
-            </div>
-            <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-yellow-700 dark:text-yellow-300 truncate">
-                R$ {{ number_format($totalPending, 2, ',', '.') }}
-            </div>
-            <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                Valor que ainda falta cobrar.
-            </div>
-        </div>
+                    {{-- CARD 3: RECEITA GARANTIDA P/ HOJE (PAGO) --}}
+                    <div
+                        class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-300 dark:border-indigo-800 overflow-hidden shadow-lg sm:rounded-lg p-5 flex flex-col justify-center">
+                        <div class="flex items-center justify-between">
+                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                TOTAL EM DINHEIRO NO CAIXA
+                            </div>
+                            <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12l2 2 4-4m5.618-4.504A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.552L12 12m0 0l-8.618 3.552A11.955 11.955 0 0012 21.056a11.955 11.955 0 008.618-3.552L12 12z">
+                                </path>
+                            </svg>
+                        </div>
+                        <div class="mt-2 text-3xl font-extrabold text-indigo-700 dark:text-indigo-300">
+                            R$ {{ number_format($totalAntecipadoReservasDia, 2, ',', '.') }}
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Valor total pago para as reservas agendadas hoje.
+                        </div>
+                    </div>
 
-        {{-- CARD 4: RESERVAS ATIVAS --}}
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
-            <div class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
-                📅 Ativas
-            </div>
-            <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-gray-900 dark:text-white truncate">
-                {{ $totalReservasDia }}
-            </div>
-            <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                Total de agendamentos hoje.
-            </div>
-        </div>
+                    {{-- CARD 4: SALDO PENDENTE A RECEBER --}}
+                    <div
+                        class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-800 overflow-hidden shadow-lg sm:rounded-lg p-5 flex flex-col justify-center">
+                        <div class="flex items-center justify-between">
+                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                SALDO PENDENTE A RECEBER
+                            </div>
+                            <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V4m0 12v4M5 9h14M5 15h14M4 12h16">
+                                </path>
+                            </svg>
+                        </div>
+                        <div class="mt-2 text-3xl font-extrabold text-yellow-700 dark:text-yellow-300">
+                            R$ {{ number_format($totalPending, 2, ',', '.') }}
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Total Previsto (Receita Bruta): R$ {{ number_format($totalExpected, 2, ',', '.') }}
+                        </div>
+                    </div>
 
-        {{-- CARD 5: FALTAS (NO-SHOW) --}}
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
-            <div class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
-                ❌ Faltas
-            </div>
-            <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-red-700 dark:text-red-300 truncate">
-                {{ $noShowCount }}
-            </div>
-            <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                Clientes que não compareceram.
-            </div>
-        </div>
+                    {{-- CARD 5: RESERVAS ATIVAS DO DIA (Contagem) --}}
+                    @php
+                        // A cor do Card é determinada pela Movimentação Líquida do dia
+                        $isNegativeLiquid = $totalRecebidoDiaLiquido < 0;
+                        $kpiClass = $isNegativeLiquid
+                            ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-800'
+                            : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-800';
+                        $textColor = $isNegativeLiquid
+                            ? 'text-red-700 dark:text-red-300'
+                            : 'text-green-700 dark:text-green-300';
+                    @endphp
+                    <div
+                        class="{{ $kpiClass }} overflow-hidden shadow-lg sm:rounded-lg p-5 flex flex-col justify-center">
+                        <div class="flex items-center justify-between">
+                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                RESERVAS ATIVAS DO DIA
+                            </div>
+                            <svg class="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z">
+                                </path>
+                            </svg>
+                        </div>
+                        <div class="mt-2 text-3xl font-extrabold text-gray-900 dark:text-white">
+                            {{ $totalReservasDia ?? 0 }}
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Movimentação Líquida: <span class="{{ $textColor }} font-semibold">R$
+                                {{ number_format($totalRecebidoDiaLiquido ?? 0, 2, ',', '.') }}</span>
+                        </div>
+                    </div>
 
-    </div>
-</div>
+                    {{-- CARD 6: FALTAS (NO-SHOW) --}}
+                    <div
+                        class="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 overflow-hidden shadow-lg sm:rounded-lg p-5 flex flex-col justify-center">
+                        <div class="flex items-center justify-between">
+                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                FALTAS (NO-SHOW)
+                            </div>
+                            <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L12 12M6 6l12 12">
+                                </path>
+                            </svg>
+                        </div>
+                        <div class="mt-2 text-3xl font-extrabold text-red-700 dark:text-red-300">
+                            {{ $noShowCount }}
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Total de agendamentos no dia: {{ $totalReservasDia }}.
+                        </div>
+                    </div>
+                </div>
+
+                {{-- FIM DA LINHA DE KPIS --}}
+            </div>
+
 
 
             {{-- 🚨 3. FECHAMENTO DE CAIXA (Lógica Condicional) --}}
@@ -290,77 +329,69 @@
                             </thead>
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 @forelse ($reservas as $reserva)
-                                    @php
-                                        // 1. Cálculos Financeiros (Mantendo os dados originais)
-                                        $total = $reserva->final_price ?? $reserva->price;
-                                        $pago = $reserva->total_paid;
-                                        $restante = max(0, $total - $pago);
-                                        $currentStatus = $reserva->payment_status;
+                                   @php
+    // 1. Cálculos Financeiros (Mantendo os dados originais)
+    $total = $reserva->final_price ?? $reserva->price;
+    $pago = $reserva->total_paid;
+    $restante = max(0, $total - $pago);
+    $currentStatus = $reserva->payment_status;
 
-                                        // 2. Identificação de "Hoje" para Destaque Visual
-                                        $dataHoje = \Carbon\Carbon::today()->toDateString();
-                                        $dataReserva = \Carbon\Carbon::parse($reserva->date)->toDateString();
-                                        $eHoje = $dataReserva === $dataHoje;
+    // 2. Identificação de "Hoje" para Destaque Visual
+    $dataHoje = \Carbon\Carbon::today()->toDateString();
+    $dataReserva = \Carbon\Carbon::parse($reserva->date)->toDateString();
+    $eHoje = ($dataReserva === $dataHoje);
 
-                                        // 3. Lógica de Detecção de Atraso (Sincronizada com Reservas Confirmadas)
-                                        $isOverdue = false;
-                                        // Só checa atraso se não estiver pago, cancelado ou rejeitado
-                                        if (
-                                            in_array($reserva->status, ['confirmed', 'pending']) &&
-                                            $currentStatus !== 'paid'
-                                        ) {
-                                            $onlyTime = \Carbon\Carbon::parse($reserva->end_time)->format('H:i:s');
-                                            $dateTimeString = $dataReserva . ' ' . $onlyTime;
+    // 3. Lógica de Detecção de Atraso (Sincronizada com Reservas Confirmadas)
+    $isOverdue = false;
+    // Só checa atraso se não estiver pago, cancelado ou rejeitado
+    if (in_array($reserva->status, ['confirmed', 'pending']) && $currentStatus !== 'paid') {
+        $onlyTime = \Carbon\Carbon::parse($reserva->end_time)->format('H:i:s');
+        $dateTimeString = $dataReserva . ' ' . $onlyTime;
 
-                                            try {
-                                                $reservaEndTime = \Carbon\Carbon::parse($dateTimeString);
-                                                if ($reservaEndTime->isPast()) {
-                                                    $isOverdue = true;
-                                                }
-                                            } catch (\Exception $e) {
-                                                $isOverdue = false;
-                                            }
-                                        }
+        try {
+            $reservaEndTime = \Carbon\Carbon::parse($dateTimeString);
+            if ($reservaEndTime->isPast()) {
+                $isOverdue = true;
+            }
+        } catch (\Exception $e) {
+            $isOverdue = false;
+        }
+    }
 
-                                        // 4. Definição de Cores e Labels de Status (A ordem aqui define a prioridade visual)
-                                        $statusClass = '';
-                                        $statusLabel = '';
+    // 4. Definição de Cores e Labels de Status (A ordem aqui define a prioridade visual)
+    $statusClass = '';
+    $statusLabel = '';
 
-                                        if ($reserva->status === 'no_show') {
-                                            $statusClass = 'bg-red-500 text-white font-bold';
-                                            $statusLabel = 'FALTA';
-                                        } elseif ($reserva->status === 'canceled' || $reserva->status === 'rejected') {
-                                            $statusClass = 'bg-gray-400 text-white font-bold';
-                                            $statusLabel = strtoupper($reserva->status);
-                                        } elseif ($currentStatus === 'paid' || $reserva->status === 'completed') {
-                                            $statusClass =
-                                                'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
-                                            $statusLabel = 'PAGO COMPLETO';
-                                        } elseif ($isOverdue) {
-                                            // Se passou da hora e não pagou tudo: Pisca em Vermelho
-                                            $statusClass = 'bg-red-700 text-white font-bold animate-pulse shadow-xl';
-                                            $statusLabel = 'ATRASADO';
-                                        } elseif ($currentStatus === 'partial') {
-                                            $statusClass =
-                                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
-                                            $statusLabel = 'PAGO PARCIAL';
-                                        } else {
-                                            $statusClass =
-                                                'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-                                            $statusLabel = $pago > 0 ? 'SINAL DADO' : 'PENDENTE';
-                                        }
+    if ($reserva->status === 'no_show') {
+        $statusClass = 'bg-red-500 text-white font-bold';
+        $statusLabel = 'FALTA';
+    } elseif ($reserva->status === 'canceled' || $reserva->status === 'rejected') {
+        $statusClass = 'bg-gray-400 text-white font-bold';
+        $statusLabel = strtoupper($reserva->status);
+    } elseif ($currentStatus === 'paid' || $reserva->status === 'completed') {
+        $statusClass = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
+        $statusLabel = 'PAGO COMPLETO';
+    } elseif ($isOverdue) {
+        // Se passou da hora e não pagou tudo: Pisca em Vermelho
+        $statusClass = 'bg-red-700 text-white font-bold animate-pulse shadow-xl';
+        $statusLabel = 'ATRASADO';
+    } elseif ($currentStatus === 'partial') {
+        $statusClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
+        $statusLabel = 'PAGO PARCIAL';
+    } else {
+        $statusClass = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+        $statusLabel = ($pago > 0) ? 'SINAL DADO' : 'PENDENTE';
+    }
 
-                                        // 5. Lógica de Destaque da Linha (Zebra vs Hoje vs Dashboard)
-                                        if (isset($highlightReservaId) && $reserva->id == $highlightReservaId) {
-                                            $rowHighlight =
-                                                'bg-indigo-100 dark:bg-indigo-900/40 border-l-4 border-indigo-600 shadow-inner';
-                                        } elseif ($eHoje) {
-                                            $rowHighlight =
-                                                'bg-blue-50/70 dark:bg-blue-900/10 border-l-4 border-blue-500';
-                                        } else {
-                                            $rowHighlight = 'hover:bg-gray-50 dark:hover:bg-gray-700';
-                                        }
-                                    @endphp
+    // 5. Lógica de Destaque da Linha (Zebra vs Hoje vs Dashboard)
+    if (isset($highlightReservaId) && $reserva->id == $highlightReservaId) {
+        $rowHighlight = 'bg-indigo-100 dark:bg-indigo-900/40 border-l-4 border-indigo-600 shadow-inner';
+    } elseif ($eHoje) {
+        $rowHighlight = 'bg-blue-50/70 dark:bg-blue-900/10 border-l-4 border-blue-500';
+    } else {
+        $rowHighlight = 'hover:bg-gray-50 dark:hover:bg-gray-700';
+    }
+@endphp
                                     <tr class="{{ $rowHighlight }} transition">
                                         <td class="px-4 py-4 whitespace-nowrap text-sm font-bold">
                                             {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }} -
@@ -450,8 +481,7 @@
                                                 @else
                                                     {{-- Caso contrário (FALTA, mas RESTANTE > 0), o botão de Baixar aparece acima para cobrar a dívida. --}}
                                                     <span class="text-xs text-red-500 italic font-medium">Falta
-                                                        (Aguardando Pagamento)
-                                                    </span>
+                                                        (Aguardando Pagamento)</span>
                                                 @endif
                                             @elseif($reserva->status === 'canceled')
                                                 <span class="text-xs text-gray-500 italic font-medium">Cancelada</span>
@@ -1631,7 +1661,7 @@
             const cashStatusEl = document.getElementById('cashStatus');
 
             if (!closeCashBtn || !cashStatusEl)
-                return; // Garante que o elemento existe (pois pode ser o botão de 'Abrir Caixa')
+        return; // Garante que o elemento existe (pois pode ser o botão de 'Abrir Caixa')
 
             closeCashBtn.disabled = !isReady;
             cashStatusEl.innerHTML = statusMessage;

@@ -172,7 +172,7 @@ class Reserva extends Model
         \Illuminate\Database\Eloquent\Builder $query
     ): void {
         $query->where('is_fixed', false)
-            ->whereIn('status', [self::STATUS_CONFIRMADA, self::STATUS_PENDENTE]);
+              ->whereIn('status', [self::STATUS_CONFIRMADA, self::STATUS_PENDENTE]);
     }
 
     /**
@@ -182,7 +182,7 @@ class Reserva extends Model
         \Illuminate\Database\Eloquent\Builder $query
     ): void {
         $query->where('is_fixed', true)
-            ->whereIn('status', [self::STATUS_FREE, self::STATUS_MAINTENANCE]);
+              ->whereIn('status', [self::STATUS_FREE, self::STATUS_MAINTENANCE]);
     }
 
     public function scopeIsOccupied($query, $date, $startTime, $endTime)
@@ -193,18 +193,18 @@ class Reserva extends Model
                 $q->where(function ($inner) use ($startTime, $endTime) {
                     // Caso 1: O início da nova reserva está entre uma reserva existente
                     $inner->where('start_time', '>=', $startTime)
-                        ->where('start_time', '<', $endTime);
+                          ->where('start_time', '<', $endTime);
                 })
-                    ->orWhere(function ($inner) use ($startTime, $endTime) {
-                        // Caso 2: O fim da nova reserva está entre uma reserva existente
-                        $inner->where('end_time', '>', $startTime)
-                            ->where('end_time', '<=', $endTime);
-                    })
-                    ->orWhere(function ($inner) use ($startTime, $endTime) {
-                        // Caso 3: A nova reserva engloba totalmente uma reserva existente
-                        $inner->where('start_time', '<=', $startTime)
-                            ->where('end_time', '>=', $endTime);
-                    });
+                ->orWhere(function ($inner) use ($startTime, $endTime) {
+                    // Caso 2: O fim da nova reserva está entre uma reserva existente
+                    $inner->where('end_time', '>', $startTime)
+                          ->where('end_time', '<=', $endTime);
+                })
+                ->orWhere(function ($inner) use ($startTime, $endTime) {
+                    // Caso 3: A nova reserva engloba totalmente uma reserva existente
+                    $inner->where('start_time', '<=', $startTime)
+                          ->where('end_time', '>=', $endTime);
+                });
             });
     }
 }

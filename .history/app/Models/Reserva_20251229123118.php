@@ -74,45 +74,6 @@ class Reserva extends Model
         'end_time' => 'datetime',
     ];
 
-    // ... manter casts e outros métodos acima ...
-
-    /**
-     * 🛡️ TRAVA DE SEGURANÇA: Impede criação/exclusão em caixa fechado
-     */
-    protected static function boot()
-    {
-        parent::boot();
-
-        // Bloqueia a criação de novas reservas
-        static::creating(function ($reserva) {
-            $financeiro = app(\App\Http\Controllers\FinanceiroController::class);
-
-            // Verifica a data da reserva
-            $dateToCheck = $reserva->date instanceof \Carbon\Carbon
-                ? $reserva->date->toDateString()
-                : $reserva->date;
-
-            if ($financeiro->isCashClosed($dateToCheck)) {
-                throw new \Exception("Bloqueio de Segurança: O caixa do dia " . \Carbon\Carbon::parse($dateToCheck)->format('d/m/Y') . " já está encerrado. Reabra-o para agendar.");
-            }
-        });
-
-        // Bloqueia a exclusão de reservas existentes
-        static::deleting(function ($reserva) {
-            $financeiro = app(\App\Http\Controllers\FinanceiroController::class);
-
-            $dateToCheck = $reserva->date instanceof \Carbon\Carbon
-                ? $reserva->date->toDateString()
-                : $reserva->date;
-
-            if ($financeiro->isCashClosed($dateToCheck)) {
-                throw new \Exception("Bloqueio de Segurança: Não é possível excluir agendamentos de um dia com caixa encerrado.");
-            }
-        });
-    }
-
-    // ... manter relacionamentos e scopes abaixo ...
-
     // -------------------------------------------------------------------------
     // RELACIONAMENTOS (Relationships)
     // -------------------------------------------------------------------------
@@ -172,7 +133,7 @@ class Reserva extends Model
         \Illuminate\Database\Eloquent\Builder $query
     ): void {
         $query->where('is_fixed', false)
-            ->whereIn('status', [self::STATUS_CONFIRMADA, self::STATUS_PENDENTE]);
+              ->whereIn('status', [self::STATUS_CONFIRMADA, self::STATUS_PENDENTE]);
     }
 
     /**
@@ -182,7 +143,7 @@ class Reserva extends Model
         \Illuminate\Database\Eloquent\Builder $query
     ): void {
         $query->where('is_fixed', true)
-            ->whereIn('status', [self::STATUS_FREE, self::STATUS_MAINTENANCE]);
+              ->whereIn('status', [self::STATUS_FREE, self::STATUS_MAINTENANCE]);
     }
 
     public function scopeIsOccupied($query, $date, $startTime, $endTime)
@@ -193,18 +154,18 @@ class Reserva extends Model
                 $q->where(function ($inner) use ($startTime, $endTime) {
                     // Caso 1: O início da nova reserva está entre uma reserva existente
                     $inner->where('start_time', '>=', $startTime)
-                        ->where('start_time', '<', $endTime);
+                          ->where('start_time', '<', $endTime);
                 })
-                    ->orWhere(function ($inner) use ($startTime, $endTime) {
-                        // Caso 2: O fim da nova reserva está entre uma reserva existente
-                        $inner->where('end_time', '>', $startTime)
-                            ->where('end_time', '<=', $endTime);
-                    })
-                    ->orWhere(function ($inner) use ($startTime, $endTime) {
-                        // Caso 3: A nova reserva engloba totalmente uma reserva existente
-                        $inner->where('start_time', '<=', $startTime)
-                            ->where('end_time', '>=', $endTime);
-                    });
+                ->orWhere(function ($inner) use ($startTime, $endTime) {
+                    // Caso 2: O fim da nova reserva está entre uma reserva existente
+                    $inner->where('end_time', '>', $startTime)
+                          ->where('end_time', '<=', $endTime);
+                })
+                ->orWhere(function ($inner) use ($startTime, $endTime) {
+                    // Caso 3: A nova reserva engloba totalmente uma reserva existente
+                    $inner->where('start_time', '<=', $startTime)
+                          ->where('end_time', '>=', $endTime);
+                });
             });
     }
 }

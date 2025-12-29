@@ -19,77 +19,83 @@
 
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-           {{-- 1. ESTRUTURA DE KPIS (RESPONSIVO COM DESCRIÇÕES) --}}
-<div class="space-y-4">
-    <div class="grid grid-cols-1 lg:grid-cols-5 gap-3 lg:gap-4">
 
-        {{-- CARD 1: SALDO EM CAIXA (LÍQUIDO REAL) --}}
-        <div class="bg-green-600 dark:bg-green-700 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center border-b-4 border-green-900">
-            <div class="text-[10px] font-bold text-green-50 uppercase tracking-tighter truncate">
-                💰 Saldo Caixa
-            </div>
-            <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-white truncate">
-                R$ {{ number_format($totalRecebidoDiaLiquido, 2, ',', '.') }}
-            </div>
-            <div class="text-[9px] text-green-100 mt-1 italic leading-tight">
-                Total real em dinheiro/pix hoje.
-            </div>
-        </div>
+            {{-- 1. ESTRUTURA DE KPIS --}}
+            <div class="space-y-4">
 
-        {{-- CARD 2: RECEITA JOGOS HOJE --}}
-        <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-300 dark:border-indigo-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
-            <div class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
-                🎾 Receita Agenda
-            </div>
-            <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-indigo-700 dark:text-indigo-300 truncate">
-                R$ {{ number_format($totalAntecipadoReservasDia, 2, ',', '.') }}
-            </div>
-            <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                Faturamento dos jogos de hoje.
-            </div>
-        </div>
+                {{-- Linha dos KPIs (Agora com 3 colunas principais para clareza) --}}
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 
-        {{-- CARD 3: PENDENTE A RECEBER --}}
-        <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
-            <div class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
-                ⏳ Pendente
-            </div>
-            <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-yellow-700 dark:text-yellow-300 truncate">
-                R$ {{ number_format($totalPending, 2, ',', '.') }}
-            </div>
-            <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                Valor que ainda falta cobrar.
-            </div>
-        </div>
+                    {{-- CARD 1: DINHEIRO EM CAIXA (LÍQUIDO REAL) --}}
+                    {{-- Este card mostra os R$ 600,00 (Tudo que entrou na gaveta hoje) --}}
+                    <div
+                        class="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-800 overflow-hidden shadow-lg sm:rounded-lg p-5 flex flex-col justify-center">
+                        <div class="flex items-center justify-between">
+                            <div class="text-sm font-bold text-green-800 dark:text-green-300 uppercase tracking-wider">
+                                💰 Dinheiro em Caixa (Líquido)
+                            </div>
+                            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V4m0 12v4M5 9h14M5 15h14M4 12h16">
+                                </path>
+                            </svg>
+                        </div>
+                        <div class="mt-2 text-3xl font-extrabold text-green-700 dark:text-green-300">
+                            R$ {{ number_format($totalRecebidoDiaLiquido, 2, ',', '.') }}
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1 italic">
+                            Total real na gaveta (inclui dívidas antigas e sinais).
+                        </div>
+                    </div>
 
-        {{-- CARD 4: RESERVAS ATIVAS --}}
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
-            <div class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
-                📅 Ativas
-            </div>
-            <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-gray-900 dark:text-white truncate">
-                {{ $totalReservasDia }}
-            </div>
-            <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                Total de agendamentos hoje.
-            </div>
-        </div>
+                    {{-- CARD 2: RECEITA DOS JOGOS DE HOJE --}}
+                    {{-- Este card mostra os R$ 500,00 (Apenas o faturamento das quadras hoje) --}}
+                    <div
+                        class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-300 dark:border-indigo-800 overflow-hidden shadow-lg sm:rounded-lg p-5 flex flex-col justify-center">
+                        <div class="flex items-center justify-between">
+                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                🎾 Faturamento da Agenda
+                            </div>
+                            <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z">
+                                </path>
+                            </svg>
+                        </div>
+                        <div class="mt-2 text-3xl font-extrabold text-indigo-700 dark:text-indigo-300">
+                            R$ {{ number_format($totalAntecipadoReservasDia, 2, ',', '.') }}
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Quanto as reservas de hoje geraram de receita.
+                        </div>
+                    </div>
 
-        {{-- CARD 5: FALTAS (NO-SHOW) --}}
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
-            <div class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
-                ❌ Faltas
-            </div>
-            <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-red-700 dark:text-red-300 truncate">
-                {{ $noShowCount }}
-            </div>
-            <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                Clientes que não compareceram.
-            </div>
-        </div>
+                    {{-- CARD 3: SALDO PENDENTE A RECEBER --}}
+                    <div
+                        class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-800 overflow-hidden shadow-lg sm:rounded-lg p-5 flex flex-col justify-center">
+                        <div class="flex items-center justify-between">
+                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                ⏳ Pendente de Recebimento
+                            </div>
+                            <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div class="mt-2 text-3xl font-extrabold text-yellow-700 dark:text-yellow-300">
+                            R$ {{ number_format($totalPending, 2, ',', '.') }}
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Falta cobrar dos jogos de hoje.
+                        </div>
+                    </div>
+                </div>
 
-    </div>
-</div>
+                {{-- FIM DA LINHA DE KPIS --}}
+            </div>
+
 
 
             {{-- 🚨 3. FECHAMENTO DE CAIXA (Lógica Condicional) --}}

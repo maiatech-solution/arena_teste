@@ -19,8 +19,9 @@
 
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-           {{-- 1. ESTRUTURA DE KPIS (RESPONSIVO COM DESCRIÇÕES) --}}
+           {{-- 1. ESTRUTURA DE KPIS (RESPONSIVO: 1 COLUNA MOBILE / 5 COLUNAS DESKTOP) --}}
 <div class="space-y-4">
+    {{-- grid-cols-1 (celular) | lg:grid-cols-5 (computador) --}}
     <div class="grid grid-cols-1 lg:grid-cols-5 gap-3 lg:gap-4">
 
         {{-- CARD 1: SALDO EM CAIXA (LÍQUIDO REAL) --}}
@@ -31,60 +32,45 @@
             <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-white truncate">
                 R$ {{ number_format($totalRecebidoDiaLiquido, 2, ',', '.') }}
             </div>
-            <div class="text-[9px] text-green-100 mt-1 italic leading-tight">
-                Total real em dinheiro/pix hoje.
-            </div>
         </div>
 
         {{-- CARD 2: RECEITA JOGOS HOJE --}}
-        <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-300 dark:border-indigo-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
+        <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-300 dark:border-indigo-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center">
             <div class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
                 🎾 Receita Agenda
             </div>
             <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-indigo-700 dark:text-indigo-300 truncate">
                 R$ {{ number_format($totalAntecipadoReservasDia, 2, ',', '.') }}
             </div>
-            <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                Faturamento dos jogos de hoje.
-            </div>
         </div>
 
         {{-- CARD 3: PENDENTE A RECEBER --}}
-        <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
+        <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center">
             <div class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
                 ⏳ Pendente
             </div>
             <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-yellow-700 dark:text-yellow-300 truncate">
                 R$ {{ number_format($totalPending, 2, ',', '.') }}
             </div>
-            <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                Valor que ainda falta cobrar.
-            </div>
         </div>
 
         {{-- CARD 4: RESERVAS ATIVAS --}}
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center">
             <div class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
                 📅 Ativas
             </div>
             <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-gray-900 dark:text-white truncate">
                 {{ $totalReservasDia }}
             </div>
-            <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                Total de agendamentos hoje.
-            </div>
         </div>
 
         {{-- CARD 5: FALTAS (NO-SHOW) --}}
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
+        <div class="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center">
             <div class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
                 ❌ Faltas
             </div>
             <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-red-700 dark:text-red-300 truncate">
                 {{ $noShowCount }}
-            </div>
-            <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                Clientes que não compareceram.
             </div>
         </div>
 

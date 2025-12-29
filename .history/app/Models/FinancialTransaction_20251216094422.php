@@ -5,30 +5,30 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Http\Controllers\FinanceiroController;
-use Carbon\Carbon;
 
 class FinancialTransaction extends Model
 {
     use HasFactory;
 
     /**
-     * ✅ Constantes de Tipo de Transação
+     * ✅ NOVO: Constantes de Tipo de Transação (Alinhadas com ReservaController)
      */
     public const TYPE_SIGNAL = 'signal';
-    public const TYPE_PAYMENT = 'payment';
+    public const TYPE_PAYMENT = 'payment'; // Pagamento final/parcial
+    // Constantes de Retenção/Compensação
     public const TYPE_RETEN_NOSHOW_COMP = 'RETEN_NOSHOW_COMP';
     public const TYPE_RETEN_CANC_COMP = 'RETEN_CANC_COMP';
     public const TYPE_RETEN_CANC_P_COMP = 'RETEN_CANC_P_COMP';
     public const TYPE_RETEN_CANC_S_COMP = 'RETEN_CANC_S_COMP';
+    // Estorno não precisa de constante de entrada, pois a lógica é a exclusão do 'signal'
 
     protected $fillable = [
         'reserva_id',
-        'user_id',
-        'manager_id',
+        'user_id',      // Cliente que pagou
+        'manager_id',   // Gestor que recebeu/registrou
         'amount',
-        'type',
-        'payment_method',
+        'type',         // 'signal', 'payment', 'RETEN_NOSHOW_COMP', etc.
+        'payment_method',// 'pix', 'money', 'card', 'retained_funds', etc.
         'transaction_code',
         'description',
         'paid_at'
@@ -38,29 +38,6 @@ class FinancialTransaction extends Model
         'amount' => 'decimal:2',
         'paid_at' => 'datetime',
     ];
-
-    /**
-     * 🛡️ TRAVA DE SEGURANÇA: Impede criação de transação em caixa fechado
-     */
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($transaction) {
-            // Instancia o controller para usar a lógica de verificação
-            $financeiro = app(FinanceiroController::class);
-
-            // Define a data a ser checada (se não houver paid_at, usa a data atual)
-            $dateToCheck = $transaction->paid_at
-                ? Carbon::parse($transaction->paid_at)->toDateString()
-                : now()->toDateString();
-
-            if ($financeiro->isCashClosed($dateToCheck)) {
-                // Cancela a operação e lança erro
-                throw new \Exception("Bloqueio de Segurança: O caixa do dia " . Carbon::parse($dateToCheck)->format('d/m/Y') . " já está encerrado. Reabra-o para lançar movimentações.");
-            }
-        });
-    }
 
     // Relação: Transação pertence a uma Reserva
     public function reserva(): BelongsTo
