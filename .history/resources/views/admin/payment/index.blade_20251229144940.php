@@ -39,7 +39,7 @@
         {{-- CARD 2: RECEITA JOGOS HOJE --}}
         <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-300 dark:border-indigo-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
             <div class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
-                🎾 RECEITA DO DIA
+                🎾 Receita Agenda
             </div>
             <div class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-indigo-700 dark:text-indigo-300 truncate">
                 R$ {{ number_format($totalAntecipadoReservasDia, 2, ',', '.') }}
