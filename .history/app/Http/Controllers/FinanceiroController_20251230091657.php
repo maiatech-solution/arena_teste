@@ -73,11 +73,12 @@ class FinanceiroController extends Controller
             ->orderBy('paid_at', 'asc')
             ->get();
 
-        // 2. BUSCA O HISTÓRICO DE FECHAMENTOS (Corrigido a setinha -> )
-        $cashierHistory = Cashier::with('user')
+        // 2. BUSCA O HISTÓRICO DE FECHAMENTOS (Para a tabela de Diferença)
+        // Pegamos os últimos 10 fechamentos para auditoria
+        $cashierHistory = Cashier::with('user') // assume que você tem o relacionamento 'user' ou 'manager' no model Cashier
             ->orderBy('date', 'desc')
             ->limit(10)
-            ->get(); // <--- O erro estava aqui, mudei de .get() para ->get()
+            . get();
 
         return view('admin.financeiro.caixa', compact('movimentacoes', 'data', 'cashierHistory'));
     }

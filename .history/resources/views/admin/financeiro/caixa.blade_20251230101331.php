@@ -56,11 +56,11 @@
                         <h1 class="text-3xl font-black text-gray-800 dark:text-white uppercase tracking-tighter">
                             Relatório de Caixa
                         </h1>
-                        <p class="text-gray-500 text-sm mt-1">
-                            Competência: <span class="font-bold text-gray-800 dark:text-gray-200">
-                                {{ \Carbon\Carbon::parse($data)->locale('pt_BR')->isoFormat('dddd, D [de] MMMM [de] YYYY') }}
-                            </span>
-                        </p>
+                       <p class="text-gray-500 text-sm mt-1">
+    Competência: <span class="font-bold text-gray-800 dark:text-gray-200">
+        {{ \Carbon\Carbon::parse($data)->locale('pt_BR')->isoFormat('dddd, D [de] MMMM [de] YYYY') }}
+    </span>
+</p>
                     </div>
 
                     @php

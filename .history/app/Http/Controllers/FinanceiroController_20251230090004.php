@@ -67,19 +67,12 @@ class FinanceiroController extends Controller
     {
         $data = $request->input('data', now()->format('Y-m-d'));
 
-        // 1. Movimentações detalhadas do dia selecionado
         $movimentacoes = FinancialTransaction::whereDate('paid_at', $data)
             ->with(['reserva', 'manager'])
             ->orderBy('paid_at', 'asc')
             ->get();
 
-        // 2. BUSCA O HISTÓRICO DE FECHAMENTOS (Corrigido a setinha -> )
-        $cashierHistory = Cashier::with('user')
-            ->orderBy('date', 'desc')
-            ->limit(10)
-            ->get(); // <--- O erro estava aqui, mudei de .get() para ->get()
-
-        return view('admin.financeiro.caixa', compact('movimentacoes', 'data', 'cashierHistory'));
+        return view('admin.financeiro.caixa', compact('movimentacoes', 'data'));
     }
 
     /**
@@ -169,8 +162,7 @@ class FinanceiroController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Erro ao fechar caixa: ' . $e->getMessage());
-            // Aqui está o segredo: enviamos a mensagem REAL do erro para o front-end
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Erro ao processar fechamento.'], 500);
         }
     }
 
@@ -205,8 +197,8 @@ class FinanceiroController extends Controller
     public function isCashClosed(string $dateString): bool
     {
         return Cashier::whereDate('date', $dateString)
-            ->where('status', 'closed')
-            ->exists();
+                    ->where('status', 'closed')
+                    ->exists();
     }
 
     private function calculateLiquidCash(string $dateString)

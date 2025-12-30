@@ -67,19 +67,12 @@ class FinanceiroController extends Controller
     {
         $data = $request->input('data', now()->format('Y-m-d'));
 
-        // 1. Movimentações detalhadas do dia selecionado
         $movimentacoes = FinancialTransaction::whereDate('paid_at', $data)
             ->with(['reserva', 'manager'])
             ->orderBy('paid_at', 'asc')
             ->get();
 
-        // 2. BUSCA O HISTÓRICO DE FECHAMENTOS (Corrigido a setinha -> )
-        $cashierHistory = Cashier::with('user')
-            ->orderBy('date', 'desc')
-            ->limit(10)
-            ->get(); // <--- O erro estava aqui, mudei de .get() para ->get()
-
-        return view('admin.financeiro.caixa', compact('movimentacoes', 'data', 'cashierHistory'));
+        return view('admin.financeiro.caixa', compact('movimentacoes', 'data'));
     }
 
     /**

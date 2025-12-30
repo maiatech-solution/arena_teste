@@ -305,26 +305,29 @@
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 @forelse ($reservas as $reserva)
                                     @php
-                                        // 1. Cálculos Financeiros
+                                        // 1. Cálculos Financeiros (Mantendo os dados originais)
                                         $total = $reserva->final_price ?? $reserva->price;
                                         $pago = $reserva->total_paid;
                                         $restante = max(0, $total - $pago);
                                         $currentStatus = $reserva->payment_status;
 
-                                        // 2. Identificação de "Hoje" para Destaque
+                                        // 2. Identificação de "Hoje" para Destaque Visual
                                         $dataHoje = \Carbon\Carbon::today()->toDateString();
                                         $dataReserva = \Carbon\Carbon::parse($reserva->date)->toDateString();
                                         $eHoje = $dataReserva === $dataHoje;
 
-                                        // 3. Lógica de Atraso
+                                        // 3. Lógica de Detecção de Atraso (Sincronizada com Reservas Confirmadas)
                                         $isOverdue = false;
+                                        // Só checa atraso se não estiver pago, cancelado ou rejeitado
                                         if (
                                             in_array($reserva->status, ['confirmed', 'pending']) &&
                                             $currentStatus !== 'paid'
                                         ) {
                                             $onlyTime = \Carbon\Carbon::parse($reserva->end_time)->format('H:i:s');
+                                            $dateTimeString = $dataReserva . ' ' . $onlyTime;
+
                                             try {
-                                                $reservaEndTime = \Carbon\Carbon::parse($dataReserva . ' ' . $onlyTime);
+                                                $reservaEndTime = \Carbon\Carbon::parse($dateTimeString);
                                                 if ($reservaEndTime->isPast()) {
                                                     $isOverdue = true;
                                                 }
@@ -333,13 +336,14 @@
                                             }
                                         }
 
-                                        // 4. Status Visual (Cores e Labels)
+                                        // 4. Definição de Cores e Labels de Status (A ordem aqui define a prioridade visual)
                                         $statusClass = '';
                                         $statusLabel = '';
+
                                         if ($reserva->status === 'no_show') {
                                             $statusClass = 'bg-red-500 text-white font-bold';
                                             $statusLabel = 'FALTA';
-                                        } elseif (in_array($reserva->status, ['canceled', 'rejected'])) {
+                                        } elseif ($reserva->status === 'canceled' || $reserva->status === 'rejected') {
                                             $statusClass = 'bg-gray-400 text-white font-bold';
                                             $statusLabel = strtoupper($reserva->status);
                                         } elseif ($currentStatus === 'paid' || $reserva->status === 'completed') {
@@ -347,6 +351,7 @@
                                                 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
                                             $statusLabel = 'PAGO COMPLETO';
                                         } elseif ($isOverdue) {
+                                            // Se passou da hora e não pagou tudo: Pisca em Vermelho
                                             $statusClass = 'bg-red-700 text-white font-bold animate-pulse shadow-xl';
                                             $statusLabel = 'ATRASADO';
                                         } elseif ($currentStatus === 'partial') {
@@ -359,7 +364,7 @@
                                             $statusLabel = $pago > 0 ? 'SINAL DADO' : 'PENDENTE';
                                         }
 
-                                        // 5. Destaque da Linha
+                                        // 5. Lógica de Destaque da Linha (Zebra vs Hoje vs Dashboard)
                                         if (isset($highlightReservaId) && $reserva->id == $highlightReservaId) {
                                             $rowHighlight =
                                                 'bg-indigo-100 dark:bg-indigo-900/40 border-l-4 border-indigo-600 shadow-inner';
@@ -369,21 +374,9 @@
                                         } else {
                                             $rowHighlight = 'hover:bg-gray-50 dark:hover:bg-gray-700';
                                         }
-
-                                        // 6. Condições dos Botões
-                                        $canPay =
-                                            $restante > 0 && !in_array($reserva->status, ['canceled', 'rejected']);
-                                        $canBeNoShow = !in_array($reserva->status, [
-                                            'no_show',
-                                            'canceled',
-                                            'rejected',
-                                            'completed',
-                                        ]);
                                     @endphp
-
                                     <tr class="{{ $rowHighlight }} transition">
-                                        <td
-                                            class="px-4 py-4 whitespace-nowrap text-sm font-bold text-gray-700 dark:text-gray-300">
+                                        <td class="px-4 py-4 whitespace-nowrap text-sm font-bold">
                                             {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }} -
                                             {{ \Carbon\Carbon::parse($reserva->end_time)->format('H:i') }}
                                         </td>
@@ -398,31 +391,55 @@
                                             </div>
                                         </td>
                                         <td class="px-4 py-4 whitespace-nowrap">
+                                            {{-- APLICANDO A CLASSE E O TEXTO DO NOVO STATUS --}}
                                             <span
                                                 class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $statusClass }}">
                                                 {{ $statusLabel }}
                                             </span>
                                         </td>
+                                        {{-- ✅ Célula Tipo --}}
                                         <td class="px-4 py-4 whitespace-nowrap text-sm">
-                                            <span
-                                                class="font-semibold {{ $reserva->is_recurrent ? 'text-fuchsia-600' : 'text-blue-600' }}">
-                                                {{ $reserva->is_recurrent ? 'Recorrente' : 'Pontual' }}
-                                            </span>
+                                            @if ($reserva->is_recurrent)
+                                                <span class="font-semibold text-fuchsia-600">Recorrente</span>
+                                            @else
+                                                <span class="font-semibold text-blue-600">Pontual</span>
+                                            @endif
                                         </td>
-                                        <td
-                                            class="px-4 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-700 dark:text-gray-300">
+                                        <td class="px-4 py-4 whitespace-nowrap text-sm text-right font-bold">
                                             {{ number_format($total, 2, ',', '.') }}
                                         </td>
+                                        {{-- Total Pago --}}
                                         <td
                                             class="px-4 py-4 whitespace-nowrap text-sm text-right text-green-600 font-medium">
                                             {{ number_format($pago, 2, ',', '.') }}
                                         </td>
+                                        {{-- Saldo a Pagar --}}
                                         <td
                                             class="px-4 py-4 whitespace-nowrap text-sm text-right font-bold {{ $restante > 0 ? 'text-red-600' : 'text-gray-400' }}">
                                             {{ number_format($restante, 2, ',', '.') }}
                                         </td>
                                         <td class="px-4 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                            @php
+                                                // --- Lógica de Habilitação dos Botões (Caixa) ---
+
+                                                // 1. Condição para o botão $ Baixar
+                                                // Permitido APENAS se houver saldo restante E a reserva não estiver em um estado terminal de cancelamento/rejeição
+                                                $canPay =
+                                                    $restante > 0 &&
+                                                    $reserva->status !== 'canceled' &&
+                                                    $reserva->status !== 'rejected';
+
+                                                // 2. Condição para o botão X Falta
+                                                // Permitido se a reserva não estiver em um estado terminal/finalizado (Falta/Cancelada/Rejeitada/Concluída)
+                                                $canBeNoShow =
+                                                    $reserva->status !== 'no_show' &&
+                                                    $reserva->status !== 'canceled' &&
+                                                    $reserva->status !== 'rejected' &&
+                                                    $reserva->status !== 'completed';
+                                            @endphp
+
                                             @if ($canPay)
+                                                {{-- Botão Pagar: Aparece se houver saldo restante. --}}
                                                 <button
                                                     onclick="openPaymentModal({{ $reserva->id }}, {{ $total }}, {{ $restante }}, {{ $pago }}, '{{ $reserva->client_name }}', {{ $reserva->is_recurrent ? 'true' : 'false' }})"
                                                     class="text-white bg-green-600 hover:bg-green-700 rounded px-3 py-1 text-xs mr-2 transition duration-150 {{ $isActionDisabled ? 'opacity-50 cursor-not-allowed' : '' }}"
@@ -432,6 +449,7 @@
                                             @endif
 
                                             @if ($canBeNoShow)
+                                                {{-- Botão Falta: Aparece se ainda não foi marcada Falta/Cancelada/Rejeitada/Concluída --}}
                                                 <button
                                                     onclick="openNoShowModal({{ $reserva->id }}, '{{ $reserva->client_name }}', {{ $pago }})"
                                                     class="text-white bg-red-600 hover:bg-red-700 rounded px-3 py-1 text-xs transition duration-150 {{ $isActionDisabled ? 'opacity-50 cursor-not-allowed' : '' }}"
@@ -439,12 +457,20 @@
                                                     X Falta
                                                 </button>
                                             @elseif($reserva->status === 'no_show')
-                                                <span class="text-xs text-red-500 italic font-medium">
-                                                    {{ $restante <= 0 ? 'Falta Registrada' : 'Falta (Aguardando Pagamento)' }}
-                                                </span>
-                                            @elseif(in_array($reserva->status, ['canceled', 'rejected']))
-                                                <span
-                                                    class="text-xs text-gray-500 italic font-medium">{{ ucfirst($reserva->status) }}</span>
+                                                {{-- Se for FALTA, e não tiver mais saldo a pagar (R$ 0,00), mostra status final. --}}
+                                                @if ($restante <= 0)
+                                                    <span class="text-xs text-red-500 italic font-medium">Falta
+                                                        Registrada</span>
+                                                @else
+                                                    {{-- Caso contrário (FALTA, mas RESTANTE > 0), o botão de Baixar aparece acima para cobrar a dívida. --}}
+                                                    <span class="text-xs text-red-500 italic font-medium">Falta
+                                                        (Aguardando Pagamento)
+                                                    </span>
+                                                @endif
+                                            @elseif($reserva->status === 'canceled')
+                                                <span class="text-xs text-gray-500 italic font-medium">Cancelada</span>
+                                            @elseif($reserva->status === 'rejected')
+                                                <span class="text-xs text-gray-500 italic font-medium">Rejeitada</span>
                                             @elseif($pago >= $total)
                                                 <span
                                                     class="text-xs text-green-500 italic font-medium">Finalizado</span>
@@ -453,6 +479,7 @@
                                     </tr>
                                 @empty
                                     <tr>
+                                        {{-- Colspan ajustado para 8 --}}
                                         <td colspan="8"
                                             class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                                             Nenhum agendamento encontrado para esta data ou termo de pesquisa.
@@ -473,57 +500,18 @@
                     <h3
                         class="text-lg font-semibold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 flex items-center">
                         <svg class="w-5 h-5 mr-2 text-indigo-500" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24">
+                            viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
                             </path>
                         </svg>
                         Movimentação Detalhada de Caixa ({{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }})
+                        <span class="text-sm font-normal text-gray-500 ml-3">(Sinais, Pagamentos, Retenções e
+                            Estornos)</span>
                     </h3>
 
-                    {{-- NOVO: DASHBOARD DE ENTRADAS VS SAÍDAS --}}
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <div
-                            class="p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-xl flex justify-between items-center">
-                            <div>
-                                <span
-                                    class="block text-[10px] uppercase font-bold text-green-600 dark:text-green-400 tracking-widest">Total
-                                    Entradas</span>
-                                <span class="text-2xl font-black text-green-700 dark:text-green-300">
-                                    R$
-                                    {{ number_format($financialTransactions->where('amount', '>', 0)->sum('amount'), 2, ',', '.') }}
-                                </span>
-                            </div>
-                            <div class="bg-green-100 dark:bg-green-800/30 p-2 rounded-lg">
-                                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M12 4v16m8-8H4"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div
-                            class="p-4 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-xl flex justify-between items-center">
-                            <div>
-                                <span
-                                    class="block text-[10px] uppercase font-bold text-red-600 dark:text-red-400 tracking-widest">Total
-                                    Saídas / Estornos</span>
-                                <span class="text-2xl font-black text-red-700 dark:text-red-300">
-                                    R$
-                                    {{ number_format(abs($financialTransactions->where('amount', '<', 0)->sum('amount')), 2, ',', '.') }}
-                                </span>
-                            </div>
-                            <div class="bg-red-100 dark:bg-red-800/30 p-2 rounded-lg">
-                                <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M20 12H4"></path>
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-
                     @php
+                        // 1. Agrupamos as transações por ID da Reserva (Chave de Agrupamento)
                         $groupedTransactions = $financialTransactions->groupBy('reserva_id');
                     @endphp
 
@@ -531,107 +519,151 @@
                         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-700">
                                 <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/12">
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-1/12">
                                         Hora</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/12">
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-1/12">
                                         ID</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-2/12">
-                                        Pagador/Gestor</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-2/12">
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-2/12">
+                                        Pagador / Gestor</th>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-2/12">
                                         Tipo | Forma</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-4/12">
+                                    {{-- LARGURA DE VOLTA AO ORIGINAL, mas sem truncamento --}}
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-4/12">
                                         Descrição</th>
                                     <th
-                                        class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-1/12">
+                                        class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-1/12">
                                         Valor (R$)</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 @forelse ($groupedTransactions as $reservaId => $transactions)
+                                    {{-- Linha de Agrupamento/Resumo para a Reserva (MELHORIA DE ROBUSTEZ) --}}
                                     @if ($reservaId)
                                         @php
+                                            // Pega a primeira transação para ter acesso ao relacionamento 'reserva'
                                             $transactionExample = $transactions->first();
+                                            // Tenta obter o nome do cliente através do relacionamento (se existir, se foi carregado, se a reserva não foi excluída)
                                             $clientName = $transactionExample->reserva->client_name ?? 'N/A';
+                                            $reservaInfo =
+                                                'ID: ' .
+                                                $reservaId .
+                                                ($clientName !== 'N/A'
+                                                    ? ' - ' . $clientName
+                                                    : ' (Reserva Ausente/Cancelada)');
                                         @endphp
-                                        <tr class="bg-gray-100 dark:bg-gray-700/60 border-t-2 border-indigo-500">
+                                        <tr
+                                            class="bg-gray-100 dark:bg-gray-700/50 border-t-2 border-indigo-400 dark:border-indigo-600">
+                                            {{-- Colspan ajustado para 5 colunas de texto --}}
                                             <td colspan="5"
-                                                class="px-4 py-2.5 text-sm font-bold text-gray-800 dark:text-gray-100">
-                                                <span
-                                                    class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-600 text-white mr-3">RESERVA</span>
-                                                ID: {{ $reservaId }} - {{ $clientName }}
+                                                class="px-4 py-2 text-sm font-bold text-gray-800 dark:text-gray-200">
+                                                ✅ MOVIMENTOS DA RESERVA <span
+                                                    class="text-indigo-600 dark:text-indigo-400">{{ $reservaInfo }}</span>
                                             </td>
                                             <td
-                                                class="px-4 py-2.5 text-right text-sm font-black text-gray-900 dark:text-white bg-indigo-50/50 dark:bg-indigo-900/20 border-l border-indigo-100 dark:border-indigo-800/50">
-                                                R$ {{ number_format($transactions->sum('amount'), 2, ',', '.') }}
+                                                class="px-4 py-2 text-right text-sm font-bold text-gray-800 dark:text-gray-200">
+                                                TOTAL: R$
+                                                {{ number_format($transactions->sum('amount'), 2, ',', '.') }}
                                             </td>
                                         </tr>
                                     @endif
 
+                                    {{-- Iteração sobre as transações individuais (Sinal, Pagamento, Estorno, etc.) --}}
                                     @foreach ($transactions as $transaction)
                                         @php
                                             $amount = (float) $transaction->amount;
-                                            $isRefund = $transaction->type === 'refund' || $amount < 0;
+                                            $isPositive = $amount >= 0;
+                                            $isRefund = $transaction->type === 'refund' || $amount < 0; // Se o valor for negativo, é saída
 
-                                            // CORREÇÃO: Destaque de linha para Estornos
+                                            // Destaque visual para estornos/saídas
                                             $rowClass = $isRefund
-                                                ? 'bg-red-50/50 dark:bg-red-900/10 border-l-4 border-red-500 hover:bg-red-100'
-                                                : 'hover:bg-gray-50 dark:hover:bg-gray-700 border-l-4 border-transparent';
+                                                ? 'bg-red-50 dark:bg-red-900/30 hover:bg-red-100'
+                                                : 'hover:bg-gray-50 dark:hover:bg-gray-700';
+                                            $amountClass = $isPositive
+                                                ? 'text-green-600 font-bold'
+                                                : 'text-red-600 font-bold';
 
-                                            $amountClass = $amount >= 0 ? 'text-green-600' : 'text-red-600 font-black';
+                                            // Mapeamento de Tipos para exibição amigável
+                                            $typeMap = [
+                                                'signal' => 'Sinal',
+                                                'payment' => 'Pagamento Saldo',
+                                                'full_payment' => 'Pgto. Total',
+                                                'partial_payment' => 'Pgto. Parcial',
+                                                'payment_settlement' => 'Acerto',
+                                                'refund' => 'Estorno/Devolução', // MUITO IMPORTANTE
+                                                'RETEN_CANC_COMP' => 'Retenção (Canc.)',
+                                                'RETEN_NOSHOW_COMP' => 'Retenção (No-Show)',
+                                            ];
+                                            $displayType =
+                                                $typeMap[$transaction->type] ??
+                                                ucwords(str_replace('_', ' ', $transaction->type));
+
+                                            // Mapeamento de Formas de Pagamento
+                                            $methodMap = [
+                                                'pix' => 'PIX',
+                                                'money' => 'Dinheiro',
+                                                'credit_card' => 'Crédito',
+                                                'debit_card' => 'Débito',
+                                                'transfer' => 'Transf.',
+                                                'other' => 'Outro',
+                                                'retained_funds' => 'Retained Funds',
+                                            ];
+                                            $displayMethod =
+                                                $methodMap[$transaction->payment_method] ??
+                                                ucwords(str_replace('_', ' ', $transaction->payment_method));
                                         @endphp
-
-                                        <tr class="{{ $rowClass }} transition duration-150">
-                                            <td class="px-4 py-3 text-sm text-gray-500 font-mono italic">
+                                        <tr class="{{ $rowClass }}">
+                                            <td
+                                                class="px-4 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                                 {{ \Carbon\Carbon::parse($transaction->paid_at)->format('H:i:s') }}
                                             </td>
                                             <td
-                                                class="px-4 py-3 text-sm font-medium {{ $isRefund ? 'text-red-700' : 'text-indigo-600' }}">
-                                                #{{ $transaction->reserva_id ?? '--' }}
+                                                class="px-4 py-2 whitespace-nowrap text-sm font-medium {{ $isRefund ? 'text-red-800 dark:text-red-400' : 'text-indigo-600 dark:text-indigo-400' }}">
+                                                {{ $transaction->reserva_id ?? '--' }}
                                             </td>
-                                            <td class="px-4 py-3 text-sm">
-                                                <div class="font-semibold">
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">
+                                                <div class="text-gray-900 dark:text-white font-medium">
                                                     {{ $transaction->payer->name ?? 'Caixa Geral' }}</div>
-                                                <div class="text-[10px] text-gray-400 italic">
-                                                    {{ $transaction->manager->name ?? 'Sistema' }}</div>
+                                                <div class="text-xs text-gray-500 dark:text-gray-400">Registrado por:
+                                                    {{ $transaction->manager->name ?? 'Desconhecido' }}</div>
                                             </td>
-                                            <td class="px-4 py-3 text-sm">
-                                                <div class="text-[10px] font-extrabold uppercase">
-                                                    {{ $transaction->type }}</div>
-                                                <div
-                                                    class="text-[9px] px-1 bg-gray-100 dark:bg-gray-700 w-fit rounded font-bold">
-                                                    ({{ $transaction->payment_method }})</div>
+                                            <td
+                                                class="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                                                <div class="font-medium text-gray-900 dark:text-white">
+                                                    {{ $displayType }}</div>
+                                                <div class="text-xs text-gray-500">({{ $displayMethod }})</div>
                                             </td>
-                                            <td class="px-4 py-3 text-sm leading-tight">
-                                                <div class="flex items-center">
-                                                    @if ($isRefund)
-                                                        <svg class="w-4 h-4 mr-1 text-red-500" fill="currentColor"
-                                                            viewBox="0 0 20 20">
-                                                            <path fill-rule="evenodd"
-                                                                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                                                                clip-rule="evenodd"></path>
-                                                        </svg>
-                                                    @endif
-                                                    {{ $transaction->description }}
-                                                </div>
+                                            {{-- Correção: Permite a quebra de linha --}}
+                                            <td class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">
+                                                {{ $transaction->description }}
                                             </td>
-                                            <td class="px-4 py-3 text-right text-sm font-mono {{ $amountClass }}">
-                                                R$ {{ number_format($amount, 2, ',', '.') }}
+                                            <td
+                                                class="px-4 py-2 whitespace-nowrap text-sm text-right {{ $amountClass }}">
+                                                {{ number_format($amount, 2, ',', '.') }}
                                             </td>
                                         </tr>
                                     @endforeach
+
                                 @empty
                                     <tr>
-                                        <td colspan="6" class="px-4 py-8 text-center text-gray-500">Nenhuma
-                                            transação.</td>
+                                        <td colspan="6"
+                                            class="px-4 py-4 text-center text-gray-500 dark:text-gray-400">
+                                            Nenhuma transação financeira registrada para esta data.
+                                        </td>
                                     </tr>
                                 @endforelse
-
                                 <tr class="bg-gray-100 dark:bg-gray-700 font-bold">
-                                    <td colspan="5" class="px-4 py-4 text-right uppercase text-xs">Total Líquido do
-                                        Dia (Saldo Real):</td>
-                                    <td id="valor-liquido-total-real"
-                                        class="px-4 py-4 text-right text-lg {{ $totalRecebidoDiaLiquido >= 0 ? 'text-green-700' : 'text-red-700' }}">
-                                        R$ {{ number_format($totalRecebidoDiaLiquido, 2, ',', '.') }}
+                                    <td colspan="5"
+                                        class="px-4 py-3 text-right text-gray-800 dark:text-gray-200 uppercase">
+                                        Total Líquido do Dia:
+                                    </td>
+                                    <td
+                                        class="px-4 py-3 text-right text-lg {{ $totalRecebidoDiaLiquido >= 0 ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300' }}">
+                                        R$ {{ number_format($totalRecebidoDiaLiquido ?? 0, 2, ',', '.') }}
                                     </td>
                                 </tr>
                             </tbody>
@@ -641,100 +673,61 @@
             </div>
 
             {{-- 4.5. HISTÓRICO DE FECHAMENTOS (AUDITORIA DE DIVERGÊNCIAS) --}}
-            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg mt-6">
-                <div class="p-6 text-gray-900 dark:text-gray-100">
-                    <h3
-                        class="text-lg font-semibold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 flex items-center">
-                        <svg class="w-5 h-5 mr-2 text-fuchsia-500" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        Histórico Recente de Fechamentos
-                    </h3>
+<div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg mt-6">
+    <div class="p-6 text-gray-900 dark:text-gray-100">
+        <h3 class="text-lg font-semibold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 flex items-center">
+            <svg class="w-5 h-5 mr-2 text-fuchsia-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            Histórico Recente de Fechamentos
+        </h3>
 
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead class="bg-gray-50 dark:bg-gray-700">
-                                <tr>
-                                    <th
-                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
-                                        Data</th>
-                                    <th
-                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
-                                        Responsável</th>
-                                    <th
-                                        class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
-                                        Esperado (Sistema)</th>
-                                    <th
-                                        class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
-                                        Informado (Físico)</th>
-                                    <th
-                                        class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
-                                        Diferença</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                @forelse ($cashierHistory ?? [] as $caixa)
-                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-                                        <td
-                                            class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            {{ \Carbon\Carbon::parse($caixa->date)->format('d/m/Y') }}
-                                        </td>
-                                        <td
-                                            class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                            {{ $caixa->user->name ?? 'Sistema' }}
-                                        </td>
-                                        <td
-                                            class="px-4 py-4 whitespace-nowrap text-sm text-right text-gray-600 dark:text-gray-400 font-mono">
-                                            R$ {{ number_format($caixa->calculated_amount, 2, ',', '.') }}
-                                        </td>
-                                        <td
-                                            class="px-4 py-4 whitespace-nowrap text-sm text-right font-semibold text-gray-900 dark:text-white font-mono">
-                                            R$ {{ number_format($caixa->actual_amount, 2, ',', '.') }}
-                                        </td>
-                                        <td class="px-4 py-4 whitespace-nowrap text-sm text-right font-bold">
-                                            @if ($caixa->difference > 0)
-                                                {{-- Badge Âmbar: Sobrou dinheiro --}}
-                                                <span
-                                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
-                                                    title="Sobrou dinheiro físico: O valor informado é maior que o sistema">
-                                                    <span
-                                                        class="w-2 h-2 mr-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                                                    + R$ {{ number_format($caixa->difference, 2, ',', '.') }} ⚠️
-                                                </span>
-                                            @elseif($caixa->difference < 0)
-                                                {{-- Badge Vermelho: Faltou dinheiro --}}
-                                                <span
-                                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border border-red-200 dark:border-red-800"
-                                                    title="Faltou dinheiro físico: O valor informado é menor que o sistema">
-                                                    <span
-                                                        class="w-2 h-2 mr-1.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]"></span>
-                                                    - R$ {{ number_format(abs($caixa->difference), 2, ',', '.') }} 🚨
-                                                </span>
-                                            @else
-                                                {{-- Badge Verde: Caixa Perfeito --}}
-                                                <span
-                                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800">
-                                                    <span class="w-2 h-2 mr-1.5 rounded-full bg-green-500"></span>
-                                                    R$ 0,00 ✅
-                                                </span>
-                                            @endif
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="5"
-                                            class="px-4 py-8 text-center text-gray-500 dark:text-gray-400 italic">
-                                            Nenhum histórico de fechamento disponível.
-                                        </td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Data</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Responsável</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Esperado (Sistema)</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Informado (Físico)</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Diferença</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    @forelse ($cashierHistory ?? [] as $caixa)
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                            <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                                {{ \Carbon\Carbon::parse($caixa->date)->format('d/m/Y') }}
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ $caixa->user->name ?? 'Sistema' }}
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap text-sm text-right">
+                                R$ {{ number_format($caixa->calculated_amount, 2, ',', '.') }}
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap text-sm text-right font-semibold">
+                                R$ {{ number_format($caixa->actual_amount, 2, ',', '.') }}
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap text-sm text-right font-bold">
+                                @if($caixa->difference > 0)
+                                    <span class="text-yellow-600 dark:text-yellow-400">+ R$ {{ number_format($caixa->difference, 2, ',', '.') }} ⚠️</span>
+                                @elseif($caixa->difference < 0)
+                                    <span class="text-red-600 dark:text-red-400"> R$ {{ number_format($caixa->difference, 2, ',', '.') }} 🚨</span>
+                                @else
+                                    <span class="text-green-600 dark:text-green-400">R$ 0,00 ✅</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="5" class="px-4 py-8 text-center text-gray-500">Nenhum histórico de fechamento disponível.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
 
 
@@ -1180,63 +1173,42 @@
 
         // --- Lógica do Pagamento/No-Show (Modal Triggers e Handlers, mantidos) ---
         function openPaymentModal(id, totalPrice, remaining, signalAmount, clientName, isRecurrent = false) {
-            // 1. Verificação de Bloqueio de Caixa
-            // Convertemos a variável do Blade para um booleano real no JS
-            const isActionDisabled = {{ $isActionDisabled ? 'true' : 'false' }};
-
-            if (isActionDisabled) {
-                // Usa o seu sistema de mensagens para avisar o operador
-                if (typeof showMessage === "function") {
+            // Verifica o status de bloqueio global antes de abrir
+            if (document.getElementById('openCloseCashModalBtn') && document.getElementById('openCloseCashModalBtn')
+                .disabled) {
+                // Se o botão de fechar caixa estiver desabilitado, significa que o caixa está fechado
+                // A lógica do Blade já deve ter bloqueado, mas esta é uma proteção extra se a data for passada
+                if ("{{ $isActionDisabled }}" === '1') {
                     showMessage(
                         'Ações bloqueadas. O caixa para esta data está FECHADO. Por favor, reabra o caixa primeiro.',
-                        false
-                    );
-                } else {
-                    alert('Ações bloqueadas. O caixa para esta data está FECHADO.');
+                        false);
+                    return;
                 }
-                return; // Interrompe a execução para não abrir o modal
             }
 
-            // 2. Preenchimento de Dados Básicos
             document.getElementById('modalReservaId').value = id;
             document.getElementById('modalClientName').innerText = clientName;
-
-            // 3. Formatação e Exibição do Sinal (Currency)
             const formattedSignal = signalAmount.toLocaleString('pt-BR', {
                 style: 'currency',
                 currency: 'BRL'
             });
             document.getElementById('modalSignalAmount').innerText = formattedSignal;
             document.getElementById('modalSignalAmountRaw').value = signalAmount.toFixed(2);
-
-            // 4. Definição do Preço Final Inicial (Editável no Modal)
             document.getElementById('modalFinalPrice').value = totalPrice.toFixed(2);
-
-            // 5. Tratamento de Recorrência
             const recurrentOptionEl = document.getElementById('recurrentOption');
-            const applyToSeriesCheckbox = document.getElementById('apply_to_series');
-
             if (isRecurrent) {
                 recurrentOptionEl.classList.remove('hidden');
-                applyToSeriesCheckbox.checked = true;
+                document.getElementById('apply_to_series').checked = true;
             } else {
                 recurrentOptionEl.classList.add('hidden');
-                applyToSeriesCheckbox.checked = false;
+                document.getElementById('apply_to_series').checked = false;
             }
-
-            // 6. Reset de Campos e Erros
-            const errorMessageDiv = document.getElementById('payment-error-message');
-            errorMessageDiv.textContent = '';
-            errorMessageDiv.classList.add('hidden');
-            document.getElementById('modalPaymentMethod').value = '';
-
-            // 7. Cálculo Inicial de Saldo
             calculateAmountDue();
-
-            // 8. Exibição Visual do Modal
-            const modal = document.getElementById('paymentModal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+            document.getElementById('payment-error-message').textContent = '';
+            document.getElementById('payment-error-message').classList.add('hidden');
+            document.getElementById('modalPaymentMethod').value = '';
+            document.getElementById('paymentModal').classList.remove('hidden');
+            document.getElementById('paymentModal').classList.add('flex');
         }
 
         function closePaymentModal() {
@@ -1451,11 +1423,9 @@
         // --- Lógica do Fechamento de Caixa (MODAL 3, mantido) ---
 
         function calculateDifference() {
-            // 1. Busca o valor de referência que acabamos de marcar no HTML
-            const calculatedAmountEl = document.getElementById('valor-liquido-total-real');
-            if (!calculatedAmountEl) return;
+            const calculatedAmountEl = document.getElementById('calculatedLiquidAmount');
 
-            // 2. Limpa a string para transformar em número (Float)
+            // Captura o valor removendo R$, pontos de milhar e trocando a vírgula por ponto
             let calculatedText = calculatedAmountEl.innerText
                 .replace('R$', '')
                 .replace(/\./g, '')
@@ -1465,11 +1435,10 @@
             const calculatedAmount = parseFloat(calculatedText) || 0;
             const actualAmount = parseFloat(document.getElementById('actualCashAmount').value) || 0;
 
-            // 3. Calcula a diferença
+            // Cálculo da diferença com precisão de 2 casas
             const difference = (actualAmount - calculatedAmount).toFixed(2);
             const diffMessageEl = document.getElementById('differenceMessage');
 
-            // 4. Feedback Visual no Modal
             diffMessageEl.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-yellow-100', 'text-yellow-700',
                 'bg-green-100', 'text-green-700');
 

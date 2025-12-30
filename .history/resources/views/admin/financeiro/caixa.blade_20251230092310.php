@@ -104,7 +104,7 @@
                         </div>
                     </div>
 
-                    {{-- 📊 SEÇÃO: HISTÓRICO DE AUDITORIA E DIVERGÊNCIAS --}}
+                    {{-- 📊 NOVA SEÇÃO: HISTÓRICO DE AUDITORIA E DIVERGÊNCIAS --}}
                     <div class="mb-10">
                         <h3
                             class="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -119,22 +119,16 @@
                                     <tr
                                         class="text-gray-400 uppercase text-[10px] font-bold border-b border-gray-50 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
                                         <th class="py-3 px-4">Data do Caixa</th>
-                                        <th class="py-3 px-2">Operador</th>
                                         <th class="py-3 px-2 text-right">Sistema</th>
                                         <th class="py-3 px-2 text-right">Físico Informado</th>
-                                        <th class="py-3 px-4 text-right">Diferença</th>
+                                        <th class="py-3 px-4 text-right">Diferença (Divergência)</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-50 dark:divide-gray-700">
                                     @forelse($cashierHistory as $hist)
                                         <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
                                             <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-300">
-                                                {{-- Data em Português --}}
-                                                {{ \Carbon\Carbon::parse($hist->date)->locale('pt_BR')->isoFormat('DD/MM/YYYY') }}
-                                            </td>
-                                            <td class="py-3 px-2 text-gray-500 text-xs italic">
-                                                {{-- Nome do Operador via Relacionamento --}}
-                                                {{ $hist->user->name ?? 'Sistema' }}
+                                                {{ \Carbon\Carbon::parse($hist->date)->format('d/m/Y') }}
                                             </td>
                                             <td class="py-3 px-2 text-right text-gray-500 font-mono">
                                                 R$ {{ number_format($hist->calculated_amount, 2, ',', '.') }}
@@ -147,11 +141,13 @@
                                                 @if ($hist->difference == 0)
                                                     <span class="text-emerald-500 text-[11px]">R$ 0,00 ✅</span>
                                                 @elseif($hist->difference > 0)
-                                                    <span class="text-amber-500 text-[11px]" title="Sobrou dinheiro">
+                                                    <span class="text-amber-500 text-[11px]"
+                                                        title="Sobrou dinheiro no caixa físico">
                                                         + R$ {{ number_format($hist->difference, 2, ',', '.') }} ⚠️
                                                     </span>
                                                 @else
-                                                    <span class="text-red-500 text-[11px]" title="Faltou dinheiro">
+                                                    <span class="text-red-500 text-[11px]"
+                                                        title="Faltou dinheiro no caixa físico">
                                                         R$ {{ number_format($hist->difference, 2, ',', '.') }} 🚨
                                                     </span>
                                                 @endif
@@ -159,7 +155,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="5" class="py-8 text-center text-gray-400 italic text-xs">
+                                            <td colspan="4" class="py-8 text-center text-gray-400 italic text-xs">
                                                 Nenhum fechamento de caixa encontrado para auditoria.
                                             </td>
                                         </tr>

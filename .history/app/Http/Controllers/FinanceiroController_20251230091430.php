@@ -61,26 +61,27 @@ class FinanceiroController extends Controller
     }
 
     /**
-     * Relatório 02: Histórico de Caixa
-     */
-    public function relatorioCaixa(Request $request)
-    {
-        $data = $request->input('data', now()->format('Y-m-d'));
+ * Relatório 02: Histórico de Caixa
+ */
+public function relatorioCaixa(Request $request)
+{
+    $data = $request->input('data', now()->format('Y-m-d'));
 
-        // 1. Movimentações detalhadas do dia selecionado
-        $movimentacoes = FinancialTransaction::whereDate('paid_at', $data)
-            ->with(['reserva', 'manager'])
-            ->orderBy('paid_at', 'asc')
-            ->get();
+    // 1. Movimentações detalhadas do dia selecionado
+    $movimentacoes = FinancialTransaction::whereDate('paid_at', $data)
+        ->with(['reserva', 'manager'])
+        ->orderBy('paid_at', 'asc')
+        ->get();
 
-        // 2. BUSCA O HISTÓRICO DE FECHAMENTOS (Corrigido a setinha -> )
-        $cashierHistory = Cashier::with('user')
-            ->orderBy('date', 'desc')
-            ->limit(10)
-            ->get(); // <--- O erro estava aqui, mudei de .get() para ->get()
+    // 2. BUSCA O HISTÓRICO DE FECHAMENTOS (Para a tabela de Diferença)
+    // Pegamos os últimos 10 fechamentos para auditoria
+    $cashierHistory = Cashier::with('user') // assume que você tem o relacionamento 'user' ou 'manager' no model Cashier
+        ->orderBy('date', 'desc')
+        ->limit(10)
+        .get();
 
-        return view('admin.financeiro.caixa', compact('movimentacoes', 'data', 'cashierHistory'));
-    }
+    return view('admin.financeiro.caixa', compact('movimentacoes', 'data', 'cashierHistory'));
+}
 
     /**
      * Relatório 03: Cancelamentos
