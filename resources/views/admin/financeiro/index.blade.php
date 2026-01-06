@@ -2,7 +2,7 @@
     <x-slot name="header">
         <h2 class="font-bold text-2xl text-gray-800 dark:text-gray-200 leading-tight flex items-center gap-3">
             <span class="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg shadow-sm">📊</span>
-            Central de Inteligência Financeira
+            Relatórios Financeiros
         </h2>
     </x-slot>
 
