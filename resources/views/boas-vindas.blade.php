@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ config('app.name', 'Laravel') }} | Bem-vindo à Arena Elite Soccer</title>
+    <title>{{ config('app.name', 'Laravel') }} | Bem-vindo</title>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
@@ -54,7 +54,7 @@
             </svg>
 
             <h1 class="text-4xl md:text-5xl font-extrabold text-gray-900 mt-4">
-                Bem-vindo à Arena Elite Soccer
+                Bem-vindo
             </h1>
             <p class="text-lg text-gray-600 mt-2">
                 Sua reserva simples e rápida.
