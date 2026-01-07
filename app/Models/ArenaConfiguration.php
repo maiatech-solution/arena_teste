@@ -10,6 +10,7 @@ class ArenaConfiguration extends Model
     use HasFactory;
 
     protected $fillable = [
+        'arena_id',
         'day_of_week', // 0 (Domingo) - 6 (Sábado)
         'config_data',  // NOVO: Armazenará um array JSON de faixas de preço (slots)
         'default_price', // Mantido por consistência, mas o valor real virá do config_data

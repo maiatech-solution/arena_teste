@@ -24,21 +24,27 @@ class HorarioController extends Controller
         $end = $request->input('end') ? Carbon::parse($request->input('end')) : Carbon::now()->endOfMonth();
         $now = Carbon::now();
 
+        // 🏟️ PEGA A ARENA SELECIONADA (Importante para o filtro do FullCalendar)
+        $arenaId = $request->input('arena_id');
+
         $startString = $start->toDateString();
         $endString = $end->toDateString();
 
-        // 1. Busca APENAS Horários Avulsos Ativos (com data definida) dentro do período.
+        // 1. Busca Horários Disponíveis filtrando por Arena (se fornecida)
         $availableSlots = Schedule::where('is_active', true)
             ->whereNotNull('date')
             ->whereBetween('date', [$startString, $endString])
+            ->when($arenaId, function ($query) use ($arenaId) {
+                return $query->where('arena_id', $arenaId);
+            })
             ->get();
 
-        // 2. Busca Reservas Ativas no Período para verificação de conflito
-        // Filtramos todas as reservas que se sobrepõem ao período visível do calendário.
+        // 2. Busca Reservas Ativas filtrando pela mesma Arena
+        // Isso permite que o mesmo horário esteja livre na Arena B se estiver ocupado na Arena A
         $occupiedReservas = Reserva::whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-            ->where(function ($query) use ($start, $end) {
-                $query->where('start_time', '<', $end->endOfDay()->toDateTimeString())
-                      ->where('end_time', '>', $start->startOfDay()->toDateTimeString());
+            ->whereBetween('date', [$startString, $endString])
+            ->when($arenaId, function ($query) use ($arenaId) {
+                return $query->where('arena_id', $arenaId);
             })
             ->get();
 
@@ -55,49 +61,49 @@ class HorarioController extends Controller
             // A. Checa se o slot já passou
             $scheduleStart = Carbon::parse($dateString . ' ' . $schedule->start_time);
             $scheduleEnd = Carbon::parse($dateString . ' ' . $schedule->end_time);
+
             if ($scheduleEnd->lt($now)) {
                 continue;
             }
 
-            // B. Checa Conflito de Reserva - Lógica ROBUSTA
-            $isBooked = $occupiedReservas->contains(function ($reservation) use ($schedule, $scheduleStart, $scheduleEnd, $dateString) {
+            // B. Checa Conflito de Reserva - Lógica por Arena
+            $isBooked = $occupiedReservas->contains(function ($reservation) use ($schedule, $scheduleStart, $scheduleEnd) {
 
-                // TENTATIVA 1: Checagem direta por ID (Mais confiável para slots avulsos)
-                // Se o campo 'schedule_id' existe na sua tabela 'reservas':
-                if (isset($reservation->schedule_id) && $reservation->schedule_id === $schedule->id) {
-                    return true;
-                }
-
-                // TENTATIVA 2: Checagem por Sobreposição de Tempo (Fallback)
-                $reservaStart = Carbon::parse($reservation->start_time);
-                $reservaEnd = Carbon::parse($reservation->end_time);
-
-                // 🚨 Garante que a data da reserva bate com o slot avulso
-                if ($reservaStart->toDateString() !== $dateString) {
+                // 1. O conflito só existe se for na MESMA ARENA
+                if ($reservation->arena_id !== $schedule->arena_id) {
                     return false;
                 }
 
-                // Checagem de sobreposição
+                // 2. Checagem por ID (Se a reserva nasceu desse slot)
+                if (isset($reservation->fixed_slot_id) && $reservation->fixed_slot_id === $schedule->id) {
+                    return true;
+                }
+
+                // 3. Checagem por Sobreposição de Tempo (Fallback de segurança)
+                $reservaStart = Carbon::parse($reservation->date->format('Y-m-d') . ' ' . $reservation->start_time);
+                $reservaEnd = Carbon::parse($reservation->date->format('Y-m-d') . ' ' . $reservation->end_time);
+
                 return $reservaStart->lt($scheduleEnd) && $reservaEnd->gt($scheduleStart);
             });
 
-            // Se o slot estiver reservado, NUNCA adiciona o evento de DISPONIBILIDADE (verde)
+            // Se o slot estiver reservado nesta arena, não mostra o "Verde"
             if ($isBooked) {
                 continue;
             }
 
-            // Adiciona o evento de DISPONIBILIDADE (verde)
+            // Adiciona o evento de DISPONIBILIDADE
             $events[] = [
                 'id' => 'slot-' . $schedule->id . '-' . $dateString,
-                'title' => 'Disponível: R$ ' . number_format($schedule->price, 2, ',', '.'),
+                'title' => 'Livre: R$ ' . number_format($schedule->price, 2, ',', '.'),
                 'start' => $scheduleStart->toDateTimeString(),
                 'end' => $scheduleEnd->toDateTimeString(),
-                'color' => '#10B981',
+                'color' => '#10B981', // Verde
                 'className' => 'fc-event-available',
                 'extendedProps' => [
                     'status' => 'available',
                     'price' => $schedule->price,
                     'schedule_id' => $schedule->id,
+                    'arena_id' => $schedule->arena_id, // Passa a info da arena para o JS
                 ],
             ];
         }
@@ -113,8 +119,8 @@ class HorarioController extends Controller
     public function index()
     {
         $availableSlots = Schedule::orderBy('date', 'asc')
-                                 ->orderBy('start_time', 'asc')
-                                 ->get();
+            ->orderBy('start_time', 'asc')
+            ->get();
 
         return view('admin.horarios.index', [
             'availableSlots' => $availableSlots,
@@ -127,55 +133,38 @@ class HorarioController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'date' => ['required', 'date', 'after_or_equal:today'],
+            'arena_id'   => ['required', 'exists:arenas,id'], // ⬅️ NOVO
+            'date'       => ['required', 'date', 'after_or_equal:today'],
             'start_time' => ['required', 'date_format:H:i'],
-            'end_time' => ['required', 'date_format:H:i', 'after:start_time'],
-            'price' => ['required', 'numeric', 'min:0.01'],
+            'end_time'   => ['required', 'date_format:H:i', 'after:start_time'],
+            'price'      => ['required', 'numeric', 'min:0.01'],
         ]);
 
-        $date = $validated['date'];
-        $startTime = $validated['start_time'];
-        $endTime = $validated['end_time'];
-
-        // 1. VERIFICAÇÃO DE CONFLITO COM OUTROS SLOTS DE DISPONIBILIDADE (Schedule)
-        /*$existingHorario = Schedule::where('date', $date)
+        // 1. Verificação de Conflito agora considera a ARENA
+        $existingHorario = Schedule::where('date', $validated['date'])
+            ->where('arena_id', $validated['arena_id']) // ⬅️ NOVO
             ->where('is_active', true)
-            ->where(function ($query) use ($startTime, $endTime) {
-                $query->where('start_time', '<', $endTime)
-                      ->where('end_time', '>', $startTime);
+            ->where(function ($query) use ($validated) {
+                $query->where('start_time', '<', $validated['end_time'])
+                    ->where('end_time', '>', $validated['start_time']);
             })
-            ->exists(); */  //schedule não existe mais
+            ->exists();
 
         if ($existingHorario) {
-            return back()->withInput()->withErrors(['time_conflict' => 'Já existe outro slot de disponibilidade ativo e conflitante para esta data e período.']);
+            return back()->withInput()->withErrors(['time_conflict' => 'Já existe um slot nesta arena para este horário.']);
         }
 
-        // 2. VERIFICAÇÃO DE CONFLITO COM TODAS AS RESERVAS DE CLIENTES (Reserva)
-        $conflictReserva = Reserva::whereDate('start_time', $date)
-             ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
-             ->where(function ($query) use ($startTime, $endTime) {
-                 $query->where('start_time', '<', $endTime)
-                       ->where('end_time', '>', $startTime);
-             })
-             ->exists();
+        // 2. Cria o slot associado à arena
+        Schedule::create([
+            'arena_id'   => $validated['arena_id'], // ⬅️ NOVO
+            'date'       => $validated['date'],
+            'start_time' => $validated['start_time'],
+            'end_time'   => $validated['end_time'],
+            'price'      => $validated['price'],
+            'is_active'  => true,
+        ]);
 
-        if ($conflictReserva) {
-            return back()->withInput()->withErrors(['time_conflict' => 'Conflito! Já existe uma reserva de cliente (fixa ou avulsa) cobrindo parte deste horário na data selecionada.']);
-        }
-
-        // Cria o slot de disponibilidade avulso
-        /*$newSchedule = Schedule::create([
-            'date' => $date,
-            'start_time' => $startTime,
-            'end_time' => $endTime,
-            'price' => $validated['price'],
-            'is_active' => true,
-            'day_of_week' => null, // Mantém nulo
-        ]); */
-
-        $message = 'Slot Avulso adicionado com sucesso para ' . Carbon::parse($validated['date'])->format('d/m/Y') . '!';
-
-        return redirect()->route('admin.horarios.index')->with('success', $message);
+        return redirect()->route('admin.horarios.index')->with('success', 'Slot Arena adicionado!');
     }
 
     /**
@@ -184,7 +173,7 @@ class HorarioController extends Controller
     public function edit(Schedule $horario)
     {
         if ($horario->day_of_week !== null) {
-             return redirect()->route('admin.horarios.index')->with('error', 'Este slot é recorrente e o recurso foi descontinuado. Por favor, remova-o manualmente do seu banco se necessário, ou desative-o.');
+            return redirect()->route('admin.horarios.index')->with('error', 'Este slot é recorrente e o recurso foi descontinuado. Por favor, remova-o manualmente do seu banco se necessário, ou desative-o.');
         }
 
         return view('admin.horarios.edit', [
@@ -219,7 +208,7 @@ class HorarioController extends Controller
             ->where('is_active', true)
             ->where(function ($query) use ($startTime, $endTime) {
                 $query->where('start_time', '<', $endTime)
-                      ->where('end_time', '>', $startTime);
+                    ->where('end_time', '>', $startTime);
             })
             ->exists();
 
@@ -231,8 +220,8 @@ class HorarioController extends Controller
         $conflictReserva = Reserva::whereDate('start_time', $date)
             ->whereIn('status', [Reserva::STATUS_PENDENTE, Reserva::STATUS_CONFIRMADA])
             ->where(function ($query) use ($startTime, $endTime) {
-                 $query->where('start_time', '<', $endTime)
-                       ->where('end_time', '>', $startTime);
+                $query->where('start_time', '<', $endTime)
+                    ->where('end_time', '>', $startTime);
             })
             ->exists();
 
@@ -275,7 +264,7 @@ class HorarioController extends Controller
         } catch (QueryException $e) {
             return back()->with('error', "Não foi possível excluir o horário {$tipo} ({$fullIdentifier}). Ele pode ter reservas associadas ou outras dependências de banco de dados. Tente primeiro desativá-lo.");
         } catch (\Exception $e) {
-             return back()->with('error', 'Erro desconhecido ao excluir o horário.');
+            return back()->with('error', 'Erro desconhecido ao excluir o horário.');
         }
     }
 }

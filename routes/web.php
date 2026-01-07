@@ -12,6 +12,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\ApiReservaController;
 use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\FinanceiroController;
+use App\Http\Controllers\Admin\ArenaController;
 
 // 🏠 ROTA RAIZ
 Route::get('/', function () {
@@ -54,28 +55,33 @@ Route::middleware(['auth', 'gestor'])->group(function () {
     Route::post('/api/reservas/store-quick', [ReservaController::class, 'storeQuickReservaApi'])->name('api.reservas.store_quick');
     Route::post('/api/reservas/store-recurrent', [ReservaController::class, 'storeRecurrentReservaApi'])->name('api.reservas.store_recurrent');
 
-    // CONFIGURAÇÕES AJAX
-    Route::post('/admin/config/fixed-reserva/{id}/price', [ConfigurationController::class, 'updateFixedReservaPrice'])->name('admin.config.update_price');
-    Route::post('/admin/config/fixed-reserva/{reserva}/status', [ReservaController::class, 'toggleFixedReservaStatus'])->name('admin.config.update_status');
-    Route::post('/admin/config/delete-slot-config', [ConfigurationController::class, 'deleteSlotConfig'])->name('admin.config.delete_slot_config');
-    Route::post('/admin/config/delete-day-config', [ConfigurationController::class, 'deleteDayConfig'])->name('admin.config.delete_day_config');
-
-    // AÇÕES CRÍTICAS
-    Route::get('/admin/reservas/pendentes', [AdminController::class, 'indexReservas'])->name('admin.reservas.pendentes');
-    Route::patch('/admin/reservas/confirmar/{reserva}', [ReservaController::class, 'confirmar'])->name('admin.reservas.confirmar');
-    Route::patch('/admin/reservas/rejeitar/{reserva}', [ReservaController::class, 'rejeitar'])->name('admin.reservas.rejeitar');
-
     // 🚀 GRUPO ADMIN (PREFIXO /admin)
     Route::prefix('admin')->name('admin.')->group(function () {
 
-        // CONFIG ARENA
-        Route::get('/config', [ConfigurationController::class, 'index'])->name('config.index');
+        // 🏟️ 1. GERENCIAR QUADRAS (Apenas Cadastro e Lista)
+        Route::get('/arenas', [ArenaController::class, 'index'])->name('arenas.index');
+        Route::post('/arenas', [ArenaController::class, 'store'])->name('arenas.store');
+
+        // ⚙️ 2. FUNCIONAMENTO (Onde se escolhe a quadra para configurar horários)
+        Route::get('/funcionamento-portal', [ConfigurationController::class, 'funcionamento'])->name('config.funcionamento');
+        Route::get('/config/{arena_id}', [ConfigurationController::class, 'index'])->name('config.index');
+        Route::post('/config', [ConfigurationController::class, 'store'])->name('config.store');
+
+        // CONFIG HORÁRIOS RECORRENTES (🎯 Ajustado com parâmetro opcional {arena_id?})
+        Route::get('/config/{arena_id?}', [ConfigurationController::class, 'index'])->name('config.index');
         Route::post('/config', [ConfigurationController::class, 'store'])->name('config.store');
         Route::get('/config/generate', [ConfigurationController::class, 'generateFixedReservas'])->name('config.generate');
+
+        // CONFIGURAÇÕES AJAX (Operações em tempo real na tela de configuração)
+        Route::post('/config/fixed-reserva/{id}/price', [ConfigurationController::class, 'updateFixedReservaPrice'])->name('config.update_price');
+        Route::post('/config/fixed-reserva/{reserva}/status', [ReservaController::class, 'toggleFixedReservaStatus'])->name('config.update_status');
+        Route::post('/config/delete-slot-config', [ConfigurationController::class, 'deleteSlotConfig'])->name('config.delete_slot_config');
+        Route::post('/config/delete-day-config', [ConfigurationController::class, 'deleteDayConfig'])->name('config.delete_day_config');
 
         // GESTÃO DE RESERVAS
         Route::prefix('reservas')->name('reservas.')->group(function () {
             Route::get('/', [AdminController::class, 'indexReservasDashboard'])->name('index');
+            Route::get('/pendentes', [AdminController::class, 'indexReservas'])->name('pendentes');
             Route::get('confirmadas', [AdminController::class, 'confirmed_index'])->name('confirmadas');
             Route::get('todas', [AdminController::class, 'indexTodas'])->name('todas');
             Route::get('rejeitadas', [AdminController::class, 'indexReservasRejeitadas'])->name('rejeitadas');
@@ -83,6 +89,11 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::get('create', [AdminController::class, 'createUser'])->name('create');
             Route::post('/', [AdminController::class, 'storeReserva'])->name('store');
             Route::post('tornar-fixo', [AdminController::class, 'makeRecurrent'])->name('make_recurrent');
+
+            // AÇÕES DE STATUS
+            Route::patch('confirmar/{reserva}', [ReservaController::class, 'confirmar'])->name('confirmar');
+            Route::patch('rejeitar/{reserva}', [ReservaController::class, 'rejeitar'])->name('rejeitar');
+
             Route::patch('{reserva}/update-price', [AdminController::class, 'updatePrice'])->name('update_price');
             Route::patch('{reserva}/reativar', [AdminController::class, 'reativar'])->name('reativar');
             Route::patch('{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('cancelar');
@@ -114,21 +125,20 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::post('{reserva}/falta', [PaymentController::class, 'registerNoShow'])->name('noshow');
         });
 
-        // 📊 HUB DE RELATÓRIOS ANALÍTICOS
+        // 📊 RELATÓRIOS ANALÍTICOS
         Route::prefix('financeiro')->name('financeiro.')->group(function () {
             Route::get('/', [FinanceiroController::class, 'index'])->name('dashboard');
             Route::get('/faturamento', [FinanceiroController::class, 'relatorioFaturamento'])->name('relatorio_faturamento');
             Route::get('/caixa', [FinanceiroController::class, 'relatorioCaixa'])->name('relatorio_caixa');
             Route::get('/cancelamentos', [FinanceiroController::class, 'relatorioCancelamentos'])->name('relatorio_cancelamentos');
             Route::get('/ocupacao', [FinanceiroController::class, 'relatorioOcupacao'])->name('relatorio_ocupacao');
-            Route::get('/ranking', [FinanceiroController::class, 'relatorioRanking'])->name('relatorio_ranking'); // 🏆 Nova rota adicionada
+            Route::get('/ranking', [FinanceiroController::class, 'relatorioRanking'])->name('relatorio_ranking');
         });
     });
 
     // APIs FINANCEIRAS (AJAX)
     Route::get('/api/financeiro/resumo', [FinanceiroController::class, 'getResumo'])->name('api.financeiro.resumo');
     Route::get('/api/financeiro/pagamentos-pendentes', [FinanceiroController::class, 'getPagamentosPendentes'])->name('api.financeiro.pagamentos-pendentes');
-
 });
 
 // -----------------------------------------------------------------------------------
