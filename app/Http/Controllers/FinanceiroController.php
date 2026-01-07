@@ -233,4 +233,36 @@ class FinanceiroController extends Controller
         }
         return [$start, $end->endOfDay()];
     }
+
+
+    /**
+     * API para verificar o status do caixa em tempo real
+     * Usado pelo JavaScript para bloquear agendamentos se o caixa estiver fechado.
+     */
+    public function getStatus()
+    {
+        try {
+            // Buscamos se existe um registro de caixa para hoje
+            $hoje = now()->format('Y-m-d');
+            $caixa = Cashier::where('date', $hoje)->first();
+
+            // Lógica de Retorno:
+            // 1. Se não existir registro ainda, consideramos ABERTO (sistema inicia o dia livre)
+            // 2. Se existir, verificamos se o status é diferente de 'closed'
+            $isOpen = true;
+            if ($caixa && $caixa->status === 'closed') {
+                $isOpen = false;
+            }
+
+            return response()->json([
+                'isOpen' => $isOpen,
+                'date'   => $hoje,
+                'status' => $caixa->status ?? 'not_created'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erro ao buscar status do caixa: ' . $e->getMessage());
+            // Em caso de erro técnico, retornamos true para não travar o sistema
+            return response()->json(['isOpen' => true], 200);
+        }
+    }
 }

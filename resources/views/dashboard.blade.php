@@ -153,6 +153,15 @@
         #confirmation-value {
             text-align: right;
         }
+
+        .cashier-closed-locked {
+            opacity: 0.4 !important;
+            filter: grayscale(100%) !important;
+            pointer-events: none !important;
+            /* Isso mata o clique no elemento */
+            cursor: not-allowed !important;
+            user-select: none !important;
+        }
     </style>
 
     <div class="py-12">
@@ -680,6 +689,7 @@
 
 
     <script>
+        window.isCashierClosedGlobal = false;
         // === CONFIGURAÇÕES E ROTAS (CORRIGIDAS) ===
         const PENDING_API_URL = '{{ route("api.reservas.pendentes.count") }}';
         const CONFIRMED_API_URL = '{{ route("api.reservas.confirmadas") }}';
@@ -764,6 +774,7 @@
 
 
         document.addEventListener('DOMContentLoaded', () => {
+            // 1. Carregamento das Séries Expirando
             const renewalAlertContainer = document.getElementById('renewal-alert-container');
             if (renewalAlertContainer) {
                 try {
@@ -775,7 +786,7 @@
                 }
             }
 
-            // Aplicar formatação nos inputs de moeda (agora incluindo o modal de pendência)
+            // 2. Aplicar formatação nos inputs de moeda (Quick Modal e Pendência)
             document.querySelectorAll('.input-money-quick').forEach(input => {
                 input.value = formatMoneyQuick(input);
 
@@ -787,6 +798,25 @@
                     e.target.value = formatMoneyQuick(e.target);
                 });
             });
+
+            // 3. 🛡️ INTERCEPTADOR GLOBAL DE CLIQUES (Trava de Segurança do Caixa)
+            // Monitora cliques em links de pendências e botões de renovação
+            document.addEventListener('click', async function(e) {
+                const linkPendentes = e.target.closest('a[href*="pendentes"]');
+                const btnRenovacao = e.target.closest('button[onclick="openRenewalModal()"]');
+
+                if (linkPendentes || btnRenovacao) {
+                    // Verifica o status do caixa usando a função que já ajustamos
+                    // Ela mostrará a mensagem de erro e fará o refetch do calendário se necessário
+                    const aberto = await isCashierOpen();
+
+                    if (!aberto) {
+                        e.preventDefault(); // Impede a navegação do link
+                        e.stopImmediatePropagation(); // Impede a abertura do modal de renovação
+                        console.log("Ação bloqueada: Caixa Fechado.");
+                    }
+                }
+            }, true); // O parâmetro 'true' (capture) garante que nossa trava rode antes de outros scripts
         });
 
 
@@ -1004,65 +1034,37 @@
 
 
         // =========================================================
-        // FUNÇÃO CRÍTICA: Lidar com a submissão do Agendamento Rápido via AJAX
+        // FUNÇÃO CORRIGIDA: Lidar com a submissão do Agendamento Rápido
         // =========================================================
         async function handleQuickBookingSubmit(event) {
             event.preventDefault();
-
-            // 1. Captura de Elementos
             const form = document.getElementById('quick-booking-form');
             const submitBtn = document.getElementById('submit-quick-booking');
-            const modal = document.getElementById('quick-booking-modal');
 
-            // Validação básica de campos
-            const clientName = document.getElementById('client_name').value.trim();
-            const clientContact = document.getElementById('client_contact').value.trim();
-            const arenaId = document.getElementById('quick-arena-id').value;
-
-            if (!clientName || !clientContact || !arenaId) {
-                showDashboardMessage("Preencha Nome, WhatsApp e selecione o horário.", 'error');
-                return;
-            }
-
-            // 2. Preparação dos Dados
             const formData = new FormData(form);
             const data = Object.fromEntries(formData.entries());
 
-            // --- CORREÇÃO CRÍTICA: GARANTIA DO PREÇO E SINAL ---
-            // Pegamos os valores diretamente dos IDs para não depender apenas do FormData
+            // Preparação dos valores monetários
             const rawPrice = document.getElementById('quick-price').value;
             const rawSignal = document.getElementById('signal_value_quick').value;
-
-            // Função interna para limpar "150,00" -> 150.00
-            const cleanValue = (val) => {
-                if (!val) return 0;
-                return parseFloat(val.toString().replace(/\./g, '').replace(',', '.'));
-            };
+            const cleanValue = (val) => val ? parseFloat(val.toString().replace(/\./g, '').replace(',', '.')) : 0;
 
             data.fixed_price = cleanValue(rawPrice);
-            data.price = data.fixed_price; // Envia os dois para garantir compatibilidade
             data.signal_value = cleanValue(rawSignal);
-            data.arena_id = arenaId;
-
-            // Tratamento de checkbox de recorrência
             data.is_recurrent = document.getElementById('is-recurrent').checked ? 1 : 0;
 
-            // Define a URL (Recorrente ou Pontual)
             const targetUrl = data.is_recurrent ? RECURRENT_STORE_URL : QUICK_STORE_URL;
 
-            // Bloqueia botão
+            // Estado de carregamento
             submitBtn.disabled = true;
-            const originalText = submitBtn.textContent;
             submitBtn.textContent = 'Processando...';
-
-            console.log("DADOS SENDO ENVIADOS:", data); // Debug para você ver no F12
 
             try {
                 const response = await fetch(targetUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'X-CSRF-TOKEN': csrfToken,
                         'Accept': 'application/json',
                     },
                     body: JSON.stringify(data)
@@ -1070,37 +1072,29 @@
 
                 const result = await response.json();
 
+                // SEMPRE fechamos o modal antes de mostrar qualquer mensagem
+                window.closeQuickBookingModal();
+
                 if (response.ok && result.success) {
-                    // ✅ SUCESSO: Ações de fechamento
+                    // SUCESSO
                     showDashboardMessage(result.message, 'success');
-
-                    // 1. Fecha o modal usando a função global (display: none e hidden)
-                    if (typeof window.closeQuickBookingModal === 'function') {
-                        window.closeQuickBookingModal();
-                    } else {
-                        modal.style.display = 'none';
-                        modal.classList.add('hidden');
-                        form.reset();
-                    }
-
-                    // 2. Atualiza o Calendário
-                    if (window.calendar) {
-                        window.calendar.refetchEvents();
-                    }
-
+                    if (window.calendar) window.calendar.refetchEvents();
                 } else {
-                    // Erro retornado pelo servidor (Validação ou Conflito)
+                    // ERRO (Ex: Caixa Fechado)
+                    // Forçamos o refetch para que o slot verde não suma indevidamente do calendário
+                    if (window.calendar) window.calendar.refetchEvents();
+
                     const errorMsg = result.errors ? Object.values(result.errors).flat().join(' ') : result.message;
                     showDashboardMessage(errorMsg || "Erro ao salvar reserva.", 'error');
                 }
-
             } catch (error) {
-                console.error('Erro de rede:', error);
+                // ERRO CRÍTICO DE CONEXÃO
+                window.closeQuickBookingModal();
+                if (window.calendar) window.calendar.refetchEvents();
                 showDashboardMessage("Erro de conexão com o servidor.", 'error');
             } finally {
-                // Restaura o botão independente de sucesso ou erro
                 submitBtn.disabled = false;
-                submitBtn.textContent = originalText;
+                submitBtn.textContent = 'Confirmar Agendamento';
             }
         }
 
@@ -1201,10 +1195,11 @@
             const submitBtn = document.getElementById('confirm-pending-btn');
             const rejectBtn = document.getElementById('reject-pending-btn');
 
+            // Estado de carregamento
             submitBtn.disabled = true;
             rejectBtn.disabled = true;
-            submitBtn.textContent = buttonText;
-            rejectBtn.textContent = buttonText;
+            if (buttonText.includes('Confirmando')) submitBtn.textContent = 'Processando...';
+            if (buttonText.includes('Rejeitando')) rejectBtn.textContent = 'Processando...';
 
             try {
                 const response = await fetch(url, {
@@ -1212,45 +1207,37 @@
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': csrfToken,
-                        'X-Requested-With': 'XMLHttpRequest',
                         'Accept': 'application/json',
                     },
                     body: JSON.stringify(data)
                 });
 
-                let result = {};
-                try {
-                    result = await response.json();
-                } catch (e) {
-                    const errorText = await response.text();
-                    console.error("Falha ao ler JSON de resposta.", errorText);
-                    showDashboardMessage(`Erro do Servidor (${response.status}). Verifique o console.`, 'error');
-                    return;
-                }
+                const result = await response.json();
+
+                // 🎯 PASSO 1: Fecha o modal de pendência imediatamente
+                closePendingActionModal();
 
                 if (response.ok && result.success) {
+                    // SUCESSO
                     showDashboardMessage(result.message, 'success');
-                    closePendingActionModal();
                     if (calendar) calendar.refetchEvents();
-                } else if (response.status === 422 && result.errors) {
-                    const errors = Object.values(result.errors).flat().join('\n');
-                    console.error(`ERRO DE VALIDAÇÃO:\n${errors}`);
-                    showDashboardMessage(`ERRO DE VALIDAÇÃO: ${errors}`, 'warning');
                 } else {
-                    console.error(result.message || `Erro desconhecido. Status: ${response.status}.`);
-                    showDashboardMessage(result.message || `Erro desconhecido. Status: ${response.status}.`, 'error');
-                }
+                    // 🎯 ERRO (Ex: Caixa Fechado)
+                    // Forçamos o calendário a recarregar para garantir que o slot laranja não suma
+                    if (calendar) calendar.refetchEvents();
 
+                    showDashboardMessage(result.message || "Erro ao processar ação pendente.", 'error');
+                }
             } catch (error) {
-                console.error('Erro de Rede:', error);
-                showDashboardMessage("Erro de Rede. Tente novamente.", 'error');
+                console.error('Erro na ação pendente:', error);
+                closePendingActionModal();
+                if (calendar) calendar.refetchEvents();
+                showDashboardMessage("Erro de conexão.", 'error');
             } finally {
                 submitBtn.disabled = false;
                 rejectBtn.disabled = false;
                 submitBtn.textContent = 'Confirmar Reserva';
                 rejectBtn.textContent = 'Rejeitar';
-                document.getElementById('rejection-reason-area').classList.add('hidden');
-                rejectBtn.classList.replace('bg-red-800', 'bg-red-600');
             }
         }
 
@@ -1323,47 +1310,15 @@
 
         async function sendCancellationRequest(reservaId, method, urlBase, reason) {
             const url = urlBase.replace(':id', reservaId);
-
-            let shouldRefund = false;
-            const refundArea = document.getElementById('refund-decision-area');
-            const paidAmountRefInput = document.getElementById('cancellation-paid-amount-ref');
-
-            // ✅ Pega o valor LIMPO do input hidden
-            const paidAmountToProcess = paidAmountRefInput ? parseFloat(paidAmountRefInput.value) : 0;
-
-
-            if (paidAmountToProcess > 0 && !refundArea.classList.contains('hidden')) {
-                const refundChoice = document.querySelector('input[name="refund_choice"]:checked');
-
-                if (!refundChoice) {
-                    showDashboardMessage("Por favor, selecione se o valor pago será devolvido ou mantido.", 'warning');
-                    return;
-                }
-
-                // Verifica se a opção é DEVOLVER
-                shouldRefund = refundChoice.value === 'refund';
-            }
+            const refundChoice = document.querySelector('input[name="refund_choice"]:checked');
+            const paidAmountRef = document.getElementById('cancellation-paid-amount-ref')?.value || 0;
 
             const bodyData = {
                 cancellation_reason: reason,
-                should_refund: shouldRefund,
-                paid_amount_ref: paidAmountToProcess, // ✅ NOVO: Envia o valor pago/sinal para o backend
+                should_refund: refundChoice ? refundChoice.value === 'refund' : false,
+                paid_amount_ref: paidAmountRef,
                 _token: csrfToken,
                 _method: method,
-            };
-
-            // 🎯 LOG DE DEBUG CRÍTICO PARA O BACKEND
-            console.log("PAYLOAD DE CANCELAMENTO ENVIADO (DEBUG BACKEND):", JSON.stringify(bodyData, null, 2));
-
-            const fetchConfig = {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify(bodyData)
             };
 
             const submitBtn = document.getElementById('confirm-cancellation-btn');
@@ -1371,40 +1326,36 @@
             submitBtn.textContent = 'Processando...';
 
             try {
-                const response = await fetch(url, fetchConfig);
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify(bodyData)
+                });
 
-                let result = {};
-                try {
-                    result = await response.json();
-                } catch (e) {
-                    const errorText = await response.text();
-                    console.error("Falha ao ler JSON de resposta.", errorText);
-                    result = {
-                        error: `Erro do Servidor (${response.status}). Verifique o console.`
-                    };
-                }
+                const result = await response.json();
+
+                // 1. Fecha o modal imediatamente para liberar a visão do alerta
+                closeCancellationModal();
 
                 if (response.ok && result.success) {
-                    showDashboardMessage(result.message || "Ação realizada com sucesso. O calendário será atualizado.",
-                        'success');
-                    closeCancellationModal();
+                    // SUCESSO
+                    showDashboardMessage(result.message, 'success');
                     if (calendar) calendar.refetchEvents();
-
-                } else if (response.status === 422 && result.errors) {
-                    const reasonError = result.errors.cancellation_reason ? result.errors.cancellation_reason.join(
-                        ', ') : 'Erro de validação desconhecida.';
-                    console.error(`ERRO DE VALIDAÇÃO: ${reasonError}`);
-                    showDashboardMessage(`ERRO DE VALIDAÇÃO: ${reasonError}`, 'warning');
                 } else {
-                    console.error(result.error || result.message ||
-                        `Erro desconhecido ao processar a ação. Status: ${response.status}.`);
-                    showDashboardMessage(result.error || result.message ||
-                        `Erro desconhecido ao processar a ação. Status: ${response.status}.`, 'error');
+                    // 2. ERRO (Ex: Caixa Fechado)
+                    // Sincroniza o calendário para garantir que a reserva NÃO suma
+                    if (calendar) calendar.refetchEvents();
+                    showDashboardMessage(result.message || "Erro ao cancelar reserva.", 'error');
                 }
-
             } catch (error) {
-                console.error('Erro de Rede/Comunicação:', error);
-                showDashboardMessage("Erro de conexão. Tente novamente.", 'error');
+                console.error('Erro no cancelamento:', error);
+                closeCancellationModal();
+                if (calendar) calendar.refetchEvents();
+                showDashboardMessage("Erro de conexão.", 'error');
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Confirmar Ação';
@@ -1499,9 +1450,9 @@
             const reasonInput = document.getElementById('no-show-reason-input');
             const reason = reasonInput.value.trim();
 
+            // Validação mínima de caracteres
             if (reason.length < 5) {
-                showDashboardMessage("Por favor, forneça o motivo da falta com pelo menos 5 caracteres.",
-                    'warning');
+                showDashboardMessage("Por favor, forneça o motivo da falta com pelo menos 5 caracteres.", 'warning');
                 return;
             }
 
@@ -1511,29 +1462,22 @@
 
             // Decisão de Estorno
             let shouldRefund = false;
-            const paidAmount = document.getElementById('paid-amount-ref').value; // Pega o valor limpo
+            const paidAmount = document.getElementById('paid-amount-ref').value;
 
-
-            if (parseFloat(paidAmount) > 0 && !document.getElementById('no-show-refund-area').classList
-                .contains('hidden')) {
+            if (parseFloat(paidAmount) > 0 && !document.getElementById('no-show-refund-area').classList.contains('hidden')) {
                 const refundChoice = document.querySelector('input[name="no_show_refund_choice"]:checked');
-
-                // Se o radio for 'refund_all', deve estornar
                 shouldRefund = refundChoice && refundChoice.value === 'refund_all';
             }
 
             const bodyData = {
                 no_show_reason: reason,
-                should_refund: shouldRefund, // true se for devolver o valor pago
-                paid_amount: paidAmount, // Valor pago para referência no backend
+                should_refund: shouldRefund,
+                paid_amount: paidAmount,
                 _token: csrfToken,
                 _method: 'PATCH',
             };
 
-            // 🎯 LOG DE DEBUG CRÍTICO PARA O BACKEND
-            console.log("PAYLOAD DE FALTA/NO-SHOW ENVIADO (DEBUG BACKEND):", JSON.stringify(bodyData, null, 2));
-
-
+            // Estado de carregamento
             submitBtn.disabled = true;
             submitBtn.textContent = 'Processando...';
 
@@ -1549,47 +1493,39 @@
                     body: JSON.stringify(bodyData)
                 });
 
-                let result = {};
-                try {
-                    result = await response.json();
-                } catch (e) {
-                    const errorText = await response.text();
-                    console.error("Falha ao ler JSON de resposta.", errorText);
-                    result = {
-                        success: false,
-                        message: `Erro do Servidor (${response.status}). Verifique o console.`
-                    };
-                }
+                const result = await response.json();
+
+                // 🎯 FECHAMOS O MODAL DE NO-SHOW IMEDIATAMENTE
+                closeNoShowModal();
 
                 if (response.ok && result.success) {
-                    // 1. Remove a reserva visualmente NA HORA para não parecer travado
+                    // SUCESSO: Mostra mensagem e atualiza calendário para refletir a falta/liberação
+                    showDashboardMessage(result.message || "Falta registrada com sucesso.", 'success');
+
                     if (window.calendar) {
+                        // Remove o evento atual e busca os novos (ex: o novo slot livre verde)
                         const event = window.calendar.getEventById(reservaId);
                         if (event) event.remove();
+                        setTimeout(() => window.calendar.refetchEvents(), 500);
                     }
-
-                    showDashboardMessage(result.message || "Falta registrada com sucesso.", 'success');
-                    closeNoShowModal();
-
-                    // 2. Aguarda 600ms para o servidor terminar de recriar o slot verde 
-                    // e então atualiza o calendário para o verde aparecer.
-                    setTimeout(() => {
-                        if (window.calendar) window.calendar.refetchEvents();
-                    }, 600);
-
                 } else {
-                    console.error(result.message || `Erro desconhecido. Status: ${response.status}.`);
-                    showDashboardMessage(result.message || `Erro desconhecido. Status: ${response.status}.`, 'error');
+                    // ERRO (Ex: Caixa Fechado)
+                    // Forçamos o calendário a recarregar para garantir que o agendamento NÃO sumiu
+                    if (window.calendar) window.calendar.refetchEvents();
+
+                    const errorMsg = result.errors ? Object.values(result.errors).flat().join(' ') : result.message;
+                    showDashboardMessage(errorMsg || "Erro ao processar falta.", 'error');
                 }
 
             } catch (error) {
                 console.error('Erro de Rede/Comunicação:', error);
+                closeNoShowModal();
+                if (window.calendar) window.calendar.refetchEvents();
                 showDashboardMessage("Erro de conexão. Tente novamente.", 'error');
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Confirmar Falta';
             }
-
         });
 
         // ✅ NOVO: Event Listener para o botão de Confirmação de Cancelamento
@@ -1658,11 +1594,17 @@
         }
 
         async function handleRenewal(masterReservaId) {
+            // 🎯 1. BLOQUEIO PREVENTIVO OTIMIZADO
+            // Reutiliza a função global: verifica status, avisa o usuário e trava o calendário se necessário
+            const aberto = await isCashierOpen();
+            if (!aberto) return; // 🛑 Cancela a operação se o caixa estiver fechado
+
             const url = RENEW_SERIE_URL.replace(':masterReserva', masterReservaId);
             const button = document.querySelector(`.renew-btn-${masterReservaId}`);
 
             if (!button) return;
 
+            // Estado de carregamento (UI Feedback)
             const originalText = button.textContent;
             button.disabled = true;
             button.textContent = 'Processando...';
@@ -1676,33 +1618,42 @@
                         'Accept': 'application/json',
                     },
                     body: JSON.stringify({
-                        _method: 'PATCH'
+                        _method: 'PATCH' // Laravel reconhece como PATCH através do spoofing
                     })
                 });
 
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    showDashboardMessage(result.message || `Série ${masterReservaId} renovada com sucesso!`, 'success');
+                    // SUCESSO: Notifica e limpa a lista
+                    showDashboardMessage(result.message || `Série renovada com sucesso!`, 'success');
 
-                    // Remove a série renovada da lista global e atualiza o modal
+                    // Remove a série da memória local e atualiza o modal visualmente
                     globalExpiringSeries = globalExpiringSeries.filter(s => s.master_id !== masterReservaId);
                     renderRenewalList();
 
-                    // Atualiza o contador de alerta no dashboard
-                    if (calendar) calendar.refetchEvents();
+                    // Atualiza o calendário para mostrar os novos meses gerados
+                    if (window.calendar) window.calendar.refetchEvents();
+
+                    // Se limpou todas as renovações pendentes, fecha o modal após um breve delay
+                    if (globalExpiringSeries.length === 0) {
+                        setTimeout(() => closeRenewalModal(), 1200);
+                    }
 
                 } else {
-                    console.error(result.message ||
-                        `Erro ao renovar série ${masterReservaId}. Status: ${response.status}`);
-                    showDashboardMessage(result.message || `Falha na renovação da série ${masterReservaId}.`, 'error');
+                    // ERRO DE REGRA DE NEGÓCIO (Ex: Conflito de horário ou Caixa fechou durante o clique)
+                    console.error(result.message || `Erro ao renovar série ${masterReservaId}.`);
+                    showDashboardMessage(result.message || `Falha na renovação da série.`, 'error');
+
+                    // Sincroniza o calendário para garantir que os dados batem com o servidor
+                    if (window.calendar) window.calendar.refetchEvents();
                 }
             } catch (error) {
                 console.error('Erro de Rede na Renovação:', error);
-                showDashboardMessage("Erro de conexão ao tentar renovar a série.", 'error');
+                showDashboardMessage("Erro de conexão ao tentar renovar a série. Verifique sua internet.", 'error');
             } finally {
-                // Se a renovação falhar, o botão volta ao normal
-                if (button.textContent === 'Processando...') {
+                // Restaura o estado do botão para o usuário poder tentar novamente se falhou
+                if (button && button.parentNode) {
                     button.disabled = false;
                     button.textContent = originalText;
                 }
@@ -1716,11 +1667,41 @@
         // =========================================================
         // FUNÇÃO GLOBAL: Gerenciar cliques no Calendário
         // =========================================================
-        window.eventClick = function(info) {
+        window.eventClick = async function(info) {
+            // 🛑 1. TRAVA DE SEGURANÇA INSTANTÂNEA
+            // Se a variável global diz que está fechado, bloqueamos sem nem consultar a rede.
+            if (window.isCashierClosedGlobal) {
+                showDashboardMessage("Ação bloqueada: O caixa está fechado. Abra o caixa para prosseguir.", 'error');
+                return;
+            }
+
             const event = info.event;
             const props = event.extendedProps;
 
-            // 1. Normalização de Status e Identificação do Tipo de Slot
+            // 🎯 2. VERIFICAÇÃO EM TEMPO REAL (Sincronização com o Servidor)
+            try {
+                // Corrigido: await fetch (estava grudado)
+                const response = await fetch('{{ route("admin.payment.caixa.status") }}');
+                const statusCaixa = await response.json();
+
+                if (!statusCaixa.isOpen) {
+                    window.isCashierClosedGlobal = true; // Atualiza o estado global
+                    showDashboardMessage("Ação Bloqueada: Você precisa abrir o caixa para realizar agendamentos ou alterações.", 'error');
+
+                    // Forçamos o calendário a redesenhar (aplicando o cinza em todos os slots)
+                    if (window.calendar) {
+                        window.calendar.render();
+                    }
+                    return; // 🛑 Para a execução aqui
+                }
+            } catch (error) {
+                console.error("Erro ao verificar status do caixa:", error);
+                // Em caso de erro de rede, permitimos prosseguir para não travar o usuário
+            }
+
+            // --- DAQUI PARA BAIXO O CÓDIGO SÓ RODA SE O CAIXA ESTIVER REALMENTE ABERTO ---
+
+            // 3. Normalização de Status e Identificação do Tipo de Slot
             const status = (props.status || '').toLowerCase();
             const isAvailable = status === 'free' ||
                 event.classNames.includes('fc-event-available') ||
@@ -1756,13 +1737,13 @@
                 const displayArea = document.getElementById('slot-info-display');
                 if (displayArea) {
                     displayArea.innerHTML = `
-                    <div class="space-y-1 border-l-4 border-green-500 pl-3">
-                        <p class="text-xs uppercase text-gray-500 font-bold tracking-wider">Informações da Reserva</p>
-                        <p><strong>Quadra:</strong> <span class="text-indigo-600">${selectedArenaName}</span></p>
-                        <p><strong>Data:</strong> ${moment(event.start).format('DD/MM/YYYY')}</p>
-                        <p><strong>Hora:</strong> ${moment(event.start).format('HH:mm')} às ${moment(event.end).format('HH:mm')}</p>
-                        <p><strong>Preço Sugerido:</strong> <span class="text-green-600 font-bold">R$ ${priceFormatted}</span></p>
-                    </div>`;
+            <div class="space-y-1 border-l-4 border-green-500 pl-3">
+                <p class="text-xs uppercase text-gray-500 font-bold tracking-wider">Informações da Reserva</p>
+                <p><strong>Quadra:</strong> <span class="text-indigo-600">${selectedArenaName}</span></p>
+                <p><strong>Data:</strong> ${moment(event.start).format('DD/MM/YYYY')}</p>
+                <p><strong>Hora:</strong> ${moment(event.start).format('HH:mm')} às ${moment(event.end).format('HH:mm')}</p>
+                <p><strong>Preço Sugerido:</strong> <span class="text-green-600 font-bold">R$ ${priceFormatted}</span></p>
+            </div>`;
                 }
 
                 setVal('client_name', '');
@@ -1787,7 +1768,7 @@
 
             // C. RESERVA EXISTENTE -> ABRE DETALHES
             const reservaId = event.id;
-            const clientName = event.title.replace('⭐ ', '').split(' - ')[0];
+            const clientNameRaw = event.title.replace('⭐ ', '').split(' - ')[0];
             const isRecurrent = props.is_recurrent;
             const paidAmount = props.total_paid || props.retained_amount || 0;
             const totalPrice = props.final_price || props.price || 0;
@@ -1799,35 +1780,34 @@
 
             if (contentArea && actionsArea && eventModal) {
                 contentArea.innerHTML = `
-                <div class="space-y-2">
-                    <p><strong>Cliente:</strong> ${clientName}</p>
-                    <p><strong>Contato:</strong> ${props.client_contact || 'N/A'}</p>
-                    <p><strong>Horário:</strong> ${moment(event.start).format('HH:mm')} - ${moment(event.end).format('HH:mm')}</p>
-                    <p><strong>Status:</strong> <span class="uppercase font-extrabold ${status === 'no_show' ? 'text-red-600' : 'text-indigo-600'}">${status}</span></p>
-                    <p><strong>Total Pago:</strong> <span class="text-green-700 font-bold">R$ ${parseFloat(paidAmount).toFixed(2).replace('.', ',')}</span> / R$ ${parseFloat(totalPrice).toFixed(2).replace('.', ',')}</p>
-                </div>`;
+        <div class="space-y-2">
+            <p><strong>Cliente:</strong> ${clientNameRaw}</p>
+            <p><strong>Contato:</strong> ${props.client_contact || 'N/A'}</p>
+            <p><strong>Horário:</strong> ${moment(event.start).format('HH:mm')} - ${moment(event.end).format('HH:mm')}</p>
+            <p><strong>Status:</strong> <span class="uppercase font-extrabold ${status === 'no_show' ? 'text-red-600' : 'text-indigo-600'}">${status}</span></p>
+            <p><strong>Total Pago:</strong> <span class="text-green-700 font-bold">R$ ${parseFloat(paidAmount).toFixed(2).replace('.', ',')}</span> / R$ ${parseFloat(totalPrice).toFixed(2).replace('.', ',')}</p>
+        </div>`;
 
                 actionsArea.innerHTML = `
-                <div class="grid grid-cols-1 gap-2">
-                    ${!isFinalized && status !== 'cancelled' ? `
-                        <button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                            <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
-                        </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+        <div class="grid grid-cols-1 gap-2">
+            ${!isFinalized && status !== 'cancelled' ? `
+                <button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
+                    <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
+                </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
-                    <div class="grid grid-cols-2 gap-2 mt-2">
-                        ${!isFinalized && status !== 'no_show' ? `<button onclick="openNoShowModal('${reservaId}', '${clientName.replace(/'/g, "\\'")}', '${paidAmount}', ${isFinalized}, '${totalPrice}')" class="px-2 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200">FALTA</button>` : ''}
-                        <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmount}', ${isFinalized})" class="px-2 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg border border-gray-300">CANCELAR DIA</button>
-                    </div>
+            <div class="grid grid-cols-2 gap-2 mt-2">
+                ${!isFinalized && status !== 'no_show' ? `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmount}', ${isFinalized}, '${totalPrice}')" class="px-2 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200">FALTA</button>` : ''}
+                <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmount}', ${isFinalized})" class="px-2 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg border border-gray-300">CANCELAR DIA</button>
+            </div>
 
-                    ${isRecurrent ? `<button onclick="cancelarSerie('${reservaId}', '${paidAmount}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg">CANCELAR SÉRIE</button>` : ''}
-                    <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">Fechar</button>
-                </div>`;
+            ${isRecurrent ? `<button onclick="cancelarSerie('${reservaId}', '${paidAmount}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg">CANCELAR SÉRIE</button>` : ''}
+            <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">Fechar</button>
+        </div>`;
 
                 eventModal.classList.remove('hidden');
                 eventModal.style.display = 'flex';
             }
-        }; // FECHAMENTO DA eventClick
-
+        };
         // --- FUNÇÕES DE SUPORTE (FORA DA eventClick) ---
         window.closeQuickBookingModal = function() {
             const modal = document.getElementById('quick-booking-modal');
@@ -1847,9 +1827,11 @@
             var calendarEl = document.getElementById('calendar');
             if (!calendarEl) return;
 
+            // 1. Verificações iniciais de pendências
             checkPendingReservations();
             setInterval(checkPendingReservations, 30000);
 
+            // 2. Listeners de formulário e filtros
             const quickBookingForm = document.getElementById('quick-booking-form');
             if (quickBookingForm) {
                 quickBookingForm.addEventListener('submit', handleQuickBookingSubmit);
@@ -1870,79 +1852,157 @@
                 });
             }
 
-            var calendarInstance = new FullCalendar.Calendar(calendarEl, {
-                locale: 'pt-br',
-                initialView: 'dayGridMonth',
-                height: 'auto',
-                timeZone: 'local',
-                slotMinTime: '06:00:00',
-                slotMaxTime: '23:00:00',
-                headerToolbar: {
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
-                },
-                eventSources: [{
-                        url: CONFIRMED_API_URL,
-                        method: 'GET',
-                        extraParams: () => ({
-                            arena_id: document.getElementById('filter_arena')?.value || ''
-                        })
+            // 3. 🎯 VERIFICAÇÃO INICIAL DO CAIXA
+            // Chamamos a função e, somente após o retorno, renderizamos o calendário
+            isCashierOpen().then(() => {
+                console.log("Status do caixa verificado. Iniciando calendário...");
+
+                var calendarInstance = new FullCalendar.Calendar(calendarEl, {
+                    locale: 'pt-br',
+                    initialView: 'dayGridMonth',
+                    height: 'auto',
+                    timeZone: 'local',
+                    slotMinTime: '06:00:00',
+                    slotMaxTime: '23:00:00',
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth,timeGridWeek,timeGridDay'
                     },
-                    {
-                        events: function(fetchInfo, successCallback, failureCallback) {
-                            const arenaId = document.getElementById('filter_arena')?.value || '';
-                            const url = `${AVAILABLE_API_URL}?start=${fetchInfo.startStr}&end=${fetchInfo.endStr}&arena_id=${arenaId}`;
-                            fetch(url)
-                                .then(r => r.json())
-                                .then(events => {
-                                    const now = moment();
-                                    successCallback(events.filter(e => moment(e.end).isAfter(now)));
-                                })
-                                .catch(err => failureCallback(err));
+                    eventSources: [{
+                            url: CONFIRMED_API_URL,
+                            method: 'GET',
+                            extraParams: () => ({
+                                arena_id: document.getElementById('filter_arena')?.value || ''
+                            })
+                        },
+                        {
+                            events: function(fetchInfo, successCallback, failureCallback) {
+                                const arenaId = document.getElementById('filter_arena')?.value || '';
+                                const url = `${AVAILABLE_API_URL}?start=${fetchInfo.startStr}&end=${fetchInfo.endStr}&arena_id=${arenaId}`;
+                                fetch(url)
+                                    .then(r => r.json())
+                                    .then(events => {
+                                        const now = moment();
+                                        successCallback(events.filter(e => moment(e.end).isAfter(now)));
+                                    })
+                                    .catch(err => failureCallback(err));
+                            }
                         }
-                    }
-                ],
-                eventDidMount: function(info) {
-                    const props = info.event.extendedProps;
-                    // Normalizamos os status para evitar erros de maiúsculas/minúsculas
-                    const status = (props.status || '').toLowerCase();
-                    const paymentStatus = (props.payment_status || '').toLowerCase();
+                    ],
+                    eventDidMount: function(info) {
+                        const props = info.event.extendedProps;
+                        const status = (props.status || '').toLowerCase();
+                        const paymentStatus = (props.payment_status || '').toLowerCase();
+                        const titleEl = info.el.querySelector('.fc-event-title');
 
-                    const titleEl = info.el.querySelector('.fc-event-title');
+                        // 🎯 1. TRAVA VISUAL E FÍSICA (CAIXA FECHADO)
+                        // Se o caixa estiver fechado globalmente, desativamos qualquer interação com o slot.
+                        if (window.isCashierClosedGlobal) {
+                            info.el.classList.add('cashier-closed-locked');
+                            info.el.style.pointerEvents = 'none'; // Impede cliques e hovers
+                            info.el.style.cursor = 'not-allowed';
+                        } else {
+                            // Garante que o slot seja clicável se o caixa estiver aberto
+                            info.el.classList.remove('cashier-closed-locked');
+                            info.el.style.pointerEvents = 'auto';
+                            info.el.style.cursor = 'pointer';
+                        }
 
-                    // Limpa classes anteriores
-                    info.el.classList.remove('fc-event-available', 'fc-event-recurrent', 'fc-event-quick', 'fc-event-pending', 'fc-event-paid', 'fc-event-no-show');
+                        // 2. Limpeza de classes de status anteriores para evitar conflitos de cores
+                        info.el.classList.remove(
+                            'fc-event-available',
+                            'fc-event-recurrent',
+                            'fc-event-quick',
+                            'fc-event-pending',
+                            'fc-event-paid',
+                            'fc-event-no-show'
+                        );
 
-                    // 1. PRIORIDADE MÁXIMA: Se estiver pago ou completo, fica FADED (Cinza)
-                    // Adicionei 'completed' que é o que o seu PaymentController define no sucesso
-                    if (['pago', 'completed', 'resolvido'].includes(status) || paymentStatus === 'paid') {
-                        info.el.classList.add('fc-event-paid');
-                    }
-                    // 2. Se for FALTA
-                    else if (status === 'no_show') {
-                        info.el.classList.add('fc-event-no-show');
-                    }
-                    // 3. Se for PENDENTE
-                    else if (status === 'pending') {
-                        info.el.classList.add('fc-event-pending');
-                    }
-                    // 4. Se for LIVRE
-                    else if (status === 'free' || info.event.classNames.includes('fc-event-available')) {
-                        info.el.classList.add('fc-event-available');
-                        if (titleEl) titleEl.textContent = 'LIVRE - R$ ' + parseFloat(props.price || 0).toFixed(2).replace('.', ',');
-                    }
-                    // 5. Se não for nada disso, define pela cor do tipo (Roxo ou Indigo)
-                    else {
-                        info.el.classList.add(props.is_recurrent ? 'fc-event-recurrent' : 'fc-event-quick');
-                    }
-                },
-                eventClick: (info) => window.eventClick(info)
+                        // 3. Aplicação das Cores e Rótulos de Status
+
+                        // Status: PAGO ou FINALIZADO
+                        if (['pago', 'completed', 'resolvido', 'concluida'].includes(status) || paymentStatus === 'paid') {
+                            info.el.classList.add('fc-event-paid');
+
+                            // Status: FALTA (No-show)
+                        } else if (status === 'no_show') {
+                            info.el.classList.add('fc-event-no-show');
+
+                            // Status: PENDENTE (Aguardando aprovação)
+                        } else if (status === 'pending') {
+                            info.el.classList.add('fc-event-pending');
+
+                            // Status: DISPONÍVEL (Livre para reserva)
+                        } else if (status === 'free' || info.event.classNames.includes('fc-event-available')) {
+                            info.el.classList.add('fc-event-available');
+                            if (titleEl) {
+                                // Formata o preço para o padrão brasileiro (R$ 0,00)
+                                const price = parseFloat(props.price || 0).toFixed(2).replace('.', ',');
+                                titleEl.textContent = 'LIVRE - R$ ' + price;
+                            }
+
+                            // Status: RESERVADO (Recorrente ou Avulso)
+                        } else {
+                            // Define se é Roxo (recorrente) ou Azul (avulso)
+                            info.el.classList.add(props.is_recurrent ? 'fc-event-recurrent' : 'fc-event-quick');
+                        }
+                    },
+                    eventClick: (info) => window.eventClick(info)
+                });
+
+                calendarInstance.render();
+                window.calendar = calendarInstance;
             });
-
-            calendarInstance.render();
-            window.calendar = calendarInstance;
         };
+
+        /**
+         * Verifica se o caixa está aberto e sincroniza a trava global do sistema.
+         * Otimizada para evitar re-renderizações desnecessárias do FullCalendar.
+         */
+        async function isCashierOpen() {
+            try {
+                const response = await fetch('{{ route("admin.payment.caixa.status") }}');
+
+                // Se a rota falhar (ex: 500 ou 404), assumimos aberto para não travar a operação
+                if (!response.ok) {
+                    window.isCashierClosedGlobal = false;
+                    return true;
+                }
+
+                const data = await response.json();
+
+                // Estado atual vindo do servidor
+                const isClosedNow = !data.isOpen;
+
+                // 🎯 OTIMIZAÇÃO: Só dispara o render se o estado MUDOU
+                if (window.isCashierClosedGlobal !== isClosedNow) {
+                    window.isCashierClosedGlobal = isClosedNow;
+
+                    if (window.calendar) {
+                        // Redesenha o calendário para aplicar/remover as classes 'cashier-closed-locked'
+                        // via eventDidMount conforme o novo estado global.
+                        window.calendar.render();
+                    }
+                }
+
+                // Se estiver fechado, bloqueia a execução e avisa o usuário
+                if (window.isCashierClosedGlobal) {
+                    showDashboardMessage(
+                        "Ação bloqueada: O caixa está fechado. Abra o caixa para realizar agendamentos ou alterações.",
+                        'error'
+                    );
+                    return false;
+                }
+
+                return true; // Caixa aberto, vida que segue
+            } catch (e) {
+                console.error("Erro crítico ao verificar status do caixa:", e);
+                // Em caso de erro de rede, permitimos a ação para não interromper o fluxo do negócio
+                window.isCashierClosedGlobal = false;
+                return true;
+            }
+        }
 
         // EXPOSIÇÃO GLOBAL DE FUNÇÕES
         window.closeEventModal = closeEventModal;

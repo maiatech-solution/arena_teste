@@ -116,9 +116,13 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::get('{user}/reservas', [AdminController::class, 'clientReservations'])->name('reservas');
         });
 
-        // MÓDULO FINANCEIRO & PAGAMENTOS
+        // 💰 MÓDULO FINANCEIRO & PAGAMENTOS
         Route::prefix('pagamentos')->name('payment.')->group(function () {
             Route::get('/', [PaymentController::class, 'index'])->name('index');
+
+            // 🎯 ADICIONE ESTA LINHA AQUI:
+            Route::get('/status-caixa', [FinanceiroController::class, 'getStatus'])->name('caixa.status');
+
             Route::post('fechar-caixa', [FinanceiroController::class, 'closeCash'])->name('close_cash');
             Route::post('abrir-caixa', [FinanceiroController::class, 'openCash'])->name('open_cash');
             Route::post('{reserva}/finalizar', [ReservaController::class, 'finalizarPagamento'])->name('finalize');
