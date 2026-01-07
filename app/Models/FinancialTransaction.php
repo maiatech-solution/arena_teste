@@ -17,6 +17,7 @@ class FinancialTransaction extends Model
      */
     public const TYPE_SIGNAL = 'signal';
     public const TYPE_PAYMENT = 'payment';
+    public const TYPE_REFUND = 'refund'; // ✅ NOVO: Para estornos/devoluções
     public const TYPE_RETEN_NOSHOW_COMP = 'RETEN_NOSHOW_COMP';
     public const TYPE_RETEN_CANC_COMP = 'RETEN_CANC_COMP';
     public const TYPE_RETEN_CANC_P_COMP = 'RETEN_CANC_P_COMP';
@@ -24,6 +25,7 @@ class FinancialTransaction extends Model
 
     protected $fillable = [
         'reserva_id',
+        'arena_id',    // ✅ ADICIONADO: Agora permite gravar o ID da quadra
         'user_id',
         'manager_id',
         'amount',
@@ -60,6 +62,12 @@ class FinancialTransaction extends Model
                 throw new \Exception("Bloqueio de Segurança: O caixa do dia " . Carbon::parse($dateToCheck)->format('d/m/Y') . " já está encerrado. Reabra-o para lançar movimentações.");
             }
         });
+    }
+
+    // ✅ NOVO: Relação com a Arena (Quadra)
+    public function arena(): BelongsTo
+    {
+        return $this->belongsTo(Arena::class);
     }
 
     // Relação: Transação pertence a uma Reserva

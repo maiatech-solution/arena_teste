@@ -99,7 +99,7 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::patch('{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('cancelar');
             Route::patch('{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('cancelar_pontual');
             Route::delete('{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('cancelar_serie');
-            Route::post('{reserva}/no-show', [PaymentController::class, 'registerNoShow'])->name('no_show');
+            Route::match(['post', 'patch'], '{reserva}/no-show', [PaymentController::class, 'registerNoShow'])->name('no_show');
             Route::delete('{reserva}', [AdminController::class, 'destroyReserva'])->name('destroy');
             Route::post('{masterReserva}/renew-serie', [ReservaController::class, 'renewRecurrentSeries'])->name('renew_serie');
             Route::delete('series/{masterId}/cancel', [AdminController::class, 'cancelClientSeries'])->name('cancel_client_series');

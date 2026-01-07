@@ -31,8 +31,12 @@ class Reserva extends Model
      *
      * @var array<int, string>
      */
+    /**
+     * Os atributos que podem ser atribuídos em massa (mass assignable).
+     */
     protected $fillable = [
         'user_id',
+        'arena_id',      // ✅ ADICIONE ESTA LINHA AQUI
         'manager_id',
         'date',
         'day_of_week',
@@ -51,7 +55,7 @@ class Reserva extends Model
         'is_fixed',
         'is_recurrent',
         'recurrent_series_id',
-        'fixed_slot_id', // ID do slot fixo consumido (para pré-reservas)
+        'fixed_slot_id',
         'cancellation_reason',
         'no_show_reason',
     ];
@@ -206,5 +210,11 @@ class Reserva extends Model
                             ->where('end_time', '>=', $endTime);
                     });
             });
+    }
+
+    public function arena(): BelongsTo
+    {
+        // Assume que você tem um Model chamado Arena
+        return $this->belongsTo(Arena::class, 'arena_id');
     }
 }
