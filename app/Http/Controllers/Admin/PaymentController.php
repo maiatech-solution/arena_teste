@@ -55,15 +55,22 @@ class PaymentController extends Controller
         $selectedDateString = $request->input('data_reserva') ?? $request->input('date') ?? Carbon::today()->toDateString();
         $dateObject = Carbon::parse($selectedDateString);
         $selectedReservaId = $request->input('reserva_id');
+        $selectedArenaId = $request->input('arena_id'); // 🎯 NOVO: Captura o filtro de arena
         $searchTerm = $request->input('search');
 
-        // 3. Consulta de Reservas do Dia (Com relações para evitar N+1 queries)
-        $query = Reserva::with(['user', 'arena']); // Carrega arena para saber onde foi o jogo
+        // 3. Consulta de Reservas do Dia
+        $query = Reserva::with(['user', 'arena']);
 
         if ($selectedReservaId) {
             $query->where('id', $selectedReservaId);
         } else {
             $query->whereDate('date', $dateObject);
+
+            // 🎯 NOVO: Aplica o filtro de Arena na listagem de reservas
+            if ($selectedArenaId) {
+                $query->where('arena_id', $selectedArenaId);
+            }
+
             if ($searchTerm) {
                 $searchWildcard = '%' . $searchTerm . '%';
                 $query->where(function ($q) use ($searchWildcard) {
@@ -79,19 +86,33 @@ class PaymentController extends Controller
             ->orderBy('start_time', 'asc')
             ->get();
 
-        // 4. Movimentação Financeira do Dia (Líquido)
+        // 4. Movimentação Financeira do Dia (Líquido Geral)
         $totalRecebidoDiaLiquido = FinancialTransaction::whereDate('paid_at', $dateObject)->sum('amount');
 
-        // 🎯 NOVO: Faturamento Separado por Arena (Aproveitando o arena_id que implementamos)
-        $faturamentoPorArena = FinancialTransaction::whereDate('paid_at', $dateObject)
-            ->join('arenas', 'financial_transactions.arena_id', '=', 'arenas.id')
-            ->select('arenas.name', DB::raw('SUM(financial_transactions.amount) as total'))
-            ->groupBy('arenas.name', 'arenas.id')
+        // 🎯 AJUSTE: Faturamento por Arena (Garantindo que todas as arenas apareçam)
+        $arenasAtivas = \App\Models\Arena::all(); // Pega todas as quadras cadastradas
+
+        $faturamentoReal = FinancialTransaction::whereDate('paid_at', $dateObject)
+            ->select('arena_id', DB::raw('SUM(amount) as total'))
+            ->groupBy('arena_id')
             ->get();
 
+        $faturamentoPorArena = $arenasAtivas->map(function ($arena) use ($faturamentoReal) {
+            $transacao = $faturamentoReal->firstWhere('arena_id', $arena->id);
+            return (object)[
+                'id'    => $arena->id,
+                'name'  => $arena->name,
+                'total' => $transacao ? $transacao->total : 0
+            ];
+        });
+
         // 5. Histórico de Transações Detalhado
-        $financialTransactions = FinancialTransaction::whereDate('paid_at', $dateObject)
-            ->with(['reserva', 'manager', 'payer', 'arena'])
+        // 🎯 AJUSTE: Se filtrar por arena, as transações detalhadas também filtram
+        $transQuery = FinancialTransaction::whereDate('paid_at', $dateObject);
+        if ($selectedArenaId) {
+            $transQuery->where('arena_id', $selectedArenaId);
+        }
+        $financialTransactions = $transQuery->with(['reserva', 'manager', 'payer', 'arena'])
             ->orderBy('paid_at', 'desc')
             ->get();
 
@@ -104,18 +125,18 @@ class PaymentController extends Controller
         $cashierRecord = Cashier::where('date', $selectedDateString)->first();
         $cashierStatus = $cashierRecord->status ?? 'open';
 
-        // 7. KPIs de Dashboard (Cálculos de Previsão)
+        // 7. KPIs de Dashboard
         $totalExpected = $reservas->whereNotIn('status', ['canceled', 'rejected'])
             ->sum(fn($r) => $r->final_price ?? $r->price);
 
         $totalPending = $reservas->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
             ->sum(fn($r) => max(0, ($r->final_price ?? $r->price) - $r->total_paid));
 
-        // 8. Retorno para a View com todas as métricas
+        // 8. Retorno para a View
         return view('admin.payment.index', [
             'selectedDate' => $selectedDateString,
             'reservas' => $reservas,
-            'faturamentoPorArena' => $faturamentoPorArena, // ✅ Enviando faturamento segmentado
+            'faturamentoPorArena' => $faturamentoPorArena,
             'totalGeralCaixa' => FinancialTransaction::sum('amount'),
             'totalRecebidoDiaLiquido' => $totalRecebidoDiaLiquido,
             'totalAntecipadoReservasDia' => $reservas->sum('total_paid'),
