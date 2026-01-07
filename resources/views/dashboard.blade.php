@@ -104,14 +104,18 @@
 
         /* ✅ PADRÃO: Estilo para Eventos RESOLVIDOS (PAGO, ATRASADO, CANCELADO, REJEITADO) */
         .fc-event-paid {
-            background-color: #6B7280 !important;
-            /* Cinza 500 */
-            border-color: #4B5563 !important;
-            color: #ffffff !important;
-            opacity: 0.6 !important;
-            /* Efeito de "passado" */
-            filter: grayscale(80%);
+            background-color: #9CA3AF !important;
+            /* Cinza mais claro (Gray 400) */
+            border-color: #6B7280 !important;
+            color: #4B5563 !important;
+            /* Texto cinza escuro para contraste */
+            opacity: 0.5 !important;
+            /* Efeito desbotado */
+            filter: grayscale(100%);
+            /* Remove as cores (inclusive o roxo) */
             font-weight: normal !important;
+            text-decoration: line-through;
+            /* Opcional: risca o nome para indicar conclusão */
         }
 
         /* ✅ GARANTIR QUE O TEXTO FIQUE BRANCO EM EVENTOS ESCUROS */
@@ -1558,13 +1562,24 @@
                 }
 
                 if (response.ok && result.success) {
+                    // 1. Remove a reserva visualmente NA HORA para não parecer travado
+                    if (window.calendar) {
+                        const event = window.calendar.getEventById(reservaId);
+                        if (event) event.remove();
+                    }
+
                     showDashboardMessage(result.message || "Falta registrada com sucesso.", 'success');
                     closeNoShowModal();
-                    if (calendar) calendar.refetchEvents();
+
+                    // 2. Aguarda 600ms para o servidor terminar de recriar o slot verde 
+                    // e então atualiza o calendário para o verde aparecer.
+                    setTimeout(() => {
+                        if (window.calendar) window.calendar.refetchEvents();
+                    }, 600);
+
                 } else {
                     console.error(result.message || `Erro desconhecido. Status: ${response.status}.`);
-                    showDashboardMessage(result.message || `Erro desconhecido. Status: ${response.status}.`,
-                        'error');
+                    showDashboardMessage(result.message || `Erro desconhecido. Status: ${response.status}.`, 'error');
                 }
 
             } catch (error) {
@@ -1890,20 +1905,35 @@
                 ],
                 eventDidMount: function(info) {
                     const props = info.event.extendedProps;
+                    // Normalizamos os status para evitar erros de maiúsculas/minúsculas
                     const status = (props.status || '').toLowerCase();
+                    const paymentStatus = (props.payment_status || '').toLowerCase();
+
                     const titleEl = info.el.querySelector('.fc-event-title');
+
+                    // Limpa classes anteriores
                     info.el.classList.remove('fc-event-available', 'fc-event-recurrent', 'fc-event-quick', 'fc-event-pending', 'fc-event-paid', 'fc-event-no-show');
 
-                    if (status === 'free' || info.event.classNames.includes('fc-event-available')) {
+                    // 1. PRIORIDADE MÁXIMA: Se estiver pago ou completo, fica FADED (Cinza)
+                    // Adicionei 'completed' que é o que o seu PaymentController define no sucesso
+                    if (['pago', 'completed', 'resolvido'].includes(status) || paymentStatus === 'paid') {
+                        info.el.classList.add('fc-event-paid');
+                    }
+                    // 2. Se for FALTA
+                    else if (status === 'no_show') {
+                        info.el.classList.add('fc-event-no-show');
+                    }
+                    // 3. Se for PENDENTE
+                    else if (status === 'pending') {
+                        info.el.classList.add('fc-event-pending');
+                    }
+                    // 4. Se for LIVRE
+                    else if (status === 'free' || info.event.classNames.includes('fc-event-available')) {
                         info.el.classList.add('fc-event-available');
                         if (titleEl) titleEl.textContent = 'LIVRE - R$ ' + parseFloat(props.price || 0).toFixed(2).replace('.', ',');
-                    } else if (status === 'no_show') {
-                        info.el.classList.add('fc-event-no-show');
-                    } else if (status === 'pending') {
-                        info.el.classList.add('fc-event-pending');
-                    } else if (['pago', 'resolvido', 'atrasado'].includes(status)) {
-                        info.el.classList.add('fc-event-paid');
-                    } else {
+                    }
+                    // 5. Se não for nada disso, define pela cor do tipo (Roxo ou Indigo)
+                    else {
                         info.el.classList.add(props.is_recurrent ? 'fc-event-recurrent' : 'fc-event-quick');
                     }
                 },

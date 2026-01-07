@@ -48,15 +48,18 @@ class PaymentController extends Controller
      */
     public function index(Request $request)
     {
+        // 1. Integridade: Corrige inconsistências antes de carregar a página
         $this->checkAndCorrectNoShowPaidAmounts();
 
+        // 2. Definição de Data e Filtros
         $selectedDateString = $request->input('data_reserva') ?? $request->input('date') ?? Carbon::today()->toDateString();
         $dateObject = Carbon::parse($selectedDateString);
         $selectedReservaId = $request->input('reserva_id');
         $searchTerm = $request->input('search');
 
-        // 1. Consulta de Reservas
-        $query = Reserva::with('user');
+        // 3. Consulta de Reservas do Dia (Com relações para evitar N+1 queries)
+        $query = Reserva::with(['user', 'arena']); // Carrega arena para saber onde foi o jogo
+
         if ($selectedReservaId) {
             $query->where('id', $selectedReservaId);
         } else {
@@ -76,32 +79,43 @@ class PaymentController extends Controller
             ->orderBy('start_time', 'asc')
             ->get();
 
-        // 2. Transações e Movimentação
+        // 4. Movimentação Financeira do Dia (Líquido)
         $totalRecebidoDiaLiquido = FinancialTransaction::whereDate('paid_at', $dateObject)->sum('amount');
 
+        // 🎯 NOVO: Faturamento Separado por Arena (Aproveitando o arena_id que implementamos)
+        $faturamentoPorArena = FinancialTransaction::whereDate('paid_at', $dateObject)
+            ->join('arenas', 'financial_transactions.arena_id', '=', 'arenas.id')
+            ->select('arenas.name', DB::raw('SUM(financial_transactions.amount) as total'))
+            ->groupBy('arenas.name', 'arenas.id')
+            ->get();
+
+        // 5. Histórico de Transações Detalhado
         $financialTransactions = FinancialTransaction::whereDate('paid_at', $dateObject)
-            ->with(['reserva', 'manager', 'payer'])
+            ->with(['reserva', 'manager', 'payer', 'arena'])
             ->orderBy('paid_at', 'desc')
             ->get();
 
-        // 🎯 LÓGICA DO HISTÓRICO: Busca os fechamentos reais para a tabela do fim da página
+        // 6. Auditoria de Fechamento (Cashier)
         $cashierHistory = Cashier::with('user')
             ->orderBy('date', 'desc')
             ->limit(10)
             ->get();
 
-        // Status do Caixa
         $cashierRecord = Cashier::where('date', $selectedDateString)->first();
         $cashierStatus = $cashierRecord->status ?? 'open';
 
-        // KPIs de Dashboard
-        $totalExpected = $reservas->whereNotIn('status', ['canceled', 'rejected'])->sum(fn($r) => $r->final_price ?? $r->price);
+        // 7. KPIs de Dashboard (Cálculos de Previsão)
+        $totalExpected = $reservas->whereNotIn('status', ['canceled', 'rejected'])
+            ->sum(fn($r) => $r->final_price ?? $r->price);
+
         $totalPending = $reservas->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
             ->sum(fn($r) => max(0, ($r->final_price ?? $r->price) - $r->total_paid));
 
+        // 8. Retorno para a View com todas as métricas
         return view('admin.payment.index', [
             'selectedDate' => $selectedDateString,
             'reservas' => $reservas,
+            'faturamentoPorArena' => $faturamentoPorArena, // ✅ Enviando faturamento segmentado
             'totalGeralCaixa' => FinancialTransaction::sum('amount'),
             'totalRecebidoDiaLiquido' => $totalRecebidoDiaLiquido,
             'totalAntecipadoReservasDia' => $reservas->sum('total_paid'),
@@ -111,7 +125,7 @@ class PaymentController extends Controller
             'noShowCount' => $reservas->where('status', 'no_show')->count(),
             'financialTransactions' => $financialTransactions,
             'cashierStatus' => $cashierStatus,
-            'cashierHistory' => $cashierHistory, // Agora a variável vai populada
+            'cashierHistory' => $cashierHistory,
             'highlightReservaId' => $selectedReservaId,
         ]);
     }
@@ -258,13 +272,23 @@ class PaymentController extends Controller
             $paidAmount = (float) $request->input('paid_amount', $reserva->total_paid);
             $shouldRefund = $request->boolean('should_refund');
 
-            // 2. Registro Financeiro (Tratando Arena ID)
+            // 2. Registro Financeiro (Tratando Arena ID e evitando duplicidade)
             if ($paidAmount > 0) {
+
+                // 🗑️ LIMPEZA: Remove transações anteriores desta reserva (como o sinal) 
+                // para que a retenção ou estorno não duplique o valor no caixa.
+                FinancialTransaction::where('reserva_id', $reserva->id)
+                    ->whereIn('type', [
+                        FinancialTransaction::TYPE_SIGNAL,
+                        FinancialTransaction::TYPE_PAYMENT,
+                        FinancialTransaction::TYPE_RETEN_NOSHOW_COMP
+                    ])->delete();
+
                 if ($shouldRefund) {
-                    // Estorno: Valor Negativo
+                    // Estorno: Registra a saída do dinheiro
                     FinancialTransaction::create([
                         'reserva_id'     => $reserva->id,
-                        'arena_id'       => $reserva->arena_id, // ✅ Adicionado
+                        'arena_id'       => $reserva->arena_id,
                         'user_id'        => $reserva->user_id,
                         'manager_id'     => Auth::id(),
                         'amount'         => -$paidAmount,
@@ -274,10 +298,10 @@ class PaymentController extends Controller
                         'paid_at'        => now(),
                     ]);
                 } else {
-                    // Retenção: Criamos a transação de compensação (como fizemos no outro controller)
+                    // Retenção/Compensação: Substitui o sinal original
                     FinancialTransaction::create([
                         'reserva_id'     => $reserva->id,
-                        'arena_id'       => $reserva->arena_id, // ✅ Adicionado
+                        'arena_id'       => $reserva->arena_id,
                         'user_id'        => $reserva->user_id,
                         'manager_id'     => Auth::id(),
                         'amount'         => $paidAmount,
@@ -289,7 +313,7 @@ class PaymentController extends Controller
                 }
             }
 
-            // 3. Lógica de Bloqueio de Usuário (Mantida)
+            // 3. Lógica de Bloqueio de Usuário
             if ($request->boolean('block_user') && $reserva->user) {
                 $user = $reserva->user;
                 $user->no_show_count = ($user->no_show_count ?? 0) + 1;
@@ -299,12 +323,11 @@ class PaymentController extends Controller
                 $user->save();
             }
 
-            // 4. LIBERAÇÃO DO SLOT (O que faltava para ficar verde)
-            // Chamamos a função de recriar o slot verde que está no outro Controller
+            // 4. LIBERAÇÃO DO SLOT
             $reservaController = app(\App\Http\Controllers\ReservaController::class);
             $reservaController->recreateFixedSlot($reserva);
 
-            // 5. Deleta a reserva original (Para não ficar o "vermelho" por cima do verde)
+            // 5. Deleta a reserva original
             $reserva->delete();
 
             DB::commit();
