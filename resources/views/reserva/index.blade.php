@@ -161,11 +161,8 @@
         backdrop-blur-sm shadow-2xl shadow-gray-900/70 dark:shadow-indigo-900/50
         rounded-3xl transform transition-all duration-300 ease-in-out">
 
-            <h1
-                class="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-gray-100 mb-6
-            border-b-4 border-indigo-600 dark:border-indigo-400 pb-3 text-center
-            tracking-tight">
-                ⚽ ELITE SOCCER - Agendamento Online
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-gray-100 mb-6 border-b-4 border-indigo-600 dark:border-indigo-400 pb-3 text-center tracking-tight">
+                ⚽ Agendamento Online
             </h1>
 
             <p class="text-gray-600 dark:text-gray-400 mb-8 text-center text-base sm:text-lg font-medium">
@@ -175,862 +172,441 @@
 
             {{-- No início da seção de mensagens de erro --}}
             @if ($errors->has('reserva_duplicada'))
-                <div class="bg-yellow-100 dark:bg-yellow-900/50 border-l-4 border-yellow-600 text-yellow-800 dark:text-yellow-300 p-4 rounded-xl relative mb-6 flex items-center shadow-lg"
-                    role="alert">
-                    <svg class="w-6 h-6 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd"
-                            d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                            clip-rule="evenodd" />
-                    </svg>
-                    <div>
-                        <span class="font-bold text-lg">Atenção!</span>
-                        <p class="mt-1">{{ $errors->first('reserva_duplicada') }}</p>
-                    </div>
+            <div class="bg-yellow-100 dark:bg-yellow-900/50 border-l-4 border-yellow-600 text-yellow-800 dark:text-yellow-300 p-4 rounded-xl relative mb-6 flex items-center shadow-lg"
+                role="alert">
+                <svg class="w-6 h-6 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clip-rule="evenodd" />
+                </svg>
+                <div>
+                    <span class="font-bold text-lg">Atenção!</span>
+                    <p class="mt-1">{{ $errors->first('reserva_duplicada') }}</p>
                 </div>
+            </div>
             @endif
 
             {{-- --- Mensagens de Status (Mantidas) --- --}}
             @if (session('success'))
-                <div class="bg-green-100 dark:bg-green-900/50 border-l-4 border-green-600 text-green-800 dark:text-green-300 p-4 rounded-xl relative mb-6 flex items-center shadow-lg"
-                    role="alert">
-                    <span class="font-bold text-lg">SUCESSO!</span> <span class="ml-2">{{ session('success') }}</span>
-                </div>
+            <div class="bg-green-100 dark:bg-green-900/50 border-l-4 border-green-600 text-green-800 dark:text-green-300 p-4 rounded-xl relative mb-6 flex items-center shadow-lg"
+                role="alert">
+                <span class="font-bold text-lg">SUCESSO!</span> <span class="ml-2">{{ session('success') }}</span>
+            </div>
             @endif
 
             @if (session('whatsapp_link'))
-                <div class="bg-green-50 dark:bg-green-900/30 border border-green-400 dark:border-green-700 p-8 rounded-3xl relative mb-12 text-center shadow-2xl shadow-green-400/40 dark:shadow-green-900/70"
-                    role="alert">
-                    <p class="font-extrabold mb-3 text-3xl sm:text-4xl text-green-700 dark:text-green-300">PRÉ-RESERVA
-                        SOLICITADA!</p>
-                    <p class="mb-6 text-lg text-gray-700 dark:text-gray-300">
-                        Sua pré-reserva foi solicitada! <br> <strong>Clique abaixo imediatamente</strong> para entrar em
-                        contato com o gestor da arena e confirmar sua reserva com o o pagamento do sinal via WhatsApp.
-                    </p>
-                    <a href="{{ session('whatsapp_link') }}" target="_blank"
-                        class="mt-2 inline-flex items-center p-4 px-8 sm:px-12 py-4 sm:py-5 bg-green-600 text-white font-extrabold rounded-full shadow-2xl shadow-green-600/50 hover:bg-green-700 transition duration-300 transform hover:scale-105 active:scale-[0.97] uppercase tracking-wider text-base sm:text-xl">
-                        ENTRAR EM CONTATO
-                    </a>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-4 italic">O horário será liberado se o
-                        comprovante não for enviado.</p>
-                </div>
+            <div class="bg-green-50 dark:bg-green-900/30 border border-green-400 dark:border-green-700 p-8 rounded-3xl relative mb-12 text-center shadow-2xl shadow-green-400/40 dark:shadow-green-900/70"
+                role="alert">
+                <p class="font-extrabold mb-3 text-3xl sm:text-4xl text-green-700 dark:text-green-300">PRÉ-RESERVA
+                    SOLICITADA!</p>
+                <p class="mb-6 text-lg text-gray-700 dark:text-gray-300">
+                    Sua pré-reserva foi solicitada! <br> <strong>Clique abaixo imediatamente</strong> para entrar em
+                    contato com o gestor da arena e confirmar sua reserva com o o pagamento do sinal via WhatsApp.
+                </p>
+                <a href="{{ session('whatsapp_link') }}" target="_blank"
+                    class="mt-2 inline-flex items-center p-4 px-8 sm:px-12 py-4 sm:py-5 bg-green-600 text-white font-extrabold rounded-full shadow-2xl shadow-green-600/50 hover:bg-green-700 transition duration-300 transform hover:scale-105 active:scale-[0.97] uppercase tracking-wider text-base sm:text-xl">
+                    ENTRAR EM CONTATO
+                </a>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-4 italic">O horário será liberado se o
+                    comprovante não for enviado.</p>
+            </div>
             @endif
 
             {{-- Alerta Geral de Erro de Submissão (incluindo erro de conflito) --}}
             @if (session('error'))
-                <div class="bg-red-100 dark:bg-red-900/50 border-l-4 border-red-600 text-red-800 dark:text-red-300 p-4 rounded-xl relative mb-6 flex items-center shadow-lg"
-                    role="alert">
-                    <svg class="w-6 h-6 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <div class="bg-red-100 dark:bg-red-900/50 border-l-4 border-red-600 text-red-800 dark:text-red-300 p-4 rounded-xl relative mb-6 flex items-center shadow-lg"
+                role="alert">
+                <svg class="w-6 h-6 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                        clip-rule="evenodd" />
+                </svg>
+                <span class="font-bold text-lg">ERRO!</span> <span class="ml-2">{{ session('error') }}</span>
+            </div>
+            @endif
+            @if ($errors->any())
+            <div class="bg-red-100 dark:bg-red-900/50 border-l-4 border-red-600 text-red-800 dark:text-red-300 p-4 rounded-xl relative mb-8 shadow-lg"
+                role="alert">
+                <p class="font-bold flex items-center text-lg"><svg class="w-5 h-5 mr-2" fill="currentColor"
+                        viewBox="0 0 20 20">
                         <path fill-rule="evenodd"
                             d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
                             clip-rule="evenodd" />
-                    </svg>
-                    <span class="font-bold text-lg">ERRO!</span> <span class="ml-2">{{ session('error') }}</span>
-                </div>
-            @endif
-            @if ($errors->any())
-                <div class="bg-red-100 dark:bg-red-900/50 border-l-4 border-red-600 text-red-800 dark:text-red-300 p-4 rounded-xl relative mb-8 shadow-lg"
-                    role="alert">
-                    <p class="font-bold flex items-center text-lg"><svg class="w-5 h-5 mr-2" fill="currentColor"
-                            viewBox="0 0 20 20">
-                            <path fill-rule="evenodd"
-                                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                                clip-rule="evenodd" />
-                        </svg> Correção Necessária!</p>
-                    <p class="mt-1">Houve um problema com a sua seleção ou dados. Por favor, verifique os campos
-                        destacados.</p>
-                </div>
+                    </svg> Correção Necessária!</p>
+                <p class="mt-1">Houve um problema com a sua seleção ou dados. Por favor, verifique os campos
+                    destacados.</p>
+            </div>
             @endif
 
-            {{-- Calendário FullCalendar --}}
-            <div class="calendar-container shadow-2xl">
-                <div id='calendar'></div>
+            {{-- 🏟️ SELEÇÃO DE ARENA (Aparece primeiro) --}}
+            <div id="arena-selection-container" class="mb-10 transition-all duration-500">
+                @if ($errors->any())
+                <div class="bg-red-500 text-white p-4 rounded-lg mb-4">
+                    <strong>Erro de Validação:</strong>
+                    <ul>
+                        @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+                @endif
+                <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6 text-center italic uppercase tracking-widest">
+                    Escolha sua Quadra
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    @foreach(\App\Models\Arena::all() as $arena)
+                    <button onclick="selectArena('{{ $arena->id }}', '{{ $arena->name }}')"
+                        class="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border-2 border-transparent hover:border-indigo-500 p-1 text-left">
+                        <div class="p-6">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="p-3 bg-indigo-100 dark:bg-indigo-900/50 rounded-xl text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform">
+                                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </span>
+                                <span class="text-xs font-bold text-green-500 uppercase tracking-tighter bg-green-50 dark:bg-green-900/30 px-2 py-1 rounded">Disponível</span>
+                            </div>
+                            <h3 class="text-xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">{{ $arena->name }}</h3>
+                            <p class="text-gray-500 dark:text-gray-400 text-sm mt-1 font-medium italic">Clique para ver os horários desta quadra</p>
+                        </div>
+                    </button>
+                    @endforeach
+                </div>
+            </div>
+
+            {{-- 📅 CONTAINER DO CALENDÁRIO (Começa oculto e sem ID duplicado lá embaixo) --}}
+            <div id="calendar-wrapper" class="hidden opacity-0 transform translate-y-4 transition-all duration-500">
+                <div class="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4 px-2">
+                    <button onclick="resetSelection()" class="text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-2 hover:scale-105 transition-transform">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        VOLTAR E TROCAR QUADRA
+                    </button>
+
+                    <div class="flex items-center gap-3">
+                        <span class="text-gray-400 text-[10px] font-black uppercase tracking-widest">Quadra Selecionada:</span>
+                        <span id="selected-arena-badge" class="bg-indigo-600 text-white px-6 py-2 rounded-full font-black text-sm uppercase shadow-lg shadow-indigo-500/30"></span>
+                    </div>
+                </div>
+
+                <div class="calendar-container shadow-2xl">
+                    <div id='calendar'></div>
+                </div>
             </div>
 
         </div>
     </div>
 
-    {{-- --- Modal de Confirmação de Dados --- --}}
-    {{-- --- MODAL DE CONFIRMAÇÃO (O QUE CORRIGIMOS) --- --}}
+
+
+    {{-- --- MODAL DE CONFIRMAÇÃO DE AGENDAMENTO (MULTIQUADRA) --- --}}
     <div id="booking-modal"
-        class="modal-overlay hidden fixed inset-0 items-center justify-center z-50 p-4 backdrop-blur-sm bg-black/50">
+        class="modal-overlay hidden fixed inset-0 items-center justify-center z-[9999] p-4 backdrop-blur-sm bg-black/60 transition-opacity duration-300">
+
         <div id="modal-content"
-            class="bg-white dark:bg-gray-800 p-8 sm:p-10 rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto transform transition-all duration-300 scale-100 border-t-[10px]
-            @if ($errors->any()) border-red-600 dark:border-red-500 @else border-indigo-600 dark:border-indigo-500 @endif"
+            class="bg-white dark:bg-gray-800 p-8 sm:p-10 rounded-[2.5rem] shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-y-auto transform transition-all duration-300 scale-100 border-t-[12px] 
+        @if ($errors->any()) border-red-600 dark:border-red-500 @else border-indigo-600 dark:border-indigo-500 @endif"
             onclick="event.stopPropagation()">
 
             {{-- Erros de Validação do Laravel --}}
             @if ($errors->any())
-                <div
-                    class="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-300 rounded-r-xl shadow-sm">
-                    <p class="font-black flex items-center text-lg uppercase tracking-tight">
-                        <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd"
-                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                                clip-rule="evenodd" />
-                        </svg>
-                        Atenção
-                    </p>
-                    <ul class="mt-1 text-sm font-semibold">
-                        @foreach ($errors->all() as $error)
-                            <li>{{ $error }}</li>
-                        @endforeach
-                    </ul>
-                </div>
+            <div class="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-300 rounded-r-xl shadow-sm">
+                <p class="font-black flex items-center text-lg uppercase tracking-tight">
+                    <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                    </svg>
+                    Correção Necessária
+                </p>
+                <ul class="mt-1 text-sm font-semibold">
+                    @foreach ($errors->all() as $error)
+                    <li>• {{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
             @endif
 
+            {{-- Título e Identificação da Arena --}}
             <div class="mb-8 text-center sm:text-left">
-                <h4 class="text-3xl font-black text-gray-900 dark:text-gray-100 tracking-tight leading-none">Dados da
-                    Reserva</h4>
-                <p class="text-gray-500 dark:text-gray-400 mt-2 font-medium italic">Elite Soccer - Onde o jogo acontece
-                </p>
+                <h4 class="text-3xl font-black text-gray-900 dark:text-gray-100 tracking-tight leading-none">Dados da Reserva</h4>
+                <div class="mt-3 inline-flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 rounded-full border border-indigo-100 dark:border-indigo-800">
+                    <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                    <span class="text-xs font-black uppercase text-indigo-700 dark:text-indigo-300 tracking-widest">
+                        Agendando na: <span id="modal-arena-name-display">---</span>
+                    </span>
+                </div>
             </div>
 
             <form id="booking-form" method="POST" action="{{ route('reserva.store') }}">
                 @csrf
 
-                {{-- CAMPOS HIDDEN (Fundamentais para o Controller) --}}
+                {{-- --- CAMPOS OCULTOS --- --}}
                 <input type="hidden" name="data_reserva" id="form-date" value="{{ old('data_reserva') }}">
                 <input type="hidden" name="hora_inicio" id="form-start" value="{{ old('hora_inicio') }}">
                 <input type="hidden" name="hora_fim" id="form-end" value="{{ old('hora_fim') }}">
                 <input type="hidden" name="price" id="form-price" value="{{ old('price') }}">
                 <input type="hidden" name="schedule_id" id="form-schedule-id" value="{{ old('schedule_id') }}">
+                <input type="hidden" name="arena_id" id="form-arena-id" value="{{ old('arena_id') }}">
                 <input type="hidden" name="reserva_conflito_id" value="" />
+                <input type="hidden" name="email_cliente" value="{{ Auth::check() ? Auth::user()->email : old('email_cliente') }}">
 
-                {{-- 🎯 CORREÇÃO DO ERRO 500: Campo de e-mail --}}
-                <input type="hidden" name="email_cliente"
-                    value="{{ Auth::check() ? Auth::user()->email : old('email_cliente') }}">
-
-                {{-- Resumo Visual do Horário --}}
+                {{-- Resumo Visual --}}
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-                    <div
-                        class="bg-indigo-50 dark:bg-indigo-900/20 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-800">
-                        <span class="text-[10px] font-black uppercase tracking-widest text-indigo-500 block mb-1">Data
-                            Agendada</span>
-                        <span id="modal-date"
-                            class="font-bold text-gray-800 dark:text-gray-100 block leading-tight text-lg"></span>
+                    <div class="bg-indigo-50/50 dark:bg-indigo-900/10 p-5 rounded-3xl border border-indigo-100/50 dark:border-indigo-800/50 transition-colors">
+                        <span class="text-[10px] font-black uppercase tracking-widest text-indigo-500 block mb-1">Data Agendada</span>
+                        <span id="modal-date" class="font-bold text-gray-800 dark:text-gray-100 block leading-tight text-lg"></span>
                     </div>
-                    <div
-                        class="bg-indigo-50 dark:bg-indigo-900/20 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-800 text-center sm:text-left">
-                        <span
-                            class="text-[10px] font-black uppercase tracking-widest text-indigo-500 block mb-1">Horário</span>
-                        <span id="modal-time"
-                            class="font-black text-3xl text-indigo-600 dark:text-indigo-400 block leading-none"></span>
+                    <div class="bg-indigo-50/50 dark:bg-indigo-900/10 p-5 rounded-3xl border border-indigo-100/50 dark:border-indigo-800/50 text-center sm:text-left transition-colors">
+                        <span class="text-[10px] font-black uppercase tracking-widest text-indigo-500 block mb-1">Horário</span>
+                        <span id="modal-time" class="font-black text-3xl text-indigo-600 dark:text-indigo-400 block leading-none"></span>
                     </div>
                 </div>
 
                 {{-- Dados do Cliente --}}
                 <div class="mb-8">
                     @if (Auth::check() && Auth::user()->isClient())
-                        <div
-                            class="p-6 bg-green-50 dark:bg-green-900/20 rounded-2xl border border-green-200 dark:border-green-800 flex items-center justify-between">
-                            <div>
-                                <p class="text-xs font-bold text-green-600 uppercase tracking-widest mb-1">Reserva
-                                    vinculada a:</p>
-                                <p class="text-xl font-black text-gray-900 dark:text-gray-100 leading-none">
-                                    {{ Auth::user()->name }}</p>
-                                <p class="text-sm text-green-700 dark:text-green-400 font-medium mt-2 italic">
-                                    {{ Auth::user()->contato_cliente }}</p>
-                            </div>
-                            <input type="hidden" name="nome_cliente" value="{{ Auth::user()->name }}">
-                            <input type="hidden" name="contato_cliente"
-                                value="{{ Auth::user()->contato_cliente }}">
+                    <div class="p-6 bg-green-50 dark:bg-green-900/20 rounded-3xl border border-green-200 dark:border-green-800 flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-bold text-green-600 uppercase tracking-widest mb-1">Reserva vinculada a:</p>
+                            <p class="text-xl font-black text-gray-900 dark:text-gray-100 leading-none">{{ Auth::user()->name }}</p>
+                            <p class="text-sm text-green-700 dark:text-green-400 font-medium mt-2 italic">{{ Auth::user()->contato_cliente }}</p>
                         </div>
+                        <input type="hidden" name="nome_cliente" value="{{ Auth::user()->name }}">
+                        <input type="hidden" name="contato_cliente" value="{{ Auth::user()->contato_cliente }}">
+                    </div>
                     @else
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                            <div>
-                                <label
-                                    class="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">Nome
-                                    Completo</label>
-                                <input type="text" name="nome_cliente" placeholder="Seu nome" required
-                                    value="{{ old('nome_cliente') }}"
-                                    class="w-full bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 dark:text-white rounded-xl p-4 focus:border-indigo-500 outline-none transition shadow-sm">
-                            </div>
-                            <div>
-                                <label
-                                    class="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">WhatsApp</label>
-                                <input type="tel" name="contato_cliente" id="guest-contact"
-                                    placeholder="919XXXXXXXX" required value="{{ old('contato_cliente') }}"
-                                    class="w-full bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 dark:text-white rounded-xl p-4 focus:border-indigo-500 outline-none transition shadow-sm"
-                                    maxlength="11">
-                            </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div class="group">
+                            <label class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1 transition-colors group-focus-within:text-indigo-500">Nome Completo</label>
+                            <input type="text" name="nome_cliente" placeholder="Seu nome" required
+                                value="{{ old('nome_cliente') }}"
+                                class="w-full bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 dark:text-white rounded-2xl p-4 focus:border-indigo-500 outline-none transition-all shadow-sm focus:bg-white dark:focus:bg-gray-800">
                         </div>
+                        <div class="group">
+                            <label class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1 transition-colors group-focus-within:text-indigo-500">WhatsApp (Com DDD)</label>
+                            <input type="tel" name="contato_cliente" id="guest-contact"
+                                placeholder="919XXXXXXXX" required value="{{ old('contato_cliente') }}"
+                                class="w-full bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 dark:text-white rounded-2xl p-4 focus:border-indigo-500 outline-none transition-all shadow-sm focus:bg-white dark:focus:bg-gray-800"
+                                maxlength="11">
+                        </div>
+                    </div>
                     @endif
                 </div>
 
                 {{-- Aviso de Pagamento --}}
-                <div class="mb-8 p-6 bg-red-50 dark:bg-red-900/20 border-l-8 border-red-600 rounded-r-2xl shadow-sm">
+                <div class="mb-8 p-6 bg-red-50 dark:bg-red-900/20 border-l-8 border-red-600 rounded-r-3xl shadow-sm">
                     <p class="text-xs sm:text-sm text-red-800 dark:text-red-300 font-bold leading-relaxed">
-                        Sua vaga só é garantida após o envio imediato do comprovante de sinal via WhatsApp.
+                        Importante: Sua vaga só é garantida após o envio imediato do comprovante de sinal via WhatsApp.
                     </p>
                 </div>
 
-                {{-- Rodapé --}}
-                <div
-                    class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-6 border-t border-gray-100 dark:border-gray-700">
-                    <div>
-                        <span
-                            class="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Investimento</span>
-                        <span class="text-4xl font-black text-green-600 dark:text-green-400 leading-none">R$ <span
-                                id="modal-price"></span></span>
+                {{-- Rodapé / Ações --}}
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-6 border-t border-gray-100 dark:border-gray-700">
+                    <div class="text-center sm:text-left">
+                        <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Total da Reserva</span>
+                        <span class="text-4xl font-black text-green-600 dark:text-green-400 leading-none">
+                            R$ <span id="modal-price">0,00</span>
+                        </span>
                     </div>
                     <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                         <button type="button" id="close-modal"
-                            class="px-8 py-4 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 font-black rounded-2xl hover:bg-gray-200 transition uppercase text-xs tracking-widest">Cancelar</button>
+                            class="px-8 py-4 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 font-black rounded-2xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all uppercase text-xs tracking-widest active:scale-95">
+                            Cancelar
+                        </button>
                         <button type="submit"
-                            class="px-8 py-4 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-500/40 transition transform hover:scale-105 active:scale-95 uppercase text-xs tracking-widest">Confirmar
-                            Jogo</button>
+                            class="px-8 py-4 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-500/40 transition-all transform hover:scale-105 active:scale-95 uppercase text-xs tracking-widest">
+                            Confirmar Jogo
+                        </button>
                     </div>
                 </div>
             </form>
         </div>
     </div>
 
+
     {{-- FullCalendar, Moment.js e Scripts Customizados --}}
     <script src='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js'></script>
     <script src='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/locale/pt-br.min.js'></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
 
-
     <script>
-        // 🛑 CRÍTICO: Rota API para buscar os horários disponíveis (slots verdes)
-        const AVAILABLE_API_URL = '{{ route('api.horarios.disponiveis') }}';
+        // 1. Definições Globais
+        window.selectedArenaId = null;
+        window.selectedArenaName = "";
+        window.calendar = null;
 
-        // 🛑 CRÍTICO: Rota API para buscar as reservas (ocupados)
-        const RESERVED_API_URL = '{{ route('api.reservas.confirmadas') }}';
-
-        // Variáveis de checagem de status de autenticação (simplificadas, mas mantidas)
-        const IS_AUTHENTICATED_AS_GESTOR = @json(Auth::check() && optional(Auth::user())->isGestor());
-
-        let calendar; // Variável global para o calendário
-        // 🛑 NOVO: CACHE GLOBAL DE DIAS FUTUROS DISPONÍVEIS (YYYY-MM-DD)
-        let availableDaysCache = [];
-
-        document.addEventListener('DOMContentLoaded', () => {
-
-            const calendarEl = document.getElementById('calendar');
-            const modal = document.getElementById('booking-modal');
-            const closeModalButton = document.getElementById('close-modal');
-
-            // Variáveis globais para reabertura de modal (se houver erro de validação)
-            const oldDate = @json(old('data_reserva'));
-            const oldStart = @json(old('hora_inicio'));
-            const oldEnd = @json(old('hora_fim'));
-            const oldPrice = @json(old('price'));
-            const oldScheduleId = @json(old('schedule_id'));
+        const AVAILABLE_API_URL = "{{ route('api.horarios.disponiveis') }}";
+        // Correção na lógica de parsing do booleano PHP
+        const IS_AUTHENTICATED_AS_GESTOR = JSON.parse("{{ Auth::check() && optional(Auth::user())->isGestor() ? 'true' : 'false' }}");
 
 
-            // --- Funções Auxiliares ---
+        // 2. FUNÇÕES DE NAVEGAÇÃO (Escopo Global)
 
-            /**
-             * Formata a data para o padrão Brasileiro (Dia da semana, dia de Mês de Ano).
-             */
-            function formatarDataBrasileira(dateString) {
-                const date = new Date(dateString + 'T00:00:00');
-                if (isNaN(date)) {
-                    return 'Data Inválida';
+        // Selecionar a Quadra
+        window.selectArena = function(id, name) {
+            console.log("Selecionando arena:", id, name);
+            window.selectedArenaId = id;
+            window.selectedArenaName = name;
+
+            const selection = document.getElementById('arena-selection-container');
+            const wrapper = document.getElementById('calendar-wrapper');
+
+            if (selection && wrapper) {
+                selection.classList.add('hidden');
+                wrapper.classList.remove('hidden');
+
+                // Forçar transição visual
+                setTimeout(() => {
+                    wrapper.classList.remove('opacity-0', 'translate-y-4');
+                    wrapper.classList.add('opacity-100', 'translate-y-0');
+                }, 50);
+
+                document.getElementById('selected-arena-badge').textContent = "Quadra: " + name;
+                document.getElementById('form-arena-id').value = id;
+
+                if (window.calendar) {
+                    window.calendar.removeAllEvents(); // Limpa lixo visual
+                    window.calendar.refetchEvents(); // Busca dados da nova quadra
+                    setTimeout(() => {
+                        window.calendar.updateSize(); // Ajusta layout branco
+                    }, 200);
                 }
-                const options = {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                };
-                const formatted = date.toLocaleDateString('pt-BR', options);
-                return formatted.charAt(0).toUpperCase() + formatted.slice(1);
             }
+        };
 
-            /**
-             * Exibe um alerta temporário no modal (Substitui alert()).
-             */
-            function showFrontendAlert(message) {
-                const alertBox = document.getElementById('frontend-alert-box');
-                const alertMessage = document.getElementById('frontend-alert-message').querySelector('span.ml-1');
+        // 🎯 NOVO: Voltar para a lista de quadras
+        window.resetSelection = function() {
+            console.log("Resetando seleção de arena...");
 
-                alertMessage.textContent = message;
-                alertBox.classList.remove('hidden');
+            window.selectedArenaId = null;
+            window.selectedArenaName = "";
+
+            const selection = document.getElementById('arena-selection-container');
+            const wrapper = document.getElementById('calendar-wrapper');
+
+            if (selection && wrapper) {
+                // Inicia animação de saída
+                wrapper.classList.add('opacity-0', 'translate-y-4');
 
                 setTimeout(() => {
-                    alertBox.classList.add('hidden');
-                }, 5000); // 5 segundos
+                    wrapper.classList.add('hidden');
+                    selection.classList.remove('hidden');
 
-                console.error(message);
+                    if (window.calendar) {
+                        window.calendar.removeAllEvents(); // Limpa o calendário para a próxima vez
+                        window.calendar.changeView('dayGridMonth'); // Volta para visão mensal
+                    }
+                }, 300);
             }
+        };
 
-            /**
-             * Limpa a string de telefone, removendo tudo exceto dígitos (0-9).
-             */
-            function cleanPhoneNumber(value) {
-                return value.replace(/\D/g, '');
-            }
+        // 3. AUXILIARES DO CALENDÁRIO
+        function countAvailableSlots(dateStr) {
+            if (!window.calendar) return 0;
+            return window.calendar.getEvents().filter(e =>
+                moment(e.start).format('YYYY-MM-DD') === dateStr &&
+                e.classNames.includes('fc-event-available')
+            ).length;
+        }
 
-            // ----------------------------------------------------------------------
-            // --- FUNÇÃO CRÍTICA: LÓGICA DE CONTAGEM DE SLOTS DISPONÍVEIS ---
-            // ----------------------------------------------------------------------
-            /**
-             * Conta os slots disponíveis para um determinado dia a partir dos eventos carregados.
-             */
-            function countAvailableSlots(dateStr) {
-                if (!calendar) return 0;
+        function updateDayMarkers() {
+            const dayCells = document.querySelectorAll('.fc-daygrid-day');
+            dayCells.forEach(dateEl => {
+                const dateStr = dateEl.getAttribute('data-date');
+                if (!dateStr) return;
 
-                const now = moment();
-                const todayDate = now.format('YYYY-MM-DD');
+                const frame = dateEl.querySelector('.fc-daygrid-day-frame');
+                const bottomContainer = dateEl.querySelector('.fc-daygrid-day-bottom') || frame;
 
-                // Agora busca todos os eventos no cache do FullCalendar para o dia específico
-                const eventsOnDay = calendar.getEvents().filter(event =>
-                    moment(event.start).format('YYYY-MM-DD') === dateStr
-                );
+                const old = dateEl.querySelector('.day-marker');
+                if (old) old.remove();
 
-                let finalAvailableSlots = 0;
+                const slots = countAvailableSlots(dateStr);
+                let html = '';
 
-                eventsOnDay.forEach(event => {
-                    const isAvailableClass = event.classNames.includes('fc-event-available');
-                    const eventEnd = moment(event.end);
-
-                    // Verifica se o slot disponível é válido (não expirou hoje)
-                    const isExpiredAvailableSlot = isAvailableClass && dateStr === todayDate && eventEnd
-                        .isBefore(now);
-
-                    if (isAvailableClass && !isExpiredAvailableSlot) {
-                        finalAvailableSlots++;
-                    }
-                });
-
-                return finalAvailableSlots;
-            }
-
-            // ----------------------------------------------------------------------
-            // --- FUNÇÃO CRÍTICA: LÓGICA DE MARCADORES RESUMO (CONTADOR) & SINCRONIZAÇÃO DE CACHE ---
-            // ----------------------------------------------------------------------
-            function updateDayMarkers() {
-                if (!calendar || calendar.view.type !== 'dayGridMonth') return;
-
-                const dayCells = calendarEl.querySelectorAll('.fc-daygrid-day-frame');
-                const today = moment().startOf('day');
-                const datesProcessed = [];
-
-                dayCells.forEach(dayEl => {
-                    const dateEl = dayEl.closest('.fc-daygrid-day');
-                    const dateStr = dateEl ? dateEl.getAttribute('data-date') : null;
-                    if (!dateStr) return;
-
-                    // 1. Limpa classes de clique e marcadores antigos
-                    dateEl.classList.remove('has-slots');
-                    const existingMarker = dayEl.querySelector('.day-marker');
-                    if (existingMarker) existingMarker.remove();
-
-                    // Verifica se o dia é passado
-                    const isTodayOrFuture = !moment(dateStr).isBefore(today, 'day');
-
-                    if (!isTodayOrFuture) {
-                        return; // Não mostra marcador em dias passados
-                    }
-
-                    // Conta slots usando a função separada
-                    const finalAvailableSlots = countAvailableSlots(dateStr);
-
-                    // Salva a informação para a correção do cache
-                    datesProcessed.push({
-                        dateStr,
-                        hasSlots: finalAvailableSlots > 0
-                    });
-
-                    const markerContainer = dayEl.querySelector('.fc-daygrid-day-bottom');
-                    if (!markerContainer) return;
-
-                    let markerHtml = '';
-
-                    // 🛑 LÓGICA: MOSTRA A QUANTIDADE 🛑
-                    if (finalAvailableSlots > 0) {
-                        const plural = finalAvailableSlots > 1 ? 's' : '';
-                        markerHtml = `
-                        <div class="day-marker marker-available" data-available-slots="${finalAvailableSlots}">
-                            ${finalAvailableSlots} horário${plural} disponível${plural}
-                        </div>`;
-                        // Adiciona classe para permitir clique e estilizar o cursor
-                        dateEl.classList.add('has-slots');
-                    } else {
-                        markerHtml = `
-                        <div class="day-marker marker-none" data-available-slots="0">
-                            Esgotado
-                        </div>`;
-                    }
-
-                    // Adiciona ao DOM
-                    if (markerHtml) {
-                        markerContainer.insertAdjacentHTML('beforeend', markerHtml);
-                    }
-
-                    // Remoção forçada do contador nativo no escopo geral (Garantia)
-                    dayEl.querySelectorAll('.fc-daygrid-more-link').forEach(link => link.remove());
-                });
-
-                // 🛑 CRÍTICO: SINCRONIZAÇÃO IMEDIATA DO CACHE DE NAVEGAÇÃO 🛑
-                datesProcessed.forEach(({
-                    dateStr,
-                    hasSlots
-                }) => {
-                    const index = availableDaysCache.indexOf(dateStr);
-
-                    if (hasSlots) {
-                        // Se tem slots e não está no cache, adiciona
-                        if (index === -1) {
-                            availableDaysCache.push(dateStr);
-                        }
-                    } else {
-                        // Se não tem slots e está no cache, remove (ex: foi preenchido)
-                        if (index !== -1) {
-                            availableDaysCache.splice(index, 1);
-                        }
-                    }
-                });
-                // Reordena o cache para garantir que a navegação funcione
-                availableDaysCache.sort();
-                console.log(
-                    `[CACHE SYNC] Cache sincronizado para mês visível. Total: ${availableDaysCache.length}`);
-            }
-
-            // ----------------------------------------------------------------------
-            // --- FUNÇÃO CRÍTICA: POPULA O CACHE DE DIAS DISPONÍVEIS (6 MESES) ---
-            // ----------------------------------------------------------------------
-            /**
-             * Carrega a lista de todos os dias futuros com horários disponíveis e popula o cache.
-             */
-            async function loadAvailableDaysCache() {
-                const today = moment().startOf('day').format('YYYY-MM-DD');
-                const sixMonthsLater = moment().add(6, 'months').format('YYYY-MM-DD');
-
-                console.log(`[CACHE DEBUG] Buscando dias disponíveis de ${today} até ${sixMonthsLater}...`);
-
-                const urlWithParams = AVAILABLE_API_URL +
-                    '?start=' + encodeURIComponent(today) +
-                    '&end=' + encodeURIComponent(sixMonthsLater);
-
-                try {
-                    const response = await fetch(urlWithParams);
-                    if (!response.ok) throw new Error('Falha ao buscar slots para o cache.');
-                    const events = await response.json();
-
-                    // Extrai as datas únicas dos eventos
-                    const uniqueDates = events.reduce((acc, event) => {
-                        const dateStr = moment(event.start).format('YYYY-MM-DD');
-                        if (!acc.includes(dateStr)) {
-                            acc.push(dateStr);
-                        }
-                        return acc;
-                    }, []);
-
-                    // Filtra para remover quaisquer datas passadas ou inválidas
-                    const filteredDates = uniqueDates.filter(dateStr =>
-                        !moment(dateStr).isBefore(moment(), 'day')
-                    );
-
-                    // Armazena e ordena
-                    availableDaysCache = filteredDates.sort();
-                    console.log(
-                        `[CACHE DEBUG] Cache populado com ${availableDaysCache.length} dias disponíveis:`,
-                        availableDaysCache);
-
-                } catch (error) {
-                    console.error('[CACHE ERROR] Erro ao popular cache de dias disponíveis:', error);
+                if (slots > 0) {
+                    html = `<div class="day-marker" style="background:#10b981; color:white; font-size:11px; font-weight:bold; padding:4px; text-align:center; border-radius:6px; margin:2px;">${slots} Horários</div>`;
+                } else if (moment(dateStr).isSameOrAfter(moment(), 'day')) {
+                    html = `<div class="day-marker" style="background:#fee2e2; color:#991b1b; font-size:11px; padding:4px; text-align:center; border-radius:6px; margin:2px;">Esgotado</div>`;
                 }
-            }
+                bottomContainer.insertAdjacentHTML('beforeend', html);
+            });
+        }
 
+        // 4. INICIALIZAÇÃO DO DOM
+        document.addEventListener('DOMContentLoaded', function() {
+            const calendarEl = document.getElementById('calendar');
+            if (!calendarEl) return;
 
-            // ----------------------------------------------------------------------
-            // --- LÓGICA DE PULO DE DIAS ESGOTADOS NA NAVEGAÇÃO ---
-            // ----------------------------------------------------------------------
-
-            /**
-             * Encontra a próxima data (ou anterior) com slots disponíveis usando o cache.
-             */
-            function findNextAvailableDate(currentDateStr, direction) {
-
-                if (availableDaysCache.length === 0) {
-                    console.warn("[NAV DEBUG] Cache de dias vazia. Navegação indisponível.");
-                    return null;
-                }
-
-                const currentDate = moment(currentDateStr);
-                let nextDate = null;
-
-                if (direction === 1) {
-                    // AVANÇAR: Encontra o primeiro dia no cache que é estritamente DEPOIS do dia atual
-                    for (const dateStr of availableDaysCache) {
-                        const cacheDate = moment(dateStr);
-                        // O cache já está ordenado, basta encontrar o primeiro depois da data atual
-                        if (cacheDate.isAfter(currentDate, 'day')) {
-                            nextDate = dateStr;
-                            break;
-                        }
-                    }
-                } else if (direction === -1) {
-                    // RETROCEDER: Encontra o último dia no cache que é estritamente ANTES do dia atual
-                    // O cache está ordenado, então procuramos de trás para frente
-                    for (let i = availableDaysCache.length - 1; i >= 0; i--) {
-                        const dateStr = availableDaysCache[i];
-                        const cacheDate = moment(dateStr);
-
-                        if (cacheDate.isBefore(currentDate, 'day')) {
-                            nextDate = dateStr;
-                            break;
-                        }
-                    }
-                }
-
-                console.log(`[NAV DEBUG] Próxima data encontrada na direção ${direction}: ${nextDate}`);
-                return nextDate;
-            }
-
-            /**
-             * FUNÇÃO CRÍTICA: Lógica de clique para os botões de navegação customizados.
-             */
-            function handleCustomNavigation(direction) {
-                // Esta função só deve ser chamada para timeGridDay
-                if (calendar.view.type !== 'timeGridDay') {
-                    console.warn("[NAV DEBUG] Navegação customizada ignorada: Não está no modo Dia.");
-                    return;
-                }
-
-                const currentDateStr = calendar.getDate().toISOString().split('T')[0];
-                const nextAvailableDate = findNextAvailableDate(currentDateStr, direction);
-                const today = moment().startOf('day').format('YYYY-MM-DD');
-
-                if (nextAvailableDate) {
-                    // Navega para a data que encontramos (o próximo slot verde)
-                    calendar.changeView('timeGridDay', nextAvailableDate);
-                } else {
-                    // Não encontrou mais datas disponíveis na direção
-                    if (direction === 1) {
-                        showFrontendAlert(
-                            `Não há mais horários disponíveis após ${formatarDataBrasileira(currentDateStr)}.`);
-                    } else {
-                        // Se for para retroceder e não encontrou nada, tentamos o dia de hoje, se for no futuro
-                        if (moment(currentDateStr).isAfter(moment(today), 'day')) {
-                            calendar.changeView('timeGridDay', today);
-                            showFrontendAlert(`Você voltou para o dia de hoje, ${formatarDataBrasileira(today)}.`);
-                        } else {
-                            showFrontendAlert(
-                                `Não é possível navegar para dias anteriores com horários disponíveis.`);
-                        }
-                    }
-                }
-            }
-
-
-            // CRÍTICO: Lógica de limpeza no input de telefone
-            const guestContactInput = document.getElementById('guest-contact');
-            if (guestContactInput) {
-                guestContactInput.addEventListener('input', function() {
-                    this.value = cleanPhoneNumber(this.value);
-                });
-            }
-
-
-            // === Inicialização do FullCalendar ===
-            calendar = new FullCalendar.Calendar(calendarEl, {
+            window.calendar = new FullCalendar.Calendar(calendarEl, {
                 locale: 'pt-br',
                 initialView: 'dayGridMonth',
                 height: 'auto',
-                timeZone: 'local',
-
-                // 🛑 CRÍTICO: DEFINIÇÃO DOS BOTÕES CUSTOMIZADOS 🛑
-                customButtons: {
-                    customPrev: {
-                        text: 'Anterior', // Texto para o botão (opcional)
-                        icon: 'chevron-left',
-                        click: function() {
-                            // Modo Mês: Navegação nativa (muda o mês)
-                            if (calendar.view.type === 'dayGridMonth') {
-                                calendar.prev();
-                            } else { // Modo Dia: Navegação customizada (pula dias esgotados)
-                                handleCustomNavigation(-1);
-                            }
-                        }
-                    },
-                    customNext: {
-                        text: 'Próximo', // Texto para o botão (opcional)
-                        icon: 'chevron-right',
-                        click: function() {
-                            // Modo Mês: Navegação nativa (muda o mês)
-                            if (calendar.view.type === 'dayGridMonth') {
-                                calendar.next();
-                            } else { // Modo Dia: Navegação customizada (pula dias esgotados)
-                                handleCustomNavigation(1);
-                            }
-                        }
-                    }
-                },
-
-                eventSources: [
-                    // 1. Reservas Reais (Ocupados - Sem className 'available') - Apenas para bloqueio visual/clique
-                    {
-                        url: RESERVED_API_URL,
-                        method: 'GET',
-                        failure: function() {
-                            console.error('Falha ao carregar reservas reais.');
-                        },
-                        // Cor totalmente transparente e prioridade para BLOQUEAR.
-                        color: 'transparent',
-                        textColor: 'transparent',
-                        borderColor: 'transparent',
-                        editable: false,
-                        priority: 5,
-                    },
-                    // 2. Slots Disponíveis (Grade Fixa - Com className 'available') - Fonte para a contagem
-                    {
-                        id: 'available-slots-source-id',
-                        className: 'fc-event-available',
-                        display: 'block',
-                        priority: 1,
-                        events: function(fetchInfo, successCallback, failureCallback) {
-                            const now = moment();
-                            const todayDate = now.format('YYYY-MM-DD');
-
-                            const urlWithParams = AVAILABLE_API_URL +
-                                '?start=' + encodeURIComponent(fetchInfo.startStr) +
-                                '&end=' + encodeURIComponent(fetchInfo.endStr);
-
-                            fetch(urlWithParams)
-                                .then(response => {
-                                    if (!response.ok) throw new Error(
-                                        'Falha ao buscar slots disponíveis.');
-                                    return response.json();
-                                })
-                                .then(availableEvents => {
-                                    const filteredEvents = availableEvents.filter(event => {
-                                        const eventDate = moment(event.start).format(
-                                            'YYYY-MM-DD');
-
-                                        if (eventDate !== todayDate) {
-                                            return true;
-                                        }
-
-                                        const eventEnd = moment(event.end);
-                                        // Filtra slots disponíveis que já expiraram hoje
-                                        return eventEnd.isAfter(now);
-                                    });
-
-                                    successCallback(filteredEvents);
-                                })
-                                .catch(error => {
-                                    console.error(
-                                        'Falha ao carregar e filtrar horários disponíveis:',
-                                        error);
-                                    failureCallback(error);
-                                });
-                        }
-                    }
-                ],
-
-                views: {
-                    dayGridMonth: {
-                        buttonText: 'Mês',
-                        dayMaxEvents: 0,
-                    },
-                    timeGridDay: {
-                        buttonText: 'Dia',
-                        slotMinTime: '06:00:00',
-                        slotMaxTime: '24:00:00'
-                    }
-                },
                 headerToolbar: {
-                    // Usa os botões customizados que chamam nossa lógica
-                    left: 'customPrev,customNext today',
+                    left: 'prev,next today',
                     center: 'title',
                     right: 'dayGridMonth,timeGridDay'
                 },
-                editable: false,
-                initialDate: new Date().toISOString().slice(0, 10),
-
-                validRange: function(now) {
-                    return {
-                        start: now.toISOString().split('T')[0]
-                    };
+                eventSources: [{
+                    url: AVAILABLE_API_URL,
+                    extraParams: function() {
+                        return {
+                            arena_id: window.selectedArenaId || 0
+                        };
+                    },
+                    success: function() {
+                        setTimeout(updateDayMarkers, 100);
+                    }
+                }],
+                datesSet: function() {
+                    setTimeout(updateDayMarkers, 100);
                 },
-
-                eventsSet: function(info) {
-                    // 1. Chama o marcador (cálculo correto) E SINCRONIZAÇÃO DE CACHE
-                    updateDayMarkers();
-
-                    // 2. Remoção forçada do contador nativo no escopo geral (Garantia)
-                    document.querySelectorAll('.fc-daygrid-more-link').forEach(link => link.remove());
-                },
-
                 eventDidMount: function(info) {
-    const event = info.event;
-    const isAvailable = event.classNames.includes('fc-event-available');
-
-    // 1. Visão de Mês
-    if (info.view.type === 'dayGridMonth') {
-        info.el.style.display = 'none';
-        return;
-    }
-
-    // 2. Visão de Dia (TimeGrid)
-    if (info.view.type === 'timeGridDay') {
-        const harness = info.el.closest('.fc-timegrid-event-harness');
-
-        // Limpeza visual do horário dentro do card (Remove os :00 segundos)
-        const timeTextEl = info.el.querySelector('.fc-event-time');
-        if (timeTextEl) {
-            let timeText = timeTextEl.innerText;
-            // Transforma "12:00 - 13:00" em "12:00 - 13:00" (limpa se vier com segundos do backend)
-            timeTextEl.innerText = timeText.replace(/:00/g, '');
-        }
-
-        if (!isAvailable) {
-            info.el.style.display = 'none';
-            if (harness) {
-                harness.style.display = 'none';
-                harness.style.zIndex = '1';
-            }
-            return;
-        }
-
-        // Slot Disponível (Verde)
-        info.el.style.display = 'block';
-        info.el.style.cursor = 'pointer';
-
-        if (harness) {
-            harness.style.display = 'block';
-            harness.style.zIndex = '99'; // Joga o slot verde para a frente de tudo
-            harness.style.pointerEvents = 'auto';
-        }
-    }
-},
-
-                // 🛑 dateClick: Bloqueia o clique em dias esgotados (Mês -> Dia) 🛑
+                    if (info.view.type === 'dayGridMonth') info.el.style.display = 'none';
+                },
                 dateClick: function(info) {
-                    const clickedDateStr = info.dateStr;
-                    const clickedDate = moment(clickedDateStr);
-                    const today = moment().startOf('day');
-
-                    if (clickedDate.isBefore(today, 'day')) {
-                        return; // Ignora cliques em dias passados
-                    }
-
-                    // Checa a disponibilidade usando a função que agora está no escopo correto
-                    const availableSlotsCount = countAvailableSlots(clickedDateStr);
-
-                    if (availableSlotsCount > 0) {
-                        // Se houver slots disponíveis, muda para a visão de Dia
-                        calendar.changeView('timeGridDay', clickedDateStr);
-                    } else {
-                        // Se estiver esgotado, exibe alerta e não muda a view
-                        showFrontendAlert(
-                            `❌ O dia ${formatarDataBrasileira(clickedDateStr)} está esgotado ou não tem horários disponíveis.`
-                        );
+                    if (countAvailableSlots(info.dateStr) > 0) {
+                        window.calendar.changeView('timeGridDay', info.dateStr);
                     }
                 },
-
                 eventClick: function(info) {
-                    const event = info.event;
-                    const isAvailable = event.classNames.includes('fc-event-available');
+                    if (!info.event.classNames.includes('fc-event-available') || IS_AUTHENTICATED_AS_GESTOR) return;
 
-                    // --- 🛑 LÓGICA DE SLOT DISPONÍVEL ---
-                    if (isAvailable) {
+                    const modal = document.getElementById('booking-modal');
+                    const start = moment(info.event.start);
+                    const end = moment(info.event.end);
 
-                        // 1. Bloqueio extra para Gestores logados
-                        if (IS_AUTHENTICATED_AS_GESTOR) {
-                            showFrontendAlert(
-                                "❌ Você está logado como Gestor/Admin. Use o Dashboard para agendamentos rápidos ou deslogue."
-                            );
-                            return;
-                        }
+                    document.getElementById('modal-arena-name-display').textContent = window.selectedArenaName;
+                    document.getElementById('modal-date').textContent = start.format('DD/MM/YYYY');
+                    document.getElementById('modal-time').textContent = start.format('HH:mm') + " - " + end.format('HH:mm');
 
-                        const startDate = moment(event.start);
-                        const endDate = moment(event.end);
-                        const extendedProps = event.extendedProps || {};
+                    const price = info.event.extendedProps.price || 0;
+                    document.getElementById('modal-price').textContent = parseFloat(price).toLocaleString('pt-BR', {
+                        minimumFractionDigits: 2
+                    });
 
-                        if (!event.id || !startDate.isValid() || !endDate.isValid() || extendedProps
-                            .price === undefined) {
-                            showFrontendAlert(
-                                "❌ Não foi possível carregar os detalhes do horário. Tente novamente."
-                            );
-                            return;
-                        }
+                    document.getElementById('form-date').value = start.format('YYYY-MM-DD');
+                    document.getElementById('form-start').value = start.format('HH:mm');
+                    document.getElementById('form-end').value = end.format('HH:mm');
+                    document.getElementById('form-price').value = price;
+                    document.getElementById('form-schedule-id').value = info.event.id;
 
-                        const dateString = startDate.format('YYYY-MM-DD');
-                        const startTimeInput = startDate.format('H:mm');
-                        const endTimeInput = endDate.format('H:mm');
-                        const timeSlotDisplay = startDate.format('HH:mm') + ' - ' + endDate.format(
-                            'HH:mm');
-
-                        const priceRaw = extendedProps.price || 0;
-                        const priceDisplay = parseFloat(priceRaw).toFixed(2).replace('.', ',');
-                        const scheduleId = event.id;
-
-                        // 2.1 Popula o Modal VISUAL
-                        document.getElementById('modal-date').textContent = formatarDataBrasileira(
-                            dateString);
-                        document.getElementById('modal-time').textContent = timeSlotDisplay;
-                        document.getElementById('modal-price').textContent = priceDisplay;
-
-                        // 2.2 Popula os campos HIDDEN do formulário
-                        document.getElementById('form-date').value = dateString;
-                        document.getElementById('form-start').value = startTimeInput;
-                        document.getElementById('form-end').value = endTimeInput;
-                        document.getElementById('form-price').value = priceRaw;
-                        document.getElementById('form-schedule-id').value = scheduleId;
-
-                        // 2.3 Exibir o modal (AQUI É ONDE ELE DEVE ABRIR CORRETAMENTE COM O NOVO CSS)
-                        modal.classList.remove('hidden');
-                        modal.classList.add('flex');
-
-                    } else {
-                        // Clicou em um evento Ocupado/Fechado - Ação de ignorar
-                        if (modal.classList.contains('hidden')) {
-                            showFrontendAlert(
-                                "❌ Este horário está ocupado ou é uma pré-reserva. Por favor, clique em um slot verde (disponível)."
-                            );
-                        } else {
-                            console.log("Usuário clicou em slot ocupado, modal já estava visível.");
-                        }
-                    }
+                    modal.classList.remove('hidden');
+                    modal.classList.add('flex');
                 }
             });
 
-            calendar.render();
+            window.calendar.render();
 
-            window.calendar = calendar; // Mantido para debugging externo, se necessário.
-
-            // 🛑 CRÍTICO: CHAMA O CARREGAMENTO DO CACHE NO INÍCIO E PERIODICAMENTE 🛑
-            loadAvailableDaysCache();
-            // Chama a cada 60s o carregamento de 6 meses (se um mês não estiver na tela, ele pega a info)
-            setInterval(loadAvailableDaysCache, 60000);
-
-            // === Lógica de Reabertura do Modal em caso de Erro de Validação ===
-            if (oldDate && oldStart) {
-                const formattedOldPrice = parseFloat(oldPrice).toFixed(2).replace('.', ',');
-
-                document.getElementById('modal-date').textContent = formatarDataBrasileira(oldDate);
-                document.getElementById('modal-time').textContent = `${oldStart} - ${oldEnd}`;
-                document.getElementById('modal-price').textContent = formattedOldPrice;
-                document.getElementById('form-schedule-id').value = oldScheduleId;
-
-                calendar.changeView('timeGridDay', oldDate);
-
-                modal.classList.remove('hidden');
-                modal.classList.add('flex'); // Reaplicação do flex para exibir
-            }
-
-            // Listener para fechar o modal
-            closeModalButton.addEventListener('click', () => {
-                modal.classList.add('hidden');
-                modal.classList.remove('flex'); // Removendo o flex ao esconder
-            });
-
-            // Listener para fechar o modal ao clicar no overlay
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    modal.classList.add('hidden');
-                    modal.classList.remove('flex'); // Removendo o flex ao esconder
-                }
-            });
-
+            const closeBtn = document.getElementById('close-modal');
+            if (closeBtn) closeBtn.onclick = function() {
+                document.getElementById('booking-modal').classList.replace('flex', 'hidden');
+            };
         });
     </script>
-
 </body>
 
 </html>

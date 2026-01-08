@@ -10,205 +10,190 @@ use Illuminate\Support\Facades\Log;
 class ApiReservaController extends Controller
 {
     // =========================================================================
-    // ✅ MÉTODO 1: Reservas de CLIENTE (TODOS OS STATUS DE OCUPAÇÃO)
-    // Rota: api.reservas.confirmadas
+    // ✅ MÉTODO 1: DASHBOARD DO GESTOR (Visão Completa)
     // =========================================================================
     public function getConfirmedReservas(Request $request)
     {
         try {
-            $start = Carbon::parse($request->input('start', Carbon::today()->subMonths(1)->toDateString()));
-            $end = Carbon::parse($request->input('end', Carbon::today()->addMonths(6)->toDateString()));
-
-            // 🎯 CAPTURA O FILTRO DE ARENA
+            $start = $request->input('start');
+            $end = $request->input('end');
             $arenaId = $request->input('arena_id');
 
-            $statuses = [
-                Reserva::STATUS_CONFIRMADA,
-                Reserva::STATUS_PENDENTE,
-                Reserva::STATUS_CONCLUIDA,
-                Reserva::STATUS_LANCADA_CAIXA,
-                Reserva::STATUS_NO_SHOW,
-            ];
+            $query = Reserva::whereDate('date', '>=', Carbon::parse($start)->toDateString())
+                ->whereDate('date', '<=', Carbon::parse($end)->toDateString());
 
-            $query = Reserva::where('is_fixed', false)
-                ->whereIn('status', $statuses)
-                ->whereDate('date', '>=', $start)
-                ->whereDate('date', '<=', $end);
-
-            // 🎯 APLICA O FILTRO SE UMA ARENA FOR SELECIONADA
-            if (!empty($arenaId)) {
-                $query->where('arena_id', $arenaId);
-            }
-
-            $reservas = $query->get();
-
-            // ... (resto do seu código de mapeamento $events permanece igual)
-            $events = $reservas->map(function ($reserva) {
-                // ... mantenha sua lógica de cores e títulos aqui ...
-                // (Apenas certifique-se de fechar o map e retornar o JSON ao final)
-                // [Omitido para brevidade, mantenha o seu original]
-                return [
-                    'id' => $reserva->id,
-                    'title' => (isset($titlePrefix) ? $titlePrefix : '') . ($reserva->user ? $reserva->user->name : ($reserva->client_name ?? 'Cliente')) . ' - R$ ' . number_format((float)$reserva->price, 2, ',', '.'),
-                    'start' => $reserva->date->format('Y-m-d') . 'T' . ($reserva->start_time instanceof Carbon ? $reserva->start_time->format('H:i:s') : $reserva->start_time),
-                    'end' => $reserva->date->format('Y-m-d') . 'T' . ($reserva->end_time instanceof Carbon ? $reserva->end_time->format('H:i:s') : $reserva->end_time),
-                    'color' => (isset($color) ? $color : '#4f46e5'),
-                    'className' => (isset($className) ? $className : 'fc-event-quick'),
-                    'extendedProps' => [
-                        'status' => $reserva->status,
-                        'price' => (float)$reserva->price,
-                        'total_paid' => (float)($reserva->total_paid ?? $reserva->signal_value),
-                        'is_recurrent' => (bool)$reserva->is_recurrent,
-                        'arena_id' => $reserva->arena_id // Útil para debug
-                    ]
-                ];
-            });
-
-            return response()->json($events);
-        } catch (\Exception $e) {
-            Log::error("Erro CRÍTICO ao buscar reservas de cliente: " . $e->getMessage());
-            return response()->json(['error' => 'Erro interno ao carregar reservas.'], 500);
-        }
-    }
-
-    // =========================================================================
-    // ✅ MÉTODO 2: Horários Disponíveis p/ Calendário (API) - CORRIGIDO
-    // =========================================================================
-    public function getAvailableSlotsApi(Request $request)
-    {
-        try {
-            // 1. Tratamento robusto das datas de entrada
-            $startInput = $request->input('start');
-            $endInput = $request->input('end');
-
-            $startDate = $startInput ? Carbon::parse($startInput) : Carbon::today();
-            $endDate = $endInput ? Carbon::parse($endInput) : Carbon::today()->addWeeks(6);
-
-            // 2. Captura e limpeza do Filtro de Arena
-            // Usamos filled() para garantir que não seja uma string vazia ou espaço
-            $arenaId = $request->input('arena_id');
-
-            $query = Reserva::where('is_fixed', true)
-                ->where('status', Reserva::STATUS_FREE)
-                ->whereDate('date', '>=', $startDate->toDateString())
-                ->whereDate('date', '<=', $endDate->toDateString());
-
-            // 🎯 FILTRO DE ARENA: Só aplica se houver um valor real
             if ($request->filled('arena_id') && $arenaId !== 'null') {
                 $query->where('arena_id', $arenaId);
             }
 
-            $allFixedSlots = $query->get();
+            $reservas = $query->with('user')->get();
 
-            $events = [];
-            foreach ($allFixedSlots as $slot) {
-                // Tratamento de Horários (Garante formato HH:mm:ss)
-                $slotStartTime = $slot->start_time instanceof Carbon ? $slot->start_time->format('H:i:s') : $slot->start_time;
-                $slotEndTime = $slot->end_time instanceof Carbon ? $slot->end_time->format('H:i:s') : $slot->end_time;
+            return response()->json($reservas->map(function ($reserva) {
+                // Tratamento seguro de horas
+                $sStart = $reserva->start_time instanceof Carbon ? $reserva->start_time->format('H:i:s') : Carbon::parse($reserva->start_time)->format('H:i:s');
+                $sEnd = $reserva->end_time instanceof Carbon ? $reserva->end_time->format('H:i:s') : Carbon::parse($reserva->end_time)->format('H:i:s');
+                $dateStr = $reserva->date instanceof Carbon ? $reserva->date->format('Y-m-d') : Carbon::parse($reserva->date)->format('Y-m-d');
 
-                if (empty($slotStartTime) || empty($slotEndTime)) continue;
-
-                // Tratamento da Data (Garante formato YYYY-MM-DD)
-                $slotDateString = $slot->date instanceof Carbon ? $slot->date->toDateString() : Carbon::parse($slot->date)->toDateString();
-
-                // 3. Verificação de Ocupação (Evitar sobreposição com reservas confirmadas)
-                $isOccupiedByConfirmed = Reserva::where('is_fixed', false)
-                    ->where('arena_id', $slot->arena_id)
-                    ->whereDate('date', $slotDateString)
-                    ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA, Reserva::STATUS_LANCADA_CAIXA])
-                    ->where(function ($q) use ($slotStartTime, $slotEndTime) {
-                        $q->where('start_time', '<', $slotEndTime)
-                            ->where('end_time', '>', $slotStartTime);
-                    })
-                    ->exists();
-
-                if (!$isOccupiedByConfirmed) {
-                    $events[] = [
-                        'id' => $slot->id,
-                        'title' => 'Disponível',
-                        'start' => $slotDateString . 'T' . $slotStartTime,
-                        'end' => $slotDateString . 'T' . $slotEndTime,
-                        'color' => '#10b981',
-                        'className' => 'fc-event-available',
-                        'extendedProps' => [
-                            'status' => Reserva::STATUS_FREE,
-                            'price' => (float)$slot->price,
-                            'is_fixed' => true,
-                            'arena_id' => $slot->arena_id
-                        ]
+                if ($reserva->is_fixed) {
+                    return [
+                        'id' => $reserva->id,
+                        'title' => 'Livre (Fixo)',
+                        'start' => $dateStr . 'T' . $sStart,
+                        'end' => $dateStr . 'T' . $sEnd,
+                        'color' => '#d1d5db',
+                        'display' => 'background',
+                        'extendedProps' => ['is_fixed' => true]
                     ];
                 }
-            }
 
-            return response()->json($events);
+                $color = '#4f46e5';
+                if ($reserva->status === Reserva::STATUS_PENDENTE) $color = '#f59e0b';
+                if ($reserva->status === Reserva::STATUS_CONCLUIDA) $color = '#10b981';
+
+                return [
+                    'id' => $reserva->id,
+                    'title' => ($reserva->user->name ?? $reserva->client_name ?? 'Cliente'),
+                    'start' => $dateStr . 'T' . $sStart,
+                    'end' => $dateStr . 'T' . $sEnd,
+                    'color' => $color,
+                    'extendedProps' => ['is_fixed' => false, 'status' => $reserva->status]
+                ];
+            }));
         } catch (\Exception $e) {
-            Log::error("Erro CRÍTICO no getAvailableSlotsApi: " . $e->getMessage());
-            return response()->json(['error' => 'Erro interno ao carregar horários.'], 500);
+            Log::error("Erro Dashboard: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
     // =========================================================================
-    // ✅ MÉTODO 3: Horários Disponíveis p/ FORMULÁRIO PÚBLICO (HTML) - CORRIGIDO
+    // ✅ MÉTODO 2: AGENDAMENTO PÚBLICO (Versão Ultra-Segura)
+    // =========================================================================
+    public function getAvailableSlotsApi(Request $request)
+    {
+        try {
+            $arenaId = $request->query('arena_id');
+            $start = $request->query('start'); // Ex: 2026-01-07T00:00:00-03:00
+            $end = $request->query('end');
+
+            if (!$arenaId || $arenaId == 'null') {
+                return response()->json([]);
+            }
+
+            // 🎯 TRATAMENTO DE DATA: Extrai apenas YYYY-MM-DD para o SQL
+            $dateStart = Carbon::parse($start)->toDateString();
+            $dateEnd = Carbon::parse($end)->toDateString();
+            $now = Carbon::now();
+
+            // Instancia o controller financeiro para checar o status do caixa
+            $financeiroController = app(\App\Http\Controllers\FinanceiroController::class);
+
+            // 1. Pegamos os slots de funcionamento (is_fixed = true)
+            $slots = Reserva::where('arena_id', $arenaId)
+                ->where('is_fixed', true)
+                ->whereBetween('date', [$dateStart, $dateEnd])
+                ->get();
+
+            // 2. Pegamos as reservas de clientes (ocupações)
+            $occupied = Reserva::where('arena_id', $arenaId)
+                ->where('is_fixed', false)
+                ->whereBetween('date', [$dateStart, $dateEnd])
+                ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, Reserva::STATUS_CONCLUIDA])
+                ->get();
+
+            // 3. Filtragem de Conflitos, Horários Passados e CAIXA FECHADO
+            $available = $slots->filter(function ($slot) use ($occupied, $now, $financeiroController) {
+                $slotDate = $slot->date->format('Y-m-d');
+                $sStart = Carbon::parse($slot->start_time)->format('H:i:s');
+                $sEnd = Carbon::parse($slot->end_time)->format('H:i:s');
+
+                // 🛑 REGRA ZERO: Se o caixa do dia estiver fechado, o horário fica indisponível
+                if ($financeiroController->isCashClosed($slotDate)) {
+                    return false;
+                }
+
+                // Regra A: Se o horário de fim já passou (considerando data e hora), esconde
+                if (Carbon::parse($slotDate . ' ' . $sEnd)->isPast()) {
+                    return false;
+                }
+
+                // Regra B: Verifica se há reserva de cliente CONFIRMADA no mesmo horário
+                // (Mantemos o leilão: se houver apenas PENDENTES, o slot verde continua aparecendo)
+                $hasConfirmedConflict = $occupied->where('date', $slot->date)->contains(function ($res) use ($sStart, $sEnd) {
+                    $resStart = Carbon::parse($res->start_time)->format('H:i:s');
+                    $resEnd = Carbon::parse($res->end_time)->format('H:i:s');
+
+                    // Conflito apenas com quem já foi Confirmado ou Concluído
+                    $isBlockingStatus = in_array($res->status, [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA]);
+
+                    return $isBlockingStatus && ($resStart < $sEnd && $resEnd > $sStart);
+                });
+
+                return !$hasConfirmedConflict;
+            });
+
+            // 🎯 O SEGREDO: values() transforma em array [] para o FullCalendar não "branquear"
+            return response()->json($available->map(function ($slot) {
+                return [
+                    'id' => $slot->id,
+                    'title' => 'Livre',
+                    'start' => $slot->date->format('Y-m-d') . 'T' . Carbon::parse($slot->start_time)->format('H:i:s'),
+                    'end' => $slot->date->format('Y-m-d') . 'T' . Carbon::parse($slot->end_time)->format('H:i:s'),
+                    'className' => 'fc-event-available',
+                    'extendedProps' => [
+                        'price' => (float)$slot->price,
+                        'is_fixed' => true
+                    ]
+                ];
+            })->values());
+        } catch (\Exception $e) {
+            Log::error("Erro API Agendamento: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    // =========================================================================
+    // ✅ MÉTODO 3: LISTA/SELECT (Mantido)
     // =========================================================================
     public function getAvailableTimes(Request $request)
     {
-        $request->validate(['date' => 'required|date_format:Y-m-d']);
-        $dateString = $request->input('date');
-        $selectedDate = Carbon::parse($dateString);
-        $isToday = $selectedDate->isToday();
+        $request->validate([
+            'date' => 'required|date',
+            'arena_id' => 'required|exists:arenas,id'
+        ]);
+
+        $date = Carbon::parse($request->date)->toDateString();
+        $arenaId = $request->arena_id;
         $now = Carbon::now();
 
-        $allFixedSlots = Reserva::where('is_fixed', true)
-            ->whereDate('date', $dateString)
-            ->where('status', Reserva::STATUS_FREE)
-            ->get();
+        $slots = Reserva::where('arena_id', $arenaId)->where('is_fixed', true)->whereDate('date', $date)->get();
+        $occupied = Reserva::where('arena_id', $arenaId)->where('is_fixed', false)->whereDate('date', $date)
+            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, Reserva::STATUS_CONCLUIDA])->get();
 
-        // 🎯 CORREÇÃO: Pegar apenas reservas CONFIRMADAS para liberar horários pendentes na lista
-        $occupiedReservas = Reserva::where('is_fixed', false)
-            ->whereDate('date', $dateString)
-            ->where('status', Reserva::STATUS_CONFIRMADA)
-            ->get();
+        $times = [];
+        foreach ($slots as $slot) {
+            $sStart = Carbon::parse($slot->start_time)->format('H:i');
+            $sEnd = Carbon::parse($slot->end_time)->format('H:i');
 
-        $availableTimes = [];
+            if (Carbon::parse($date . ' ' . $sEnd)->lt($now)) continue;
 
-        foreach ($allFixedSlots as $slot) {
-            $slotStart = $slot->start_time instanceof Carbon ? $slot->start_time->format('H:i') : substr($slot->start_time, 0, 5);
-            $slotEnd = $slot->end_time instanceof Carbon ? $slot->end_time->format('H:i') : substr($slot->end_time, 0, 5);
-
-            if (empty($slotStart) || empty($slotEnd)) continue;
-
-            $slotStartCarbon = Carbon::parse($slotStart);
-            $slotEndCarbon = Carbon::parse($slotEnd);
-            $slotEndDateTime = $selectedDate->copy()->setTime($slotEndCarbon->hour, $slotEndCarbon->minute);
-
-            if ($slotEndCarbon->lt($slotStartCarbon)) {
-                $slotEndDateTime->addDay();
-            }
-
-            if ($isToday && $slotEndDateTime->lt($now)) {
-                continue;
-            }
-
-            $isOccupied = $occupiedReservas->contains(function ($reservation) use ($slotStart, $slotEnd) {
-                $reservationStart = $reservation->start_time instanceof Carbon ? $reservation->start_time->format('H:i:s') : $reservation->start_time;
-                $reservationEnd = $reservation->end_time instanceof Carbon ? $reservation->end_time->format('H:i:s') : $reservation->end_time;
-                return $reservationStart < $slotEnd . ':00' && $reservationEnd > $slotStart . ':00';
+            $isOccupied = $occupied->contains(function ($res) use ($sStart, $sEnd) {
+                $resStart = Carbon::parse($res->start_time)->format('H:i');
+                $resEnd = Carbon::parse($res->end_time)->format('H:i');
+                return $resStart < $sEnd && $resEnd > $sStart;
             });
 
             if (!$isOccupied) {
-                $availableTimes[] = [
+                $times[] = [
                     'id' => $slot->id,
-                    'time_slot' => $slotStart . ' - ' . $slotEnd,
+                    'time_slot' => $sStart . ' - ' . $sEnd,
                     'price' => number_format($slot->price, 2, ',', '.'),
                     'raw_price' => $slot->price,
-                    'start_time' => $slotStart,
-                    'end_time' => $slotEnd,
-                    'schedule_id' => $slot->id,
+                    'start_time' => $sStart,
+                    'end_time' => $sEnd,
+                    'arena_id' => $slot->arena_id,
                 ];
             }
         }
-
-        $finalAvailableTimes = collect($availableTimes)->sortBy('start_time')->values();
-        return response()->json($finalAvailableTimes);
+        return response()->json(collect($times)->sortBy('start_time')->values());
     }
 }
