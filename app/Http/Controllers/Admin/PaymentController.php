@@ -407,121 +407,71 @@ class PaymentController extends Controller
      */
 
     public function processPayment(Request $request, $reservaId)
-
     {
+        $reserva = Reserva::with('arena')->findOrFail($reservaId);
 
-        $reserva = Reserva::findOrFail($reservaId);
-
-
-
-        // 1. Trava de Segurança usando a lógica centralizada (mais seguro)
-
+        // 1. Trava de Segurança usando a lógica centralizada
         $financeiro = app(FinanceiroController::class);
-
         if ($financeiro->isCashClosed($reserva->date)) {
-
             return response()->json(['success' => false, 'message' => 'O caixa do dia ' . \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') . ' já está encerrado.'], 403);
         }
 
-
-
         $request->validate([
-
             'final_price' => 'required|numeric|min:0',
-
             'amount_paid' => 'required|numeric|min:0',
-
             'payment_method' => 'required|string',
-
             'apply_to_series' => 'nullable|boolean',
-
         ]);
 
-
-
         try {
-
             $paymentStatus = 'pending';
 
-
-
             DB::transaction(function () use ($request, $reserva, &$paymentStatus) {
-
                 $finalPrice = (float) $request->final_price;
-
                 $amountPaid = (float) $request->amount_paid;
-
                 $newTotalPaid = (float) $reserva->total_paid + $amountPaid;
 
-
-
                 // Determina Status
-
                 if (round($newTotalPaid, 2) >= round($finalPrice, 2)) {
-
                     $paymentStatus = 'paid';
-
                     $reserva->status = 'completed';
                 } elseif ($newTotalPaid > 0) {
-
                     $paymentStatus = 'partial';
                 }
 
-
-
                 // Atualiza a Reserva
-
                 $reserva->total_paid = $newTotalPaid;
-
                 $reserva->final_price = $finalPrice;
-
                 $reserva->payment_status = $paymentStatus;
-
-                $reserva->manager_id = Auth::id(); // Registra quem recebeu
-
+                $reserva->manager_id = Auth::id();
                 $reserva->save();
 
-
-
-                // 2. Registro Financeiro (Corrigido com arena_id)
-
+                // 2. Registro Financeiro com Horário e Arena
                 if ($amountPaid > 0) {
+                    // Formata a info para a descrição
+                    $infoReserva = " | {$reserva->arena->name} [{$reserva->start_time}]";
 
                     FinancialTransaction::create([
-
                         'reserva_id'     => $reserva->id,
-
-                        'arena_id'       => $reserva->arena_id, // ✅ ESSENCIAL: Evita erro 1364
-
+                        'arena_id'       => $reserva->arena_id,
                         'user_id'        => $reserva->user_id,
-
                         'manager_id'     => Auth::id(),
-
                         'amount'         => $amountPaid,
-
                         'type'           => $paymentStatus === 'paid' ? 'full_payment' : 'partial_payment',
-
                         'payment_method' => $request->payment_method,
-
-                        'description'    => 'Pagamento reserva #' . $reserva->id,
-
+                        // 🎯 DESCRIÇÃO ATUALIZADA COM HORÁRIO E ARENA
+                        'description'    => 'Pagamento reserva #' . $reserva->id . $infoReserva,
                         'paid_at'        => now(),
-
                     ]);
                 }
             });
 
-
-
             return response()->json(['success' => true, 'message' => 'Pagamento processado com sucesso!', 'status' => $paymentStatus]);
         } catch (\Exception $e) {
-
             Log::error("Erro no processamento de pagamento ID {$reservaId}: " . $e->getMessage());
-
             return response()->json(['success' => false, 'message' => 'Erro interno: ' . $e->getMessage()], 500);
         }
     }
-
 
 
     /**
@@ -532,9 +482,10 @@ class PaymentController extends Controller
 
     public function registerNoShow(Request $request, $reservaId)
     {
-        $reserva = Reserva::findOrFail($reservaId);
+        // 1. Carrega a reserva com a arena para pegar o nome da quadra antes de deletar
+        $reserva = Reserva::with('arena')->findOrFail($reservaId);
 
-        // 1. Trava de Segurança: Caixa Fechado
+        // 2. Trava de Segurança: Caixa Fechado
         $financeiro = app(FinanceiroController::class);
         if ($financeiro->isCashClosed($reserva->date)) {
             return response()->json(['success' => false, 'message' => 'Erro: O caixa deste dia está fechado.'], 403);
@@ -543,17 +494,17 @@ class PaymentController extends Controller
         try {
             DB::beginTransaction();
 
-            // Captura de valores vindos do Modal JS
             $totalOriginalPago = (float) $reserva->total_paid;
             $shouldRefund = $request->boolean('should_refund');
-
-            // Sincroniza com o nome enviado pelo JS: 'refund_amount'
             $valorParaEstornar = (float) $request->input('refund_amount', 0);
             $motivoFalta = $request->input('no_show_reason', 'Falta (No-show) não justificada');
 
+            // 🎯 PREPARA A STRING DE INFORMAÇÃO PARA O CAIXA
+            $infoReserva = " | {$reserva->arena->name} [{$reserva->start_time}]";
+
             if ($totalOriginalPago > 0) {
                 if ($shouldRefund && $valorParaEstornar > 0) {
-                    // 💰 2. REGISTRA A SAÍDA (ESTORNO PARCIAL OU TOTAL)
+                    // 💰 REGISTRA A SAÍDA (ESTORNO)
                     FinancialTransaction::create([
                         'reserva_id'     => $reserva->id,
                         'arena_id'       => $reserva->arena_id,
@@ -562,26 +513,27 @@ class PaymentController extends Controller
                         'amount'         => -$valorParaEstornar,
                         'type'           => 'refund',
                         'payment_method' => 'cash_out',
-                        'description'    => "Estorno Falta #{$reserva->id} | Motivo: {$motivoFalta} | Cliente: {$reserva->client_name}",
+                        'description'    => "Estorno Falta #{$reserva->id} | Motivo: {$motivoFalta} | Cliente: {$reserva->client_name}" . $infoReserva,
                         'paid_at'        => now(),
                     ]);
 
-                    // Ajusta a descrição do sinal original para auditoria
+                    // Ajusta a descrição das transações anteriores (Sinal/Pagamentos) para incluir o horário
                     FinancialTransaction::where('reserva_id', $reserva->id)
-                        ->where('type', FinancialTransaction::TYPE_SIGNAL)
-                        ->update(['description' => "Sinal convertido em No-Show Parcial #{$reserva->id}"]);
+                        ->update([
+                            'description' => DB::raw("CONCAT(description, '{$infoReserva}')")
+                        ]);
                 } else {
-                    // 🔒 2. RETENÇÃO INTEGRAL (Lucro para a Arena)
+                    // 🔒 RETENÇÃO INTEGRAL (Lucro para a Arena)
                     FinancialTransaction::where('reserva_id', $reserva->id)
                         ->update([
                             'type' => FinancialTransaction::TYPE_RETEN_NOSHOW_COMP,
-                            'description' => "Retenção Integral por Falta #{$reserva->id} | Cliente: {$reserva->client_name}",
+                            'description' => "Retenção Integral por Falta #{$reserva->id} | Cliente: {$reserva->client_name}" . $infoReserva,
                             'payment_method' => 'retained_funds'
                         ]);
                 }
             }
 
-            // 3. Lógica de Bloqueio de Usuário (Incremento Seguro)
+            // 3. Lógica de Bloqueio de Usuário
             if ($reserva->user) {
                 $user = $reserva->user;
                 $user->increment('no_show_count');
@@ -590,11 +542,11 @@ class PaymentController extends Controller
                 }
             }
 
-            // 4. LIBERAÇÃO DO SLOT (O que torna o horário verde no calendário)
+            // 4. LIBERAÇÃO DO SLOT
             $reservaController = app(\App\Http\Controllers\ReservaController::class);
             $reservaController->recreateFixedSlot($reserva);
 
-            // 5. DELEÇÃO (Mantendo seu fluxo funcional)
+            // 5. DELEÇÃO
             $reserva->delete();
 
             DB::commit();

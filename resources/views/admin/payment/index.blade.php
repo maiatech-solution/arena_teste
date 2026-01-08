@@ -536,12 +536,12 @@
                         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-700">
                                 <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/12">Hora</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/12">ID</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-2/12">Pagador/Gestor</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-2/12">Tipo | Forma</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-4/12">Descrição</th>
-                                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-1/12">Valor (R$)</th>
+                                    <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-300 uppercase w-1/12">Hora</th>
+                                    <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-300 uppercase w-1/12">ID</th>
+                                    <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-300 uppercase w-2/12">Pagador/Gestor</th>
+                                    <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-300 uppercase w-2/12">Tipo | Forma</th>
+                                    <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-300 uppercase w-4/12">Descrição</th>
+                                    <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-300 uppercase w-1/12">Valor (R$)</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -549,15 +549,44 @@
                                 @if ($reservaId)
                                 @php
                                 $transactionExample = $transactions->first();
-                                $clientName = $transactionExample->reserva->client_name ?? 'N/A';
-                                $arenaTag = $transactionExample->reserva->arena->name ?? '';
+                                $reserva = $transactionExample->reserva;
+                                $clientName = $reserva->client_name ?? ($transactionExample->payer->name ?? 'N/D');
+                                $arenaTag = $reserva->arena->name ?? '';
+
+                                // 🎯 LÓGICA DE RECUPERAÇÃO DE HORÁRIO (REGEX)
+                                // Tenta encontrar o horário [HH:mm] salvo na descrição via Controller
+                                preg_match('/\[(\d{2}:\d{2})\]/', $transactionExample->description, $matches);
+                                $horarioBackup = $matches[1] ?? null;
+
+                                // Tenta encontrar a Arena | Nome | salvo na descrição via Controller
+                                if(!$arenaTag) {
+                                preg_match('/\|\s([^|\[]+)\s\[/', $transactionExample->description, $arenaMatches);
+                                $arenaTag = trim($arenaMatches[1] ?? '');
+                                }
                                 @endphp
+
+                                {{-- LINHA DE CABEÇALHO DA RESERVA (CINZA) --}}
                                 <tr class="bg-gray-100 dark:bg-gray-700/60 border-t-2 border-indigo-500">
                                     <td colspan="5" class="px-4 py-2.5 text-sm font-bold text-gray-800 dark:text-gray-100">
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-600 text-white mr-3">RESERVA</span>
+
                                         ID: {{ $reservaId }} - {{ $clientName }}
+
+                                        {{-- EXIBIÇÃO DO HORÁRIO AGENDADO --}}
+                                        @if($reserva)
+                                        <span class="ml-3 bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-[11px] font-black border border-indigo-200">
+                                            ⏰ {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }} às {{ \Carbon\Carbon::parse($reserva->end_time)->format('H:i') }}
+                                        </span>
+                                        @elseif($horarioBackup)
+                                        <span class="ml-3 bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-[11px] font-black border border-orange-200" title="Horário extraído do histórico">
+                                            ⏰ {{ $horarioBackup }} (Original)
+                                        </span>
+                                        @else
+                                        <span class="ml-3 text-[10px] text-gray-400 italic font-normal">(Horário N/D)</span>
+                                        @endif
+
                                         @if($arenaTag)
-                                        <span class="ml-2 text-[9px] text-indigo-400 uppercase font-black">[{{ $arenaTag }}]</span>
+                                        <span class="ml-2 text-[9px] text-indigo-400 uppercase font-black tracking-widest">[{{ $arenaTag }}]</span>
                                         @endif
                                     </td>
                                     <td class="px-4 py-2.5 text-right text-sm font-black text-gray-900 dark:text-white bg-indigo-50/50 dark:bg-indigo-900/20 border-l border-indigo-100 dark:border-indigo-800/50">
@@ -566,6 +595,7 @@
                                 </tr>
                                 @endif
 
+                                {{-- TRANSAÇÕES INDIVIDUAIS (BRANCAS/VERMELHAS) --}}
                                 @foreach ($transactions as $transaction)
                                 @php
                                 $amount = (float) $transaction->amount;
@@ -573,7 +603,7 @@
                                     $rowClass=$isRefund ? 'bg-red-50/50 dark:bg-red-900/10 border-l-4 border-red-500' : 'hover:bg-gray-50 dark:hover:bg-gray-700 border-l-4 border-transparent' ;
                                     $amountClass=$amount>= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-black';
                                     @endphp
-                                    <tr class="{{ $rowClass }} transition">
+                                    <tr class="{{ $rowClass }} transition duration-150">
                                         <td class="px-4 py-3 text-sm text-gray-500 font-mono italic">
                                             {{ \Carbon\Carbon::parse($transaction->paid_at)->format('H:i:s') }}
                                         </td>
@@ -582,7 +612,7 @@
                                         </td>
                                         <td class="px-4 py-3 text-sm">
                                             <div class="font-semibold text-gray-700 dark:text-gray-300">{{ $transaction->payer->name ?? 'Caixa Geral' }}</div>
-                                            <div class="text-[10px] text-gray-400 italic">{{ $transaction->manager->name ?? 'Sistema' }}</div>
+                                            <div class="text-[10px] text-gray-400 italic">Gestor: {{ $transaction->manager->name ?? 'Sistema' }}</div>
                                         </td>
                                         <td class="px-4 py-3 text-sm">
                                             <div class="text-[10px] font-extrabold uppercase text-gray-500">{{ $transaction->type }}</div>
@@ -591,7 +621,7 @@
                                         <td class="px-4 py-3 text-sm leading-tight text-gray-600 dark:text-gray-400">
                                             <div class="flex items-center">
                                                 @if ($isRefund)
-                                                <svg class="w-4 h-4 mr-1 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                                <svg class="w-3 h-3 mr-1 text-red-500" fill="currentColor" viewBox="0 0 20 20">
                                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
                                                 </svg>
                                                 @endif
@@ -599,19 +629,22 @@
                                             </div>
                                         </td>
                                         <td class="px-4 py-3 text-right text-sm font-mono {{ $amountClass }}">
-                                            R$ {{ number_format($amount, 2, ',', '.') }}
+                                            {{ $amount < 0 ? '-' : '' }} R$ {{ number_format(abs($amount), 2, ',', '.') }}
                                         </td>
                                     </tr>
                                     @endforeach
+
                                     @empty
                                     <tr>
-                                        <td colspan="6" class="px-4 py-8 text-center text-gray-500 italic">Nenhuma transação encontrada para este filtro.</td>
+                                        <td colspan="6" class="px-4 py-12 text-center text-gray-500 italic">
+                                            Nenhuma transação financeira registrada para este dia.
+                                        </td>
                                     </tr>
                                     @endforelse
 
-                                    <tr class="bg-gray-100 dark:bg-gray-700 font-bold">
-                                        <td colspan="5" class="px-4 py-4 text-right uppercase text-xs">Total Líquido {{ request('arena_id') ? 'da Arena' : 'do Dia' }}:</td>
-                                        {{-- ADICIONADO O ID ABAIXO --}}
+                                    {{-- LINHA DE TOTALIZADOR FINAL --}}
+                                    <tr class="bg-gray-100 dark:bg-gray-700 font-bold border-t-2 border-gray-300">
+                                        <td colspan="5" class="px-4 py-4 text-right uppercase text-xs tracking-widest text-gray-600 dark:text-gray-300">Total Líquido do Período:</td>
                                         <td id="valor-liquido-total-real" class="px-4 py-4 text-right text-lg {{ $totalRecebidoDiaLiquido >= 0 ? 'text-green-700' : 'text-red-700' }}">
                                             R$ {{ number_format($totalRecebidoDiaLiquido, 2, ',', '.') }}
                                         </td>
