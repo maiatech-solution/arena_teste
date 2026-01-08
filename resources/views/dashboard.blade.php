@@ -433,7 +433,7 @@
             <p id="modal-message-cancel" class="text-gray-700 mb-4 font-medium"></p>
 
             {{-- NOVO: Área de Decisão de Estorno --}}
-            <div id="refund-decision-area" class="mb-6 p-4 border border-red-300 bg-red-50 rounded-lg hidden">
+            <div id="refund-decision-area" class="mb-6 p-4 border border-red-300 bg-red-50 rounded-lg" style="display: none;">
                 <p class="font-bold text-red-700 mb-3 flex items-center">
                     <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -1258,20 +1258,32 @@
 
         // --- CANCELAMENTO LÓGICA (COM ESTORNO) ---
 
-        // ✅ NOVO: Adicionado isEventPaid
-        function openCancellationModal(reservaId, method, urlBase, message, buttonText, paidOrSignalValue = 0, isEventPaid =
-            false) {
+        /**
+         * Abre o modal de cancelamento com lógica de estorno/retenção.
+         * @param {int} reservaId
+         * @param {string} method - PATCH ou DELETE
+         * @param {string} urlBase - Rota da API
+         * @param {string} message - Mensagem de confirmação
+         * @param {string} buttonText - Texto do botão principal
+         * @param {mixed} paidOrSignalValue - Valor pago para decisão financeira
+         * @param {boolean} isEventPaid - Indica se a reserva já estava concluída
+         */
+        function openCancellationModal(reservaId, method, urlBase, message, buttonText, paidOrSignalValue = 0, isEventPaid = false) {
+
+            // 1. Limpeza inicial
             closeEventModal();
             currentReservaId = reservaId;
             currentMethod = method;
             currentUrlBase = urlBase;
-            document.getElementById('cancellation-reason-input').value = '';
+
+            const reasonInput = document.getElementById('cancellation-reason-input');
+            if (reasonInput) reasonInput.value = '';
 
             const refundArea = document.getElementById('refund-decision-area');
             const signalDisplay = document.getElementById('refund-signal-value');
-            const titleDisplay = document.getElementById('refund-title-text'); // NOVO
+            const titleDisplay = document.getElementById('refund-title-text');
 
-            // ✅ NOVO: Adiciona o input hidden para enviar o valor limpo
+            // 2. Garante a existência do input hidden para o valor limpo (para o backend)
             let paidAmountRefInput = document.getElementById('cancellation-paid-amount-ref');
             if (!paidAmountRefInput) {
                 paidAmountRefInput = document.createElement('input');
@@ -1281,45 +1293,72 @@
                 document.getElementById('cancellation-modal-content').appendChild(paidAmountRefInput);
             }
 
-
+            // 3. Normalização do Valor (Trata string "50,00" ou número 50.00)
             const signalValueCleaned = cleanAndConvertForApi(paidOrSignalValue);
             const isRefundable = signalValueCleaned > 0;
             const signalFormatted = signalValueCleaned.toFixed(2).replace('.', ',');
 
-            document.getElementById('modal-message-cancel').textContent = message;
+            // Define a mensagem no modal
+            const messageEl = document.getElementById('modal-message-cancel');
+            if (messageEl) messageEl.textContent = message;
 
-            // ✅ CRÍTICO: Define o valor LIMPO no input hidden
+            // Seta o valor numérico limpo para o envio via formulário
             paidAmountRefInput.value = signalValueCleaned;
 
-
+            // 4. Lógica de exibição da Área Financeira (Blindada contra CSS)
             if (isRefundable) {
+                // Remove 'hidden' e força o display via JS para garantir que apareça
                 refundArea.classList.remove('hidden');
+                refundArea.style.setProperty('display', 'block', 'important');
 
-                // NOVO: Define o título dinâmico com base se a reserva estava PAGA
+                // Define título baseado no status de pagamento
                 titleDisplay.textContent = isEventPaid ? 'VALOR PAGO TOTAL/PARCIAL:' : 'HOUVE SINAL PAGO:';
-
                 signalDisplay.textContent = signalFormatted;
 
-                document.getElementById('refund-choice-no').checked = true;
+                // Por padrão, sugere MANTER o valor (retenção)
+                const keepRadio = document.getElementById('refund-choice-no');
+                if (keepRadio) keepRadio.checked = true;
             } else {
+                // Se o valor for 0, esconde a área financeira totalmente
                 refundArea.classList.add('hidden');
+                refundArea.style.setProperty('display', 'none', 'important');
                 signalDisplay.textContent = '0,00';
-                titleDisplay.textContent = 'HOUVE SINAL PAGO:'; // Reseta
             }
 
-            document.getElementById('cancellation-modal').classList.remove('hidden');
+            // 5. Exibição do Modal com animação
+            const modalContainer = document.getElementById('cancellation-modal');
+            const modalContent = document.getElementById('cancellation-modal-content');
+
+            modalContainer.classList.remove('hidden');
+            modalContainer.style.setProperty('display', 'flex', 'important');
 
             setTimeout(() => {
-                document.getElementById('cancellation-modal-content').classList.remove('opacity-0', 'scale-95');
+                if (modalContent) {
+                    modalContent.classList.remove('opacity-0', 'scale-95');
+                    modalContent.classList.add('opacity-100', 'scale-100');
+                }
             }, 10);
 
-            document.getElementById('confirm-cancellation-btn').textContent = buttonText;
+            const btnConfirm = document.getElementById('confirm-cancellation-btn');
+            if (btnConfirm) btnConfirm.textContent = buttonText;
         }
 
         function closeCancellationModal() {
-            document.getElementById('cancellation-modal-content').classList.add('opacity-0', 'scale-95');
+            // 1. Inicia a animação de saída do modal de confirmação
+            const content = document.getElementById('cancellation-modal-content');
+            if (content) content.classList.add('opacity-0', 'scale-95');
+
+            // 🎯 O SEGREDO AQUI: 
+            // Fecha também o modal de detalhes (o que fica por baixo)
+            closeEventModal();
+
+            // 2. Esconde o container de cancelamento após a animação
             setTimeout(() => {
-                document.getElementById('cancellation-modal').classList.add('hidden');
+                const modal = document.getElementById('cancellation-modal');
+                if (modal) {
+                    modal.classList.add('hidden');
+                    modal.style.setProperty('display', 'none', 'important');
+                }
             }, 300);
         }
 
@@ -1686,12 +1725,11 @@
             const event = info.event;
             const props = event.extendedProps;
 
-            // 📅 0. Identifica a data do clique (IMPORTANTE para o bug das datas)
+            // 📅 0. Identifica a data do clique
             const eventDate = moment(event.start).format('YYYY-MM-DD');
             const isToday = eventDate === moment().format('YYYY-MM-DD');
 
             // 🛑 1. TRAVA DE SEGURANÇA LOCAL (Cache por Data)
-            // Se o cache já marcou esta data específica como fechada, bloqueia imediatamente sem fetch.
             if (window.closedDatesCache && window.closedDatesCache[eventDate] === true) {
                 const msg = isToday ?
                     "Ação bloqueada: O caixa de HOJE está fechado." :
@@ -1700,48 +1738,35 @@
                 return;
             }
 
-            // 🎯 2. VERIFICAÇÃO EM TEMPO REAL (Sincronização com Servidor por Data)
+            // 🎯 2. VERIFICAÇÃO EM TEMPO REAL (Sincronização com Servidor)
             try {
-                // Passamos a data na rota para o servidor validar aquele dia específico
                 const response = await fetch(`{{ route("admin.payment.caixa.status") }}?date=${eventDate}`);
                 const statusCaixa = await response.json();
 
                 if (!statusCaixa.isOpen) {
-                    // Atualiza o cache de datas para que o eventDidMount pinte de cinza
                     if (!window.closedDatesCache) window.closedDatesCache = {};
                     window.closedDatesCache[eventDate] = true;
-
-                    showDashboardMessage(`Ação Bloqueada: O caixa do dia ${moment(eventDate).format('DD/MM')} está fechado. Abra-o para prosseguir.`, 'error');
-
-                    // Forçamos o redesenho para aplicar o visual de bloqueio nesta data
-                    if (window.calendar) {
-                        window.calendar.render();
-                    }
-                    return; // 🛑 Para a execução: Não abre nenhum modal
+                    showDashboardMessage(`Ação Bloqueada: O caixa do dia ${moment(eventDate).format('DD/MM')} está fechado.`, 'error');
+                    if (window.calendar) window.calendar.render();
+                    return;
                 } else {
-                    // Se cair aqui, garantimos que no cache esta data está aberta
                     if (!window.closedDatesCache) window.closedDatesCache = {};
                     window.closedDatesCache[eventDate] = false;
                 }
             } catch (error) {
-                console.error("Erro ao verificar status do caixa por data:", error);
-                // Em caso de erro crítico de rede, permitimos prosseguir para não travar o sistema totalmente
+                console.error("Erro ao verificar status do caixa:", error);
             }
 
-            // --- DAQUI PARA BAIXO O CÓDIGO SÓ RODA SE O CAIXA DA DATA ESTIVER ABERTO ---
-
-            // 3. Normalização de Status e Identificação do Tipo de Slot
+            // 3. Identificação do Tipo de Slot
             const status = (props.status || '').toLowerCase();
             const isAvailable = status === 'free' ||
                 event.classNames.includes('fc-event-available') ||
                 info.el.classList.contains('fc-event-available');
 
-            console.log("Evento clicado:", event.title, "| Status:", status, "| Data:", eventDate);
-
             // A. SLOT LIVRE (VERDE) -> ABRE AGENDAMENTO RÁPIDO
             if (isAvailable) {
                 const modal = document.getElementById('quick-booking-modal');
-                if (!modal) return console.error("Erro: Modal 'quick-booking-modal' não encontrado.");
+                if (!modal) return;
 
                 const arenaFilter = document.getElementById('filter_arena');
                 const selectedArenaId = props.arena_id || (arenaFilter ? arenaFilter.value : '');
@@ -1778,9 +1803,7 @@
                 setVal('client_name', '');
                 setVal('client_contact', '');
                 setVal('signal_value_quick', '0,00');
-
-                const repDisplay = document.getElementById('client-reputation-display');
-                if (repDisplay) repDisplay.innerHTML = '';
+                document.getElementById('client-reputation-display').innerHTML = '';
 
                 modal.classList.remove('hidden');
                 modal.style.setProperty('display', 'flex', 'important');
@@ -1789,21 +1812,24 @@
 
             // B. PENDENTE (LARANJA)
             if (status === 'pending') {
-                if (typeof openPendingActionModal === "function") {
-                    openPendingActionModal(event);
-                }
+                if (typeof openPendingActionModal === "function") openPendingActionModal(event);
                 return;
             }
 
             // C. RESERVA EXISTENTE -> ABRE DETALHES
             const reservaId = event.id;
-            // Regex para remover prefixos de status do título
             const prefixRegex = /^\s*(?:\(?(?:PAGO|FALTA|ATRASADO|CANCELADO|REJEITADA|PENDENTE|A\sVENCER\/FALTA|RECORR(?:E)?|SINAL|RESOLVIDO)\)?[\.:\s]*\s*)+/i;
             const clientNameRaw = event.title.replace(prefixRegex, '').split(' - ')[0].trim();
 
-            const isRecurrent = props.is_recurrent;
-            const paidAmount = props.total_paid || props.retained_amount || 0;
-            const totalPrice = props.final_price || props.price || 0;
+            // ✅ CORREÇÃO DOS VALORES: Garantindo que sejam números para o cálculo e strings formatadas para os botões
+            const isRecurrent = props.is_recurrent ? true : false;
+            const paidAmountValue = parseFloat(props.total_paid || props.retained_amount || 0);
+            const totalPriceValue = parseFloat(props.final_price || props.price || 0);
+
+            // String formatada para exibir no modal (R$ 50,00)
+            const paidAmountString = paidAmountValue.toFixed(2).replace('.', ',');
+            const totalPriceString = totalPriceValue.toFixed(2).replace('.', ',');
+
             const isFinalized = ['completed', 'launched', 'concluida', 'pago'].includes(status);
 
             const contentArea = document.getElementById('modal-content');
@@ -1817,7 +1843,7 @@
                 <p><strong>Contato:</strong> ${props.client_contact || 'N/A'}</p>
                 <p><strong>Horário:</strong> ${moment(event.start).format('HH:mm')} - ${moment(event.end).format('HH:mm')}</p>
                 <p><strong>Status:</strong> <span class="uppercase font-extrabold ${status === 'no_show' ? 'text-red-600' : 'text-indigo-600'}">${status}</span></p>
-                <p><strong>Total Pago:</strong> <span class="text-green-700 font-bold">R$ ${parseFloat(paidAmount).toFixed(2).replace('.', ',')}</span> / R$ ${parseFloat(totalPrice).toFixed(2).replace('.', ',')}</p>
+                <p><strong>Total Pago:</strong> <span class="text-green-700 font-bold">R$ ${paidAmountString}</span> / R$ ${totalPriceString}</p>
             </div>`;
 
                 actionsArea.innerHTML = `
@@ -1828,11 +1854,17 @@
                     </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
                 <div class="grid grid-cols-2 gap-2 mt-2">
-                    ${!isFinalized && status !== 'no_show' ? `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmount}', ${isFinalized}, '${totalPrice}')" class="px-2 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200">FALTA</button>` : ''}
-                    <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmount}', ${isFinalized})" class="px-2 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg border border-gray-300">CANCELAR DIA</button>
+                    ${!isFinalized && status !== 'no_show' ? 
+                        `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')" class="px-2 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200">FALTA</button>` 
+                        : ''}
+                    
+                    <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})" class="px-2 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg border border-gray-300">CANCELAR DIA</button>
                 </div>
 
-                ${isRecurrent ? `<button onclick="cancelarSerie('${reservaId}', '${paidAmount}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg">CANCELAR SÉRIE</button>` : ''}
+                ${isRecurrent ? 
+                    `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg">CANCELAR SÉRIE</button>` 
+                    : ''}
+                
                 <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">Fechar</button>
             </div>`;
 
@@ -1840,6 +1872,8 @@
                 eventModal.style.display = 'flex';
             }
         };
+
+
         // --- FUNÇÕES DE SUPORTE (FORA DA eventClick) ---
         window.closeQuickBookingModal = function() {
             const modal = document.getElementById('quick-booking-modal');

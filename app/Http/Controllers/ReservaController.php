@@ -991,12 +991,8 @@ class ReservaController extends Controller
     {
         $start = $request->get('start');
         $end = $request->get('end');
-
-        // 🎯 NOVO: Captura o ID da arena do filtro do dashboard. 
-        // Se não vier nada, podemos definir um padrão ou trazer de todas (depende da sua UI)
         $arenaId = $request->get('arena_id');
 
-        // Status visíveis (mantive sua lógica original)
         $visibleStatuses = [
             Reserva::STATUS_CONFIRMADA,
             Reserva::STATUS_PENDENTE,
@@ -1012,21 +1008,27 @@ class ReservaController extends Controller
         $query = Reserva::whereBetween('date', [$start, $end])
             ->whereIn('status', $visibleStatuses);
 
-        // 🏟️ FILTRO CRÍTICO: Se o gestor selecionou uma arena específica, filtra os eventos dela
         if ($arenaId) {
             $query->where('arena_id', $arenaId);
         }
 
         $allEvents = $query->get();
 
-        // Mapeamento para o FullCalendar
-        return response()->json($this->mapToFullCalendarEvents($allEvents));
+        // 🚀 FORÇAMOS A CONVERSÃO AQUI
+        $formattedEvents = $this->mapToFullCalendarEvents($allEvents);
+
+        return response()->json($formattedEvents);
     }
 
 
     /**
      * Helper para mapear objetos Reserva para o formato JSON do FullCalendar.
      * 🛑 CORRIGIDO: Removida a lógica de prefixo de título aqui para evitar duplicação no JS.
+     */
+    /**
+     * Helper para mapear objetos Reserva para o formato JSON do FullCalendar.
+     * 🛑 CORRIGIDO: Agora garante que os extendedProps contenham todos os dados financeiros
+     * para que o Dashboard habilite as opções de estorno e retenção.
      */
     protected function mapToFullCalendarEvents($reservations)
     {
@@ -1035,10 +1037,8 @@ class ReservaController extends Controller
         foreach ($reservations as $reserva) {
 
             // --- GARANTIA DE DATA CORRETA ---
-            // 'date' é Carbon, 'start_time' e 'end_time' são Carbon (graças aos casts)
             $dateString = $reserva->date->toDateString();
 
-            // ✅ CORREÇÃO APLICADA: Usar format() no objeto Carbon (start_time/end_time)
             $startTimeFormat = $reserva->start_time->format('H:i:s');
             $endTimeFormat = $reserva->end_time->format('H:i:s');
 
@@ -1047,87 +1047,68 @@ class ReservaController extends Controller
             // ---------------------------------
 
             $basePrice = number_format($reserva->price, 2, ',', '.');
-            // 🛑 TÍTULO BASE SEM PREFIXO: O JavaScript fará isso
             $title = $reserva->client_name . ' - R$ ' . $basePrice;
-            $color = '#4f46e5'; // Indigo (Padrão: Confirmada, Avulsa)
+            $color = '#4f46e5'; 
             $className = 'fc-event-quick';
             $isPaid = false;
             $isFinalized = false;
 
-            // Valor que o cliente pagou e foi retido (sinal ou pagamento total)
             $retainedAmount = (float)$reserva->total_paid;
-            // Lógica para determinar se o pagamento está completo
-            $isTotalPaid = (abs($retainedAmount - (float)$reserva->final_price) < 0.01 && $reserva->final_price > 0);
-
-
-            // -------------------------------------------------------------------------
-            // 2. Lógica de Status (Aplica a classe CSS e cor no PHP, o JS aplica o prefixo)
-            // -------------------------------------------------------------------------
+            $finalPriceFloat = (float)$reserva->final_price > 0 ? (float)$reserva->final_price : (float)$reserva->price;
+            $isTotalPaid = (abs($retainedAmount - $finalPriceFloat) < 0.01 && $finalPriceFloat > 0);
 
             if ($reserva->is_fixed) {
                 if ($reserva->status === Reserva::STATUS_FREE) {
-                    // ** SLOT FIXO LIVRE **
                     $title = 'LIVRE: R$ ' . $basePrice;
-                    $color = '#22c55e'; // Verde
+                    $color = '#22c55e';
                     $className = 'fc-event-available';
                     $isFinalized = false;
                 } elseif ($reserva->status === Reserva::STATUS_MAINTENANCE) {
-                    // ** SLOT FIXO MANUTENÇÃO **
                     $title = 'MANUTENÇÃO: Indisponível';
-                    $color = '#f59e0b'; // Amarelo/Laranja
+                    $color = '#f59e0b';
                     $className = 'fc-event-maintenance';
                     $isFinalized = true;
                 }
             } elseif ($reserva->status === Reserva::STATUS_NO_SHOW) {
-                // ** FALTA **
                 $isFinalized = true;
                 $isPaid = ($retainedAmount > 0.00);
-                $color = '#E53E3E'; // Vermelho
+                $color = '#E53E3E';
                 $className = 'fc-event-no-show';
             } elseif (in_array($reserva->status, [Reserva::STATUS_CONCLUIDA, Reserva::STATUS_LANCADA_CAIXA])) {
-                // ** PAGO/CONCLUÍDA **
                 $isFinalized = true;
                 $isPaid = true;
                 $color = '#10b981';
                 $className .= ' fc-event-concluida';
             } elseif (in_array($reserva->status, [Reserva::STATUS_CANCELADA, Reserva::STATUS_REJEITADA, Reserva::STATUS_EXPIRADA])) {
-                // ** CANCELADA / REJEITADA **
                 $isFinalized = true;
                 $isPaid = false;
-                $color = '#94a3b8'; // Cinza
+                $color = '#94a3b8';
                 $className = 'fc-event-cancelled';
             } elseif ($reserva->status === Reserva::STATUS_PENDENTE) {
-                // ** PENDENTE **
                 $color = '#ff9800';
                 $className = 'fc-event-pending';
             } elseif ($reserva->status === Reserva::STATUS_CONFIRMADA) {
-
-                // Trata o caso de Reservas CONFIRMADAS que estão PAGAS INTEGRALMENTE
                 if ($isTotalPaid) {
                     $isPaid = true;
-                    $isFinalized = true; // Força a finalização para o calendário
-                    $color = '#10b981'; // Cor de Pago
+                    $isFinalized = true;
+                    $color = '#10b981';
                     $className .= ' fc-event-concluida';
-                }
-                // Trata o caso de Reservas CONFIRMADAS com Sinal (Parcialmente pago)
-                elseif ($retainedAmount > 0) {
-                    $isPaid = true; // Tem pagamento (Sinal)
+                } elseif ($retainedAmount > 0) {
+                    $isPaid = true;
                 }
             }
 
-            // Lógica de Cor para Recorrente (se não for FINALIZADA)
             if (!$reserva->is_fixed && $reserva->is_recurrent) {
                 if (!$isFinalized && $reserva->status !== Reserva::STATUS_PENDENTE) {
-                    $color = '#C026D3'; // Fuchsia (Roxo)
+                    $color = '#C026D3';
                     $className = str_replace('fc-event-quick', '', $className);
                     $className .= ' fc-event-recurrent';
                 }
             }
 
-
             $events[] = [
                 'id' => $reserva->id,
-                'title' => $title, // Título base SEM prefixo (ex: "José - R$ 100,00")
+                'title' => $title,
                 'start' => $startDateTime->toDateTimeString(),
                 'end' => $endDateTime->toDateTimeString(),
                 'backgroundColor' => $color,
@@ -1142,7 +1123,7 @@ class ReservaController extends Controller
                     'retained_amount' => (float)$retainedAmount,
                     'payment_status' => $reserva->payment_status,
                     'is_recurrent' => (bool)$reserva->is_recurrent,
-                    'is_paid' => $isTotalPaid, // Agora reflete se o valor está 100% pago
+                    'is_paid' => $isTotalPaid,
                     'is_finalized' => $isFinalized,
                     'is_fixed' => (bool)$reserva->is_fixed,
                 ],
