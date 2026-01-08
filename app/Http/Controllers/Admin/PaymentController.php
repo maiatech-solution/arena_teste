@@ -77,13 +77,9 @@ class PaymentController extends Controller
                     $reserva->save();
 
                     Log::warning("CORREÇÃO: Reserva ID {$reserva->id} sincronizada.");
-
                 }
-
             });
-
         }
-
     }
 
 
@@ -127,7 +123,6 @@ class PaymentController extends Controller
         if ($selectedReservaId) {
 
             $query->where('id', $selectedReservaId);
-
         } else {
 
             $query->whereDate('date', $dateObject);
@@ -139,7 +134,6 @@ class PaymentController extends Controller
             if ($selectedArenaId) {
 
                 $query->where('arena_id', $selectedArenaId);
-
             }
 
 
@@ -153,11 +147,8 @@ class PaymentController extends Controller
                     $q->where('client_name', 'LIKE', $searchWildcard)
 
                         ->orWhere('client_contact', 'LIKE', $searchWildcard);
-
                 });
-
             }
-
         }
 
 
@@ -209,7 +200,6 @@ class PaymentController extends Controller
                 'total' => $transacao ? $transacao->total : 0
 
             ];
-
         });
 
 
@@ -223,7 +213,6 @@ class PaymentController extends Controller
         if ($selectedArenaId) {
 
             $transQuery->where('arena_id', $selectedArenaId);
-
         }
 
         $financialTransactions = $transQuery->with(['reserva', 'manager', 'payer', 'arena'])
@@ -299,7 +288,6 @@ class PaymentController extends Controller
             'highlightReservaId' => $selectedReservaId,
 
         ]);
-
     }
 
 
@@ -357,13 +345,10 @@ class PaymentController extends Controller
 
 
             return response()->json(['success' => true, 'message' => 'Caixa fechado com sucesso!']);
-
         } catch (\Exception $e) {
 
             return response()->json(['success' => false, 'message' => 'Erro ao fechar caixa.'], 500);
-
         }
-
     }
 
 
@@ -407,13 +392,10 @@ class PaymentController extends Controller
 
 
             return response()->json(['success' => true, 'message' => 'Caixa reaberto. Alterações permitidas.']);
-
         } catch (\Exception $e) {
 
             return response()->json(['success' => false, 'message' => 'Erro ao reabrir o caixa.'], 500);
-
         }
-
     }
 
 
@@ -439,7 +421,6 @@ class PaymentController extends Controller
         if ($financeiro->isCashClosed($reserva->date)) {
 
             return response()->json(['success' => false, 'message' => 'O caixa do dia ' . \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') . ' já está encerrado.'], 403);
-
         }
 
 
@@ -481,11 +462,9 @@ class PaymentController extends Controller
                     $paymentStatus = 'paid';
 
                     $reserva->status = 'completed';
-
                 } elseif ($newTotalPaid > 0) {
 
                     $paymentStatus = 'partial';
-
                 }
 
 
@@ -529,23 +508,18 @@ class PaymentController extends Controller
                         'paid_at'        => now(),
 
                     ]);
-
                 }
-
             });
 
 
 
             return response()->json(['success' => true, 'message' => 'Pagamento processado com sucesso!', 'status' => $paymentStatus]);
-
         } catch (\Exception $e) {
 
             Log::error("Erro no processamento de pagamento ID {$reservaId}: " . $e->getMessage());
 
             return response()->json(['success' => false, 'message' => 'Erro interno: ' . $e->getMessage()], 500);
-
         }
-
     }
 
 
@@ -557,169 +531,79 @@ class PaymentController extends Controller
      */
 
     public function registerNoShow(Request $request, $reservaId)
-
     {
-
         $reserva = Reserva::findOrFail($reservaId);
 
-
-
         // 1. Trava de Segurança: Caixa Fechado
-
         $financeiro = app(FinanceiroController::class);
-
         if ($financeiro->isCashClosed($reserva->date)) {
-
             return response()->json(['success' => false, 'message' => 'Erro: O caixa deste dia está fechado.'], 403);
-
         }
 
-
-
         try {
-
             DB::beginTransaction();
 
-
-
-            $paidAmount = (float) $request->input('paid_amount', $reserva->total_paid);
-
+            // Captura de valores vindos do Modal JS
+            $totalOriginalPago = (float) $reserva->total_paid;
             $shouldRefund = $request->boolean('should_refund');
 
+            // Sincroniza com o nome enviado pelo JS: 'refund_amount'
+            $valorParaEstornar = (float) $request->input('refund_amount', 0);
+            $motivoFalta = $request->input('no_show_reason', 'Falta (No-show) não justificada');
 
-
-            // 2. Registro Financeiro (Tratando Arena ID e evitando duplicidade)
-
-            if ($paidAmount > 0) {
-
-
-
-                // 🗑️ LIMPEZA: Remove transações anteriores desta reserva (como o sinal)
-
-                // para que a retenção ou estorno não duplique o valor no caixa.
-
-                FinancialTransaction::where('reserva_id', $reserva->id)
-
-                    ->whereIn('type', [
-
-                        FinancialTransaction::TYPE_SIGNAL,
-
-                        FinancialTransaction::TYPE_PAYMENT,
-
-                        FinancialTransaction::TYPE_RETEN_NOSHOW_COMP
-
-                    ])->delete();
-
-
-
-                if ($shouldRefund) {
-
-                    // Estorno: Registra a saída do dinheiro
-
+            if ($totalOriginalPago > 0) {
+                if ($shouldRefund && $valorParaEstornar > 0) {
+                    // 💰 2. REGISTRA A SAÍDA (ESTORNO PARCIAL OU TOTAL)
                     FinancialTransaction::create([
-
                         'reserva_id'     => $reserva->id,
-
                         'arena_id'       => $reserva->arena_id,
-
                         'user_id'        => $reserva->user_id,
-
                         'manager_id'     => Auth::id(),
-
-                        'amount'         => -$paidAmount,
-
+                        'amount'         => -$valorParaEstornar,
                         'type'           => 'refund',
-
                         'payment_method' => 'cash_out',
-
-                        'description'    => 'Estorno No-Show (Falta) #' . $reserva->id,
-
+                        'description'    => "Estorno Falta #{$reserva->id} | Motivo: {$motivoFalta} | Cliente: {$reserva->client_name}",
                         'paid_at'        => now(),
-
                     ]);
 
+                    // Ajusta a descrição do sinal original para auditoria
+                    FinancialTransaction::where('reserva_id', $reserva->id)
+                        ->where('type', FinancialTransaction::TYPE_SIGNAL)
+                        ->update(['description' => "Sinal convertido em No-Show Parcial #{$reserva->id}"]);
                 } else {
-
-                    // Retenção/Compensação: Substitui o sinal original
-
-                    FinancialTransaction::create([
-
-                        'reserva_id'     => $reserva->id,
-
-                        'arena_id'       => $reserva->arena_id,
-
-                        'user_id'        => $reserva->user_id,
-
-                        'manager_id'     => Auth::id(),
-
-                        'amount'         => $paidAmount,
-
-                        'type'           => FinancialTransaction::TYPE_RETEN_NOSHOW_COMP,
-
-                        'payment_method' => 'retained_funds',
-
-                        'description'    => 'Retenção por No-Show (Falta) #' . $reserva->id,
-
-                        'paid_at'        => now(),
-
-                    ]);
-
+                    // 🔒 2. RETENÇÃO INTEGRAL (Lucro para a Arena)
+                    FinancialTransaction::where('reserva_id', $reserva->id)
+                        ->update([
+                            'type' => FinancialTransaction::TYPE_RETEN_NOSHOW_COMP,
+                            'description' => "Retenção Integral por Falta #{$reserva->id} | Cliente: {$reserva->client_name}",
+                            'payment_method' => 'retained_funds'
+                        ]);
                 }
-
             }
 
-
-
-            // 3. Lógica de Bloqueio de Usuário
-
-            if ($request->boolean('block_user') && $reserva->user) {
-
+            // 3. Lógica de Bloqueio de Usuário (Incremento Seguro)
+            if ($reserva->user) {
                 $user = $reserva->user;
-
-                $user->no_show_count = ($user->no_show_count ?? 0) + 1;
-
+                $user->increment('no_show_count');
                 if ($user->no_show_count >= 3) {
-
-                    $user->is_blocked = true;
-
+                    $user->update(['is_blocked' => true]);
                 }
-
-                $user->save();
-
             }
 
-
-
-            // 4. LIBERAÇÃO DO SLOT
-
+            // 4. LIBERAÇÃO DO SLOT (O que torna o horário verde no calendário)
             $reservaController = app(\App\Http\Controllers\ReservaController::class);
-
             $reservaController->recreateFixedSlot($reserva);
 
-
-
-            // 5. Deleta a reserva original
-
+            // 5. DELEÇÃO (Mantendo seu fluxo funcional)
             $reserva->delete();
-
-
 
             DB::commit();
 
-
-
-            return response()->json(['success' => true, 'message' => 'Falta registrada e horário liberado!']);
-
+            return response()->json(['success' => true, 'message' => 'Falta registrada e financeiro ajustado!']);
         } catch (\Exception $e) {
-
             DB::rollBack();
-
-            Log::error("Erro no No-Show: " . $e->getMessage());
-
-            return response()->json(['success' => false, 'message' => 'Erro ao processar falta: ' . $e->getMessage()], 500);
-
+            Log::error("Erro no No-Show ID {$reservaId}: " . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Erro ao processar falta.'], 500);
         }
-
     }
-
 }

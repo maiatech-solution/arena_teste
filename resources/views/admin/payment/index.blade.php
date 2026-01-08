@@ -403,7 +403,7 @@
                                 }
 
                                 $canPay = $restante > 0 && !in_array($reserva->status, ['canceled', 'rejected']);
-                                $canBeNoShow = !in_array($reserva->status, ['no_show', 'canceled', 'rejected', 'completed']);
+                                $canBeNoShow = !in_array($reserva->status, ['no_show', 'canceled', 'rejected']);
                                 @endphp
 
                                 <tr class="{{ $rowHighlight }} transition hover:bg-opacity-50">
@@ -847,7 +847,7 @@
 
 
 
-    {{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) --}}
+    {{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) COM ESTORNO FLEXÍVEL --}}
     <div id="noShowModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
         <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
 
@@ -862,43 +862,56 @@
                             </svg>
                         </div>
                         <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                            <h3 class="text-lg leading-6 font-bold text-gray-900 dark:text-white uppercase tracking-tight" id="modal-title">
+                            <h3 class="text-lg leading-6 font-bold text-gray-900 dark:text-white uppercase tracking-tight">
                                 Registrar Falta (No-Show)
                             </h3>
 
                             <div class="mt-2 p-3 bg-red-50 dark:bg-red-900/10 rounded-lg border border-red-100 dark:border-red-900/50">
-                                <p class="text-sm text-red-800 dark:text-red-300">
+                                <p class="text-sm text-red-800 dark:text-red-300 font-medium">
                                     Cliente: <span id="noShowClientName" class="font-black"></span>
-                                </p>
-                                <p id="noShowInitialWarning" class="mt-1 text-xs text-red-600 dark:text-red-400 italic">
-                                    Marcar como falta alterará o status da reserva e afetará o histórico do cliente.
                                 </p>
                             </div>
 
                             <input type="hidden" id="noShowReservaId" name="reserva_id">
                             <input type="hidden" id="noShowPaidAmount" name="paid_amount">
 
-                            {{-- CONTROLE DE ESTORNO --}}
-                            <div id="refundControls" class="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hidden border border-gray-200 dark:border-gray-600">
-                                <label for="should_refund" class="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">
-                                    Valor já pago: <span id="noShowAmountDisplay" class="text-indigo-600"></span>
-                                </label>
-                                <select id="should_refund" name="should_refund"
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:text-white font-bold">
-                                    <option value="false">Reter valor (Multa por No-Show)</option>
-                                    <option value="true">Estornar / Devolver valor</option>
-                                </select>
-                                <p class="mt-2 text-[10px] text-gray-500">Se estornado, o saldo sairá do caixa de hoje.</p>
+                            {{-- CONTROLE DE ESTORNO EVOLUÍDO --}}
+                            <div id="refundControls" class="mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hidden border border-gray-200 dark:border-gray-600 space-y-4">
+                                <div>
+                                    <label for="should_refund" class="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">
+                                        Dinheiro Recebido: <span id="noShowAmountDisplay" class="text-indigo-600"></span>
+                                    </label>
+                                    <select id="should_refund" name="should_refund" onchange="toggleCustomRefundInput()"
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:text-white font-bold">
+                                        <option value="false">Reter valor total (Multa de No-Show)</option>
+                                        <option value="true">Estornar / Devolver Valor ao Cliente</option>
+                                    </select>
+                                </div>
+
+                                {{-- CAMPO DINÂMICO DE VALOR A DEVOLVER --}}
+                                <div id="customRefundDiv" class="hidden">
+                                    <label for="custom_refund_amount" class="block text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest mb-1">
+                                        Quanto deseja devolver agora?
+                                    </label>
+                                    <div class="relative">
+                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <span class="text-gray-500 font-bold">R$</span>
+                                        </div>
+                                        <input type="number" step="0.01" id="custom_refund_amount" name="custom_refund_amount"
+                                            class="pl-10 block w-full rounded-md border-red-300 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-800 dark:text-red-400 font-black text-xl">
+                                    </div>
+                                    <p class="mt-1 text-[9px] text-gray-400 italic font-medium">* Este valor será subtraído do caixa de hoje.</p>
+                                </div>
                             </div>
 
                             {{-- MOTIVO --}}
                             <div class="mt-4">
                                 <label for="no_show_reason" class="block text-xs font-black text-gray-500 uppercase tracking-widest">
-                                    Observações / Motivo (Obrigatório)
+                                    Motivo / Observação (Obrigatório)
                                 </label>
-                                <textarea id="no_show_reason" name="no_show_reason" rows="3" required
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-700 dark:text-white"
-                                    placeholder="Ex: Cliente avisou em cima da hora, não atendeu o telefone..."></textarea>
+                                <textarea id="no_show_reason" name="no_show_reason" rows="2" required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-700 dark:text-white text-sm"
+                                    placeholder="Ex: Não compareceu e não atendeu as ligações."></textarea>
                             </div>
 
                             {{-- BLOQUEIO --}}
@@ -906,11 +919,10 @@
                                 <label class="inline-flex items-center cursor-pointer">
                                     <input type="checkbox" id="block_user" name="block_user"
                                         class="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500 transition cursor-pointer">
-                                    <span class="ml-2 text-sm font-black text-red-700 dark:text-red-400 uppercase tracking-tighter">
-                                        Bloquear este cliente permanentemente
+                                    <span class="ml-2 text-xs font-black text-red-700 dark:text-red-400 uppercase tracking-tighter">
+                                        Bloquear cliente permanentemente
                                     </span>
                                 </label>
-                                <p class="text-[10px] text-red-500 mt-1 ml-7">O cliente não poderá fazer novos agendamentos via App/Site.</p>
                             </div>
 
                             <div id="noshow-error-message" class="hidden mt-3 p-3 bg-red-100 text-red-700 text-xs font-bold rounded-lg border border-red-200"></div>
@@ -1101,6 +1113,23 @@
             }
         }
 
+        // --- Lógica de Controle de Estorno (NOVO) ---
+        function toggleCustomRefundInput() {
+            const shouldRefund = document.getElementById('should_refund').value === 'true';
+            const customDiv = document.getElementById('customRefundDiv');
+            const paidAmount = parseFloat(document.getElementById('noShowPaidAmount').value) || 0;
+            const inputRefund = document.getElementById('custom_refund_amount');
+
+            if (shouldRefund) {
+                customDiv.classList.remove('hidden');
+                // Sugere o valor total pago por padrão, mas permite editar
+                inputRefund.value = paidAmount.toFixed(2);
+            } else {
+                customDiv.classList.add('hidden');
+                inputRefund.value = 0;
+            }
+        }
+
         // --- Lógica de Cálculo de Pagamento ---
         function calculateAmountDue() {
             const finalPriceEl = document.getElementById('modalFinalPrice');
@@ -1165,13 +1194,9 @@
             }
         }
 
-        // --- Lógica do Pagamento/No-Show ---
         // --- Lógica do Pagamento ---
         function openPaymentModal(id, totalPrice, remaining, signalAmount, clientName, isRecurrent = false) {
-            // Pegamos a informação se o caixa está fechado do input HTML, não do Blade direto no JS
-            const cashierDateInput = document.getElementById('js_cashierDate');
             const isClosed = document.getElementById('js_isActionDisabled').value === '1';
-
 
             if (isClosed) {
                 alert('Ações bloqueadas. O caixa para esta data está FECHADO.');
@@ -1205,7 +1230,6 @@
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         }
-
 
         function closePaymentModal() {
             document.getElementById('paymentModal').classList.replace('flex', 'hidden');
@@ -1268,7 +1292,7 @@
                 });
         });
 
-        // --- Lógica de No-Show ---
+        // --- Lógica de No-Show (REVISADA) ---
         function openNoShowModal(id, clientName, paidAmount) {
             const isClosed = document.getElementById('js_isActionDisabled').value === '1';
             if (isClosed) {
@@ -1282,6 +1306,7 @@
 
             const refundControls = document.getElementById('refundControls');
             const displayAmount = document.getElementById('noShowAmountDisplay');
+            const customDiv = document.getElementById('customRefundDiv');
 
             if (paidAmount > 0) {
                 refundControls.classList.remove('hidden');
@@ -1289,6 +1314,9 @@
                     style: "currency",
                     currency: "BRL"
                 });
+                // Resetar para reter por padrão ao abrir
+                document.getElementById('should_refund').value = 'false';
+                customDiv.classList.add('hidden');
             } else {
                 refundControls.classList.add('hidden');
             }
@@ -1296,8 +1324,6 @@
             document.getElementById('noShowModal').classList.remove('hidden');
             document.getElementById('noShowModal').classList.add('flex');
         }
-
-
 
         function closeNoShowModal() {
             document.getElementById('noShowModal').classList.replace('flex', 'hidden');
@@ -1310,6 +1336,7 @@
             const notes = document.getElementById('no_show_reason').value;
             const blockUser = document.getElementById('block_user').checked;
             const shouldRefund = document.getElementById('should_refund').value === 'true';
+            const refundAmount = document.getElementById('custom_refund_amount').value; // PEGA O VALOR DIGITADO
             const csrfToken = document.querySelector('input[name="_token"]').value;
 
             const submitBtn = document.getElementById('submitNoShowBtn');
@@ -1325,7 +1352,8 @@
                     body: JSON.stringify({
                         notes,
                         block_user: blockUser,
-                        should_refund: shouldRefund
+                        should_refund: shouldRefund,
+                        refund_amount: refundAmount // ENVIA O VALOR PERSONALIZADO
                     })
                 })
                 .then(res => res.json())
@@ -1347,7 +1375,6 @@
 
             if (!calculatedAmountEl || !diffMessageEl || !actualAmountInput) return;
 
-            // Remove o hidden logo no início para garantir que a mensagem apareça
             diffMessageEl.classList.remove('hidden');
 
             let calculatedText = calculatedAmountEl.innerText
@@ -1360,7 +1387,6 @@
             const actualAmount = parseFloat(actualAmountInput.value) || 0;
             const difference = (actualAmount - calculatedAmount).toFixed(2);
 
-            // Limpa as cores antes de aplicar a nova
             diffMessageEl.classList.remove('bg-red-100', 'text-red-700', 'bg-yellow-100', 'text-yellow-700', 'bg-green-100', 'text-green-700');
 
             if (Math.abs(difference) < 0.01) {
@@ -1391,21 +1417,17 @@
             document.getElementById('closeCashModal').classList.replace('hidden', 'flex');
         }
 
-
         function closeCloseCashModal() {
             document.getElementById('closeCashModal').classList.replace('flex', 'hidden');
         }
 
-        // --- ENVIO REAL DO FECHAMENTO (MODAL 3) ---
         document.getElementById('closeCashForm').addEventListener('submit', function(e) {
             e.preventDefault();
-
             const submitBtn = document.getElementById('submitCloseCashBtn');
             const date = document.getElementById('closeCashDate').value;
             const actualAmount = document.getElementById('actualCashAmount').value;
             const csrfToken = document.querySelector('input[name="_token"]').value;
 
-            // Interface: Feedback de carregamento
             submitBtn.disabled = true;
             const btnText = document.getElementById('submitCloseCashText');
             if (btnText) btnText.innerText = "PROCESSANDO...";
@@ -1425,7 +1447,6 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
-                        // SUCESSO: Recarrega a página para aplicar os bloqueios do Blade
                         location.reload();
                     } else {
                         alert("Erro ao fechar caixa: " + data.message);
@@ -1434,7 +1455,6 @@
                     }
                 })
                 .catch(err => {
-                    console.error("Erro na requisição:", err);
                     alert("Erro de conexão com o servidor.");
                     submitBtn.disabled = false;
                 });
@@ -1480,20 +1500,14 @@
         });
 
         function checkCashierStatus() {
-            console.log("--- DEBUG CAIXA INICIADO ---");
-
             const btn = document.getElementById('openCloseCashModalBtn');
             const statusEl = document.getElementById('cashStatus');
             const inputTotal = document.getElementById('js_totalReservas');
             const inputFilter = document.getElementById('js_isFiltered');
             const valorLiquidoEl = document.getElementById('valor-liquido-total-real');
 
-            if (!btn || !statusEl) {
-                console.warn("Elementos do caixa não encontrados.");
-                return;
-            }
+            if (!btn || !statusEl) return;
 
-            // 1. Lendo valores dos inputs ocultos
             const totalReservations = inputTotal ? parseInt(inputTotal.value) : 0;
             const isFiltered = inputFilter && inputFilter.value === '1';
 
@@ -1503,9 +1517,6 @@
                 totalCashToday = parseFloat(rawText) || 0;
             }
 
-            console.log("Reservas Totais:", totalReservations, "Filtro:", isFiltered, "Saldo Real:", totalCashToday);
-
-            // 2. Regra de Filtro: Bloqueia se houver filtro de arena ativo
             if (isFiltered) {
                 btn.disabled = true;
                 statusEl.innerHTML = "💡 Limpe o filtro de arena para fechar.";
@@ -1513,7 +1524,6 @@
                 return;
             }
 
-            // 3. Regra para Dias sem Reservas (como o seu dia 07)
             if (totalReservations === 0) {
                 if (totalCashToday > 0) {
                     btn.disabled = false;
@@ -1527,31 +1537,22 @@
                 return;
             }
 
-            // 4. Regra para Dias com Reservas (como o seu dia 08)
-            // Lista de termos que consideramos como "concluídos" para o caixa
             const finalStatuses = ['pago completo', 'pago', 'finalizado', 'falta', 'cancelada', 'rejeitada', 'no_show', 'paid', 'complete'];
-
             let completedOnScreen = 0;
             const rows = document.querySelectorAll('table tbody tr');
 
             rows.forEach(row => {
                 const cells = row.querySelectorAll('td');
-                // Geralmente a coluna de status é a terceira (índice 2)
                 if (cells.length >= 3) {
                     const statusCell = cells[2];
                     const textContent = statusCell.innerText.trim().toLowerCase();
                     const dataStatus = statusCell.getAttribute('data-status') ? statusCell.getAttribute('data-status').toLowerCase() : '';
-
-                    // Verifica se o texto da tela OU o data-attribute está na nossa lista de finalizados
                     if (finalStatuses.includes(textContent) || finalStatuses.includes(dataStatus)) {
                         completedOnScreen++;
                     }
                 }
             });
 
-            console.log("Concluídas encontradas na tabela:", completedOnScreen);
-
-            // 5. Decisão Final
             if (completedOnScreen < totalReservations) {
                 btn.disabled = true;
                 statusEl.innerHTML = `🚨 Pendentes: ${totalReservations - completedOnScreen} reservas.`;
@@ -1565,15 +1566,11 @@
 
         // --- Inicialização ---
         document.addEventListener('DOMContentLoaded', () => {
-            // Chamada imediata ao carregar
             checkCashierStatus();
-
             const actualCashInput = document.getElementById('actualCashAmount');
             if (actualCashInput) actualCashInput.addEventListener('input', calculateDifference);
-
             const modalFinalPriceEl = document.getElementById('modalFinalPrice');
             if (modalFinalPriceEl) modalFinalPriceEl.addEventListener('input', calculateAmountDue);
-
             const modalAmountPaidEl = document.getElementById('modalAmountPaid');
             if (modalAmountPaidEl) modalAmountPaidEl.addEventListener('input', checkManualOverpayment);
         });

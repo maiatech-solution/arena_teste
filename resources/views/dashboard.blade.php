@@ -487,7 +487,7 @@
     </div>
 
 
-    {{-- NOVO: MODAL DE REGISTRO DE FALTA (NO-SHOW) --}}
+    {{-- MODAL DE REGISTRO DE FALTA (NO-SHOW) ATUALIZADO COM ESTORNO PARCIAL E VALIDAÇÕES INTERNAS --}}
     <div id="no-show-modal" class="modal-overlay hidden" onclick="closeNoShowModal()">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 m-4 transform transition-transform duration-300 scale-95 opacity-0"
             id="no-show-modal-content" onclick="event.stopPropagation()">
@@ -499,74 +499,65 @@
                 @csrf
                 @method('PATCH')
                 <input type="hidden" name="reserva_id" id="no-show-reserva-id">
-                {{-- Input escondido para enviar o valor total pago para referência --}}
                 <input type="hidden" name="paid_amount_ref" id="paid-amount-ref">
 
-                {{-- Área de Gerenciamento de Pagamento por Falta --}}
                 <div id="no-show-refund-area" class="mb-6 p-4 border border-red-300 bg-red-50 rounded-lg hidden">
                     <p class="font-bold text-red-700 mb-3 flex items-center">
                         <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M3 10h18M7 5h10M5 15h14M7 20h10" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 5h10M5 15h14M7 20h10" />
                         </svg>
-                        VALOR PAGO PELO CLIENTE: R$ <span id="no-show-paid-amount"
-                            class="font-extrabold ml-1">0,00</span>
+                        VALOR JÁ PAGO: R$ <span id="no-show-paid-amount" class="font-extrabold ml-1">0,00</span>
                     </p>
 
                     <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Decisão sobre o Valor (Sinal ou
-                            Total Pago):</label>
-                        <div class="flex flex-col space-y-2">
-                            <label
-                                class="inline-flex items-center p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
-                                <input type="radio" name="no_show_refund_choice" value="keep"
-                                    id="no-show-choice-keep"
-                                    class="form-radio h-5 w-5 text-green-600 border-green-500 focus:ring-green-500"
-                                    checked>
-                                <span class="ml-2 text-green-700 font-semibold text-sm">Manter R$ <span
-                                        id="keep-amount-display">0,00</span> no Caixa (Retenção por Falta)</span>
-                            </label>
-                            <label class="inline-flex items-center">
-                                <span class="text-sm text-gray-500 ml-2">⚠️ Para devolver um valor parcial, utilize a
-                                    página de **Caixa/Pagamentos** após confirmar a falta.</span>
-                            </label>
-                            <label
-                                class="inline-flex items-center p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
-                                <input type="radio" name="no_show_refund_choice" value="refund_all"
-                                    id="no-show-choice-refund-all"
-                                    class="form-radio h-5 w-5 text-red-600 border-red-500 focus:ring-red-500">
-                                <span class="ml-2 text-red-700 font-semibold text-sm">Devolver R$ <span
-                                        id="refund-all-amount-display">0,00</span> (Estornar TODO o valor do
-                                    Caixa)</span>
-                            </label>
-                        </div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Decisão Financeira:</label>
+                        <select id="should_refund_no_show" name="should_refund" onchange="toggleDashboardNoShowRefundInput()"
+                            class="w-full p-2 border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 font-bold">
+                            <option value="false">🔒 Reter Tudo (Fica para a Arena como Multa)</option>
+                            <option value="true">💸 Estornar / Devolver (Saída do Caixa)</option>
+                        </select>
+                    </div>
+
+                    {{-- CAMPO PARA VALOR PERSONALIZADO COM VALIDAÇÃO INTERNA --}}
+                    <div id="customNoShowRefundDiv" class="hidden mt-4 p-3 bg-white rounded-lg border border-red-200 shadow-inner">
+                        <label class="block text-xs font-bold text-red-600 uppercase mb-1">Valor a Devolver (R$):</label>
+                        <input type="number" step="0.01" id="custom_no_show_refund_amount" name="refund_amount"
+                            class="w-full p-2 border-red-300 rounded-md focus:ring-red-500 focus:border-red-500 font-bold text-lg" placeholder="0.00">
+
+                        {{-- MENSAGEM DE ERRO DE VALOR --}}
+                        <span id="no-show-error-span" class="text-[10px] text-red-600 font-bold mt-1 hidden flex items-center">
+                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                            O estorno não pode ser maior que o valor pago.
+                        </span>
+
+                        <p class="text-[10px] text-gray-500 mt-1 italic">O saldo não devolvido será mantido no caixa como lucro/multa.</p>
                     </div>
                 </div>
-                {{-- FIM Área de Gerenciamento de Pagamento --}}
 
                 <div class="mb-4">
-                    <label for="no-show-reason-input" class="block text-sm font-medium text-gray-700 mb-2">
-                        Motivo da Falta/Observações:
-                    </label>
+                    <label for="no-show-reason-input" class="block text-sm font-medium text-gray-700 mb-2">Motivo da Falta:</label>
                     <textarea id="no-show-reason-input" name="no_show_reason" rows="3"
-                        class="w-full p-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500"
-                        placeholder="Obrigatório, descreva o motivo da falta (mínimo 5 caracteres)..."></textarea>
+                        class="w-full p-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 transition duration-150"
+                        placeholder="Obrigatório (mínimo 5 caracteres)..."></textarea>
+
+                    {{-- NOVO: MENSAGEM DE ERRO DE MOTIVO --}}
+                    <span id="no-show-reason-error-span" class="text-[10px] text-red-600 font-bold mt-1 hidden flex items-center">
+                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                        Por favor, forneça o motivo da falta com pelo menos 5 caracteres.
+                    </span>
                 </div>
 
                 <div class="flex justify-end space-x-3">
-                    <button onclick="closeNoShowModal()" type="button"
-                        class="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition duration-150">
-                        Fechar
-                    </button>
-                    <button id="confirm-no-show-btn" type="submit"
-                        class="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150">
-                        Confirmar Falta
-                    </button>
+                    <button onclick="closeNoShowModal()" type="button" class="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition duration-150">Fechar</button>
+                    <button id="confirm-no-show-btn" type="submit" class="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150 shadow-md">Confirmar Falta</button>
                 </div>
             </form>
         </div>
     </div>
-    {{-- FIM NOVO MODAL DE FALTA --}}
 
 
     {{-- MODAL DE RENOVAÇÃO DE SÉRIE --}}
@@ -1443,55 +1434,65 @@
 
         // --- NO-SHOW LÓGICA (COM ESTORNO) ---
 
-        // Atualizado para receber paidAmount (como valor pago) e isPaid
+        // Função atualizada para abrir o modal de falta (No-Show)
         function openNoShowModal(reservaId, clientName, paidAmount, isPaid, price) {
+            // 1. Fecha o modal de detalhes (que está por baixo)
             closeEventModal();
+
             const modalEl = document.getElementById('no-show-modal');
+            const modalContent = document.getElementById('no-show-modal-content');
             const paidAmountEl = document.getElementById('no-show-paid-amount');
-            const keepAmountEl = document.getElementById('keep-amount-display');
-            const refundAllAmountEl = document.getElementById('refund-all-amount-display');
             const paidAmountRefInput = document.getElementById('paid-amount-ref');
-            const noShowReasonInput = document.getElementById('no-show-reason-input');
-
-            // ✅ NOVO: Referência para a área de reembolso
             const refundArea = document.getElementById('no-show-refund-area');
+            const refundSelect = document.getElementById('should_refund_no_show');
+            const customRefundDiv = document.getElementById('customNoShowRefundDiv');
+            const customRefundInput = document.getElementById('custom_no_show_refund_amount');
 
-
-            // Resetar o formulário
+            // 2. Limpa o formulário e prepara os IDs
             document.getElementById('no-show-reserva-id').value = reservaId;
-            noShowReasonInput.value = '';
+            document.getElementById('no-show-reason-input').value = '';
             document.getElementById('confirm-no-show-btn').textContent = 'Confirmar Falta';
             document.getElementById('confirm-no-show-btn').disabled = false;
 
-            // O valor a ser gerenciado é o total pago (paidAmount)
+            // 3. Tratamento do valor pago
+            // Converte de "50,00" para 50.00
             const amountPaid = cleanAndConvertForApi(paidAmount);
             const paidFormatted = amountPaid.toFixed(2).replace('.', ',');
 
-            // Coloca o valor limpo no input escondido para envio ao backend
+            // Seta o valor bruto no input oculto para o backend
             paidAmountRefInput.value = amountPaid;
 
-            document.getElementById('no-show-modal-message').innerHTML = `
-                Marque a falta do cliente **${clientName}**. O valor pago será gerenciado abaixo.
-            `;
-
-
+            // 4. Lógica de exibição da área financeira
             if (amountPaid > 0) {
-                // Se houver pagamento, mostra a área de reembolso
                 refundArea.classList.remove('hidden');
                 paidAmountEl.textContent = paidFormatted;
-                keepAmountEl.textContent = paidFormatted;
-                refundAllAmountEl.textContent = paidFormatted;
 
-                // Reseta para a opção de "Manter no Caixa" (retenção)
-                document.getElementById('no-show-choice-keep').checked = true;
+                // Reseta o Select para "Reter Tudo" e esconde o campo de valor customizado
+                if (refundSelect) refundSelect.value = 'false';
+                if (customRefundDiv) customRefundDiv.classList.add('hidden');
+                if (customRefundInput) customRefundInput.value = 0;
             } else {
-                // Se NÃO houver pagamento, esconde a área de reembolso
+                // Se o cliente não pagou nada, não faz sentido mostrar opções de estorno
                 refundArea.classList.add('hidden');
             }
 
+            // 5. Atualiza a mensagem do modal
+            document.getElementById('no-show-modal-message').innerHTML = `
+        Marque a falta do cliente <strong>${clientName}</strong>. 
+        O sistema processará o horário e o financeiro conforme sua escolha abaixo.
+    `;
 
+            // 6. Exibe o modal com as animações de entrada
             modalEl.classList.remove('hidden');
-            setTimeout(() => modalEl.querySelector('#no-show-modal-content').classList.remove('opacity-0', 'scale-95'), 10);
+            modalEl.style.display = 'flex'; // Garante o alinhamento central
+
+            // Pequeno delay para a animação do Tailwind funcionar
+            setTimeout(() => {
+                if (modalContent) {
+                    modalContent.classList.remove('opacity-0', 'scale-95');
+                    modalContent.classList.add('opacity-100', 'scale-100');
+                }
+            }, 10);
         }
 
         function closeNoShowModal() {
@@ -1501,37 +1502,57 @@
 
         document.getElementById('no-show-form').addEventListener('submit', async function(e) {
             e.preventDefault();
+
+            // 1. Captura de elementos e valores
             const reasonInput = document.getElementById('no-show-reason-input');
             const reason = reasonInput.value.trim();
+            const reasonErrorSpan = document.getElementById('no-show-reason-error-span');
 
-            // Validação mínima de caracteres
+            const paidAmount = parseFloat(document.getElementById('paid-amount-ref').value) || 0;
+            const shouldRefund = document.getElementById('should_refund_no_show').value === 'true';
+            const refundAmountInput = document.getElementById('custom_no_show_refund_amount');
+            const refundAmount = parseFloat(refundAmountInput.value) || 0;
+            const valueErrorSpan = document.getElementById('no-show-error-span');
+
+            // 2. Reset de estados de erro (limpa avisos anteriores)
+            reasonErrorSpan.classList.add('hidden');
+            reasonInput.classList.remove('border-red-600', 'bg-red-50');
+            valueErrorSpan.classList.add('hidden');
+            refundAmountInput.classList.remove('border-red-600', 'bg-red-50');
+
+            // 🛡️ TRAVA 1: Motivo (Mínimo 5 caracteres) - INTERNO NO MODAL
             if (reason.length < 5) {
-                showDashboardMessage("Por favor, forneça o motivo da falta com pelo menos 5 caracteres.", 'warning');
-                return;
+                reasonInput.focus();
+                reasonInput.classList.add('border-red-600', 'bg-red-50');
+                reasonErrorSpan.classList.remove('hidden');
+                return; // Interrompe o envio
+            }
+
+            // 🛡️ TRAVA 2: Valor do Estorno (Não pode ser maior que o pago) - INTERNO NO MODAL
+            if (shouldRefund && refundAmount > paidAmount) {
+                refundAmountInput.focus();
+                refundAmountInput.classList.add('border-red-600', 'bg-red-50', 'animate-pulse');
+                valueErrorSpan.classList.remove('hidden');
+                setTimeout(() => refundAmountInput.classList.remove('animate-pulse'), 500);
+                return; // Interrompe o envio
             }
 
             const reservaId = document.getElementById('no-show-reserva-id').value;
             const url = NO_SHOW_URL.replace(':id', reservaId);
             const submitBtn = document.getElementById('confirm-no-show-btn');
 
-            // Decisão de Estorno
-            let shouldRefund = false;
-            const paidAmount = document.getElementById('paid-amount-ref').value;
-
-            if (parseFloat(paidAmount) > 0 && !document.getElementById('no-show-refund-area').classList.contains('hidden')) {
-                const refundChoice = document.querySelector('input[name="no_show_refund_choice"]:checked');
-                shouldRefund = refundChoice && refundChoice.value === 'refund_all';
-            }
-
+            // 3. Preparação dos dados para a API
             const bodyData = {
                 no_show_reason: reason,
+                notes: reason,
                 should_refund: shouldRefund,
+                refund_amount: refundAmount,
                 paid_amount: paidAmount,
                 _token: csrfToken,
                 _method: 'PATCH',
             };
 
-            // Estado de carregamento
+            // 4. Estado de carregamento
             submitBtn.disabled = true;
             submitBtn.textContent = 'Processando...';
 
@@ -1549,34 +1570,21 @@
 
                 const result = await response.json();
 
-                // 🎯 FECHAMOS O MODAL DE NO-SHOW IMEDIATAMENTE
-                closeNoShowModal();
-
                 if (response.ok && result.success) {
-                    // SUCESSO: Mostra mensagem e atualiza calendário para refletir a falta/liberação
+                    // SUCESSO: Fecha o modal e atualiza o calendário
+                    closeNoShowModal();
                     showDashboardMessage(result.message || "Falta registrada com sucesso.", 'success');
-
-                    if (window.calendar) {
-                        // Remove o evento atual e busca os novos (ex: o novo slot livre verde)
-                        const event = window.calendar.getEventById(reservaId);
-                        if (event) event.remove();
-                        setTimeout(() => window.calendar.refetchEvents(), 500);
-                    }
-                } else {
-                    // ERRO (Ex: Caixa Fechado)
-                    // Forçamos o calendário a recarregar para garantir que o agendamento NÃO sumiu
                     if (window.calendar) window.calendar.refetchEvents();
-
-                    const errorMsg = result.errors ? Object.values(result.errors).flat().join(' ') : result.message;
-                    showDashboardMessage(errorMsg || "Erro ao processar falta.", 'error');
+                } else {
+                    // ERRO DE REGRA DE NEGÓCIO (Ex: Caixa fechado ou erro no servidor)
+                    showDashboardMessage(result.message || "Erro ao processar falta.", 'error');
+                    if (window.calendar) window.calendar.refetchEvents();
                 }
-
             } catch (error) {
-                console.error('Erro de Rede/Comunicação:', error);
-                closeNoShowModal();
-                if (window.calendar) window.calendar.refetchEvents();
-                showDashboardMessage("Erro de conexão. Tente novamente.", 'error');
+                console.error('Erro de Rede:', error);
+                showDashboardMessage("Erro de conexão com o servidor.", 'error');
             } finally {
+                // Restaura o botão independente do resultado
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Confirmar Falta';
             }
@@ -1714,10 +1722,6 @@
             }
         }
 
-        /**
-         * Função Global para gerenciar cliques no Calendário
-         * Deve ser declarada antes do window.onload
-         */
         // =========================================================
         // FUNÇÃO GLOBAL: Gerenciar cliques no Calendário
         // =========================================================
@@ -1821,12 +1825,11 @@
             const prefixRegex = /^\s*(?:\(?(?:PAGO|FALTA|ATRASADO|CANCELADO|REJEITADA|PENDENTE|A\sVENCER\/FALTA|RECORR(?:E)?|SINAL|RESOLVIDO)\)?[\.:\s]*\s*)+/i;
             const clientNameRaw = event.title.replace(prefixRegex, '').split(' - ')[0].trim();
 
-            // ✅ CORREÇÃO DOS VALORES: Garantindo que sejam números para o cálculo e strings formatadas para os botões
+            // ✅ VALORES FINANCEIROS: Garantindo precisão numérica e formatação string
             const isRecurrent = props.is_recurrent ? true : false;
             const paidAmountValue = parseFloat(props.total_paid || props.retained_amount || 0);
             const totalPriceValue = parseFloat(props.final_price || props.price || 0);
 
-            // String formatada para exibir no modal (R$ 50,00)
             const paidAmountString = paidAmountValue.toFixed(2).replace('.', ',');
             const totalPriceString = totalPriceValue.toFixed(2).replace('.', ',');
 
@@ -1855,17 +1858,17 @@
 
                 <div class="grid grid-cols-2 gap-2 mt-2">
                     ${!isFinalized && status !== 'no_show' ? 
-                        `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')" class="px-2 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200">FALTA</button>` 
+                        `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')" class="px-2 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition">FALTA</button>` 
                         : ''}
                     
-                    <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})" class="px-2 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg border border-gray-300">CANCELAR DIA</button>
+                    <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})" class="px-2 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg border border-gray-300 shadow-sm hover:bg-gray-200 transition">CANCELAR DIA</button>
                 </div>
 
                 ${isRecurrent ? 
-                    `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg">CANCELAR SÉRIE</button>` 
+                    `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition">CANCELAR SÉRIE</button>` 
                     : ''}
                 
-                <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">Fechar</button>
+                <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">Fechar</button>
             </div>`;
 
                 eventModal.classList.remove('hidden');
@@ -2090,6 +2093,43 @@
                 }
             } catch (e) {
                 console.error("Erro ao checar caixa de hoje:", e);
+            }
+        }
+
+        // --- FUNÇÃO PARA MOSTRAR/ESCONDER E VALIDAR O VALOR NO MODAL DE FALTA ---
+        function toggleDashboardNoShowRefundInput() {
+            const shouldRefund = document.getElementById('should_refund_no_show').value === 'true';
+            const customDiv = document.getElementById('customNoShowRefundDiv');
+            const paidAmount = parseFloat(document.getElementById('paid-amount-ref').value) || 0;
+            const inputRefund = document.getElementById('custom_no_show_refund_amount');
+            const errorSpan = document.getElementById('no-show-error-span');
+
+            if (shouldRefund) {
+                customDiv.classList.remove('hidden');
+                inputRefund.value = paidAmount.toFixed(2);
+
+                // Listener para validar em tempo real enquanto o usuário digita
+                inputRefund.oninput = function() {
+                    const valorDigitado = parseFloat(this.value) || 0;
+
+                    if (valorDigitado > paidAmount) {
+                        // Aplica estilos de erro no campo
+                        this.classList.add('border-red-600', 'text-red-600', 'bg-red-50');
+                        // Mostra o aviso interno (span)
+                        errorSpan.classList.remove('hidden');
+                    } else {
+                        // Remove estilos de erro
+                        this.classList.remove('border-red-600', 'text-red-600', 'bg-red-50');
+                        // Esconde o aviso interno (span)
+                        errorSpan.classList.add('hidden');
+                    }
+                };
+            } else {
+                // Se a opção for reter tudo, limpa tudo
+                customDiv.classList.add('hidden');
+                inputRefund.value = 0;
+                errorSpan.classList.add('hidden');
+                inputRefund.classList.remove('border-red-600', 'text-red-600', 'bg-red-50');
             }
         }
 
