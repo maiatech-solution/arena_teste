@@ -2017,18 +2017,13 @@ class ReservaController extends Controller
      */
     public function storePublic(Request $request)
     {
-        // 1. Regras de Validação com Formato de Hora Corrigido (H:i)
+        // 1. Regras de Validação (Formato H:i e Vínculo com Arena)
         $rules = [
             'arena_id' => ['required', 'exists:arenas,id'],
             'data_reserva' => ['required', 'date', "after_or_equal:" . Carbon::today()->format('Y-m-d')],
-
-            // Mudamos para H:i para aceitar o formato 07:00 vindo do JavaScript
             'hora_inicio' => ['required', 'date_format:H:i'],
             'hora_fim' => ['required', 'date_format:H:i', 'after:hora_inicio'],
-
             'price' => ['required', 'numeric', 'min:0'],
-
-            // Valida que o slot (ID) pertence à arena_id enviada e está livre
             'schedule_id' => [
                 'required',
                 'integer',
@@ -2038,7 +2033,6 @@ class ReservaController extends Controller
                         ->where('status', \App\Models\Reserva::STATUS_FREE);
                 }),
             ],
-
             'nome_cliente' => 'required|string|max:255',
             'contato_cliente' => 'required|string|regex:/^\d{10,11}$/|max:20',
             'email_cliente' => 'nullable|email|max:255',
@@ -2050,13 +2044,11 @@ class ReservaController extends Controller
             'arena_id.required' => 'A identificação da quadra é obrigatória.',
             'schedule_id.exists' => 'O horário selecionado não é válido para esta quadra ou já foi ocupado.',
             'contato_cliente.regex' => 'O WhatsApp deve conter apenas DDD + número (10 ou 11 dígitos).',
-            'hora_inicio.date_format' => 'O formato da hora de início é inválido.',
-            'hora_fim.date_format' => 'O formato da hora de término é inválido.',
+            'hora_inicio.date_format' => 'Formato de hora inicial inválido.',
+            'hora_fim.date_format' => 'Formato de hora final inválido.',
         ]);
 
         if ($validator->fails()) {
-            Log::warning('[STORE PUBLIC] Falha na validação:', $validator->errors()->toArray());
-
             return redirect()->route('reserva.index')
                 ->withErrors($validator)
                 ->withInput()
@@ -2066,7 +2058,7 @@ class ReservaController extends Controller
         $validated = $validator->validated();
         $date = $validated['data_reserva'];
 
-        // 🎯 VALIDAÇÃO DE CAIXA
+        // 2. Validação Preventiva de Caixa
         $financeiroController = app(FinanceiroController::class);
         if ($financeiroController->isCashClosed($date)) {
             return redirect()->back()
@@ -2078,12 +2070,10 @@ class ReservaController extends Controller
         $startTimeRaw = $validated['hora_inicio'];
         $endTimeRaw = $validated['hora_fim'];
 
-        // Tratamento para horários que terminam à meia-noite
         if ($startTimeRaw === '23:00' && ($endTimeRaw === '0:00' || $endTimeRaw === '00:00')) {
             $endTimeRaw = '23:59';
         }
 
-        // Usamos Carbon::parse para ser mais flexível com o formato da string
         $startTimeNormalized = Carbon::parse($startTimeRaw)->format('H:i:s');
         $endTimeNormalized = Carbon::parse($endTimeRaw)->format('H:i:s');
 
@@ -2095,7 +2085,7 @@ class ReservaController extends Controller
                 'whatsapp_contact' => $validated['contato_cliente'],
             ]);
 
-            // Bloqueio de duplicidade para o mesmo cliente
+            // 3. Bloqueio de duplicidade para o mesmo cliente
             $existing = \App\Models\Reserva::where('user_id', $clientUser->id)
                 ->where('arena_id', $arenaId)
                 ->where('date', $date)
@@ -2108,13 +2098,13 @@ class ReservaController extends Controller
                 return redirect()->back()->withInput()->with('error', "Você já tem uma solicitação enviada para este horário nesta quadra.");
             }
 
-            // 🛡️ TRAVA DE SEGURANÇA: Só bloqueia se houver alguém CONFIRMADO (Pago)
+            // 4. Trava de Segurança: Só bloqueia se houver alguém CONFIRMADO (Pago)
             if ($this->checkOverlap($date, $startTimeRaw, $endTimeRaw, $arenaId, true)) {
                 DB::rollBack();
                 return redirect()->back()->withInput()->with('error', 'Este horário acabou de ser fechado com outro cliente.');
             }
 
-            // 6. Criação da Reserva Pendente (Modo Leilão)
+            // 5. Criação da Reserva Pendente (Modo Leilão - não consome o slot fixo ainda)
             $reserva = \App\Models\Reserva::create([
                 'user_id' => $clientUser->id,
                 'arena_id' => $arenaId,
@@ -2137,17 +2127,36 @@ class ReservaController extends Controller
 
             DB::commit();
 
-            // 8. Preparação do Retorno e WhatsApp
+            // 6. Buscar o Nome da Arena para o WhatsApp
+            $arena = \App\Models\Arena::find($arenaId);
+            $nomeQuadra = $arena ? $arena->name : "Quadra #{$arenaId}";
+
+            // 7. Preparação da Mensagem de WhatsApp com Distinção de Quadra
             $whatsappNumber = '91985320997';
-            $messageText = "🚨 NOVA SOLICITAÇÃO\n\nCliente: {$reserva->client_name}\nData: " . Carbon::parse($reserva->date)->format('d/m/Y') . "\nHora: " . Carbon::parse($reserva->start_time)->format('H:i') . "\nStatus: PENDENTE";
+            $dataFmt = Carbon::parse($reserva->date)->format('d/m/Y');
+            $horaFmt = Carbon::parse($reserva->start_time)->format('H:i');
+
+            $messageText = "🚨 *NOVA SOLICITAÇÃO DE AGENDAMENTO*\n\n" .
+                "👤 *Cliente:* {$reserva->client_name}\n" .
+                "🏟️ *Quadra:* {$nomeQuadra}\n" .
+                "📅 *Data:* {$dataFmt}\n" .
+                "⏰ *Horário:* {$horaFmt}\n" .
+                "📝 *Status:* PENDENTE\n\n" .
+                "O cliente aguarda a confirmação via WhatsApp.";
+
             $whatsappLink = "https://api.whatsapp.com/send?phone={$whatsappNumber}&text=" . urlencode($messageText);
 
             return redirect()->route('reserva.index')
-                ->with('success', 'Solicitação enviada! Aguarde a confirmação.')
+                ->with('success', 'Solicitação enviada! Clique no botão abaixo para falar com o gestor.')
                 ->with('whatsapp_link', $whatsappLink);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("[STORE PUBLIC] Erro: " . $e->getMessage());
+
+            if (str_contains(strtolower($e->getMessage()), 'caixa')) {
+                return redirect()->back()->withInput()->with('error', 'Não foi possível concluir: O caixa para este dia está fechado.');
+            }
+
             return redirect()->back()->withInput()->with('error', 'Erro interno ao processar agendamento.');
         }
     }
