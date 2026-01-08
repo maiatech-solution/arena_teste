@@ -53,19 +53,33 @@ class AdminController extends Controller
     }
 
     /**
-     * Exibe a lista de Reservas Pendentes.
+     * Exibe a lista de Reservas Pendentes (Multiquadra).
      */
-    public function indexReservas()
+    public function indexReservas(Request $request)
     {
-        $reservas = Reserva::where('status', Reserva::STATUS_PENDENTE)
-            ->where('is_fixed', false)
-            ->orderBy('date')
-            ->orderBy('start_time')
-            ->paginate(20);
+        // 1. Captura o ID da arena vindo do filtro da View
+        $arenaId = $request->query('arena_id');
 
+        // 2. Inicia a query buscando apenas as pré-reservas pendentes
+        $query = Reserva::where('status', Reserva::STATUS_PENDENTE)
+            ->where('is_fixed', false)
+            ->with('arena')
+            ->orderBy('date', 'asc')
+            ->orderBy('start_time', 'asc');
+
+        // 3. Aplica o filtro de Arena
+        if ($arenaId) {
+            $query->where('arena_id', $arenaId);
+        }
+
+        // 4. Pagina os resultados
+        $reservas = $query->paginate(20)->appends($request->all());
+
+        // 5. Retorna a view enviando as ARENAS para o filtro funcionar
         return view('admin.reservas.index', [
             'reservas' => $reservas,
             'pageTitle' => 'Pré-Reservas Pendentes',
+            'arenas' => \App\Models\Arena::all(), // ✨ ADICIONE ESTA LINHA AQUI
         ]);
     }
 
@@ -78,18 +92,23 @@ class AdminController extends Controller
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
         $isOnlyMine = $request->input('only_mine') === 'true';
+        // 🏟️ NOVO: Captura a arena selecionada no filtro da view
+        $arenaId = $request->input('arena_id');
 
-        // 🎯 LÓGICA DE OURO PARA EXIBIR TUDO:
-        // 1. WhereIn: Inclui Confirmadas, Pendentes E as Pagas (completed/concluida).
-        // 2. Removido o filtro whereDate >= today para que as ATRASADAS apareçam.
         $reservas = Reserva::whereIn('status', [
-                Reserva::STATUS_CONFIRMADA,
-                Reserva::STATUS_CONCLUIDA,
-                Reserva::STATUS_PENDENTE,
-                'completed',
-                'concluida'
-            ])
+            Reserva::STATUS_CONFIRMADA,
+            Reserva::STATUS_CONCLUIDA,
+            Reserva::STATUS_PENDENTE,
+            'completed',
+            'concluida'
+        ])
             ->where('is_fixed', false)
+            ->with('arena') // 🏟️ ESSENCIAL: Carrega os dados da quadra (nome, cor, etc.)
+
+            // 🏟️ FILTRO MULTIQUADRA: Só filtra se uma arena for selecionada
+            ->when($arenaId, function ($query, $arenaId) {
+                return $query->where('arena_id', $arenaId);
+            })
 
             // FILTRO DE BUSCA (Nome ou Contato)
             ->when($search, function ($query, $search) {
@@ -99,7 +118,7 @@ class AdminController extends Controller
                 });
             })
 
-            // FILTROS DE DATA (Só aplica se o usuário preencher os campos "De" e "Até")
+            // FILTROS DE DATA
             ->when($startDate, function ($query, $startDate) {
                 return $query->whereDate('date', '>=', $startDate);
             })
@@ -112,7 +131,7 @@ class AdminController extends Controller
                 return $query->where('manager_id', Auth::id());
             })
 
-            // ORDENAÇÃO: Mostra as mais atuais e atrasadas recentes primeiro
+            // ORDENAÇÃO
             ->orderBy('date', 'asc')
             ->orderBy('start_time', 'asc')
             ->paginate(20)
@@ -125,6 +144,8 @@ class AdminController extends Controller
             'startDate' => $startDate,
             'endDate' => $endDate,
             'isOnlyMine' => $isOnlyMine,
+            'arenaId' => $arenaId, // 🏟️ Envia o ID de volta para manter o select selecionado
+            'arenas' => \App\Models\Arena::all(), // 🏟️ Envia a lista para o select de filtro
         ]);
     }
 
@@ -138,40 +159,45 @@ class AdminController extends Controller
         $endDate = $request->input('end_date');
         $filterStatus = $request->input('filter_status');
         $isOnlyMine = $request->input('only_mine') === 'true';
+        // 🏟️ NOVO: Filtro de Arena
+        $arenaId = $request->input('arena_id');
 
-        // 1. Inicia a query com todos os tipos de reservas (clientes e fixas)
-        $reservas = Reserva::query();
+        // 1. Inicia a query com Eager Loading da Arena
+        $query = Reserva::with('arena');
 
-        // 2. Filtro de Status
-        if ($filterStatus) {
-            $reservas->where('status', $filterStatus);
+        // 2. Filtro de Arena (Multiquadra)
+        if ($arenaId) {
+            $query->where('arena_id', $arenaId);
         }
 
-        // 3. Filtros de Data
-        $reservas
-            ->when($startDate, function ($query, $startDate) {
-                return $query->whereDate('date', '>=', $startDate);
-            })
-            ->when($endDate, function ($query, $endDate) {
-                return $query->whereDate('date', '<=', $endDate);
+        // 3. Filtro de Status
+        if ($filterStatus) {
+            $query->where('status', $filterStatus);
+        }
+
+        // 4. Filtros de Data
+        $query->when($startDate, function ($q, $startDate) {
+            return $q->whereDate('date', '>=', $startDate);
+        })
+            ->when($endDate, function ($q, $endDate) {
+                return $q->whereDate('date', '<=', $endDate);
             });
 
-        // 4. Filtro de Busca (por cliente ou contato, aplica a todos)
-        $reservas->when($search, function ($query, $search) {
-            return $query->where(function ($q) use ($search) {
-                $q->where('client_name', 'like', '%' . $search . '%')
+        // 5. Filtro de Busca
+        $query->when($search, function ($q, $search) {
+            return $q->where(function ($sub) use ($search) {
+                $sub->where('client_name', 'like', '%' . $search . '%')
                     ->orWhere('client_contact', 'like', '%' . $search . '%');
             });
         });
 
-        // 5. Ordenação e Paginação
-        $reservas = $reservas
-            ->orderBy('date', 'asc') // ORDEM CRESCENTE (ASC)
-            ->orderBy('start_time', 'asc') // ORDEM CRESCENTE (ASC)
+        // 6. Ordenação e Paginação
+        $reservas = $query->orderBy('date', 'asc')
+            ->orderBy('start_time', 'asc')
             ->paginate(20)
-            ->appends($request->except('page'));
+            ->appends($request->all()); // 🎯 appends($request->all()) mantém todos os filtros na paginação
 
-        // 6. Retorna a view 'admin.reservas.todas'
+        // 7. Retorna a view com as Arenas para o Select
         return view('admin.reservas.todas', [
             'reservas' => $reservas,
             'pageTitle' => 'Todas as Reservas (Inventário e Clientes)',
@@ -180,6 +206,8 @@ class AdminController extends Controller
             'endDate' => $endDate,
             'filterStatus' => $filterStatus,
             'isOnlyMine' => $isOnlyMine,
+            'arenaId' => $arenaId, // Passa de volta para a view
+            'arenas' => \App\Models\Arena::all(), // 🏟️ Envia as arenas para o select
         ]);
     }
 
@@ -207,6 +235,7 @@ class AdminController extends Controller
     public function storeReserva(Request $request)
     {
         $validated = $request->validate([
+            'arena_id' => 'required|exists:arenas,id', // 🏟️ ADICIONADO: Obrigatório escolher a quadra
             'user_id' => 'nullable|exists:users,id',
             'date' => 'required|date_format:Y-m-d',
             'start_time' => 'required|date_format:H:i',
@@ -216,8 +245,8 @@ class AdminController extends Controller
             'client_name' => 'required|string|max:255',
             'client_contact' => 'required|string|max:255',
             'notes' => 'nullable|string',
-            'payment_method' => 'required|string', // Necessário para a transação
-            'is_recurrent' => 'nullable|boolean', // Adicionado, se aplicável
+            'payment_method' => 'required|string',
+            'is_recurrent' => 'nullable|boolean',
         ]);
 
         $clientContact = $validated['client_contact'];
@@ -228,26 +257,30 @@ class AdminController extends Controller
             $clientUser = $this->reservaController->findOrCreateClient([
                 'name' => $validated['client_name'],
                 'whatsapp_contact' => $clientContact,
-                'email' => null, // Assumindo que o Admin não passa e-mail por aqui
+                'email' => null,
             ]);
 
-            // 2. Tenta encontrar slot fixo para consumo (para enviar o ID para consumo)
+            // 2. Normalização dos horários
             $startTimeNormalized = Carbon::createFromFormat('H:i', $validated['start_time'])->format('H:i:s');
             $endTimeNormalized = Carbon::createFromFormat('H:i', $validated['end_time'])->format('H:i:s');
 
-             $fixedSlot = Reserva::where('is_fixed', true)
+            // 3. Busca slot fixo filtrando por ARENA_ID (Crucial para integridade) 🏟️
+            $fixedSlot = Reserva::where('is_fixed', true)
+                ->where('arena_id', $validated['arena_id']) // 🎯 FILTRO ADICIONADO
                 ->where('date', $validated['date'])
                 ->where('start_time', $startTimeNormalized)
                 ->where('end_time', $endTimeNormalized)
                 ->where('status', Reserva::STATUS_FREE)
                 ->first();
-             $fixedSlotId = $fixedSlot ? $fixedSlot->id : null;
 
-            // 3. DELEGA A CRIAÇÃO FINAL ao ReservaController
+            $fixedSlotId = $fixedSlot ? $fixedSlot->id : null;
+
+            // 4. DELEGA A CRIAÇÃO FINAL ao ReservaController
+            // O $validated já contém o arena_id agora, então o helper salvará corretamente.
             $newReserva = $this->reservaController->createConfirmedReserva($validated, $clientUser, $fixedSlotId);
 
             DB::commit();
-            return redirect()->route('admin.reservas.confirmadas')->with('success', 'Reserva criada e confirmada manualmente com sucesso! ID: ' . $newReserva->id);
+            return redirect()->route('admin.reservas.confirmadas')->with('success', 'Reserva criada com sucesso na quadra selecionada!');
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao criar reserva manual.", ['exception' => $e, 'data' => $validated]);
@@ -308,9 +341,8 @@ class AdminController extends Controller
             DB::commit();
             $message = "Reserva marcada como Falta." . $result['message_finance'];
             return response()->json(['success' => true, 'message' => $message], 200);
-
         } catch (ValidationException $e) {
-             // Garante que erros de validação sejam tratados corretamente
+            // Garante que erros de validação sejam tratados corretamente
             DB::rollBack();
             return response()->json(['success' => false, 'errors' => $e->errors()], 422);
         } catch (\Exception $e) {
@@ -336,7 +368,7 @@ class AdminController extends Controller
 
         // 2. Checa por sobreposição (evita reativar se o slot estiver ocupado por outra reserva ativa)
         if ($this->reservaController->checkOverlap($reserva->date, $reserva->start_time, $reserva->end_time, true, $reserva->id)) {
-             return response()->json(['success' => false, 'message' => 'O horário está ocupado por outra reserva ativa (confirmada ou pendente). Não é possível reativar.'], 400);
+            return response()->json(['success' => false, 'message' => 'O horário está ocupado por outra reserva ativa (confirmada ou pendente). Não é possível reativar.'], 400);
         }
 
         DB::beginTransaction();
@@ -355,7 +387,6 @@ class AdminController extends Controller
             Log::info("Reserva ID: {$reserva->id} reativada (de volta para CONFIRMADA) por Gestor ID: " . Auth::id());
 
             return response()->json(['success' => true, 'message' => 'Reserva reativada com sucesso para o status Confirmada! O slot fixo foi consumido.'], 200);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao reativar reserva ID: {$reserva->id}.", ['exception' => $e]);
@@ -371,7 +402,7 @@ class AdminController extends Controller
      */
     public function updatePrice(Request $request, Reserva $reserva)
     {
-         // 1. Validação dos dados
+        // 1. Validação dos dados
         $validated = $request->validate([
             'new_price' => 'required|numeric|min:0',
             'justification' => 'required|string|min:5',
@@ -404,7 +435,6 @@ class AdminController extends Controller
                 'success' => true,
                 'message' => "Preço atualizado para R$ " . number_format($newPrice, 2, ',', '.') . " com sucesso. A tela será recarregada.",
             ]);
-
         } catch (\Exception $e) {
             // Erro geral do servidor
             return response()->json([
@@ -419,7 +449,7 @@ class AdminController extends Controller
      */
     public function makeRecurrent(Request $request)
     {
-         // Limite máximo de 6 meses (26 semanas) a partir da data de início da série
+        // Limite máximo de 6 meses (26 semanas) a partir da data de início da série
         $maxDate = Carbon::today()->addMonths(6)->toDateString();
 
         // 1. Validação CRÍTICA: Enforça o limite de 6 meses na data final.
@@ -448,11 +478,9 @@ class AdminController extends Controller
                 'success' => true,
                 'message' => $result['message'] ?? 'Série recorrente criada com sucesso (limitada a 6 meses).',
             ]);
-
         } catch (ValidationException $e) {
             // 4. Exceções de Validação são relançadas para serem tratadas pelo handler do Laravel (ex: erro 422)
             throw $e;
-
         } catch (\Exception $e) {
             Log::error("Erro ao criar série recorrente (AdminController::makeRecurrent): " . $e->getMessage(), ['request' => $request->all()]);
 
@@ -474,8 +502,17 @@ class AdminController extends Controller
         if ($reserva->is_recurrent) {
             return response()->json(['success' => false, 'message' => 'Use as rotas de cancelamento de série para reservas recorrentes.'], 400);
         }
-        if ($reserva->status !== Reserva::STATUS_CONFIRMADA) {
-            return response()->json(['success' => false, 'message' => 'A reserva não está confirmada.'], 400);
+
+        // 🚩 AJUSTE: Permite cancelar tanto as Confirmadas quanto as já Pagas (Completed)
+        $statusPermitidos = [
+            Reserva::STATUS_CONFIRMADA,
+            Reserva::STATUS_CONCLUIDA, // Caso sua model tenha essa constante
+            'completed',
+            'concluida'
+        ];
+
+        if (!in_array($reserva->status, $statusPermitidos)) {
+            return response()->json(['success' => false, 'message' => 'A reserva não está em um status que permite cancelamento.'], 400);
         }
 
         $validated = $request->validate([
@@ -486,7 +523,8 @@ class AdminController extends Controller
 
         DB::beginTransaction();
         try {
-            // 🛑 DELEGA A LÓGICA CENTRALIZADA (Cancelamento Pontual)
+            // A lógica delegada ao reservaController já sabe lidar com o estorno
+            // se o should_refund for true e o paid_amount_ref for > 0
             $result = $this->reservaController->finalizeStatus(
                 $reserva,
                 Reserva::STATUS_CANCELADA,
@@ -503,7 +541,7 @@ class AdminController extends Controller
             Log::error("Erro ao cancelar reserva PONTUAL ID: {$reserva->id}.", ['exception' => $e]);
             return response()->json([
                 'success' => false,
-                'message' => 'Erro interno ao cancelar a reserva. Detalhe: ' . $e->getMessage()
+                'message' => 'Erro interno ao cancelar a reserva: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -518,19 +556,23 @@ class AdminController extends Controller
         if (!$reserva->is_recurrent) {
             return response()->json(['success' => false, 'message' => 'A reserva não é recorrente. Use a rota de cancelamento pontual.'], 400);
         }
-        if ($reserva->status !== Reserva::STATUS_CONFIRMADA) {
-            return response()->json(['success' => false, 'message' => 'A reserva não está confirmada.'], 400);
+
+        // 🚩 AJUSTE: Aceita reservas Confirmadas ou Concluídas (Pagas)
+        $statusPermitidos = [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA, 'completed', 'concluida'];
+
+        if (!in_array($reserva->status, $statusPermitidos)) {
+            return response()->json(['success' => false, 'message' => 'A reserva não está em um status cancelável.'], 400);
         }
 
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
             'should_refund' => 'required|boolean',
-            'paid_amount_ref' => 'required|numeric|min:0',
+            'paid_amount_ref' => 'required|numeric|min:0', // 🚩 O Controller espera este nome
         ]);
 
         DB::beginTransaction();
         try {
-            // 🛑 DELEGA A LÓGICA CENTRALIZADA (Usa a mesma lógica de cancelamento pontual)
+            // O finalizeStatus cuidará de criar a saída no caixa se should_refund for true
             $result = $this->reservaController->finalizeStatus(
                 $reserva,
                 Reserva::STATUS_CANCELADA,
@@ -540,14 +582,14 @@ class AdminController extends Controller
             );
 
             DB::commit();
-            $message = "Reserva recorrente pontual cancelada com sucesso! O horário foi liberado." . $result['message_finance'];
+            $message = "Reserva recorrente pontual cancelada com sucesso! O horário foi liberado." . ($result['message_finance'] ?? '');
             return response()->json(['success' => true, 'message' => $message], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao cancelar reserva RECORRENTE PONTUAL ID: {$reserva->id}.", ['exception' => $e]);
             return response()->json([
                 'success' => false,
-                'message' => 'Erro interno ao cancelar a reserva pontual. Detalhe: ' . $e->getMessage()
+                'message' => 'Erro interno ao cancelar a reserva pontual: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -555,42 +597,72 @@ class AdminController extends Controller
 
     /**
      * ✅ CORRIGIDO: Cancela TODAS as reservas futuras de uma série recorrente (DELETE /admin/reservas/{reserva}/cancelar-serie).
-     * Delega a lógica de loop e finanças.
+     * Esta função encerra o contrato mensalista e processa o estorno do valor pago hoje, se solicitado.
      */
     public function cancelarSerieRecorrente(Request $request, Reserva $reserva)
     {
+        // 1. Validação de Integridade: Verifica se realmente é uma reserva de mensalista
         if (!$reserva->is_recurrent) {
-            return response()->json(['success' => false, 'message' => 'A reserva não pertence a uma série recorrente.'], 400);
+            return response()->json([
+                'success' => false,
+                'message' => 'A reserva não pertence a uma série recorrente. Use a rota de cancelamento pontual.'
+            ], 400);
         }
 
+        // 🚩 2. AJUSTE DE STATUS: Permite cancelar mesmo que o horário de hoje já esteja pago (Caso do Amaral)
+        $statusPermitidos = [
+            Reserva::STATUS_CONFIRMADA,
+            Reserva::STATUS_CONCLUIDA,
+            'completed',
+            'concluida'
+        ];
+
+        if (!in_array($reserva->status, $statusPermitidos)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Não é possível cancelar a série: o status atual da reserva (' . $reserva->status . ') não permite esta ação.'
+            ], 400);
+        }
+
+        // 3. Validação dos dados vindos do Modal
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
             'should_refund' => 'required|boolean',
-            'paid_amount_ref' => 'required|numeric|min:0', // Valor do sinal da mestra (única transação financeira)
+            'paid_amount_ref' => 'required|numeric|min:0', // Valor pago hoje para possível estorno
         ]);
 
+        // 4. Identifica o ID mestre da série (se a reserva atual não for a mestre, busca a original)
         $masterId = $reserva->recurrent_series_id ?? $reserva->id;
 
         DB::beginTransaction();
         try {
-            // 🛑 DELEGAÇÃO COMPLETA da lógica de loop e finanças.
+            // 🛑 5. DELEGAÇÃO: O método cancelSeries no ReservaController deve:
+            // - Percorrer todos os horários futuros com este masterId.
+            // - Trocar o status para 'cancelled'.
+            // - Recriar os slots 'fixed' (verdes) para liberar a agenda.
+            // - Se should_refund for true, gerar uma transação de SAÍDA no caixa de hoje.
             $result = $this->reservaController->cancelSeries(
                 $masterId,
-                $validated['cancellation_reason'],
+                '[Gestor - Cancelamento Série] ' . $validated['cancellation_reason'],
                 $validated['should_refund'],
                 (float) $validated['paid_amount_ref']
             );
 
             DB::commit();
-            $message = "Toda a série recorrente futura (total de {$result['cancelled_count']} slots) foi cancelada com sucesso! Os horários foram liberados." . $result['message_finance'];
 
-            return response()->json(['success' => true, 'message' => $message], 200);
+            $message = "Toda a série recorrente futura (total de {$result['cancelled_count']} slots) foi cancelada com sucesso! Os horários foram liberados." . ($result['message_finance'] ?? '');
+
+            return response()->json([
+                'success' => true,
+                'message' => $message
+            ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao cancelar série recorrente ID: {$masterId}.", ['exception' => $e]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Erro interno ao cancelar a série recorrente. Detalhe: ' . $e->getMessage()
+                'message' => 'Erro interno ao cancelar a série recorrente: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -678,7 +750,7 @@ class AdminController extends Controller
     public function createUser()
     {
         return view('admin.users.create', [
-             // ...
+            // ...
         ]);
     }
 
@@ -923,9 +995,18 @@ class AdminController extends Controller
         $search = $request->input('search');
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
+        // 🏟️ NOVO: Filtro de Arena
+        $arenaId = $request->input('arena_id');
 
         $reservas = Reserva::where('status', Reserva::STATUS_REJEITADA)
             ->where('is_fixed', false)
+            ->with('arena') // 🏟️ Eager loading para mostrar o nome da quadra na lista
+
+            // 🏟️ FILTRO MULTIQUADRA
+            ->when($arenaId, function ($query, $arenaId) {
+                return $query->where('arena_id', $arenaId);
+            })
+
             ->orderBy('date', 'desc')
             ->orderBy('created_at', 'desc')
             ->when($search, function ($query, $search) {
@@ -942,7 +1023,7 @@ class AdminController extends Controller
                 return $query->whereDate('date', '<=', $endDate);
             })
             ->paginate(20)
-            ->appends($request->except('page'));
+            ->appends($request->all()); // 🎯 Mantém todos os filtros na paginação
 
         return view('admin.reservas.rejeitadas', [
             'reservas' => $reservas,
@@ -950,6 +1031,8 @@ class AdminController extends Controller
             'search' => $search,
             'startDate' => $startDate,
             'endDate' => $endDate,
+            'arenaId' => $arenaId, // Passa de volta para manter o select preenchido
+            'arenas' => \App\Models\Arena::all(), // 🏟️ Envia as arenas para o select
         ]);
     }
 
@@ -974,16 +1057,21 @@ class AdminController extends Controller
      */
     public function indexFinancialDashboard(Request $request)
     {
-        // 1. Definição da data de referência (hoje ou data do filtro)
+        // 1. Definição da data e da ARENA (Filtro essencial) 🏟️
         $selectedDate = $request->input('date', Carbon::today()->toDateString());
         $date = Carbon::parse($selectedDate)->toDateString();
+        $arenaId = $request->input('arena_id'); // 🎯 NOVO: Captura o filtro de quadra
         $search = $request->input('search');
         $reservaId = $request->input('reserva_id');
 
-        // 2. Consulta de Reservas Agendadas para a Tabela
+        // 2. Consulta de Reservas com Filtro de Arena e Eager Loading
         $reservasQuery = Reserva::where('is_fixed', false)
+            ->with('arena') // 🏟️ Para exibir o nome da quadra na tabela
             ->whereDate('date', $date)
             ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, Reserva::STATUS_CONCLUIDA, Reserva::STATUS_CANCELADA, Reserva::STATUS_NO_SHOW])
+            ->when($arenaId, function ($query, $arenaId) {
+                return $query->where('arena_id', $arenaId); // Filtra por quadra
+            })
             ->when($reservaId, function ($query, $reservaId) {
                 return $query->where('id', $reservaId);
             })
@@ -996,62 +1084,60 @@ class AdminController extends Controller
             ->orderBy('start_time')
             ->get();
 
-        // 3. Cálculo dos KPIs Financeiros do Dia
+        // 3. Cálculos Financeiros Segmentados 💰
 
-        // 3.1 Total Recebido HOJE (Cash in Hand - Saldo Líquido)
+        // 3.1 Total Recebido (Filtrado por Arena se houver)
         $totalReceived = FinancialTransaction::whereDate('paid_at', $date)
+            ->when($arenaId, function ($query, $arenaId) {
+                return $query->where('arena_id', $arenaId);
+            })
             ->sum('amount');
 
-        // 🛑 NOVO: Busca todas as transações financeiras do dia para auditoria na view
+        // Transações para auditoria (Filtradas)
         $financialTransactions = FinancialTransaction::whereDate('paid_at', $date)
-            ->orderBy('paid_at', 'asc') // Ordena por data/hora para ver a ordem dos eventos
+            ->when($arenaId, function ($query, $arenaId) {
+                return $query->where('arena_id', $arenaId);
+            })
+            ->orderBy('paid_at', 'asc')
             ->get();
 
-
-        // 3.2 Total Esperado e Total Pendente (A receber)
+        // 3.2 Total Esperado e Pendente (Baseado na query filtrada de reservas)
+        // Usamos as reservas ativas da quadra selecionada
         $activeReservas = Reserva::where('is_fixed', false)
             ->whereDate('date', $date)
             ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
+            ->when($arenaId, function ($query, $arenaId) {
+                return $query->where('arena_id', $arenaId);
+            })
             ->get();
 
-        $totalExpected = 0.00;
-        $totalPaidBySignals = 0.00;
-
-        foreach ($activeReservas as $reserva) {
-            $totalExpected += $reserva->price;
-            $totalPaidBySignals += $reserva->total_paid;
-        }
-
+        $totalExpected = $activeReservas->sum('price');
+        $totalPaidBySignals = $activeReservas->sum('total_paid');
         $totalPending = $totalExpected - $totalPaidBySignals;
 
-        // 3.3 Contagem de Faltas (No-Show)
+        // 3.3 No-Show (Filtrado)
         $noShowCount = Reserva::whereDate('date', $date)
             ->where('is_fixed', false)
             ->where('status', Reserva::STATUS_NO_SHOW)
+            ->when($arenaId, function ($query, $arenaId) {
+                return $query->where('arena_id', $arenaId);
+            })
             ->count();
 
-        // 4. Saldo Total (Global)
-        $totalBalance = $this->calculateTotalBalance();
-
-        Log::info("DEBUG FINANCEIRO: KPIs do dia {$date} - Recebido: R$ {$totalReceived}, Pendente: R$ {$totalPending}, Esperado: R$ {$totalExpected}");
-
-
-        return view('admin.financial.index', [ // Assume que a view é admin.financial.index
-            'reservas' => $reservasQuery, // Tabela de agendamentos (inclui canceladas e no_show)
-            'financialTransactions' => $financialTransactions, // 🛑 NOVO: Transações para auditoria
+        return view('admin.financial.index', [
+            'reservas' => $reservasQuery,
+            'financialTransactions' => $financialTransactions,
             'selectedDate' => $selectedDate,
-            'highlightReservaId' => $reservaId, // Para destacar linha se vier do calendário
-
-            // KPIs para a view
-            'totalReceived' => $totalReceived, // Recebido HOJE (agora Saldo Líquido)
-            'totalPending' => max(0, $totalPending), // Pendente (não pode ser negativo no display)
-            'totalExpected' => $totalExpected, // Receita total prevista
+            'arenaId' => $arenaId, // Passa o ID para manter o select preenchido
+            'arenas' => \App\Models\Arena::all(), // 🏟️ Lista de quadras para o filtro
+            'highlightReservaId' => $reservaId,
+            'totalReceived' => $totalReceived,
+            'totalPending' => max(0, $totalPending),
+            'totalExpected' => $totalExpected,
             'noShowCount' => $noShowCount,
-
-            // Variáveis globais/de filtro
             'pageTitle' => 'Gerenciamento de Caixa & Pagamentos',
             'search' => $search,
-            'totalGlobalBalance' => $totalBalance, // Opcional: para mostrar o saldo acumulado total
+            'totalGlobalBalance' => $this->calculateTotalBalance(),
         ]);
     }
 }

@@ -202,9 +202,11 @@ class FinanceiroController extends Controller
         }
     }
 
-    public function isCashClosed(string $dateString): bool
+    // app/Http/Controllers/FinanceiroController.php
+
+    public static function isCashClosed(string $dateString): bool
     {
-        return Cashier::whereDate('date', $dateString)
+        return \App\Models\Cashier::whereDate('date', $dateString)
             ->where('status', 'closed')
             ->exists();
     }

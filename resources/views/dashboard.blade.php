@@ -103,19 +103,22 @@
         }
 
         /* ✅ PADRÃO: Estilo para Eventos RESOLVIDOS (PAGO, ATRASADO, CANCELADO, REJEITADO) */
+        /* ✅ MODIFICADO: Estilo para Eventos RESOLVIDOS (PAGO, CONCLUÍDO) */
         .fc-event-paid {
             background-color: #9CA3AF !important;
-            /* Cinza mais claro (Gray 400) */
             border-color: #6B7280 !important;
             color: #4B5563 !important;
-            /* Texto cinza escuro para contraste */
             opacity: 0.5 !important;
-            /* Efeito desbotado */
             filter: grayscale(100%);
-            /* Remove as cores (inclusive o roxo) */
             font-weight: normal !important;
             text-decoration: line-through;
-            /* Opcional: risca o nome para indicar conclusão */
+        }
+
+        /* ✅ NOVO: Esconder completamente eventos CANCELADOS ou REJEITADOS */
+        /* Isso garante que o slot VERDE debaixo fique visível */
+        .fc-event-cancelled,
+        .fc-event-rejected {
+            display: none !important;
         }
 
         /* ✅ GARANTIR QUE O TEXTO FIQUE BRANCO EM EVENTOS ESCUROS */
@@ -1957,7 +1960,14 @@
                         const titleEl = info.el.querySelector('.fc-event-title');
                         const eventDate = moment(info.event.start).format('YYYY-MM-DD');
 
-                        // Trava visual se a data estiver no cache de fechados (hoje ou detectado via clique)
+                        // 🚩 REGRA DE OURO: Se o status for cancelado ou rejeitado, removemos do visual
+                        // Isso resolve o problema de nomes "fantasmas" no calendário.
+                        if (status === 'cancelled' || status === 'rejected') {
+                            info.el.style.display = 'none'; // Esconde o card completamente
+                            return; // Interrompe o processamento deste evento
+                        }
+
+                        // Trava visual se a data estiver no cache de fechados
                         const isLocked = window.closedDatesCache && window.closedDatesCache[eventDate] === true;
 
                         if (isLocked) {
@@ -1966,8 +1976,10 @@
                             info.el.style.cursor = 'not-allowed';
                         }
 
+                        // Limpa classes anteriores para evitar conflitos de cores
                         info.el.classList.remove('fc-event-available', 'fc-event-recurrent', 'fc-event-quick', 'fc-event-pending', 'fc-event-paid', 'fc-event-no-show');
 
+                        // Lógica de Estilização por Status
                         if (['pago', 'completed', 'resolvido', 'concluida'].includes(status) || paymentStatus === 'paid') {
                             info.el.classList.add('fc-event-paid');
                         } else if (status === 'no_show') {
@@ -1981,6 +1993,7 @@
                                 titleEl.textContent = 'LIVRE - R$ ' + price;
                             }
                         } else {
+                            // Reservas Confirmadas (Vivas)
                             info.el.classList.add(props.is_recurrent ? 'fc-event-recurrent' : 'fc-event-quick');
                         }
                     },
