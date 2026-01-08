@@ -239,29 +239,44 @@ class FinanceiroController extends Controller
      * API para verificar o status do caixa em tempo real
      * Usado pelo JavaScript para bloquear agendamentos se o caixa estiver fechado.
      */
-    public function getStatus()
+    public function getStatus(Request $request)
     {
         try {
-            // Buscamos se existe um registro de caixa para hoje
+            $targetDate = $request->query('date', now()->format('Y-m-d'));
             $hoje = now()->format('Y-m-d');
-            $caixa = Cashier::where('date', $hoje)->first();
 
-            // Lógica de Retorno:
-            // 1. Se não existir registro ainda, consideramos ABERTO (sistema inicia o dia livre)
-            // 2. Se existir, verificamos se o status é diferente de 'closed'
-            $isOpen = true;
-            if ($caixa && $caixa->status === 'closed') {
-                $isOpen = false;
+            // 1. 🔍 BUSCA NO BANCO PRIMEIRO
+            // Independente de ser hoje, passado ou futuro, se o caixa existe no banco,
+            // o status dele é a palavra final.
+            $caixa = Cashier::where('date', $targetDate)->first();
+
+            if ($caixa) {
+                return response()->json([
+                    'isOpen' => $caixa->status !== 'closed', // Se for 'closed', retorna false
+                    'date'   => $targetDate,
+                    'status' => $caixa->status
+                ]);
             }
 
+            // 2. 🚀 SE NÃO EXISTE NO BANCO, LIBERAMOS O FUTURO
+            // Se chegou aqui e a data é futura, permitimos clicar pois o caixa ainda será criado.
+            if ($targetDate > $hoje) {
+                return response()->json([
+                    'isOpen' => true,
+                    'date'   => $targetDate,
+                    'status' => 'not_created'
+                ]);
+            }
+
+            // 3. SE É HOJE OU PASSADO E NÃO TEM REGISTRO
+            // Permitimos o clique para que o primeiro lançamento crie o caixa (comportamento padrão)
             return response()->json([
-                'isOpen' => $isOpen,
-                'date'   => $hoje,
-                'status' => $caixa->status ?? 'not_created'
+                'isOpen' => true,
+                'date'   => $targetDate,
+                'status' => 'not_created'
             ]);
         } catch (\Exception $e) {
             Log::error('Erro ao buscar status do caixa: ' . $e->getMessage());
-            // Em caso de erro técnico, retornamos true para não travar o sistema
             return response()->json(['isOpen' => true], 200);
         }
     }

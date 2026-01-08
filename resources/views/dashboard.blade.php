@@ -689,7 +689,7 @@
 
 
     <script>
-        window.isCashierClosedGlobal = false;
+        window.closedDatesCache = {};
         // === CONFIGURAÇÕES E ROTAS (CORRIGIDAS) ===
         const PENDING_API_URL = '{{ route("api.reservas.pendentes.count") }}';
         const CONFIRMED_API_URL = '{{ route("api.reservas.confirmadas") }}';
@@ -808,7 +808,7 @@
                 if (linkPendentes || btnRenovacao) {
                     // Verifica o status do caixa usando a função que já ajustamos
                     // Ela mostrará a mensagem de erro e fará o refetch do calendário se necessário
-                    const aberto = await isCashierOpen();
+                    const aberto = await isCashierOpen(moment().format('YYYY-MM-DD'));
 
                     if (!aberto) {
                         e.preventDefault(); // Impede a navegação do link
@@ -1596,7 +1596,7 @@
         async function handleRenewal(masterReservaId) {
             // 🎯 1. BLOQUEIO PREVENTIVO OTIMIZADO
             // Reutiliza a função global: verifica status, avisa o usuário e trava o calendário se necessário
-            const aberto = await isCashierOpen();
+            const aberto = await isCashierOpen(moment().format('YYYY-MM-DD'));
             if (!aberto) return; // 🛑 Cancela a operação se o caixa estiver fechado
 
             const url = RENEW_SERIE_URL.replace(':masterReserva', masterReservaId);
@@ -1668,38 +1668,47 @@
         // FUNÇÃO GLOBAL: Gerenciar cliques no Calendário
         // =========================================================
         window.eventClick = async function(info) {
-            // 🛑 1. TRAVA DE SEGURANÇA INSTANTÂNEA
-            // Se a variável global diz que está fechado, bloqueamos sem nem consultar a rede.
-            if (window.isCashierClosedGlobal) {
-                showDashboardMessage("Ação bloqueada: O caixa está fechado. Abra o caixa para prosseguir.", 'error');
-                return;
-            }
-
             const event = info.event;
             const props = event.extendedProps;
 
-            // 🎯 2. VERIFICAÇÃO EM TEMPO REAL (Sincronização com o Servidor)
+            // 📅 0. Identifica a data do clique (IMPORTANTE para o bug das datas)
+            const eventDate = moment(event.start).format('YYYY-MM-DD');
+
+            // 🛑 1. TRAVA DE SEGURANÇA LOCAL (Cache por Data)
+            // Se o cache já marcou esta data específica como fechada, bloqueia imediatamente.
+            if (window.closedDatesCache && window.closedDatesCache[eventDate] === true) {
+                showDashboardMessage(`Ação bloqueada: O caixa do dia ${moment(eventDate).format('DD/MM')} está fechado.`, 'error');
+                return;
+            }
+
+            // 🎯 2. VERIFICAÇÃO EM TEMPO REAL (Sincronização com Servidor por Data)
             try {
-                // Corrigido: await fetch (estava grudado)
-                const response = await fetch('{{ route("admin.payment.caixa.status") }}');
+                // Passamos a data na rota para o servidor validar aquele dia específico
+                const response = await fetch(`{{ route("admin.payment.caixa.status") }}?date=${eventDate}`);
                 const statusCaixa = await response.json();
 
                 if (!statusCaixa.isOpen) {
-                    window.isCashierClosedGlobal = true; // Atualiza o estado global
-                    showDashboardMessage("Ação Bloqueada: Você precisa abrir o caixa para realizar agendamentos ou alterações.", 'error');
+                    // Atualiza o cache de datas para que o eventDidMount pinte de cinza
+                    if (!window.closedDatesCache) window.closedDatesCache = {};
+                    window.closedDatesCache[eventDate] = true;
 
-                    // Forçamos o calendário a redesenhar (aplicando o cinza em todos os slots)
+                    showDashboardMessage(`Ação Bloqueada: O caixa do dia ${moment(eventDate).format('DD/MM')} está fechado. Abra-o para prosseguir.`, 'error');
+
+                    // Forçamos o redesenho para aplicar o visual de bloqueio nesta data
                     if (window.calendar) {
                         window.calendar.render();
                     }
-                    return; // 🛑 Para a execução aqui
+                    return; // 🛑 Para a execução
+                } else {
+                    // Se cair aqui, garantimos que no cache esta data está aberta
+                    if (window.closedDatesCache) window.closedDatesCache[eventDate] = false;
                 }
             } catch (error) {
-                console.error("Erro ao verificar status do caixa:", error);
-                // Em caso de erro de rede, permitimos prosseguir para não travar o usuário
+                console.error("Erro ao verificar status do caixa por data:", error);
+                // Em caso de erro de rede, permitimos prosseguir para não travar a operação
             }
 
-            // --- DAQUI PARA BAIXO O CÓDIGO SÓ RODA SE O CAIXA ESTIVER REALMENTE ABERTO ---
+            // --- DAQUI PARA BAIXO O CÓDIGO SÓ RODA SE O CAIXA DA DATA ESTIVER ABERTO ---
 
             // 3. Normalização de Status e Identificação do Tipo de Slot
             const status = (props.status || '').toLowerCase();
@@ -1707,7 +1716,7 @@
                 event.classNames.includes('fc-event-available') ||
                 info.el.classList.contains('fc-event-available');
 
-            console.log("Evento clicado:", event.title, "| Status:", status);
+            console.log("Evento clicado:", event.title, "| Status:", status, "| Data:", eventDate);
 
             // A. SLOT LIVRE (VERDE) -> ABRE AGENDAMENTO RÁPIDO
             if (isAvailable) {
@@ -1725,7 +1734,7 @@
 
                 setVal('quick-schedule-id', props.schedule_id || '');
                 setVal('quick-arena-id', selectedArenaId);
-                setVal('quick-date', moment(event.start).format('YYYY-MM-DD'));
+                setVal('quick-date', eventDate);
                 setVal('quick-start-time', moment(event.start).format('HH:mm'));
                 setVal('quick-end-time', moment(event.end).format('HH:mm'));
                 setVal('reserva-id-to-update', event.id || '');
@@ -1737,13 +1746,13 @@
                 const displayArea = document.getElementById('slot-info-display');
                 if (displayArea) {
                     displayArea.innerHTML = `
-            <div class="space-y-1 border-l-4 border-green-500 pl-3">
-                <p class="text-xs uppercase text-gray-500 font-bold tracking-wider">Informações da Reserva</p>
-                <p><strong>Quadra:</strong> <span class="text-indigo-600">${selectedArenaName}</span></p>
-                <p><strong>Data:</strong> ${moment(event.start).format('DD/MM/YYYY')}</p>
-                <p><strong>Hora:</strong> ${moment(event.start).format('HH:mm')} às ${moment(event.end).format('HH:mm')}</p>
-                <p><strong>Preço Sugerido:</strong> <span class="text-green-600 font-bold">R$ ${priceFormatted}</span></p>
-            </div>`;
+                <div class="space-y-1 border-l-4 border-green-500 pl-3">
+                    <p class="text-xs uppercase text-gray-500 font-bold tracking-wider">Informações da Reserva</p>
+                    <p><strong>Quadra:</strong> <span class="text-indigo-600">${selectedArenaName}</span></p>
+                    <p><strong>Data:</strong> ${moment(event.start).format('DD/MM/YYYY')}</p>
+                    <p><strong>Hora:</strong> ${moment(event.start).format('HH:mm')} às ${moment(event.end).format('HH:mm')}</p>
+                    <p><strong>Preço Sugerido:</strong> <span class="text-green-600 font-bold">R$ ${priceFormatted}</span></p>
+                </div>`;
                 }
 
                 setVal('client_name', '');
@@ -1780,29 +1789,29 @@
 
             if (contentArea && actionsArea && eventModal) {
                 contentArea.innerHTML = `
-        <div class="space-y-2">
-            <p><strong>Cliente:</strong> ${clientNameRaw}</p>
-            <p><strong>Contato:</strong> ${props.client_contact || 'N/A'}</p>
-            <p><strong>Horário:</strong> ${moment(event.start).format('HH:mm')} - ${moment(event.end).format('HH:mm')}</p>
-            <p><strong>Status:</strong> <span class="uppercase font-extrabold ${status === 'no_show' ? 'text-red-600' : 'text-indigo-600'}">${status}</span></p>
-            <p><strong>Total Pago:</strong> <span class="text-green-700 font-bold">R$ ${parseFloat(paidAmount).toFixed(2).replace('.', ',')}</span> / R$ ${parseFloat(totalPrice).toFixed(2).replace('.', ',')}</p>
-        </div>`;
+            <div class="space-y-2">
+                <p><strong>Cliente:</strong> ${clientNameRaw}</p>
+                <p><strong>Contato:</strong> ${props.client_contact || 'N/A'}</p>
+                <p><strong>Horário:</strong> ${moment(event.start).format('HH:mm')} - ${moment(event.end).format('HH:mm')}</p>
+                <p><strong>Status:</strong> <span class="uppercase font-extrabold ${status === 'no_show' ? 'text-red-600' : 'text-indigo-600'}">${status}</span></p>
+                <p><strong>Total Pago:</strong> <span class="text-green-700 font-bold">R$ ${parseFloat(paidAmount).toFixed(2).replace('.', ',')}</span> / R$ ${parseFloat(totalPrice).toFixed(2).replace('.', ',')}</p>
+            </div>`;
 
                 actionsArea.innerHTML = `
-        <div class="grid grid-cols-1 gap-2">
-            ${!isFinalized && status !== 'cancelled' ? `
-                <button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                    <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
-                </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+            <div class="grid grid-cols-1 gap-2">
+                ${!isFinalized && status !== 'cancelled' ? `
+                    <button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
+                        <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
+                    </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
-            <div class="grid grid-cols-2 gap-2 mt-2">
-                ${!isFinalized && status !== 'no_show' ? `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmount}', ${isFinalized}, '${totalPrice}')" class="px-2 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200">FALTA</button>` : ''}
-                <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmount}', ${isFinalized})" class="px-2 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg border border-gray-300">CANCELAR DIA</button>
-            </div>
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                    ${!isFinalized && status !== 'no_show' ? `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmount}', ${isFinalized}, '${totalPrice}')" class="px-2 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200">FALTA</button>` : ''}
+                    <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmount}', ${isFinalized})" class="px-2 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg border border-gray-300">CANCELAR DIA</button>
+                </div>
 
-            ${isRecurrent ? `<button onclick="cancelarSerie('${reservaId}', '${paidAmount}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg">CANCELAR SÉRIE</button>` : ''}
-            <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">Fechar</button>
-        </div>`;
+                ${isRecurrent ? `<button onclick="cancelarSerie('${reservaId}', '${paidAmount}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg">CANCELAR SÉRIE</button>` : ''}
+                <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">Fechar</button>
+            </div>`;
 
                 eventModal.classList.remove('hidden');
                 eventModal.style.display = 'flex';
@@ -1863,7 +1872,7 @@
                     height: 'auto',
                     timeZone: 'local',
                     slotMinTime: '06:00:00',
-                    slotMaxTime: '23:00:00',
+                    slotMaxTime: '24:00:00',
                     headerToolbar: {
                         left: 'prev,next today',
                         center: 'title',
@@ -1880,13 +1889,32 @@
                             events: function(fetchInfo, successCallback, failureCallback) {
                                 const arenaId = document.getElementById('filter_arena')?.value || '';
                                 const url = `${AVAILABLE_API_URL}?start=${fetchInfo.startStr}&end=${fetchInfo.endStr}&arena_id=${arenaId}`;
+
                                 fetch(url)
                                     .then(r => r.json())
                                     .then(events => {
                                         const now = moment();
-                                        successCallback(events.filter(e => moment(e.end).isAfter(now)));
+
+                                        const filtered = events.filter(e => {
+                                            const eventEnd = moment(e.end);
+                                            const eventStart = moment(e.start);
+
+                                            // Se o slot for de OUTRO DIA (que não hoje), mostra sempre
+                                            if (!eventStart.isSame(now, 'day')) {
+                                                return true;
+                                            }
+
+                                            // Se for HOJE, só mostra se o horário de INÍCIO ainda não passou
+                                            // Usamos uma folga de 5 minutos apenas para imprevistos de relógio
+                                            return eventStart.isAfter(now.clone().subtract(30, 'minutes'));
+                                        });
+
+                                        successCallback(filtered);
                                     })
-                                    .catch(err => failureCallback(err));
+                                    .catch(err => {
+                                        console.error("Erro ao buscar slots livres:", err);
+                                        failureCallback(err);
+                                    });
                             }
                         }
                     ],
@@ -1896,14 +1924,19 @@
                         const paymentStatus = (props.payment_status || '').toLowerCase();
                         const titleEl = info.el.querySelector('.fc-event-title');
 
-                        // 🎯 1. TRAVA VISUAL E FÍSICA (CAIXA FECHADO)
-                        // Se o caixa estiver fechado globalmente, desativamos qualquer interação com o slot.
-                        if (window.isCashierClosedGlobal) {
+                        // 🎯 1. TRAVA VISUAL E FÍSICA POR DATA (CAIXA FECHADO)
+                        // Identificamos a data específica deste slot/evento
+                        const eventDate = moment(info.event.start).format('YYYY-MM-DD');
+
+                        // Verificamos se esta data específica está marcada como fechada no nosso cache
+                        const isLocked = window.closedDatesCache && window.closedDatesCache[eventDate] === true;
+
+                        if (isLocked) {
                             info.el.classList.add('cashier-closed-locked');
                             info.el.style.pointerEvents = 'none'; // Impede cliques e hovers
                             info.el.style.cursor = 'not-allowed';
                         } else {
-                            // Garante que o slot seja clicável se o caixa estiver aberto
+                            // Garante que o slot seja clicável se o caixa do dia estiver aberto
                             info.el.classList.remove('cashier-closed-locked');
                             info.el.style.pointerEvents = 'auto';
                             info.el.style.cursor = 'pointer';
@@ -1957,49 +1990,54 @@
         };
 
         /**
-         * Verifica se o caixa está aberto e sincroniza a trava global do sistema.
-         * Otimizada para evitar re-renderizações desnecessárias do FullCalendar.
+         * Verifica se o caixa está aberto para uma data específica.
+         * @param {string} date - Data no formato YYYY-MM-DD
+         * @returns {Promise<boolean>}
          */
-        async function isCashierOpen() {
-            try {
-                const response = await fetch('{{ route("admin.payment.caixa.status") }}');
+        async function isCashierOpen(date) {
+            // 1. Definição da data alvo (Hoje se não for informada)
+            const targetDate = date || moment().format('YYYY-MM-DD');
 
-                // Se a rota falhar (ex: 500 ou 404), assumimos aberto para não travar a operação
+            // 2. Garantia de existência do Cache (Evita erro de variável não definida)
+            if (!window.closedDatesCache) {
+                window.closedDatesCache = {};
+            }
+
+            try {
+                // 🎯 3. Consulta ao servidor enviando a data específica como parâmetro
+                const response = await fetch(`{{ route("admin.payment.caixa.status") }}?date=${targetDate}`);
+
+                // Se houver erro na rota, por segurança, permitimos a operação para não travar o sistema
                 if (!response.ok) {
-                    window.isCashierClosedGlobal = false;
+                    window.closedDatesCache[targetDate] = false;
                     return true;
                 }
 
                 const data = await response.json();
-
-                // Estado atual vindo do servidor
                 const isClosedNow = !data.isOpen;
 
-                // 🎯 OTIMIZAÇÃO: Só dispara o render se o estado MUDOU
-                if (window.isCashierClosedGlobal !== isClosedNow) {
-                    window.isCashierClosedGlobal = isClosedNow;
+                // 4. Sincronização do Cache de Datas
+                // Isso fará com que o eventDidMount saiba que deve pintar o dia de cinza
+                window.closedDatesCache[targetDate] = isClosedNow;
 
+                // 5. Bloqueio e Feedback ao Usuário
+                if (isClosedNow) {
+                    const dataFormatada = moment(targetDate).format('DD/MM');
+                    showDashboardMessage(`Ação bloqueada: O caixa do dia ${dataFormatada} está fechado.`, 'error');
+
+                    // Forçamos o calendário a se redesenhar para aplicar a classe 'cashier-closed-locked'
                     if (window.calendar) {
-                        // Redesenha o calendário para aplicar/remover as classes 'cashier-closed-locked'
-                        // via eventDidMount conforme o novo estado global.
                         window.calendar.render();
                     }
+                    return false; // Retorna falso para interromper qualquer ação (clique/reserva)
                 }
 
-                // Se estiver fechado, bloqueia a execução e avisa o usuário
-                if (window.isCashierClosedGlobal) {
-                    showDashboardMessage(
-                        "Ação bloqueada: O caixa está fechado. Abra o caixa para realizar agendamentos ou alterações.",
-                        'error'
-                    );
-                    return false;
-                }
+                // Se chegou aqui, o caixa está aberto para esta data
+                return true;
 
-                return true; // Caixa aberto, vida que segue
             } catch (e) {
-                console.error("Erro crítico ao verificar status do caixa:", e);
-                // Em caso de erro de rede, permitimos a ação para não interromper o fluxo do negócio
-                window.isCashierClosedGlobal = false;
+                console.error(`[Caixa Debug] Erro ao verificar status da data ${targetDate}:`, e);
+                // Em caso de erro crítico de rede, não bloqueamos o usuário
                 return true;
             }
         }
