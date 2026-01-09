@@ -314,9 +314,10 @@ class AdminController extends Controller
     /**
      * ✅ CORRIGIDO: Registra a falta do cliente (No-Show) - DELEGADO.
      * Delega a manipulação de status e transações financeiras.
-     */
-    public function registerNoShow(Request $request, Reserva $reserva)
-    {
+     
+    
+     *public function registerNoShow(Request $request, Reserva $reserva)
+     *{
         if ($reserva->status !== Reserva::STATUS_CONFIRMADA) {
             return response()->json(['success' => false, 'message' => 'A reserva deve estar confirmada para ser marcada como falta.'], 400);
         }
@@ -353,7 +354,9 @@ class AdminController extends Controller
                 'message' => 'Erro interno ao registrar a falta. Detalhe: ' . $e->getMessage()
             ], 500);
         }
-    }
+     *}
+     */
+
 
 
     /**
@@ -988,42 +991,46 @@ class AdminController extends Controller
     }
 
     /**
-     * Exibe a lista de Reservas Rejeitadas.
+     * Exibe a lista de Reservas Rejeitadas com suporte a filtros e multiquadras.
      */
     public function indexReservasRejeitadas(Request $request)
     {
         $search = $request->input('search');
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
-        // 🏟️ NOVO: Filtro de Arena
         $arenaId = $request->input('arena_id');
 
-        $reservas = Reserva::where('status', Reserva::STATUS_REJEITADA)
+        // 1. Iniciamos a query filtrando apenas por REJEITADAS e carregando Arena/Manager
+        $query = Reserva::where('status', Reserva::STATUS_REJEITADA)
             ->where('is_fixed', false)
-            ->with('arena') // 🏟️ Eager loading para mostrar o nome da quadra na lista
+            ->with(['arena', 'manager']); // 🏟️ Essencial para não dar erro na View
 
-            // 🏟️ FILTRO MULTIQUADRA
-            ->when($arenaId, function ($query, $arenaId) {
-                return $query->where('arena_id', $arenaId);
-            })
+        // 2. Filtro Multiquadra
+        $query->when($arenaId, function ($q, $arenaId) {
+            return $q->where('arena_id', $arenaId);
+        });
 
-            ->orderBy('date', 'desc')
-            ->orderBy('created_at', 'desc')
-            ->when($search, function ($query, $search) {
-                return $query->where(function ($q) use ($search) {
-                    $q->where('client_name', 'like', '%' . $search . '%')
-                        ->orWhere('client_contact', 'like', '%' . $search . '%')
-                        ->orWhere('cancellation_reason', 'like', '%' . $search . '%');
-                });
-            })
-            ->when($startDate, function ($query, $startDate) {
-                return $query->whereDate('date', '>=', $startDate);
-            })
-            ->when($endDate, function ($query, $endDate) {
-                return $query->whereDate('date', '<=', $endDate);
-            })
-            ->paginate(20)
-            ->appends($request->all()); // 🎯 Mantém todos os filtros na paginação
+        // 3. Filtro de Busca (Nome, Contato ou até o Motivo da Rejeição)
+        $query->when($search, function ($q, $search) {
+            return $q->where(function ($sub) use ($search) {
+                $sub->where('client_name', 'like', '%' . $search . '%')
+                    ->orWhere('client_contact', 'like', '%' . $search . '%')
+                    ->orWhere('cancellation_reason', 'like', '%' . $search . '%');
+            });
+        });
+
+        // 4. Filtros de Data (Período da reserva)
+        $query->when($startDate, function ($q, $startDate) {
+            return $q->whereDate('date', '>=', $startDate);
+        })
+            ->when($endDate, function ($q, $endDate) {
+                return $q->whereDate('date', '<=', $endDate);
+            });
+
+        // 5. Ordenação: Mostra as que foram rejeitadas recentemente primeiro
+        $reservas = $query->orderBy('updated_at', 'desc')
+            ->paginate(15)
+            ->appends($request->all()); // 🎯 CRÍTICO: Mantém os filtros ao trocar de página
 
         return view('admin.reservas.rejeitadas', [
             'reservas' => $reservas,
@@ -1031,8 +1038,8 @@ class AdminController extends Controller
             'search' => $search,
             'startDate' => $startDate,
             'endDate' => $endDate,
-            'arenaId' => $arenaId, // Passa de volta para manter o select preenchido
-            'arenas' => \App\Models\Arena::all(), // 🏟️ Envia as arenas para o select
+            'arenaId' => $arenaId,
+            'arenas' => \App\Models\Arena::all(), // 🏟️ Necessário para o Select da View
         ]);
     }
 

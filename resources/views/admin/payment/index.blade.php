@@ -1369,13 +1369,14 @@
             const notes = document.getElementById('no_show_reason').value;
             const blockUser = document.getElementById('block_user').checked;
             const shouldRefund = document.getElementById('should_refund').value === 'true';
-            const refundAmount = document.getElementById('custom_refund_amount').value; // PEGA O VALOR DIGITADO
+            const refundAmount = document.getElementById('custom_refund_amount').value;
             const csrfToken = document.querySelector('input[name="_token"]').value;
 
             const submitBtn = document.getElementById('submitNoShowBtn');
             submitBtn.disabled = true;
 
-            fetch(`/admin/pagamentos/${reservaId}/falta`, {
+            // 🎯 URL ATUALIZADA PARA O PADRÃO QUE DEFINIMOS NAS ROTAS
+            fetch(`/admin/reservas/${reservaId}/no-show`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1386,7 +1387,7 @@
                         notes,
                         block_user: blockUser,
                         should_refund: shouldRefund,
-                        refund_amount: refundAmount // ENVIA O VALOR PERSONALIZADO
+                        refund_amount: refundAmount
                     })
                 })
                 .then(res => res.json())
@@ -1397,6 +1398,11 @@
                         alert(data.message);
                         submitBtn.disabled = false;
                     }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("Erro ao processar requisição.");
+                    submitBtn.disabled = false;
                 });
         });
 

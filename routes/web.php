@@ -126,7 +126,6 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::post('fechar-caixa', [FinanceiroController::class, 'closeCash'])->name('close_cash');
             Route::post('abrir-caixa', [FinanceiroController::class, 'openCash'])->name('open_cash');
             Route::post('{reserva}/finalizar', [ReservaController::class, 'finalizarPagamento'])->name('finalize');
-            Route::post('{reserva}/falta', [PaymentController::class, 'registerNoShow'])->name('noshow');
         });
 
         // 📊 RELATÓRIOS ANALÍTICOS
