@@ -302,70 +302,100 @@
                                     <span class="text-gray-400 text-[10px] uppercase font-bold italic">Automático</span>
                                     @endif
                                 </td>
-
+                            
+                                
                                 {{-- 8. AÇÕES --}}
-                                <td class="px-4 py-3 text-sm font-medium min-w-[100px]">
-                                    <div class="flex flex-col space-y-1">
-                                        {{-- Botão Detalhes: Sempre visível --}}
-                                        <a href="{{ route('admin.reservas.show', $reserva) }}"
-                                            class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center">
-                                            Detalhes
-                                        </a>
+<td class="px-4 py-3 text-sm font-medium min-w-[100px]">
+    <div class="flex flex-col space-y-1">
+        {{-- Botão Detalhes: Sempre visível --}}
+        <a href="{{ route('admin.reservas.show', $reserva) }}"
+            class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center">
+            Detalhes
+        </a>
 
-                                        @if (in_array($reserva->status, ['cancelled', 'rejected', 'no_show']))
-                                        @php
-                                        // 1. Extração robusta da data (YYYY-MM-DD) para evitar erro de data duplicada
-                                        $rawDate = is_string($reserva->date) ? $reserva->date : $reserva->date->format('Y-m-d');
-                                        $onlyDate = substr($rawDate, 0, 10);
+        @if (in_array($reserva->status, ['cancelled', 'rejected', 'no_show']))
+            @php
+                // 1. Extração Ultra-Segura: Forçamos a string e pegamos apenas os primeiros 10 caracteres (YYYY-MM-DD)
+                // Isso mata qualquer tentativa do PHP de duplicar a data.
+                $dateValue = is_object($reserva->date) ? $reserva->date->format('Y-m-d') : (string)$reserva->date;
+                $onlyDate = substr(trim($dateValue), 0, 10);
+                
+                // 2. Limpeza da hora (pega apenas HH:MM:SS se vier com lixo)
+                $onlyTime = substr(trim($reserva->end_time), 0, 8);
 
-                                        // 2. Data de hoje (apenas Y-m-d) para comparação diária
-                                        $today = now()->format('Y-m-d');
+                try {
+                    // Monta a data final de forma limpa: "2026-01-09 07:00:00"
+                    $reservaEndTime = \Carbon\Carbon::parse($onlyDate . ' ' . $onlyTime);
+                    $isExpired = now()->greaterThan($reservaEndTime);
+                } catch (\Exception $e) {
+                    $isExpired = true; // Se der erro no parse, por segurança assume expirado
+                }
+            @endphp
 
-                                        // 3. Trava Front-end: Só marcamos como "Encerrado" se o DIA já passou.
-                                        // Se for hoje, o gestor ainda pode reativar pelo painel.
-                                        $isPastDay = $onlyDate < $today;
-                                            @endphp
+            @if (!$reserva->is_fixed)
+                @if ($isExpired)
+                    {{-- Bloqueio visual para horários que já passaram --}}
+                    <div class="bg-gray-200 text-gray-400 px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center cursor-not-allowed"
+                        title="Este horário já encerrou e não pode mais ser reativado.">
+                        Encerrado
+                    </div>
+                @else
+                    <button onclick="openReactivationModal({{ $reserva->id }}, 'Reativar', 'Deseja reativar esta reserva?', REACTIVATE_URL)"
+                        class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
+                        Reativar
+                    </button>
+                @endif
+            @endif
 
-                                            @if (!$reserva->is_fixed)
-                                            @if ($isPastDay)
-                                            <div class="bg-gray-200 text-gray-400 px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center cursor-not-allowed"
-                                                title="Esta reserva é de um dia anterior e não pode mais ser reativada.">
-                                                Encerrado
-                                            </div>
-                                            @else
-                                            <button onclick="openReactivationModal({{ $reserva->id }}, 'Reativar', 'Deseja reativar esta reserva?', REACTIVATE_URL)"
-                                                class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
-                                                Reativar
-                                            </button>
-                                            @endif
-                                            @endif
+        @elseif (in_array($reserva->status, ['confirmed', 'pending']))
+            {{-- Botão de Caixa: Link com data limpa --}}
+            @php
+                $caixaDateValue = is_object($reserva->date) ? $reserva->date->format('Y-m-d') : (string)$reserva->date;
+                $caixaDate = substr(trim($caixaDateValue), 0, 10);
+            @endphp
+            <a href="{{ route('admin.payment.index', ['reserva_id' => $reserva->id, 'data_reserva' => $caixaDate]) }}"
+                class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center">
+                Caixa
+            </a>
 
-                                            @elseif (in_array($reserva->status, ['confirmed', 'pending']))
-                                            @php
-                                            $rawDate = is_string($reserva->date) ? $reserva->date : $reserva->date->format('Y-m-d');
-                                            $onlyDate = substr($rawDate, 0, 10);
-                                            @endphp
+            {{-- Botão de Preço --}}
+            <button onclick="openPriceUpdateModal({{ $reserva->id }}, {{ $reserva->price ?? 0 }}, '{{ $reserva->client_name ?? 'Reserva' }}')"
+                class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
+                Preço
+            </button>
 
-                                            {{-- Botão de Caixa --}}
-                                            <a href="{{ route('admin.payment.index', ['reserva_id' => $reserva->id, 'data_reserva' => $onlyDate]) }}"
-                                                class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center">
-                                                Caixa
-                                            </a>
+            {{-- CANCELAMENTO PONTUAL --}}
+            <button onclick="openCancellationModal(
+                {{ $reserva->id }}, 
+                'PATCH', 
+                '{{ route('admin.reservas.cancelar_pontual', ':id') }}', 
+                'Deseja cancelar APENAS ESTA reserva do dia?', 
+                'Cancelar Dia',
+                {{ in_array($reserva->payment_status, ['paid', 'partial']) ? 'true' : 'false' }},
+                {{ $reserva->total_paid ?? 0 }}
+            )"
+            class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
+                Cancelar Dia
+            </button>
 
-                                            {{-- Botão de Preço --}}
-                                            <button onclick="openPriceUpdateModal({{ $reserva->id }}, {{ $reserva->price ?? 0 }}, '{{ $reserva->client_name ?? 'Reserva' }}')"
-                                                class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
-                                                Preço
-                                            </button>
-
-                                            {{-- Botão de Cancelamento --}}
-                                            <button onclick="openCancellationModal({{ $reserva->id }}, 'PATCH', '{{ route('admin.reservas.cancelar', ':id') }}', 'Deseja realmente cancelar esta reserva?', 'Cancelar')"
-                                                class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
-                                                Cancelar
-                                            </button>
-                                            @endif
-                                    </div>
-                                </td>
+            {{-- CANCELAMENTO DE SÉRIE --}}
+            @if($reserva->is_recurrent)
+                <button onclick="openCancellationModal(
+                    {{ $reserva->id }}, 
+                    'DELETE', 
+                    '{{ route('admin.reservas.cancelar_serie', ':id') }}', 
+                    'Deseja cancelar TODA A SÉRIE a partir deste dia?', 
+                    'Cancelar Série',
+                    {{ in_array($reserva->payment_status, ['paid', 'partial']) ? 'true' : 'false' }},
+                    {{ $reserva->total_paid ?? 0 }}
+                )"
+                class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
+                    Série
+                </button>
+            @endif
+        @endif
+    </div>
+</td>
                             </tr>
                             @empty
                             <tr>
@@ -387,7 +417,7 @@
         </div>
     </div>
 
-    {{-- MODAL DE CANCELAMENTO REFINADO --}}
+    {{-- MODAL DE CANCELAMENTO REFINADO COM OPÇÃO DE ESTORNO --}}
     <div id="cancellation-modal" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden items-center justify-center z-50 transition-opacity duration-300">
         <div class="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg p-8 m-4 transform transition-transform duration-300 scale-95 opacity-0" id="cancellation-modal-content" onclick="event.stopPropagation()">
 
@@ -400,14 +430,24 @@
                 <h3 id="modal-title" class="text-xl font-black text-gray-900 uppercase tracking-tighter">Confirmação</h3>
             </div>
 
-            {{-- Alerta de Contexto --}}
-            <div class="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-100">
+            <div class="bg-gray-50 rounded-2xl p-4 mb-4 border border-gray-100">
                 <p id="modal-message" class="text-sm text-gray-600 font-medium leading-relaxed"></p>
+            </div>
+
+            {{-- 🔄 NOVO: Opção de Estorno de Crédito --}}
+            <div id="estorno-container" class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl hidden">
+                <label class="flex items-center space-x-3 cursor-pointer">
+                    <input type="checkbox" id="estornar-credito-checkbox" class="rounded-lg text-red-600 focus:ring-red-500 h-5 w-5 border-gray-300 transition cursor-pointer">
+                    <div class="flex flex-col">
+                        <span class="text-[11px] font-black text-amber-900 uppercase tracking-tight">Estornar valores pagos?</span>
+                        <span class="text-[10px] text-amber-700 italic leading-tight">O saldo (parcial ou total) será devolvido à carteira do cliente.</span>
+                    </div>
+                </label>
             </div>
 
             <div class="mb-6">
                 <label for="cancellation-reason-input" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                    Motivo da Operação:
+                    Motivo da Operação: <span class="text-red-500 font-bold">*</span>
                 </label>
                 <textarea id="cancellation-reason-input" rows="3"
                     class="w-full p-4 border-gray-200 rounded-2xl focus:ring-red-500 focus:border-red-500 bg-gray-50 text-sm"
@@ -415,14 +455,8 @@
             </div>
 
             <div class="flex gap-3">
-                <button onclick="closeCancellationModal()" type="button"
-                    class="flex-1 px-4 py-3 bg-gray-100 text-gray-500 font-black text-[10px] uppercase rounded-2xl hover:bg-gray-200 transition">
-                    Voltar
-                </button>
-                <button id="confirm-cancellation-btn" type="button"
-                    class="flex-1 px-4 py-3 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl hover:bg-red-700 transition shadow-lg shadow-red-100">
-                    Confirmar
-                </button>
+                <button onclick="closeCancellationModal()" type="button" class="flex-1 px-4 py-3 bg-gray-100 text-gray-500 font-black text-[10px] uppercase rounded-2xl hover:bg-gray-200 transition">Voltar</button>
+                <button id="confirm-cancellation-btn" type="button" class="flex-1 px-4 py-3 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl hover:bg-red-700 transition shadow-lg shadow-red-100">Confirmar</button>
             </div>
         </div>
     </div>
@@ -590,26 +624,34 @@
         let currentMethod = null; // PATCH ou DELETE (Método Lógico)
         let currentUrlBase = null;
 
-        /**
-         * Abre o modal de cancelamento e configura os dados da reserva.
-         */
-        function openCancellationModal(reservaId, method, urlBase, message, buttonText) {
+        // Adicione esta variável no topo do seu <script>
+        let currentReservaPaidAmount = 0;
+
+        function openCancellationModal(reservaId, method, urlBase, message, buttonText, hasPayment = false, totalPaid = 0) {
             currentReservaId = reservaId;
             currentMethod = method;
             currentUrlBase = urlBase;
-            document.getElementById('cancellation-reason-input').value = ''; // Limpa o campo
+            currentReservaPaidAmount = totalPaid; // Armazena o valor vindo da tabela
+
+            document.getElementById('cancellation-reason-input').value = '';
+            const estornoCheckbox = document.getElementById('estornar-credito-checkbox');
+            if (estornoCheckbox) estornoCheckbox.checked = false;
+
+            const estornoContainer = document.getElementById('estorno-container');
+            if (estornoContainer) {
+                hasPayment ? estornoContainer.classList.remove('hidden') : estornoContainer.classList.add('hidden');
+            }
 
             document.getElementById('modal-title').textContent = buttonText;
             document.getElementById('modal-message').textContent = message;
-            document.getElementById('cancellation-modal').classList.remove('hidden');
-            document.getElementById('cancellation-modal').classList.add('flex');
 
-            // Ativa a transição do modal
+            const modal = document.getElementById('cancellation-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
             setTimeout(() => {
                 document.getElementById('cancellation-modal-content').classList.remove('opacity-0', 'scale-95');
             }, 10);
-
-            document.getElementById('confirm-cancellation-btn').textContent = buttonText;
         }
 
         /**
@@ -916,9 +958,16 @@
             }
         }
 
-        // --- Listener de Confirmação do Modal de Cancelamento ---
+        // --- Listener de Confirmação do Modal de Cancelamento (IGUALADO AO CONTROLLER) ---
         document.getElementById('confirm-cancellation-btn').addEventListener('click', function() {
             const reason = document.getElementById('cancellation-reason-input').value.trim();
+
+            // Captura o estado do checkbox de estorno
+            const estornoCheckbox = document.getElementById('estornar-credito-checkbox');
+
+            // TRADUÇÃO PARA O CONTROLLER:
+            // O seu PHP espera 'should_refund' (bool) e 'paid_amount_ref' (float)
+            const shouldRefund = estornoCheckbox ? estornoCheckbox.checked : false;
 
             if (reason.length < 5) {
                 alert("Por favor, forneça um motivo de cancelamento com pelo menos 5 caracteres.");
@@ -926,8 +975,11 @@
             }
 
             if (currentReservaId && currentMethod && currentUrlBase) {
-                // Passamos o método LÓGICO (PATCH/DELETE) e o motivo
-                sendAjaxRequest(currentReservaId, currentMethod, currentUrlBase, reason);
+                // Enviamos os nomes que o seu ReservaController@cancelarPontual já utiliza
+                sendAjaxRequest(currentReservaId, currentMethod, currentUrlBase, reason, {
+                    should_refund: shouldRefund, // Substitui 'estornar_credito'
+                    paid_amount_ref: currentReservaPaidAmount // Passa o valor real para o estorno
+                });
             } else {
                 alert("Erro: Dados da reserva não configurados corretamente.");
             }
