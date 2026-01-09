@@ -122,11 +122,11 @@
 
                             {{-- ✅ 2. NOVO: Filtro de Arena (Multiquadra) --}}
                             <div class="w-full md:w-40 flex-shrink-0">
-                                <label for="filter_arena" class="block text-xs font-semibold text-gray-500 mb-1">Arena/Quadra:</label>
-                                <select name="filter_arena" id="filter_arena" class="px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 w-full">
+                                <label for="arena_id" class="block text-xs font-semibold text-gray-500 mb-1">Arena/Quadra:</label>
+                                <select name="arena_id" id="arena_id" class="px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 w-full">
                                     <option value="">Todas as Quadras</option>
                                     @foreach(\App\Models\Arena::all() as $arena)
-                                    <option value="{{ $arena->id }}" {{ ($filterArena ?? '') == $arena->id ? 'selected' : '' }}>
+                                    <option value="{{ $arena->id }}" {{ ($arenaId ?? '') == $arena->id ? 'selected' : '' }}>
                                         {{ $arena->name }}
                                     </option>
                                     @endforeach
@@ -163,7 +163,7 @@
                                         </svg>
                                     </button>
 
-                                    @if (isset($search) && $search || $startDate || $endDate || $filterStatus || ($filterArena ?? ''))
+                                    @if (isset($search) && $search || $startDate || $endDate || $filterStatus || ($arenaId ?? ''))
                                     <a href="{{ route('admin.reservas.todas', ['only_mine' => $isOnlyMine ? 'true' : 'false']) }}"
                                         class="text-red-500 hover:text-red-700 h-full p-2 transition duration-150 flex-shrink-0 flex items-center justify-center rounded-lg border border-red-200"
                                         title="Limpar Busca e Filtros">
@@ -177,6 +177,8 @@
                         </form>
                     </div>
                 </div>
+
+
                 <div class="overflow-x-auto border border-gray-200 rounded-xl shadow-lg">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-100">
@@ -302,70 +304,70 @@
                                     <span class="text-gray-400 text-[10px] uppercase font-bold italic">Automático</span>
                                     @endif
                                 </td>
-                            
-                                
+
+
                                 {{-- 8. AÇÕES --}}
-<td class="px-4 py-3 text-sm font-medium min-w-[100px]">
-    <div class="flex flex-col space-y-1">
-        {{-- Botão Detalhes: Sempre visível --}}
-        <a href="{{ route('admin.reservas.show', $reserva) }}"
-            class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center">
-            Detalhes
-        </a>
+                                <td class="px-4 py-3 text-sm font-medium min-w-[100px]">
+                                    <div class="flex flex-col space-y-1">
+                                        {{-- Botão Detalhes: Sempre visível --}}
+                                        <a href="{{ route('admin.reservas.show', $reserva) }}"
+                                            class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center">
+                                            Detalhes
+                                        </a>
 
-        @if (in_array($reserva->status, ['cancelled', 'rejected', 'no_show']))
-            @php
-                // 1. Extração Ultra-Segura: Forçamos a string e pegamos apenas os primeiros 10 caracteres (YYYY-MM-DD)
-                // Isso mata qualquer tentativa do PHP de duplicar a data.
-                $dateValue = is_object($reserva->date) ? $reserva->date->format('Y-m-d') : (string)$reserva->date;
-                $onlyDate = substr(trim($dateValue), 0, 10);
-                
-                // 2. Limpeza da hora (pega apenas HH:MM:SS se vier com lixo)
-                $onlyTime = substr(trim($reserva->end_time), 0, 8);
+                                        @if (in_array($reserva->status, ['cancelled', 'rejected', 'no_show']))
+                                        @php
+                                        // 1. Extração Ultra-Segura: Forçamos a string e pegamos apenas os primeiros 10 caracteres (YYYY-MM-DD)
+                                        // Isso mata qualquer tentativa do PHP de duplicar a data.
+                                        $dateValue = is_object($reserva->date) ? $reserva->date->format('Y-m-d') : (string)$reserva->date;
+                                        $onlyDate = substr(trim($dateValue), 0, 10);
 
-                try {
-                    // Monta a data final de forma limpa: "2026-01-09 07:00:00"
-                    $reservaEndTime = \Carbon\Carbon::parse($onlyDate . ' ' . $onlyTime);
-                    $isExpired = now()->greaterThan($reservaEndTime);
-                } catch (\Exception $e) {
-                    $isExpired = true; // Se der erro no parse, por segurança assume expirado
-                }
-            @endphp
+                                        // 2. Limpeza da hora (pega apenas HH:MM:SS se vier com lixo)
+                                        $onlyTime = substr(trim($reserva->end_time), 0, 8);
 
-            @if (!$reserva->is_fixed)
-                @if ($isExpired)
-                    {{-- Bloqueio visual para horários que já passaram --}}
-                    <div class="bg-gray-200 text-gray-400 px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center cursor-not-allowed"
-                        title="Este horário já encerrou e não pode mais ser reativado.">
-                        Encerrado
-                    </div>
-                @else
-                    <button onclick="openReactivationModal({{ $reserva->id }}, 'Reativar', 'Deseja reativar esta reserva?', REACTIVATE_URL)"
-                        class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
-                        Reativar
-                    </button>
-                @endif
-            @endif
+                                        try {
+                                        // Monta a data final de forma limpa: "2026-01-09 07:00:00"
+                                        $reservaEndTime = \Carbon\Carbon::parse($onlyDate . ' ' . $onlyTime);
+                                        $isExpired = now()->greaterThan($reservaEndTime);
+                                        } catch (\Exception $e) {
+                                        $isExpired = true; // Se der erro no parse, por segurança assume expirado
+                                        }
+                                        @endphp
 
-        @elseif (in_array($reserva->status, ['confirmed', 'pending']))
-            {{-- Botão de Caixa: Link com data limpa --}}
-            @php
-                $caixaDateValue = is_object($reserva->date) ? $reserva->date->format('Y-m-d') : (string)$reserva->date;
-                $caixaDate = substr(trim($caixaDateValue), 0, 10);
-            @endphp
-            <a href="{{ route('admin.payment.index', ['reserva_id' => $reserva->id, 'data_reserva' => $caixaDate]) }}"
-                class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center">
-                Caixa
-            </a>
+                                        @if (!$reserva->is_fixed)
+                                        @if ($isExpired)
+                                        {{-- Bloqueio visual para horários que já passaram --}}
+                                        <div class="bg-gray-200 text-gray-400 px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center cursor-not-allowed"
+                                            title="Este horário já encerrou e não pode mais ser reativado.">
+                                            Encerrado
+                                        </div>
+                                        @else
+                                        <button onclick="openReactivationModal({{ $reserva->id }}, 'Reativar', 'Deseja reativar esta reserva?', REACTIVATE_URL)"
+                                            class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
+                                            Reativar
+                                        </button>
+                                        @endif
+                                        @endif
 
-            {{-- Botão de Preço --}}
-            <button onclick="openPriceUpdateModal({{ $reserva->id }}, {{ $reserva->price ?? 0 }}, '{{ $reserva->client_name ?? 'Reserva' }}')"
-                class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
-                Preço
-            </button>
+                                        @elseif (in_array($reserva->status, ['confirmed', 'pending']))
+                                        {{-- Botão de Caixa: Link com data limpa --}}
+                                        @php
+                                        $caixaDateValue = is_object($reserva->date) ? $reserva->date->format('Y-m-d') : (string)$reserva->date;
+                                        $caixaDate = substr(trim($caixaDateValue), 0, 10);
+                                        @endphp
+                                        <a href="{{ route('admin.payment.index', ['reserva_id' => $reserva->id, 'data_reserva' => $caixaDate]) }}"
+                                            class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center">
+                                            Caixa
+                                        </a>
 
-            {{-- CANCELAMENTO PONTUAL --}}
-            <button onclick="openCancellationModal(
+                                        {{-- Botão de Preço --}}
+                                        <button onclick="openPriceUpdateModal({{ $reserva->id }}, {{ $reserva->price ?? 0 }}, '{{ $reserva->client_name ?? 'Reserva' }}')"
+                                            class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
+                                            Preço
+                                        </button>
+
+                                        {{-- CANCELAMENTO PONTUAL --}}
+                                        <button onclick="openCancellationModal(
                 {{ $reserva->id }}, 
                 'PATCH', 
                 '{{ route('admin.reservas.cancelar_pontual', ':id') }}', 
@@ -374,13 +376,13 @@
                 {{ in_array($reserva->payment_status, ['paid', 'partial']) ? 'true' : 'false' }},
                 {{ $reserva->total_paid ?? 0 }}
             )"
-            class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
-                Cancelar Dia
-            </button>
+                                            class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
+                                            Cancelar Dia
+                                        </button>
 
-            {{-- CANCELAMENTO DE SÉRIE --}}
-            @if($reserva->is_recurrent)
-                <button onclick="openCancellationModal(
+                                        {{-- CANCELAMENTO DE SÉRIE --}}
+                                        @if($reserva->is_recurrent)
+                                        <button onclick="openCancellationModal(
                     {{ $reserva->id }}, 
                     'DELETE', 
                     '{{ route('admin.reservas.cancelar_serie', ':id') }}', 
@@ -389,13 +391,13 @@
                     {{ in_array($reserva->payment_status, ['paid', 'partial']) ? 'true' : 'false' }},
                     {{ $reserva->total_paid ?? 0 }}
                 )"
-                class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
-                    Série
-                </button>
-            @endif
-        @endif
-    </div>
-</td>
+                                            class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
+                                            Série
+                                        </button>
+                                        @endif
+                                        @endif
+                                    </div>
+                                </td>
                             </tr>
                             @empty
                             <tr>

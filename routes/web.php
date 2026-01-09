@@ -96,6 +96,9 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::patch('/{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('cancelar_pontual');
             Route::delete('/{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('cancelar_serie');
 
+            // ✅ ROTA ADICIONADA: Resolve o erro RouteNotFound na view de histórico do cliente
+            Route::post('/cancel-client-series/{masterId}', [AdminController::class, 'cancelClientSeries'])->name('cancel_client_series');
+
             // 🎯 Ajuste de Nome para o seu JS (admin.reservas.no_show)
             Route::post('/{reserva}/no-show', [PaymentController::class, 'registerNoShow'])->name('no_show');
         });
