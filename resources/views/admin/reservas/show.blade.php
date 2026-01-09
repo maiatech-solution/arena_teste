@@ -160,20 +160,40 @@
                             @endif
 
                             <div class="grid grid-cols-2 gap-2 mt-4">
+                                {{-- 🔒 VERIFICAÇÃO DE CAIXA PARA BLOQUEIO DE AÇÕES --}}
+                                @php
+                                $isClosed = \App\Models\Cashier::where('date', $reserva->date)->where('status', 'closed')->exists();
+                                @endphp
+
                                 {{-- REGISTRAR NO-SHOW --}}
+                                @if($isClosed)
+                                {{-- Botão Desabilitado se o caixa estiver fechado --}}
+                                <button type="button"
+                                    onclick="alert('🚫 Ação Bloqueada: O caixa do dia {{ \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') }} já foi encerrado.')"
+                                    class="w-full bg-gray-100 text-gray-400 py-3 rounded-2xl font-black text-[10px] uppercase cursor-not-allowed border border-gray-200">
+                                    No-Show 🔒
+                                </button>
+                                @else
                                 <form action="{{ route('admin.reservas.no_show', $reserva->id) }}" method="POST" onsubmit="return confirm('Marcar como Falta (No-Show)?');">
                                     @csrf
                                     <button type="submit" class="w-full bg-red-50 text-red-600 py-3 rounded-2xl font-black text-[10px] uppercase hover:bg-red-600 hover:text-white transition">
                                         No-Show 🚨
                                     </button>
                                 </form>
+                                @endif
 
                                 {{-- CANCELAR --}}
                                 @php $cancellationRoute = $reserva->is_recurrent ? 'admin.reservas.cancelar_pontual' : 'admin.reservas.cancelar'; @endphp
+
                                 <button type="button"
-                                    onclick="openCancellationModal('{{ $reserva->client_name }}', {{ $reserva->id }}, '{{ route($cancellationRoute, $reserva->id) }}', 'Cancelar Agendamento')"
-                                    class="w-full bg-gray-50 text-gray-500 py-3 rounded-2xl font-black text-[10px] uppercase hover:bg-gray-100 transition">
-                                    Cancelar
+                                    @if($isClosed)
+                                    onclick="alert('🚫 Ação Bloqueada: O caixa deste dia já foi encerrado.')"
+                                    class="w-full bg-gray-100 text-gray-400 py-3 rounded-2xl font-black text-[10px] uppercase cursor-not-allowed border border-gray-200"
+                                    @else
+                                    onclick="openCancellationModal('{{ $reserva->client_name }}', '{{$reserva->id}}', '{{ route($cancellationRoute, $reserva->id) }}', 'Cancelar Agendamento')"
+                                    class="w-full bg-gray-50 text-gray-500 py-3 rounded-2xl font-black text-[10px] uppercase hover:bg-gray-100 transition"
+                                    @endif>
+                                    Cancelar {{ $isClosed ? '🔒' : '' }}
                                 </button>
                             </div>
                         </div>

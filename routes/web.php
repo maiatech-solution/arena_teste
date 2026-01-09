@@ -78,15 +78,14 @@ Route::middleware(['auth', 'gestor'])->group(function () {
 
         // 📅 3. GESTÃO DE RESERVAS
         Route::prefix('reservas')->name('reservas.')->group(function () {
-            Route::get('/', [AdminController::class, 'indexReservasDashboard'])->name('index');
+            // Adicionado {arena_id?} para permitir visualizar a agenda de uma quadra específica
+            Route::get('/dashboard/{arena_id?}', [AdminController::class, 'indexReservasDashboard'])->name('index');
+
             Route::get('/pendentes', [AdminController::class, 'indexReservas'])->name('pendentes');
             Route::get('/confirmadas', [AdminController::class, 'confirmed_index'])->name('confirmadas');
             Route::get('/todas', [AdminController::class, 'indexTodas'])->name('todas');
             Route::get('/rejeitadas', [AdminController::class, 'indexReservasRejeitadas'])->name('rejeitadas');
             Route::get('/{reserva}/show', [AdminController::class, 'showReserva'])->name('show');
-            Route::get('/create', [AdminController::class, 'createUser'])->name('create');
-            Route::post('/', [AdminController::class, 'storeReserva'])->name('store');
-            Route::post('/tornar-fixo', [AdminController::class, 'makeRecurrent'])->name('make_recurrent');
 
             // Ações de Status e Modificações
             Route::patch('/confirmar/{reserva}', [ReservaController::class, 'confirmar'])->name('confirmar');
@@ -97,12 +96,8 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::patch('/{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('cancelar_pontual');
             Route::delete('/{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('cancelar_serie');
 
-            // No-Show centralizado no PaymentController por causa do estorno financeiro
+            // 🎯 Ajuste de Nome para o seu JS (admin.reservas.no_show)
             Route::post('/{reserva}/no-show', [PaymentController::class, 'registerNoShow'])->name('no_show');
-
-            Route::delete('/{reserva}', [AdminController::class, 'destroyReserva'])->name('destroy');
-            Route::post('/{masterReserva}/renew-serie', [ReservaController::class, 'renewRecurrentSeries'])->name('renew_serie');
-            Route::delete('/series/{masterId}/cancel', [AdminController::class, 'cancelClientSeries'])->name('cancel_client_series');
         });
 
         // 👥 4. GESTÃO DE USUÁRIOS (CLIENTES)

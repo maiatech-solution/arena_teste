@@ -318,85 +318,101 @@ class AdminController extends Controller
     
      *public function registerNoShow(Request $request, Reserva $reserva)
      *{
-        if ($reserva->status !== Reserva::STATUS_CONFIRMADA) {
-            return response()->json(['success' => false, 'message' => 'A reserva deve estar confirmada para ser marcada como falta.'], 400);
-        }
+     *if ($reserva->status !== Reserva::STATUS_CONFIRMADA) {
+     *    return response()->json(['success' => false, 'message' => 'A reserva deve estar confirmada para ser marcada como falta.'], 400);
+     *}
 
-        $validated = $request->validate([
-            'no_show_reason' => 'required|string|min:5|max:255',
-            'should_refund' => 'required|boolean',
-            'paid_amount' => 'required|numeric|min:0',
-        ]);
+     *$validated = $request->validate([
+     *    'no_show_reason' => 'required|string|min:5|max:255',
+     *    'should_refund' => 'required|boolean',
+     *    'paid_amount' => 'required|numeric|min:0',
+     *]);
 
-        DB::beginTransaction();
-        try {
-            // 🛑 DELEGA A LÓGICA CENTRALIZADA
-            $result = $this->reservaController->finalizeStatus(
-                $reserva,
-                Reserva::STATUS_NO_SHOW,
-                '[Gestor] ' . $validated['no_show_reason'],
-                $validated['should_refund'],
-                (float) $validated['paid_amount']
-            );
+     *DB::beginTransaction();
+     *try {
+     *    // 🛑 DELEGA A LÓGICA CENTRALIZADA
+     *    $result = $this->reservaController->finalizeStatus(
+     *        $reserva,
+     *        Reserva::STATUS_NO_SHOW,
+     *        '[Gestor] ' . $validated['no_show_reason'],
+     *        $validated['should_refund'],
+     *        (float) $validated['paid_amount']
+     *    );
 
-            DB::commit();
-            $message = "Reserva marcada como Falta." . $result['message_finance'];
-            return response()->json(['success' => true, 'message' => $message], 200);
-        } catch (ValidationException $e) {
-            // Garante que erros de validação sejam tratados corretamente
-            DB::rollBack();
-            return response()->json(['success' => false, 'errors' => $e->errors()], 422);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("Erro ao registrar No-Show para reserva ID: {$reserva->id}.", ['exception' => $e]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Erro interno ao registrar a falta. Detalhe: ' . $e->getMessage()
-            ], 500);
-        }
+     *    DB::commit();
+     *    $message = "Reserva marcada como Falta." . $result['message_finance'];
+     *    return response()->json(['success' => true, 'message' => $message], 200);
+     *} catch (ValidationException $e) {
+     *    // Garante que erros de validação sejam tratados corretamente
+     *    DB::rollBack();
+     *    return response()->json(['success' => false, 'errors' => $e->errors()], 422);
+     *} catch (\Exception $e) {
+     *    DB::rollBack();
+     *    Log::error("Erro ao registrar No-Show para reserva ID: {$reserva->id}.", ['exception' => $e]);
+     *    return response()->json([
+     *        'success' => false,
+     *        'message' => 'Erro interno ao registrar a falta. Detalhe: ' . $e->getMessage()
+     *    ], 500);
+     *}
      *}
      */
 
 
 
     /**
-     * ✅ CORRIGIDO: Reativa uma reserva cancelada ou rejeitada para o status CONFIRMADA.
+     * ✅ REVISADO: Reativa uma reserva garantindo compatibilidade de data e timezone.
      */
-    public function reativar(Request $request, Reserva $reserva)
+    public function reativar(Request $request, $id) // Alteramos de Reserva $reserva para apenas $id
     {
-        // 1. Validação de Status
-        if (!in_array($reserva->status, [Reserva::STATUS_CANCELADA, Reserva::STATUS_REJEITADA])) {
-            return response()->json(['success' => false, 'message' => 'A reserva deve estar cancelada ou rejeitada para ser reativada.'], 400);
+        // 1. Buscamos os dados BRUTOS do banco para evitar o erro de conversão automática do Laravel
+        $dadosBrutos = DB::table('reservas')->where('id', $id)->first();
+
+        if (!$dadosBrutos) {
+            return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404);
         }
 
-        // 2. Checa por sobreposição (evita reativar se o slot estiver ocupado por outra reserva ativa)
-        if ($this->reservaController->checkOverlap($reserva->date, $reserva->start_time, $reserva->end_time, true, $reserva->id)) {
-            return response()->json(['success' => false, 'message' => 'O horário está ocupado por outra reserva ativa (confirmada ou pendente). Não é possível reativar.'], 400);
+        // 2. Validação de Status
+        $statusPermitidos = ['cancelled', 'rejected', 'no_show'];
+        if (!in_array($dadosBrutos->status, $statusPermitidos)) {
+            return response()->json(['success' => false, 'message' => 'Esta reserva não pode ser reativada.'], 400);
         }
 
-        DB::beginTransaction();
         try {
-            // 3. Atualiza a Reserva
+            // 🚀 A LIMPEZA REAL: Pegamos apenas os primeiros 10 caracteres da coluna 'date'
+            $dataLimpa = substr((string)$dadosBrutos->date, 0, 10);
+            $horaFim = $dadosBrutos->end_time;
+
+            // Montamos a data de verificação
+            $dataFimReserva = \Carbon\Carbon::parse($dataLimpa . ' ' . $horaFim);
+
+            if ($dataFimReserva->isPast()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => '🛑 Horário encerrado (Fim: ' . $dataFimReserva->format('H:i') . ').'
+                ], 400);
+            }
+
+            // 3. Checa sobreposição (usando o controller auxiliar)
+            if ($this->reservaController->checkOverlap($dataLimpa, $dadosBrutos->start_time, $horaFim, true, $id, $dadosBrutos->arena_id)) {
+                return response()->json(['success' => false, 'message' => 'O horário já está ocupado por outra reserva.'], 400);
+            }
+
+            DB::beginTransaction();
+
+            // Agora carregamos o model apenas para salvar, desativando o timestamp se necessário
+            $reserva = Reserva::find($id);
             $reserva->status = Reserva::STATUS_CONFIRMADA;
-            $reserva->manager_id = Auth::id(); // Atualiza quem a reativou
-            // Limpa o motivo de cancelamento/rejeição
+            $reserva->manager_id = Auth::id();
             $reserva->cancellation_reason = null;
             $reserva->save();
 
-            // 4. 🛑 CONSUMIR O SLOT FIXO (remover do calendário público)
             $this->reservaController->consumeFixedSlot($reserva);
 
             DB::commit();
-            Log::info("Reserva ID: {$reserva->id} reativada (de volta para CONFIRMADA) por Gestor ID: " . Auth::id());
-
-            return response()->json(['success' => true, 'message' => 'Reserva reativada com sucesso para o status Confirmada! O slot fixo foi consumido.'], 200);
+            return response()->json(['success' => true, 'message' => 'Reserva reativada com sucesso!'], 200);
         } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("Erro ao reativar reserva ID: {$reserva->id}.", ['exception' => $e]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Erro interno ao reativar a reserva. Detalhe: ' . $e->getMessage()
-            ], 500);
+            if (DB::transactionLevel() > 0) DB::rollBack();
+            return response()->json(['success' => false, 'message' => 'Erro: ' . $e->getMessage()], 500);
         }
     }
 

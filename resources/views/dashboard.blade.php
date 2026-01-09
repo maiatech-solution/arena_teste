@@ -709,7 +709,7 @@
         // ROTAS DE SUBMISSÃO
         const RECURRENT_STORE_URL = '{{ route("api.reservas.store_recurrent") }}';
         const QUICK_STORE_URL = '{{ route("api.reservas.store_quick") }}';
-        const RENEW_SERIE_URL = '{{ route("admin.reservas.renew_serie", ":masterReserva") }}';
+        const RENEW_SERIE_URL = '{{ url("admin/reservas") }}/:masterReserva/renew-serie';
 
         // ROTAS DE AÇÕES PENDENTES
         const CONFIRM_PENDING_URL = '{{ route("admin.reservas.confirmar", ":id") }}';
