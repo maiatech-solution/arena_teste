@@ -71,202 +71,110 @@ class PaymentController extends Controller
      */
 
     public function index(Request $request)
-
     {
-
-        // 1. Integridade: Corrige inconsistências antes de carregar a página
-
+        // 1. Integridade
         $this->checkAndCorrectNoShowPaidAmounts();
 
-
-
         // 2. Definição de Data e Filtros
-
         $selectedDateString = $request->input('data_reserva') ?? $request->input('date') ?? Carbon::today()->toDateString();
-
         $dateObject = Carbon::parse($selectedDateString);
-
         $selectedReservaId = $request->input('reserva_id');
-
-        $selectedArenaId = $request->input('arena_id'); // 🎯 NOVO: Captura o filtro de arena
-
+        $selectedArenaId = $request->input('arena_id');
         $searchTerm = $request->input('search');
 
-
-
-        // 3. Consulta de Reservas do Dia
-
+        // 3. Consulta de Reservas do Dia (Base para KPIs da View)
         $query = Reserva::with(['user', 'arena']);
 
-
-
         if ($selectedReservaId) {
-
             $query->where('id', $selectedReservaId);
         } else {
-
             $query->whereDate('date', $dateObject);
 
-
-
-            // 🎯 NOVO: Aplica o filtro de Arena na listagem de reservas
-
             if ($selectedArenaId) {
-
                 $query->where('arena_id', $selectedArenaId);
             }
 
-
-
             if ($searchTerm) {
-
                 $searchWildcard = '%' . $searchTerm . '%';
-
                 $query->where(function ($q) use ($searchWildcard) {
-
                     $q->where('client_name', 'LIKE', $searchWildcard)
-
                         ->orWhere('client_contact', 'LIKE', $searchWildcard);
                 });
             }
         }
 
-
-
         $reservas = $query->whereNotNull('user_id')
-
             ->where('is_fixed', false)
-
             ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, 'completed', 'no_show', 'canceled'])
-
             ->orderBy('start_time', 'asc')
-
             ->get();
 
+        // 4. Lógica de Fechamento (SEMPRE GERAL - Independente de Filtro)
+        // Precisamos saber o total do dia para o JS validar o botão de fechamento
+        $totalReservasGeralCount = Reserva::whereDate('date', $dateObject)
+            ->whereNotNull('user_id')
+            ->where('is_fixed', false)
+            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, 'completed', 'no_show', 'canceled'])
+            ->count();
 
-
-        // 4. Movimentação Financeira do Dia (Líquido Geral)
-
+        // 5. Movimentação Financeira (Real vs Contextual)
+        // Saldo real em caixa hoje (Geral)
         $totalRecebidoDiaLiquido = FinancialTransaction::whereDate('paid_at', $dateObject)->sum('amount');
 
-
-
-        // 🎯 AJUSTE: Faturamento por Arena (Garantindo que todas as arenas apareçam)
-
-        $arenasAtivas = \App\Models\Arena::all(); // Pega todas as quadras cadastradas
-
-
-
+        // 6. Faturamento Segmentado por Arena
+        $arenasAtivas = \App\Models\Arena::all();
         $faturamentoReal = FinancialTransaction::whereDate('paid_at', $dateObject)
-
             ->select('arena_id', DB::raw('SUM(amount) as total'))
-
             ->groupBy('arena_id')
-
             ->get();
 
-
-
         $faturamentoPorArena = $arenasAtivas->map(function ($arena) use ($faturamentoReal) {
-
             $transacao = $faturamentoReal->firstWhere('arena_id', $arena->id);
-
             return (object)[
-
                 'id'    => $arena->id,
-
                 'name'  => $arena->name,
-
                 'total' => $transacao ? $transacao->total : 0
-
             ];
         });
 
-
-
-        // 5. Histórico de Transações Detalhado
-
-        // 🎯 AJUSTE: Se filtrar por arena, as transações detalhadas também filtram
-
+        // 7. Histórico de Transações Detalhado (Respeita Filtro)
         $transQuery = FinancialTransaction::whereDate('paid_at', $dateObject);
-
         if ($selectedArenaId) {
-
             $transQuery->where('arena_id', $selectedArenaId);
         }
-
         $financialTransactions = $transQuery->with(['reserva', 'manager', 'payer', 'arena'])
-
             ->orderBy('paid_at', 'desc')
-
             ->get();
 
-
-
-        // 6. Auditoria de Fechamento (Cashier)
-
-        $cashierHistory = Cashier::with('user')
-
-            ->orderBy('date', 'desc')
-
-            ->limit(10)
-
-            ->get();
-
-
-
+        // 8. Auditoria de Fechamento (Cashier)
         $cashierRecord = Cashier::where('date', $selectedDateString)->first();
-
         $cashierStatus = $cashierRecord->status ?? 'open';
+        $cashierHistory = Cashier::with('user')->orderBy('date', 'desc')->limit(10)->get();
 
-
-
-        // 7. KPIs de Dashboard
-
+        // 9. KPIs Dinâmicos (Baseados na lista filtrada de $reservas)
         $totalExpected = $reservas->whereNotIn('status', ['canceled', 'rejected'])
-
             ->sum(fn($r) => $r->final_price ?? $r->price);
 
-
-
         $totalPending = $reservas->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
-
             ->sum(fn($r) => max(0, ($r->final_price ?? $r->price) - $r->total_paid));
 
-
-
-        // 8. Retorno para a View
-
+        // 10. Retorno
         return view('admin.payment.index', [
-
-            'selectedDate' => $selectedDateString,
-
-            'reservas' => $reservas,
-
-            'faturamentoPorArena' => $faturamentoPorArena,
-
-            'totalGeralCaixa' => FinancialTransaction::sum('amount'),
-
-            'totalRecebidoDiaLiquido' => $totalRecebidoDiaLiquido,
-
+            'selectedDate'               => $selectedDateString,
+            'reservas'                   => $reservas,
+            'faturamentoPorArena'        => $faturamentoPorArena,
+            'totalGeralCaixa'            => FinancialTransaction::sum('amount'),
+            'totalRecebidoDiaLiquido'    => $totalRecebidoDiaLiquido,
             'totalAntecipadoReservasDia' => $reservas->sum('total_paid'),
-
-            'totalReservasDia' => $reservas->whereIn('status', [Reserva::STATUS_CONFIRMADA, 'completed', 'no_show'])->count(),
-
-            'totalPending' => $totalPending,
-
-            'totalExpected' => $totalExpected,
-
-            'noShowCount' => $reservas->where('status', 'no_show')->count(),
-
-            'financialTransactions' => $financialTransactions,
-
-            'cashierStatus' => $cashierStatus,
-
-            'cashierHistory' => $cashierHistory,
-
-            'highlightReservaId' => $selectedReservaId,
-
+            'totalReservasDia'           => $reservas->whereIn('status', [Reserva::STATUS_CONFIRMADA, 'completed', 'no_show'])->count(),
+            'totalReservasGeral'         => $totalReservasGeralCount, // 🎯 CRUCIAL para o JS de fechamento
+            'totalPending'               => $totalPending,
+            'totalExpected'              => $totalExpected,
+            'noShowCount'                => $reservas->where('status', 'no_show')->count(),
+            'financialTransactions'      => $financialTransactions,
+            'cashierStatus'              => $cashierStatus,
+            'cashierHistory'             => $cashierHistory,
+            'highlightReservaId'         => $selectedReservaId,
         ]);
     }
 

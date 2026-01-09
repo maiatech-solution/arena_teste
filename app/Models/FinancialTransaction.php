@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Http\Controllers\Admin\FinanceiroController; 
+use App\Http\Controllers\Admin\FinanceiroController;
 use Carbon\Carbon;
 
 class FinancialTransaction extends Model
@@ -18,9 +18,9 @@ class FinancialTransaction extends Model
      */
     public const TYPE_SIGNAL = 'signal';
     public const TYPE_PAYMENT = 'payment';
-    public const TYPE_REFUND = 'refund'; 
+    public const TYPE_REFUND = 'refund';
     public const TYPE_NO_SHOW_PENALTY = 'no_show_penalty';
-    
+
     // Constantes de retenção específicas
     public const TYPE_RETEN_NOSHOW_COMP = 'RETEN_NOSHOW_COMP';
     public const TYPE_RETEN_CANC_COMP = 'RETEN_CANC_COMP';
@@ -54,18 +54,22 @@ class FinancialTransaction extends Model
         parent::boot();
 
         static::creating(function ($transaction) {
-            // Se estiver rodando via terminal (PHP Artisan), ignora a trava
+            // 1. Ignora se for via console (Seeds, Migrations, etc)
             if (app()->runningInConsole()) return;
 
-            // Instancia o controller para usar a lógica de verificação
-            $financeiro = app(FinanceiroController::class);
-
+            // 2. Determina a data da transação com precisão
             $dateToCheck = $transaction->paid_at
-                ? Carbon::parse($transaction->paid_at)->toDateString()
+                ? \Carbon\Carbon::parse($transaction->paid_at)->toDateString()
                 : now()->toDateString();
 
-            if ($financeiro->isCashClosed($dateToCheck)) {
-                $formattedDate = Carbon::parse($dateToCheck)->format('d/m/Y');
+            // 3. Verificação Direta via Model (Evita instanciar Controller no Model)
+            // Isso é mais rápido e segue as melhores práticas de design
+            $isClosed = \App\Models\Cashier::where('date', $dateToCheck)
+                ->where('status', 'closed')
+                ->exists();
+
+            if ($isClosed) {
+                $formattedDate = \Carbon\Carbon::parse($dateToCheck)->format('d/m/Y');
                 throw new \Exception("Bloqueio de Segurança: O caixa do dia {$formattedDate} já está encerrado. Reabra-o para lançar movimentações.");
             }
         });
@@ -103,6 +107,12 @@ class FinancialTransaction extends Model
      * ✅ HELPER DE SCOPE
      * Facilita pegar apenas entradas ou apenas saídas (estornos)
      */
-    public function scopeCredits($query) { return $query->where('amount', '>', 0); }
-    public function scopeDebits($query) { return $query->where('amount', '<', 0); }
+    public function scopeCredits($query)
+    {
+        return $query->where('amount', '>', 0);
+    }
+    public function scopeDebits($query)
+    {
+        return $query->where('amount', '<', 0);
+    }
 }
