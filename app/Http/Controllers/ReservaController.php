@@ -489,28 +489,38 @@ class ReservaController extends Controller
 
         $reserva->update($updateData);
 
+        // 🚀 NOVO: LÓGICA DE REPUTAÇÃO AUTOMÁTICA (Acionada apenas em No-Show)
+        if ($newStatus === Reserva::STATUS_NO_SHOW) {
+            $user = $reserva->user; // Busca o relacionamento do cliente
+            if ($user) {
+                // Incrementa o contador. O Mutator no Model User cuidará da qualificação e do bloqueio.
+                $user->no_show_count += 1;
+                $user->save();
+                Log::info("Reputação atualizada para Cliente ID: {$user->id} devido a No-Show na Reserva #{$reserva->id}");
+            }
+        }
+
         // 3. Gerenciamento Financeiro Isenta por Arena 🏟️
         if ($amountPaid > 0) {
             if ($shouldRefund) {
                 // 🛑 LÓGICA DE ESTORNO (DEVOLUÇÃO REAL):
                 // Criamos uma transação NEGATIVA para que o saldo do caixa de hoje diminua.
-                // Não deletamos o passado, registramos a saída agora para auditoria.
                 FinancialTransaction::create([
                     'reserva_id'     => $reserva->id,
                     'arena_id'       => $arenaId,
                     'user_id'        => $reserva->user_id,
                     'manager_id'     => Auth::id(),
-                    'amount'         => -$amountPaid, // 📉 Valor negativo (ex: -100.00)
+                    'amount'         => -$amountPaid, // 📉 Valor negativo
                     'type'           => FinancialTransaction::TYPE_REFUND,
                     'payment_method' => 'outro',
                     'description'    => "ESTORNO/DEVOLUÇÃO: " . $reason . " (Reserva #{$reserva->id})",
-                    'paid_at'        => now(), // 📅 Registra a saída HOJE no caixa
+                    'paid_at'        => now(),
                 ]);
 
                 $messageFinance = " O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi registrado como SAÍDA (Estorno) no caixa.";
             } else {
                 // 🛑 LÓGICA DE RETENÇÃO (MANTÉM O DINHEIRO):
-                // Primeiro limpamos transações de sinal/pagamento anteriores para não duplicar o saldo.
+                // Limpa transações anteriores para não duplicar o saldo.
                 FinancialTransaction::where('reserva_id', $reserva->id)
                     ->where('arena_id', $arenaId)
                     ->whereIn('type', [
@@ -519,7 +529,6 @@ class ReservaController extends Controller
                     ])
                     ->delete();
 
-                // Criamos uma transação de compensação (Retenção) vinculada à quadra
                 $type = ($newStatus === Reserva::STATUS_CANCELADA)
                     ? ($reserva->is_recurrent ? FinancialTransaction::TYPE_RETEN_CANC_P_COMP : FinancialTransaction::TYPE_RETEN_CANC_COMP)
                     : FinancialTransaction::TYPE_RETEN_NOSHOW_COMP;
@@ -545,6 +554,7 @@ class ReservaController extends Controller
 
         return ['message_finance' => $messageFinance];
     }
+
     /**
      * Cancela todas as reservas futuras de uma série.
      * * @param int $masterId O ID da reserva mestra.
@@ -1048,7 +1058,7 @@ class ReservaController extends Controller
 
             $basePrice = number_format($reserva->price, 2, ',', '.');
             $title = $reserva->client_name . ' - R$ ' . $basePrice;
-            $color = '#4f46e5'; 
+            $color = '#4f46e5';
             $className = 'fc-event-quick';
             $isPaid = false;
             $isFinalized = false;

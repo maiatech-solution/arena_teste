@@ -19,20 +19,22 @@
                 <!-- Botão de Volta para a Lista de Usuários -->
                 <div class="mb-6 flex justify-between items-center">
                     <a href="{{ route('admin.users.index', ['role_filter' => 'cliente']) }}" class="inline-flex items-center px-4 py-2 bg-gray-200 border border-transparent rounded-md font-semibold text-xs text-gray-800 uppercase tracking-widest hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition ease-in-out duration-150">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
                         Voltar à Lista de Usuários
                     </a>
                 </div>
 
                 @php
-                    // Agrupa as reservas da PÁGINA ATUAL pela série recorrente ID, ou 'pontual'.
-                    $groupedReservas = $reservas->groupBy(function($item) {
-                        return $item->is_recurrent ? $item->recurrent_series_id : 'pontual';
-                    });
+                // Agrupa as reservas da PÁGINA ATUAL pela série recorrente ID, ou 'pontual'.
+                $groupedReservas = $reservas->groupBy(function($item) {
+                return $item->is_recurrent ? $item->recurrent_series_id : 'pontual';
+                });
 
-                    // 🛑 IMPORTANTE: Esta variável é injetada pelo Controller
-                    // com a contagem TOTAL de slots futuros para CADA série.
-                    $seriesFutureCounts = $seriesFutureCounts ?? [];
+                // 🛑 IMPORTANTE: Esta variável é injetada pelo Controller
+                // com a contagem TOTAL de slots futuros para CADA série.
+                $seriesFutureCounts = $seriesFutureCounts ?? [];
                 @endphp
 
                 <!-- Container para Mensagens AJAX -->
@@ -43,68 +45,71 @@
 
                     {{-- 🟢 RESERVAS PONTUAIS 🟢 --}}
                     @if ($groupedReservas->has('pontual'))
-                        <div class="p-6 bg-green-50 rounded-xl shadow-lg border border-green-200" id="series-container-pontual">
-                            <h3 class="text-xl font-bold text-green-700 mb-4 border-b border-green-300 pb-2">
-                                Reservas Pontuais
-                                <span class="text-sm font-normal text-gray-500">({{ $groupedReservas['pontual']->count() }} Total)</span>
-                            </h3>
+                    <div class="p-6 bg-green-50 rounded-xl shadow-lg border border-green-200" id="series-container-pontual">
+                        <h3 class="text-xl font-bold text-green-700 mb-4 border-b border-green-300 pb-2">
+                            Reservas Pontuais
+                            <span class="text-sm font-normal text-gray-500">({{ $groupedReservas['pontual']->count() }} Total)</span>
+                        </h3>
 
-                            {{-- Tabela de Pontuais (Usa a partial view) --}}
-                            @include('admin.users.partials.reservation_table', ['reservas' => $groupedReservas['pontual']])
-                        </div>
+                        {{-- Tabela de Pontuais (Usa a partial view) --}}
+                        @include('admin.users.partials.reservation_table', ['reservas' => $groupedReservas['pontual']])
+                    </div>
                     @endif
 
 
                     {{-- 🟣 SÉRIES RECORRENTES (Agrupadas) 🟣 --}}
                     @foreach ($groupedReservas as $seriesId => $seriesReservas)
-                        @if ($seriesId !== 'pontual')
-                            @php
-                                // Obtém a contagem TOTAL de slots futuros (AGORA DO CONTROLLER)
-                                // Se o controller falhar, faz fallback para a contagem da página (subótimo, mas evita erro)
-                                $totalFutureSlots = $seriesFutureCounts[$seriesId] ?? $seriesReservas->filter(fn($r) => \Carbon\Carbon::parse($r->date)->isFuture() || \Carbon\Carbon::parse($r->date)->isToday())->count();
-                                $maxDate = $seriesReservas->max('date');
-                            @endphp
+                    @if ($seriesId !== 'pontual')
+                    @php
+                    // Obtém a contagem TOTAL de slots futuros (AGORA DO CONTROLLER)
+                    // Se o controller falhar, faz fallback para a contagem da página (subótimo, mas evita erro)
+                    $totalFutureSlots = $seriesFutureCounts[$seriesId] ?? $seriesReservas->filter(fn($r) => \Carbon\Carbon::parse($r->date)->isFuture() || \Carbon\Carbon::parse($r->date)->isToday())->count();
+                    $maxDate = $seriesReservas->max('date');
+                    @endphp
 
-                            <div class="p-6 bg-fuchsia-50 rounded-xl shadow-lg border border-fuchsia-200" id="series-container-{{ $seriesId }}">
-                                <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-fuchsia-300 pb-3 mb-4">
-                                    <h3 class="text-xl font-bold text-fuchsia-700">
-                                        Série Recorrente #{{ $seriesId }}
-                                        <span class="text-sm font-normal text-gray-500">({{ $seriesReservas->count() }} slots | Expira em: {{ \Carbon\Carbon::parse($maxDate)->format('d/m/Y') }})</span>
-                                    </h3>
+                    <div class="p-6 bg-fuchsia-50 rounded-xl shadow-lg border border-fuchsia-200" id="series-container-{{ $seriesId }}">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-fuchsia-300 pb-3 mb-4">
+                            <h3 class="text-xl font-bold text-fuchsia-700">
+                                Série Recorrente #{{ $seriesId }}
+                                <span class="text-sm font-normal text-gray-500">({{ $seriesReservas->count() }} slots | Expira em: {{ \Carbon\Carbon::parse($maxDate)->format('d/m/Y') }})</span>
+                            </h3>
 
-                                    {{-- Botão de Exclusão da Série - AGORA USA $totalFutureSlots --}}
-                                    @if ($totalFutureSlots > 0)
-                                        <button type="button"
-                                                onclick="openSeriesCancellationModal({{ $seriesId }}, '{{ $client->name }}', {{ $totalFutureSlots }})"
-                                                class="mt-3 md:mt-0 px-4 py-2 bg-red-700 text-white text-sm font-semibold rounded-lg shadow-md hover:bg-red-800 transition duration-150">
-                                            Cancelar TODA a Série ({{ $totalFutureSlots }} futuros)
-                                        </button>
-                                    @else
-                                        <span class="mt-3 md:mt-0 text-sm text-gray-500 italic">Série concluída ou cancelada.</span>
-                                    @endif
-                                </div>
+                            {{-- Botão de Exclusão da Série - AGORA USA $totalFutureSlots --}}
+                            @if ($totalFutureSlots > 0)
+                            <button type="button"
+                                class="btn-cancelar-serie ..."
+                                data-series-id="{{ $seriesId }}"
+                                data-client-name="{{ $client->name }}"
+                                data-future-slots="{{ $totalFutureSlots }}"
+                                onclick="handleSeriesModal(this)">
+                                Cancelar TODA a Série
+                            </button>
+                            @else
+                            <span class="mt-3 md:mt-0 text-sm text-gray-500 italic">Série concluída ou cancelada.</span>
+                            @endif
+                        </div>
 
-                                {{-- Tabela de Recorrentes (Usa a partial view) --}}
-                                <div class="overflow-x-auto max-h-96 overflow-y-auto">
-                                    @include('admin.users.partials.reservation_table', ['reservas' => $seriesReservas])
-                                </div>
-                            </div>
-                        @endif
+                        {{-- Tabela de Recorrentes (Usa a partial view) --}}
+                        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+                            @include('admin.users.partials.reservation_table', ['reservas' => $seriesReservas])
+                        </div>
+                    </div>
+                    @endif
                     @endforeach
 
                     {{-- Caso não haja reservas --}}
                     @if ($reservas->isEmpty())
-                        <div class="text-center py-10 text-gray-500 italic">
-                            Este cliente não possui reservas agendadas ou históricas.
-                        </div>
+                    <div class="text-center py-10 text-gray-500 italic">
+                        Este cliente não possui reservas agendadas ou históricas.
+                    </div>
                     @endif
                 </div>
 
                 <!-- Paginação -->
                 @if (!$reservas->isEmpty())
-                    <div class="mt-6">
-                        {{ $reservas->links() }}
-                    </div>
+                <div class="mt-6">
+                    {{ $reservas->links() }}
+                </div>
                 @endif
 
             </div>
@@ -204,6 +209,16 @@
             }, 5000);
         }
 
+        function handleSeriesModal(button) {
+            // Pegamos os dados direto dos atributos do botão
+            const seriesId = button.getAttribute('data-series-id');
+            const clientName = button.getAttribute('data-client-name');
+            const futureCount = button.getAttribute('data-future-slots');
+
+            // Chamamos sua função original
+            openSeriesCancellationModal(seriesId, clientName, futureCount);
+        }
+
         // --- Listener de Submissão do Formulário de Cancelamento de Série ---
         document.getElementById('series-cancellation-form').addEventListener('submit', async function(event) {
             event.preventDefault();
@@ -247,7 +262,10 @@
                 } catch (e) {
                     const errorText = await response.text();
                     console.error("Falha ao ler JSON de resposta (Pode ser 500 ou HTML).", errorText);
-                    result = { success: false, message: `Erro do Servidor (${response.status}). Verifique o console.` };
+                    result = {
+                        success: false,
+                        message: `Erro do Servidor (${response.status}). Verifique o console.`
+                    };
                 }
 
                 if (response.ok && result.success) {

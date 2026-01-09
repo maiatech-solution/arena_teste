@@ -103,15 +103,17 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::post('/{reserva}/no-show', [PaymentController::class, 'registerNoShow'])->name('no_show');
         });
 
-        // 👥 4. GESTÃO DE USUÁRIOS (CLIENTES)
+        // 👥 4. GESTÃO DE USUÁRIOS (Ajustado para UserController)
         Route::prefix('users')->name('users.')->group(function () {
-            Route::get('/', [AdminController::class, 'indexUsers'])->name('index');
-            Route::get('/create', [AdminController::class, 'createUser'])->name('create');
-            Route::post('/', [AdminController::class, 'storeUser'])->name('store');
-            Route::get('/{user}/edit', [AdminController::class, 'editUser'])->name('edit');
-            Route::put('/{user}', [AdminController::class, 'updateUser'])->name('update');
-            Route::delete('/{user}', [AdminController::class, 'destroyUser'])->name('destroy');
-            Route::get('/{user}/reservas', [AdminController::class, 'clientReservations'])->name('reservas');
+            Route::get('/', [UserController::class, 'index'])->name('index');
+            Route::get('/create', [UserController::class, 'create'])->name('create');
+            Route::post('/', [UserController::class, 'store'])->name('store');
+            Route::get('/{user}/edit', [UserController::class, 'edit'])->name('edit');
+            Route::put('/{user}', [UserController::class, 'update'])->name('update');
+            Route::delete('/{user}', [UserController::class, 'destroy'])->name('destroy');
+
+            // 🎯 Rota do Histórico que acabamos de criar
+            Route::get('/{user}/reservas', [UserController::class, 'reservas'])->name('reservas');
         });
 
         // 💰 5. MÓDULO FINANCEIRO & PAGAMENTOS (OPERAÇÕES DIÁRIAS)

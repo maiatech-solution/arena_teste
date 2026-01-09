@@ -1729,9 +1729,10 @@
             const event = info.event;
             const props = event.extendedProps;
 
-            // 📅 0. Identifica a data do clique
+            // 📅 0. Identifica a data e hora do clique
             const eventDate = moment(event.start).format('YYYY-MM-DD');
             const isToday = eventDate === moment().format('YYYY-MM-DD');
+            const isPast = moment(event.start).isBefore(moment()); // ✨ Nova verificação: Já passou?
 
             // 🛑 1. TRAVA DE SEGURANÇA LOCAL (Cache por Data)
             if (window.closedDatesCache && window.closedDatesCache[eventDate] === true) {
@@ -1746,16 +1747,12 @@
             try {
                 const response = await fetch(`{{ route("admin.payment.caixa.status") }}?date=${eventDate}`);
                 const statusCaixa = await response.json();
-
                 if (!statusCaixa.isOpen) {
                     if (!window.closedDatesCache) window.closedDatesCache = {};
                     window.closedDatesCache[eventDate] = true;
                     showDashboardMessage(`Ação Bloqueada: O caixa do dia ${moment(eventDate).format('DD/MM')} está fechado.`, 'error');
                     if (window.calendar) window.calendar.render();
                     return;
-                } else {
-                    if (!window.closedDatesCache) window.closedDatesCache = {};
-                    window.closedDatesCache[eventDate] = false;
                 }
             } catch (error) {
                 console.error("Erro ao verificar status do caixa:", error);
@@ -1769,67 +1766,54 @@
 
             // A. SLOT LIVRE (VERDE) -> ABRE AGENDAMENTO RÁPIDO
             if (isAvailable) {
+                // ... (Mantém sua lógica original de agendamento rápido sem alterações) ...
                 const modal = document.getElementById('quick-booking-modal');
                 if (!modal) return;
-
                 const arenaFilter = document.getElementById('filter_arena');
                 const selectedArenaId = props.arena_id || (arenaFilter ? arenaFilter.value : '');
                 const selectedArenaName = props.arena_name || (arenaFilter ? arenaFilter.options[arenaFilter.selectedIndex]?.text : 'N/A');
-
                 const setVal = (id, val) => {
                     const el = document.getElementById(id);
                     if (el) el.value = val;
                 };
-
                 setVal('quick-schedule-id', props.schedule_id || '');
                 setVal('quick-arena-id', selectedArenaId);
                 setVal('quick-date', eventDate);
                 setVal('quick-start-time', moment(event.start).format('HH:mm'));
                 setVal('quick-end-time', moment(event.end).format('HH:mm'));
                 setVal('reserva-id-to-update', event.id || '');
-
                 const priceRaw = parseFloat(props.price || 0);
                 const priceFormatted = priceRaw.toFixed(2).replace('.', ',');
                 setVal('quick-price', priceFormatted);
-
                 const displayArea = document.getElementById('slot-info-display');
                 if (displayArea) {
-                    displayArea.innerHTML = `
-                <div class="space-y-1 border-l-4 border-green-500 pl-3">
-                    <p class="text-xs uppercase text-gray-500 font-bold tracking-wider">Informações da Reserva</p>
-                    <p><strong>Quadra:</strong> <span class="text-indigo-600">${selectedArenaName}</span></p>
-                    <p><strong>Data:</strong> ${moment(event.start).format('DD/MM/YYYY')}</p>
-                    <p><strong>Hora:</strong> ${moment(event.start).format('HH:mm')} às ${moment(event.end).format('HH:mm')}</p>
-                    <p><strong>Preço Sugerido:</strong> <span class="text-green-600 font-bold">R$ ${priceFormatted}</span></p>
-                </div>`;
+                    displayArea.innerHTML = `<div class="space-y-1 border-l-4 border-green-500 pl-3"><p class="text-xs uppercase text-gray-500 font-bold tracking-wider">Informações da Reserva</p><p><strong>Quadra:</strong> <span class="text-indigo-600">${selectedArenaName}</span></p><p><strong>Data:</strong> ${moment(event.start).format('DD/MM/YYYY')}</p><p><strong>Hora:</strong> ${moment(event.start).format('HH:mm')} às ${moment(event.end).format('HH:mm')}</p><p><strong>Preço Sugerido:</strong> <span class="text-green-600 font-bold">R$ ${priceFormatted}</span></p></div>`;
                 }
-
                 setVal('client_name', '');
                 setVal('client_contact', '');
                 setVal('signal_value_quick', '0,00');
                 document.getElementById('client-reputation-display').innerHTML = '';
-
                 modal.classList.remove('hidden');
                 modal.style.setProperty('display', 'flex', 'important');
                 return;
             }
 
-            // B. PENDENTE (LARANJA)
-            if (status === 'pending') {
+            // B. PENDENTE E FUTURA (LARANJA - AINDA NÃO ACONTECEU)
+            // ✨ Só abre o modal de aprovação se a reserva for pendente E NÃO estiver atrasada.
+            if (status === 'pending' && !isPast) {
                 if (typeof openPendingActionModal === "function") openPendingActionModal(event);
                 return;
             }
 
-            // C. RESERVA EXISTENTE -> ABRE DETALHES
+            // C. RESERVA EXISTENTE (CONFIRMADA, PAGO OU PENDENTE ATRASADA)
+            // ✨ Aqui a Daniela/Julia que estão atrasadas cairão no Modal de Detalhes Completo.
             const reservaId = event.id;
             const prefixRegex = /^\s*(?:\(?(?:PAGO|FALTA|ATRASADO|CANCELADO|REJEITADA|PENDENTE|A\sVENCER\/FALTA|RECORR(?:E)?|SINAL|RESOLVIDO)\)?[\.:\s]*\s*)+/i;
             const clientNameRaw = event.title.replace(prefixRegex, '').split(' - ')[0].trim();
 
-            // ✅ VALORES FINANCEIROS: Garantindo precisão numérica e formatação string
             const isRecurrent = props.is_recurrent ? true : false;
             const paidAmountValue = parseFloat(props.total_paid || props.retained_amount || 0);
             const totalPriceValue = parseFloat(props.final_price || props.price || 0);
-
             const paidAmountString = paidAmountValue.toFixed(2).replace('.', ',');
             const totalPriceString = totalPriceValue.toFixed(2).replace('.', ',');
 
@@ -1840,12 +1824,16 @@
             const eventModal = document.getElementById('event-modal');
 
             if (contentArea && actionsArea && eventModal) {
+                // ✨ Título dinâmico para indicar o atraso no modal
+                const modalTitle = (status === 'pending' && isPast) ? 'Detalhes de Reserva ATRASADA' : 'Detalhes da Reserva Confirmada';
+                eventModal.querySelector('h3').textContent = modalTitle;
+
                 contentArea.innerHTML = `
             <div class="space-y-2">
                 <p><strong>Cliente:</strong> ${clientNameRaw}</p>
                 <p><strong>Contato:</strong> ${props.client_contact || 'N/A'}</p>
                 <p><strong>Horário:</strong> ${moment(event.start).format('HH:mm')} - ${moment(event.end).format('HH:mm')}</p>
-                <p><strong>Status:</strong> <span class="uppercase font-extrabold ${status === 'no_show' ? 'text-red-600' : 'text-indigo-600'}">${status}</span></p>
+                <p><strong>Status:</strong> <span class="uppercase font-extrabold ${status === 'no_show' || (status === 'pending' && isPast) ? 'text-red-600' : 'text-indigo-600'}">${status === 'pending' && isPast ? 'PENDENTE (ATRASADA)' : status}</span></p>
                 <p><strong>Total Pago:</strong> <span class="text-green-700 font-bold">R$ ${paidAmountString}</span> / R$ ${totalPriceString}</p>
             </div>`;
 
@@ -1998,40 +1986,69 @@
                         const eventDate = moment(info.event.start).format('YYYY-MM-DD');
 
                         // 🚩 REGRA DE OURO: Se o status for cancelado ou rejeitado, removemos do visual
-                        // Isso resolve o problema de nomes "fantasmas" no calendário.
                         if (status === 'cancelled' || status === 'rejected') {
-                            info.el.style.display = 'none'; // Esconde o card completamente
-                            return; // Interrompe o processamento deste evento
+                            info.el.style.display = 'none';
+                            return;
                         }
 
                         // Trava visual se a data estiver no cache de fechados
                         const isLocked = window.closedDatesCache && window.closedDatesCache[eventDate] === true;
-
                         if (isLocked) {
                             info.el.classList.add('cashier-closed-locked');
                             info.el.style.pointerEvents = 'none';
                             info.el.style.cursor = 'not-allowed';
                         }
 
-                        // Limpa classes anteriores para evitar conflitos de cores
+                        // Limpa classes anteriores
                         info.el.classList.remove('fc-event-available', 'fc-event-recurrent', 'fc-event-quick', 'fc-event-pending', 'fc-event-paid', 'fc-event-no-show');
 
-                        // Lógica de Estilização por Status
+                        // 🔴 LÓGICA DE ESTILIZAÇÃO POR STATUS
+
+                        // 1. RESOLVIDO / PAGO (Faded)
                         if (['pago', 'completed', 'resolvido', 'concluida'].includes(status) || paymentStatus === 'paid') {
                             info.el.classList.add('fc-event-paid');
-                        } else if (status === 'no_show') {
+                        }
+
+                        // 2. FALTA (No-Show)
+                        else if (status === 'no_show') {
                             info.el.classList.add('fc-event-no-show');
-                        } else if (status === 'pending') {
+                        }
+
+                        // 3. PENDENTE (Laranja - Aguardando aprovação)
+                        else if (status === 'pending') {
                             info.el.classList.add('fc-event-pending');
-                        } else if (status === 'free' || info.event.classNames.includes('fc-event-available')) {
+                        }
+
+                        // 4. LIVRE (Verde)
+                        else if (status === 'free' || info.event.classNames.includes('fc-event-available')) {
                             info.el.classList.add('fc-event-available');
                             if (titleEl) {
                                 const price = parseFloat(props.price || 0).toFixed(2).replace('.', ',');
                                 titleEl.textContent = 'LIVRE - R$ ' + price;
                             }
-                        } else {
-                            // Reservas Confirmadas (Vivas)
-                            info.el.classList.add(props.is_recurrent ? 'fc-event-recurrent' : 'fc-event-quick');
+                        }
+
+                        // 5. CONFIRMADAS (Aqui entra a lógica de ATRASADA por horário)
+                        else {
+                            const now = moment();
+                            const eventEnd = moment(info.event.end); // Usamos o FIM da reserva
+                            const isPast = eventEnd.isBefore(now);
+
+                            if (isPast && (status === 'confirmed' || status === 'confirmada')) {
+                                // ✨ RESERVA CONFIRMADA QUE JÁ PASSOU DO HORÁRIO (Atraso de Recebimento)
+                                info.el.classList.add('fc-event-no-show'); // Usa o vermelho para alerta
+                                info.el.style.backgroundColor = '#7f1d1d'; // Vermelho Bordô Escuro
+                                info.el.style.borderColor = '#450a0a';
+                                info.el.style.animation = 'pulse 2s infinite'; // Alerta pulsante
+
+                                if (titleEl) {
+                                    // Preserva o nome do cliente e adiciona o alerta
+                                    titleEl.innerHTML = '<span style="font-weight: 900;">ATRASADA</span> ' + titleEl.textContent;
+                                }
+                            } else {
+                                // Confirmada normal (Dentro do horário ou futura)
+                                info.el.classList.add(props.is_recurrent ? 'fc-event-recurrent' : 'fc-event-quick');
+                            }
                         }
                     },
                     eventClick: (info) => window.eventClick(info)
