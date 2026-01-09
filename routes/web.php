@@ -58,77 +58,74 @@ Route::middleware(['auth', 'gestor'])->group(function () {
     // 🚀 GRUPO ADMIN (PREFIXO /admin)
     Route::prefix('admin')->name('admin.')->group(function () {
 
-        // 🏟️ 1. GERENCIAR QUADRAS (Apenas Cadastro e Lista)
+        // 🏟️ 1. GERENCIAR QUADRAS
         Route::get('/arenas', [ArenaController::class, 'index'])->name('arenas.index');
         Route::post('/arenas', [ArenaController::class, 'store'])->name('arenas.store');
 
-        // ⚙️ 2. FUNCIONAMENTO (Onde se escolhe a quadra para configurar horários)
+        // ⚙️ 2. CONFIGURAÇÃO DE FUNCIONAMENTO E HORÁRIOS
         Route::get('/funcionamento-portal', [ConfigurationController::class, 'funcionamento'])->name('config.funcionamento');
-        Route::get('/config/{arena_id}', [ConfigurationController::class, 'index'])->name('config.index');
-        Route::post('/config', [ConfigurationController::class, 'store'])->name('config.store');
 
-        // CONFIG HORÁRIOS RECORRENTES (🎯 Ajustado com parâmetro opcional {arena_id?})
+        // Unificado: Parâmetro opcional {arena_id?} resolve ambos os casos
         Route::get('/config/{arena_id?}', [ConfigurationController::class, 'index'])->name('config.index');
         Route::post('/config', [ConfigurationController::class, 'store'])->name('config.store');
         Route::get('/config/generate', [ConfigurationController::class, 'generateFixedReservas'])->name('config.generate');
 
-        // CONFIGURAÇÕES AJAX (Operações em tempo real na tela de configuração)
+        // Operações AJAX de Configuração
         Route::post('/config/fixed-reserva/{id}/price', [ConfigurationController::class, 'updateFixedReservaPrice'])->name('config.update_price');
         Route::post('/config/fixed-reserva/{reserva}/status', [ReservaController::class, 'toggleFixedReservaStatus'])->name('config.update_status');
         Route::post('/config/delete-slot-config', [ConfigurationController::class, 'deleteSlotConfig'])->name('config.delete_slot_config');
         Route::post('/config/delete-day-config', [ConfigurationController::class, 'deleteDayConfig'])->name('config.delete_day_config');
 
-        // GESTÃO DE RESERVAS
+        // 📅 3. GESTÃO DE RESERVAS
         Route::prefix('reservas')->name('reservas.')->group(function () {
             Route::get('/', [AdminController::class, 'indexReservasDashboard'])->name('index');
             Route::get('/pendentes', [AdminController::class, 'indexReservas'])->name('pendentes');
-            Route::get('confirmadas', [AdminController::class, 'confirmed_index'])->name('confirmadas');
-            Route::get('todas', [AdminController::class, 'indexTodas'])->name('todas');
-            Route::get('rejeitadas', [AdminController::class, 'indexReservasRejeitadas'])->name('rejeitadas');
-            Route::get('{reserva}/show', [AdminController::class, 'showReserva'])->name('show');
-            Route::get('create', [AdminController::class, 'createUser'])->name('create');
+            Route::get('/confirmadas', [AdminController::class, 'confirmed_index'])->name('confirmadas');
+            Route::get('/todas', [AdminController::class, 'indexTodas'])->name('todas');
+            Route::get('/rejeitadas', [AdminController::class, 'indexReservasRejeitadas'])->name('rejeitadas');
+            Route::get('/{reserva}/show', [AdminController::class, 'showReserva'])->name('show');
+            Route::get('/create', [AdminController::class, 'createUser'])->name('create');
             Route::post('/', [AdminController::class, 'storeReserva'])->name('store');
-            Route::post('tornar-fixo', [AdminController::class, 'makeRecurrent'])->name('make_recurrent');
+            Route::post('/tornar-fixo', [AdminController::class, 'makeRecurrent'])->name('make_recurrent');
 
-            // AÇÕES DE STATUS
-            Route::patch('confirmar/{reserva}', [ReservaController::class, 'confirmar'])->name('confirmar');
-            Route::patch('rejeitar/{reserva}', [ReservaController::class, 'rejeitar'])->name('rejeitar');
+            // Ações de Status e Modificações
+            Route::patch('/confirmar/{reserva}', [ReservaController::class, 'confirmar'])->name('confirmar');
+            Route::patch('/rejeitar/{reserva}', [ReservaController::class, 'rejeitar'])->name('rejeitar');
+            Route::patch('/{reserva}/update-price', [AdminController::class, 'updatePrice'])->name('update_price');
+            Route::patch('/{reserva}/reativar', [AdminController::class, 'reativar'])->name('reativar');
+            Route::patch('/{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('cancelar');
+            Route::patch('/{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('cancelar_pontual');
+            Route::delete('/{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('cancelar_serie');
 
-            Route::patch('{reserva}/update-price', [AdminController::class, 'updatePrice'])->name('update_price');
-            Route::patch('{reserva}/reativar', [AdminController::class, 'reativar'])->name('reativar');
-            Route::patch('{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('cancelar');
-            Route::patch('{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('cancelar_pontual');
-            Route::delete('{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('cancelar_serie');
-            Route::match(['post', 'patch'], '{reserva}/no-show', [PaymentController::class, 'registerNoShow'])->name('no_show');
-            Route::delete('{reserva}', [AdminController::class, 'destroyReserva'])->name('destroy');
-            Route::post('{masterReserva}/renew-serie', [ReservaController::class, 'renewRecurrentSeries'])->name('renew_serie');
-            Route::delete('series/{masterId}/cancel', [AdminController::class, 'cancelClientSeries'])->name('cancel_client_series');
+            // No-Show centralizado no PaymentController por causa do estorno financeiro
+            Route::post('/{reserva}/no-show', [PaymentController::class, 'registerNoShow'])->name('no_show');
+
+            Route::delete('/{reserva}', [AdminController::class, 'destroyReserva'])->name('destroy');
+            Route::post('/{masterReserva}/renew-serie', [ReservaController::class, 'renewRecurrentSeries'])->name('renew_serie');
+            Route::delete('/series/{masterId}/cancel', [AdminController::class, 'cancelClientSeries'])->name('cancel_client_series');
         });
 
-        // GESTÃO DE USUÁRIOS
+        // 👥 4. GESTÃO DE USUÁRIOS (CLIENTES)
         Route::prefix('users')->name('users.')->group(function () {
             Route::get('/', [AdminController::class, 'indexUsers'])->name('index');
-            Route::get('create', [AdminController::class, 'createUser'])->name('create');
+            Route::get('/create', [AdminController::class, 'createUser'])->name('create');
             Route::post('/', [AdminController::class, 'storeUser'])->name('store');
-            Route::get('{user}/edit', [AdminController::class, 'editUser'])->name('edit');
-            Route::put('{user}', [AdminController::class, 'updateUser'])->name('update');
-            Route::delete('{user}', [AdminController::class, 'destroyUser'])->name('destroy');
-            Route::get('{user}/reservas', [AdminController::class, 'clientReservations'])->name('reservas');
+            Route::get('/{user}/edit', [AdminController::class, 'editUser'])->name('edit');
+            Route::put('/{user}', [AdminController::class, 'updateUser'])->name('update');
+            Route::delete('/{user}', [AdminController::class, 'destroyUser'])->name('destroy');
+            Route::get('/{user}/reservas', [AdminController::class, 'clientReservations'])->name('reservas');
         });
 
-        // 💰 MÓDULO FINANCEIRO & PAGAMENTOS
+        // 💰 5. MÓDULO FINANCEIRO & PAGAMENTOS (OPERAÇÕES DIÁRIAS)
         Route::prefix('pagamentos')->name('payment.')->group(function () {
             Route::get('/', [PaymentController::class, 'index'])->name('index');
-
-            // 🎯 ADICIONE ESTA LINHA AQUI:
-            Route::get('/status-caixa', [FinanceiroController::class, 'getStatus'])->name('caixa.status');
-
-            Route::post('fechar-caixa', [FinanceiroController::class, 'closeCash'])->name('close_cash');
-            Route::post('abrir-caixa', [FinanceiroController::class, 'openCash'])->name('open_cash');
-            Route::post('{reserva}/finalizar', [ReservaController::class, 'finalizarPagamento'])->name('finalize');
+            Route::get('/status-caixa', [PaymentController::class, 'isCashierClosed'])->name('caixa.status');
+            Route::post('/fechar-caixa', [PaymentController::class, 'closeCash'])->name('close_cash');
+            Route::post('/abrir-caixa', [PaymentController::class, 'reopenCash'])->name('open_cash');
+            Route::post('/{reserva}/finalizar', [PaymentController::class, 'processPayment'])->name('finalize');
         });
 
-        // 📊 RELATÓRIOS ANALÍTICOS
+        // 📊 6. RELATÓRIOS ANALÍTICOS (VISÃO GERENCIAL)
         Route::prefix('financeiro')->name('financeiro.')->group(function () {
             Route::get('/', [FinanceiroController::class, 'index'])->name('dashboard');
             Route::get('/faturamento', [FinanceiroController::class, 'relatorioFaturamento'])->name('relatorio_faturamento');

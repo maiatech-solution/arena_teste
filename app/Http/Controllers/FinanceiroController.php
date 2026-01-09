@@ -140,67 +140,6 @@ class FinanceiroController extends Controller
         return view('admin.financeiro.ranking', compact('ranking'));
     }
 
-    // =========================================================================
-    // 🔒 GESTÃO DE CAIXA E APIs
-    // =========================================================================
-
-    public function closeCash(Request $request)
-    {
-        $request->validate([
-            'date' => 'required|date_format:Y-m-d',
-            'actual_amount' => 'required|numeric'
-        ]);
-
-        DB::beginTransaction();
-        try {
-            $dateString = $request->date;
-            $calculatedAmount = $this->calculateLiquidCash($dateString);
-
-            Cashier::updateOrCreate(['date' => $dateString], [
-                'calculated_amount' => $calculatedAmount,
-                'actual_amount' => (float)$request->actual_amount,
-                'status' => 'closed',
-                'closed_by_user_id' => Auth::id(),
-                'closing_time' => now(),
-            ]);
-
-            DB::commit();
-            return response()->json(['success' => true, 'message' => "Caixa fechado com sucesso."]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Erro ao fechar caixa: ' . $e->getMessage());
-            // Aqui está o segredo: enviamos a mensagem REAL do erro para o front-end
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
-        }
-    }
-
-    public function openCash(Request $request)
-    {
-        $request->validate([
-            'date' => 'required|date_format:Y-m-d',
-            'reason' => 'required|string|max:500'
-        ]);
-
-        DB::beginTransaction();
-        try {
-            $cashier = Cashier::where('date', $request->date)->first();
-            if (!$cashier) return response()->json(['success' => false, 'message' => 'Caixa não localizado.'], 404);
-
-            $userName = Auth::user()->name ?? 'Admin';
-            $reopenNote = "[REABERTURA por {$userName} em " . now()->format('d/m/Y H:i:s') . "]: {$request->reason}";
-
-            $cashier->update([
-                'status' => 'open',
-                'notes' => $cashier->notes ? $cashier->notes . "\n---\n" . $reopenNote : $reopenNote,
-            ]);
-
-            DB::commit();
-            return response()->json(['success' => true, 'message' => "Caixa reaberto com sucesso."]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Erro ao reabrir.'], 500);
-        }
-    }
 
     // app/Http/Controllers/FinanceiroController.php
 

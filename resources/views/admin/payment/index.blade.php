@@ -356,7 +356,7 @@
                                 $restante = max(0, $total - $pago);
                                 $currentStatus = $reserva->payment_status;
 
-                                // 2. Destaque e Lógica de Atraso
+                                // 2. Lógica de Tempo e Atraso
                                 $dataHoje = \Carbon\Carbon::today()->toDateString();
                                 $dataReserva = \Carbon\Carbon::parse($reserva->date)->toDateString();
                                 $eHoje = $dataReserva === $dataHoje;
@@ -370,7 +370,7 @@
                                 } catch (\Exception $e) { $isOverdue = false; }
                                 }
 
-                                // 3. Status Visual
+                                // 3. Status Visual (Badge)
                                 $statusClass = '';
                                 $statusLabel = '';
                                 if ($reserva->status === 'no_show') {
@@ -383,7 +383,7 @@
                                 $statusClass = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
                                 $statusLabel = 'PAGO COMPLETO';
                                 } elseif ($isOverdue) {
-                                $statusClass = 'bg-red-700 text-white font-bold animate-pulse shadow-xl';
+                                $statusClass = 'bg-red-700 text-white font-bold animate-pulse shadow-sm';
                                 $statusLabel = 'ATRASADO';
                                 } elseif ($currentStatus === 'partial') {
                                 $statusClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
@@ -393,28 +393,26 @@
                                 $statusLabel = $pago > 0 ? 'SINAL DADO' : 'PENDENTE';
                                 }
 
-                                // 4. Destaque da Linha
-                                if (isset($highlightReservaId) && $reserva->id == $highlightReservaId) {
-                                $rowHighlight = 'bg-indigo-100 dark:bg-indigo-900/40 border-l-4 border-indigo-600 shadow-inner';
-                                } elseif ($eHoje) {
-                                $rowHighlight = 'bg-blue-50/70 dark:bg-blue-900/10 border-l-4 border-blue-500';
-                                } else {
-                                $rowHighlight = 'hover:bg-gray-50 dark:hover:bg-gray-700';
-                                }
+                                // 4. Estilo da Linha (Sem destaque de ID)
+                                $rowHighlight = $eHoje
+                                ? 'bg-blue-50/70 dark:bg-blue-900/10 border-l-4 border-blue-500'
+                                : 'hover:bg-gray-50 dark:hover:bg-gray-700 border-l-4 border-transparent';
 
                                 $canPay = $restante > 0 && !in_array($reserva->status, ['canceled', 'rejected']);
                                 $canBeNoShow = !in_array($reserva->status, ['no_show', 'canceled', 'rejected']);
                                 @endphp
 
-                                <tr class="{{ $rowHighlight }} transition hover:bg-opacity-50">
+                                <tr class="{{ $rowHighlight }} transition duration-150">
+                                    {{-- Horário --}}
                                     <td class="px-4 py-4 whitespace-nowrap text-sm font-bold text-gray-700 dark:text-gray-300">
                                         {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }} -
                                         {{ \Carbon\Carbon::parse($reserva->end_time)->format('H:i') }}
                                     </td>
 
+                                    {{-- Cliente e Arena --}}
                                     <td class="px-4 py-4 whitespace-nowrap">
                                         <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                            {{ $reserva->client_name }} (ID: {{ $reserva->id }})
+                                            {{ $reserva->client_name }} <span class="text-xs text-gray-400">(#{{ $reserva->id }})</span>
                                         </div>
                                         <div class="flex flex-wrap items-center gap-2 mt-1">
                                             <span class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 font-black uppercase border border-indigo-200 dark:border-indigo-800">
@@ -424,32 +422,36 @@
                                         </div>
                                     </td>
 
-                                    <td class="px-4 py-4 whitespace-nowrap"
-                                        data-status="{{ $reserva->status }}">
-                                        <span class="badge">
+                                    {{-- Status Financeiro --}}
+                                    <td class="px-4 py-4 whitespace-nowrap" data-status="{{ $reserva->status }}">
+                                        <span class="px-2 py-1 inline-flex text-[10px] leading-4 font-bold rounded-full {{ $statusClass }}">
                                             {{ $statusLabel }}
                                         </span>
                                     </td>
 
-
+                                    {{-- Tipo --}}
                                     <td class="px-4 py-4 whitespace-nowrap text-sm">
                                         <span class="font-semibold {{ $reserva->is_recurrent ? 'text-fuchsia-600' : 'text-blue-600' }}">
                                             {{ $reserva->is_recurrent ? 'Recorrente' : 'Pontual' }}
                                         </span>
                                     </td>
 
+                                    {{-- Valor Total --}}
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-700 dark:text-gray-300">
                                         {{ number_format($total, 2, ',', '.') }}
                                     </td>
 
+                                    {{-- Pago --}}
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-right text-green-600 font-medium">
                                         {{ number_format($pago, 2, ',', '.') }}
                                     </td>
 
+                                    {{-- Saldo --}}
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-right font-bold {{ $restante > 0 ? 'text-red-600' : 'text-gray-400' }}">
                                         {{ number_format($restante, 2, ',', '.') }}
                                     </td>
 
+                                    {{-- Ações --}}
                                     <td class="px-4 py-4 whitespace-nowrap text-center text-sm font-medium">
                                         @if ($canPay)
                                         <button type="button"
@@ -1164,6 +1166,17 @@
         }
 
         // --- Lógica de Cálculo de Pagamento ---
+
+        // Funções Auxiliares para Precisão Financeira
+        function toCents(value) {
+            return Math.round(parseFloat(value || 0) * 100);
+        }
+
+        function fromCents(cents) {
+            return (cents / 100).toFixed(2);
+        }
+
+        // --- Lógica de Cálculo de Pagamento Refinada ---
         function calculateAmountDue() {
             const finalPriceEl = document.getElementById('modalFinalPrice');
             const signalRawEl = document.getElementById('modalSignalAmountRaw');
@@ -1172,25 +1185,35 @@
 
             if (!finalPriceEl || !amountPaidEl) return;
 
+            // Reset visual inicial
             trocoMessageEl.classList.add('hidden');
-            amountPaidEl.classList.remove('focus:border-yellow-500');
+            amountPaidEl.classList.remove('focus:border-yellow-500', 'border-yellow-500', 'bg-yellow-50');
             amountPaidEl.classList.add('focus:border-green-500');
 
-            const finalPrice = parseFloat(finalPriceEl.value) || 0;
-            const signalAmount = parseFloat(signalRawEl.value) || 0;
-            let remainingOrChange = finalPrice - signalAmount;
+            // Cálculos usando centavos para evitar erros de ponto flutuante
+            const finalPriceCents = toCents(finalPriceEl.value);
+            const signalAmountCents = toCents(signalRawEl.value);
+            const balanceCents = finalPriceCents - signalAmountCents;
 
-            updateRecurrentTogglePrice(finalPrice);
+            // Atualiza o label da recorrência (se houver) com o valor formatado
+            updateRecurrentTogglePrice(fromCents(finalPriceCents));
 
-            if (remainingOrChange < 0) {
-                const trocoAmount = Math.abs(remainingOrChange);
-                amountPaidEl.value = (0).toFixed(2);
-                trocoMessageEl.textContent = `🚨 ATENÇÃO: Troco a Devolver: R$ ${trocoAmount.toFixed(2).replace('.', ',')}`;
+            if (balanceCents < 0) {
+                // CASO: O sinal pago é maior que o novo preço final (Gerar Troco)
+                const trocoCents = Math.abs(balanceCents);
+                amountPaidEl.value = "0.00";
+
+                trocoMessageEl.innerHTML = `🚨 <strong>ATENÇÃO:</strong> Troco a Devolver: R$ ${fromCents(trocoCents).replace('.', ',')}`;
                 trocoMessageEl.classList.remove('hidden');
+
+                // Alerta visual no input
                 amountPaidEl.classList.remove('focus:border-green-500');
-                amountPaidEl.classList.add('focus:border-yellow-500');
+                amountPaidEl.classList.add('focus:border-yellow-500', 'border-yellow-500', 'bg-yellow-50');
             } else {
-                amountPaidEl.value = remainingOrChange.toFixed(2);
+                // CASO: Existe saldo a pagar ou valor exato
+                amountPaidEl.value = fromCents(balanceCents);
+
+                // Verifica se o usuário digitar manualmente um valor maior que o saldo
                 checkManualOverpayment();
             }
         }
@@ -1203,65 +1226,108 @@
 
             if (!finalPriceEl || !amountPaidEl) return;
 
-            const finalPrice = parseFloat(finalPriceEl.value) || 0;
-            const signalAmount = parseFloat(signalRawEl.value) || 0;
-            const amountPaidNow = parseFloat(amountPaidEl.value) || 0;
+            // Converte tudo para centavos (inteiros) para cálculo seguro
+            const finalPriceCents = toCents(finalPriceEl.value);
+            const signalAmountCents = toCents(signalRawEl.value);
+            const amountPaidNowCents = toCents(amountPaidEl.value);
 
-            updateRecurrentTogglePrice(finalPrice);
-            const totalReceived = signalAmount + amountPaidNow;
-            let overpayment = totalReceived - finalPrice;
+            // Atualiza o label de recorrência com o valor do input atual
+            updateRecurrentTogglePrice(fromCents(finalPriceCents));
 
+            const totalReceivedCents = signalAmountCents + amountPaidNowCents;
+            const overpaymentCents = totalReceivedCents - finalPriceCents;
+
+            // Reset Visual
             trocoMessageEl.classList.add('hidden');
-            amountPaidEl.classList.remove('focus:border-yellow-500');
+            amountPaidEl.classList.remove('focus:border-yellow-500', 'border-yellow-500', 'bg-yellow-50');
             amountPaidEl.classList.add('focus:border-green-500');
 
-            if (overpayment > 0.005) {
-                trocoMessageEl.textContent = `🚨 ATENÇÃO: Troco a Devolver: R$ ${overpayment.toFixed(2).replace('.', ',')}`;
+            if (overpaymentCents > 0) {
+                // CASO: O usuário digitou um valor que somado ao sinal ultrapassa o preço final
+                const trocoFormatted = fromCents(overpaymentCents).replace('.', ',');
+
+                trocoMessageEl.innerHTML = `🚨 <strong>ATENÇÃO:</strong> Troco a Devolver: R$ ${trocoFormatted}`;
                 trocoMessageEl.classList.remove('hidden');
+
+                // Alerta visual no input
                 amountPaidEl.classList.remove('focus:border-green-500');
-                amountPaidEl.classList.add('focus:border-yellow-500');
+                amountPaidEl.classList.add('focus:border-yellow-500', 'border-yellow-500', 'bg-yellow-50');
             } else {
-                if (finalPrice - signalAmount < 0) {
+                // Se o valor total recebido for menor ou igual ao preço final, 
+                // garantimos que o cálculo base de saldo devedor seja consistente.
+                const balanceCents = finalPriceCents - signalAmountCents;
+
+                // Se o sinal sozinho já cobre o valor (preço baixou), volta para a lógica principal
+                if (balanceCents < 0) {
                     calculateAmountDue();
                 }
             }
         }
 
-        // --- Lógica do Pagamento ---
+        // --- Lógica do Pagamento Refinada ---
         function openPaymentModal(id, totalPrice, remaining, signalAmount, clientName, isRecurrent = false) {
-            const isClosed = document.getElementById('js_isActionDisabled').value === '1';
+            // 1. Verificação de Segurança Robusta
+            const isClosedInput = document.getElementById('js_isActionDisabled');
+            const isClosed = isClosedInput && isClosedInput.value === '1';
 
             if (isClosed) {
-                alert('Ações bloqueadas. O caixa para esta data está FECHADO.');
+                // Sugestão: Use um Toast ou Notificação customizada se tiver no projeto
+                alert('🚫 Ações Bloqueadas: O caixa para esta data já foi encerrado e não permite novas movimentações.');
                 return;
             }
 
+            // 2. Reset de Estados de Erro anteriores
+            const errorDiv = document.getElementById('payment-error-message');
+            if (errorDiv) errorDiv.classList.add('hidden');
+
+            const trocoMsg = document.getElementById('trocoMessage');
+            if (trocoMsg) trocoMsg.classList.add('hidden');
+
+            // 3. Preenchimento de Dados Básicos
             document.getElementById('modalReservaId').value = id;
             document.getElementById('modalClientName').innerText = clientName;
 
-            const formattedSignal = signalAmount.toLocaleString('pt-BR', {
+            // 4. Formatação de Moeda para Exibição
+            const formattedSignal = new Intl.NumberFormat('pt-BR', {
                 style: 'currency',
                 currency: 'BRL'
-            });
+            }).format(signalAmount);
+
             document.getElementById('modalSignalAmount').innerText = formattedSignal;
+
+            // 5. Atribuição de Valores Raw (usando .toFixed(2) para garantir o formato decimal HTML5)
             document.getElementById('modalSignalAmountRaw').value = signalAmount.toFixed(2);
             document.getElementById('modalFinalPrice').value = totalPrice.toFixed(2);
 
+            // 6. Tratamento de Recorrência
             const recurrentOptionEl = document.getElementById('recurrentOption');
             const applyToSeriesCheckbox = document.getElementById('apply_to_series');
 
-            if (isRecurrent) {
-                recurrentOptionEl.classList.remove('hidden');
-                applyToSeriesCheckbox.checked = true;
-            } else {
-                recurrentOptionEl.classList.add('hidden');
-                applyToSeriesCheckbox.checked = false;
+            if (recurrentOptionEl && applyToSeriesCheckbox) {
+                if (isRecurrent) {
+                    recurrentOptionEl.classList.remove('hidden');
+                    applyToSeriesCheckbox.checked = true; // Por padrão, sugere atualizar a série
+                } else {
+                    recurrentOptionEl.classList.add('hidden');
+                    applyToSeriesCheckbox.checked = false;
+                }
             }
 
+            // 7. Cálculo Inicial e Abertura
+            // Chamamos a função refinada anteriormente para já calcular o saldo/troco
             calculateAmountDue();
+
             const modal = document.getElementById('paymentModal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+
+                // Foco automático no campo de valor pago para agilizar a operação
+                setTimeout(() => {
+                    document.getElementById('modalAmountPaid').focus();
+                    document.getElementById('modalAmountPaid').select();
+                }, 100);
+            }
         }
 
         function closePaymentModal() {
@@ -1365,17 +1431,23 @@
 
         document.getElementById('noShowForm').addEventListener('submit', function(e) {
             e.preventDefault();
+
             const reservaId = document.getElementById('noShowReservaId').value;
-            const notes = document.getElementById('no_show_reason').value;
+            const notes = document.getElementById('no_show_reason').value; // Valor do textarea
             const blockUser = document.getElementById('block_user').checked;
             const shouldRefund = document.getElementById('should_refund').value === 'true';
             const refundAmount = document.getElementById('custom_refund_amount').value;
             const csrfToken = document.querySelector('input[name="_token"]').value;
 
             const submitBtn = document.getElementById('submitNoShowBtn');
-            submitBtn.disabled = true;
+            const submitText = document.getElementById('submitNoShowText');
+            const submitSpinner = document.getElementById('submitNoShowSpinner');
 
-            // 🎯 URL ATUALIZADA PARA O PADRÃO QUE DEFINIMOS NAS ROTAS
+            // Estado de carregamento
+            submitBtn.disabled = true;
+            if (submitText) submitText.classList.add('hidden');
+            if (submitSpinner) submitSpinner.classList.remove('hidden');
+
             fetch(`/admin/reservas/${reservaId}/no-show`, {
                     method: 'POST',
                     headers: {
@@ -1384,7 +1456,7 @@
                         'Accept': 'application/json'
                     },
                     body: JSON.stringify({
-                        notes,
+                        no_show_reason: notes, // 🚀 AJUSTADO: Agora coincide com o Controller
                         block_user: blockUser,
                         should_refund: shouldRefund,
                         refund_amount: refundAmount
@@ -1393,51 +1465,74 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
+                        // Sucesso: Recarrega para atualizar KPIs e tabelas
                         location.reload();
                     } else {
-                        alert(data.message);
-                        submitBtn.disabled = false;
+                        // Erro controlado vindo do Controller (ex: caixa fechado)
+                        alert("Aviso: " + data.message);
+                        resetNoShowButton();
                     }
                 })
                 .catch(err => {
                     console.error(err);
-                    alert("Erro ao processar requisição.");
-                    submitBtn.disabled = false;
+                    alert("Erro crítico ao processar o No-Show. Verifique o console.");
+                    resetNoShowButton();
                 });
+
+            function resetNoShowButton() {
+                submitBtn.disabled = false;
+                if (submitText) submitText.classList.remove('hidden');
+                if (submitSpinner) submitSpinner.classList.add('hidden');
+            }
         });
 
-        // --- Fechamento de Caixa (MODAL 3) ---
+        // --- Fechamento de Caixa Refinado (MODAL 3) ---
         function calculateDifference() {
             const calculatedAmountEl = document.getElementById('valor-liquido-total-real');
             const diffMessageEl = document.getElementById('differenceMessage');
             const actualAmountInput = document.getElementById('actualCashAmount');
+            const submitBtn = document.getElementById('submitCloseCashBtn');
 
             if (!calculatedAmountEl || !diffMessageEl || !actualAmountInput) return;
 
-            diffMessageEl.classList.remove('hidden');
-
+            // 1. Limpeza rigorosa da string de moeda (Ex: "R$ 1.250,50" -> "1250.50")
             let calculatedText = calculatedAmountEl.innerText
-                .replace('R$', '')
-                .replace(/\./g, '')
-                .replace(',', '.')
+                .replace('R$', '') // Remove o símbolo
+                .replace(/\./g, '') // Remove pontos de milhar
+                .replace(',', '.') // Troca vírgula decimal por ponto
                 .trim();
 
-            const calculatedAmount = parseFloat(calculatedText) || 0;
-            const actualAmount = parseFloat(actualAmountInput.value) || 0;
-            const difference = (actualAmount - calculatedAmount).toFixed(2);
+            // 2. Conversão para Centavos (Inteiros) para cálculo seguro
+            const calculatedCents = toCents(calculatedText);
+            const actualCents = toCents(actualAmountInput.value);
+            const differenceCents = actualCents - calculatedCents;
 
-            diffMessageEl.classList.remove('bg-red-100', 'text-red-700', 'bg-yellow-100', 'text-yellow-700', 'bg-green-100', 'text-green-700');
+            // 3. Reset visual
+            diffMessageEl.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-amber-100', 'text-amber-700', 'bg-green-100', 'text-green-700', 'border-red-200', 'border-amber-200', 'border-green-200');
+            diffMessageEl.classList.add('border');
 
-            if (Math.abs(difference) < 0.01) {
-                diffMessageEl.innerHTML = '✅ <strong>Caixa exato!</strong> Valores conferem.';
-                diffMessageEl.classList.add('bg-green-100', 'text-green-700');
-            } else if (difference > 0) {
-                diffMessageEl.innerHTML = `⚠️ <strong>Sobrou R$ ${Math.abs(difference).toFixed(2).replace('.', ',')}</strong>. Físico maior que sistema.`;
-                diffMessageEl.classList.add('bg-yellow-100', 'text-yellow-700');
+            // 4. Lógica de exibição baseada na diferença
+            if (differenceCents === 0) {
+                diffMessageEl.innerHTML = '✅ <strong>Caixa Exato!</strong> Os valores conferem perfeitamente.';
+                diffMessageEl.classList.add('bg-green-100', 'text-green-700', 'border-green-200');
+                if (submitBtn) submitBtn.classList.replace('bg-amber-600', 'bg-indigo-600');
+
+            } else if (differenceCents > 0) {
+                const diffFormatted = fromCents(differenceCents).replace('.', ',');
+                diffMessageEl.innerHTML = `⚠️ <strong>Sobra de Caixa: R$ ${diffFormatted}</strong><br><span class="text-[10px] font-normal">O valor físico informado é MAIOR que o registrado no sistema.</span>`;
+                diffMessageEl.classList.add('bg-amber-100', 'text-amber-700', 'border-amber-200');
+                // Alerta o gestor mudando a cor do botão de ação
+                if (submitBtn) submitBtn.classList.replace('bg-indigo-600', 'bg-amber-600');
+
             } else {
-                diffMessageEl.innerHTML = `🚨 <strong>Faltou R$ ${Math.abs(difference).toFixed(2).replace('.', ',')}</strong>. Físico menor que sistema.`;
-                diffMessageEl.classList.add('bg-red-100', 'text-red-700');
+                const diffFormatted = fromCents(Math.abs(differenceCents)).replace('.', ',');
+                diffMessageEl.innerHTML = `🚨 <strong>Falta de Caixa: R$ ${diffFormatted}</strong><br><span class="text-[10px] font-normal">O valor físico informado é MENOR que o esperado pelo sistema.</span>`;
+                diffMessageEl.classList.add('bg-red-100', 'text-red-700', 'border-red-200');
+                // Alerta crítico no botão
+                if (submitBtn) submitBtn.classList.replace('bg-indigo-600', 'bg-red-600');
             }
+
+            diffMessageEl.classList.remove('hidden');
         }
 
         function openCloseCashModal() {

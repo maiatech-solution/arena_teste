@@ -996,50 +996,43 @@ class AdminController extends Controller
     public function indexReservasRejeitadas(Request $request)
     {
         $search = $request->input('search');
-        $startDate = $request->input('start_date');
-        $endDate = $request->input('end_date');
         $arenaId = $request->input('arena_id');
 
-        // 1. Iniciamos a query filtrando apenas por REJEITADAS e carregando Arena/Manager
-        $query = Reserva::where('status', Reserva::STATUS_REJEITADA)
-            ->where('is_fixed', false)
-            ->with(['arena', 'manager']); // 🏟️ Essencial para não dar erro na View
+        // 🎯 O valor padrão agora vem da constante da Model
+        $statusFilter = $request->input('status_filter', Reserva::STATUS_REJEITADA);
 
-        // 2. Filtro Multiquadra
-        $query->when($arenaId, function ($q, $arenaId) {
-            return $q->where('arena_id', $arenaId);
-        });
+        $query = Reserva::where('is_fixed', false)
+            ->with(['arena', 'manager']);
 
-        // 3. Filtro de Busca (Nome, Contato ou até o Motivo da Rejeição)
-        $query->when($search, function ($q, $search) {
-            return $q->where(function ($sub) use ($search) {
+        // 🔄 Lógica de Intercalação usando as Constantes da Model
+        if ($statusFilter === 'all') {
+            $query->whereIn('status', [Reserva::STATUS_REJEITADA, Reserva::STATUS_CANCELADA]);
+        } else {
+            // Se o usuário selecionou 'canceled' no HTML, o Laravel converterá 
+            // mas para garantir, vamos aceitar o que vier do request de forma dinâmica
+            $query->where('status', $statusFilter);
+        }
+
+        if ($arenaId) {
+            $query->where('arena_id', $arenaId);
+        }
+
+        if ($search) {
+            $query->where(function ($sub) use ($search) {
                 $sub->where('client_name', 'like', '%' . $search . '%')
-                    ->orWhere('client_contact', 'like', '%' . $search . '%')
-                    ->orWhere('cancellation_reason', 'like', '%' . $search . '%');
+                    ->orWhere('client_contact', 'like', '%' . $search . '%');
             });
-        });
+        }
 
-        // 4. Filtros de Data (Período da reserva)
-        $query->when($startDate, function ($q, $startDate) {
-            return $q->whereDate('date', '>=', $startDate);
-        })
-            ->when($endDate, function ($q, $endDate) {
-                return $q->whereDate('date', '<=', $endDate);
-            });
-
-        // 5. Ordenação: Mostra as que foram rejeitadas recentemente primeiro
         $reservas = $query->orderBy('updated_at', 'desc')
             ->paginate(15)
-            ->appends($request->all()); // 🎯 CRÍTICO: Mantém os filtros ao trocar de página
+            ->appends($request->all());
 
         return view('admin.reservas.rejeitadas', [
             'reservas' => $reservas,
-            'pageTitle' => 'Reservas Rejeitadas',
-            'search' => $search,
-            'startDate' => $startDate,
-            'endDate' => $endDate,
-            'arenaId' => $arenaId,
-            'arenas' => \App\Models\Arena::all(), // 🏟️ Necessário para o Select da View
+            'pageTitle' => 'Histórico de Insucessos',
+            'arenas' => \App\Models\Arena::all(),
+            'statusFilter' => $statusFilter
         ]);
     }
 

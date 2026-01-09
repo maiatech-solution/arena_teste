@@ -41,7 +41,7 @@
                     <!-- Botão 3: RESERVAS REJEITADAS -->
                     <a href="{{ route('admin.reservas.rejeitadas') }}" class="block p-4 bg-red-100 border border-red-200 rounded-xl shadow-lg hover:shadow-xl transition duration-300 transform hover:-translate-y-1">
                         <div class="flex items-center">
-                            <h4 class="text-xl font-bold text-red-700">Rejeitadas</h4>
+                            <h4 class="text-xl font-bold text-red-700">Rejeitadas/Canceladas</h4>
                         </div>
                         <p class="mt-2 text-sm text-gray-600">
                             Reservas rejeitadas pela administração (e Canceladas pelo Gestor).

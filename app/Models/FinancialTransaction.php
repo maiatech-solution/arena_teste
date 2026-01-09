@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Http\Controllers\FinanceiroController;
+use App\Http\Controllers\Admin\FinanceiroController; 
 use Carbon\Carbon;
 
 class FinancialTransaction extends Model
@@ -14,10 +14,14 @@ class FinancialTransaction extends Model
 
     /**
      * ✅ Constantes de Tipo de Transação
+     * Centralizar aqui evita erros de digitação nas Controllers
      */
     public const TYPE_SIGNAL = 'signal';
     public const TYPE_PAYMENT = 'payment';
-    public const TYPE_REFUND = 'refund'; // ✅ NOVO: Para estornos/devoluções
+    public const TYPE_REFUND = 'refund'; 
+    public const TYPE_NO_SHOW_PENALTY = 'no_show_penalty';
+    
+    // Constantes de retenção específicas
     public const TYPE_RETEN_NOSHOW_COMP = 'RETEN_NOSHOW_COMP';
     public const TYPE_RETEN_CANC_COMP = 'RETEN_CANC_COMP';
     public const TYPE_RETEN_CANC_P_COMP = 'RETEN_CANC_P_COMP';
@@ -25,7 +29,7 @@ class FinancialTransaction extends Model
 
     protected $fillable = [
         'reserva_id',
-        'arena_id',    // ✅ ADICIONADO: Agora permite gravar o ID da quadra
+        'arena_id',
         'user_id',
         'manager_id',
         'amount',
@@ -42,49 +46,63 @@ class FinancialTransaction extends Model
     ];
 
     /**
-     * 🛡️ TRAVA DE SEGURANÇA: Impede criação de transação em caixa fechado
+     * 🛡️ TRAVA DE SEGURANÇA GLOBAL
+     * Impede criação de transação em caixa fechado, agindo como um "trigger" de aplicação.
      */
     protected static function boot()
     {
         parent::boot();
 
         static::creating(function ($transaction) {
+            // Se estiver rodando via terminal (PHP Artisan), ignora a trava
+            if (app()->runningInConsole()) return;
+
             // Instancia o controller para usar a lógica de verificação
             $financeiro = app(FinanceiroController::class);
 
-            // Define a data a ser checada (se não houver paid_at, usa a data atual)
             $dateToCheck = $transaction->paid_at
                 ? Carbon::parse($transaction->paid_at)->toDateString()
                 : now()->toDateString();
 
             if ($financeiro->isCashClosed($dateToCheck)) {
-                // Cancela a operação e lança erro
-                throw new \Exception("Bloqueio de Segurança: O caixa do dia " . Carbon::parse($dateToCheck)->format('d/m/Y') . " já está encerrado. Reabra-o para lançar movimentações.");
+                $formattedDate = Carbon::parse($dateToCheck)->format('d/m/Y');
+                throw new \Exception("Bloqueio de Segurança: O caixa do dia {$formattedDate} já está encerrado. Reabra-o para lançar movimentações.");
             }
         });
     }
 
-    // ✅ NOVO: Relação com a Arena (Quadra)
+    /**
+     * ✅ RELAÇÕES
+     */
+
     public function arena(): BelongsTo
     {
         return $this->belongsTo(Arena::class);
     }
 
-    // Relação: Transação pertence a uma Reserva
+    // withDefault evita erro de "tentar ler propriedade de nulo" se a reserva for deletada
     public function reserva(): BelongsTo
     {
-        return $this->belongsTo(Reserva::class);
+        return $this->belongsTo(Reserva::class)->withDefault([
+            'client_name' => 'Reserva Excluída/Finalizada',
+            'id' => 'N/D'
+        ]);
     }
 
-    // Relação: Quem pagou (Cliente)
     public function payer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
     }
 
-    // Relação: Quem registrou (Gestor)
     public function manager(): BelongsTo
     {
         return $this->belongsTo(User::class, 'manager_id');
     }
+
+    /**
+     * ✅ HELPER DE SCOPE
+     * Facilita pegar apenas entradas ou apenas saídas (estornos)
+     */
+    public function scopeCredits($query) { return $query->where('amount', '>', 0); }
+    public function scopeDebits($query) { return $query->where('amount', '<', 0); }
 }
