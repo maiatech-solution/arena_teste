@@ -181,51 +181,62 @@ class PaymentController extends Controller
 
 
     /**
-
-     * 🎯 FECHAR CAIXA: Grava a auditoria no banco
-
+     * 🎯 FECHAR CAIXA: Grava a auditoria no banco com cálculo automático de segurança
      */
-
     public function closeCash(Request $request)
     {
-        // 1. Validação dos dados recebidos do modal
+        // 1. Validamos apenas a data e o valor físico (contado pelo operador)
+        // Removi o 'calculated_amount' da validação obrigatória para evitar o erro 500
         $validated = $request->validate([
-            'date'              => 'required|date',
-            'calculated_amount' => 'required|numeric',
-            'actual_amount'     => 'required|numeric',
+            'date'          => 'required|date',
+            'actual_amount' => 'required|numeric',
         ]);
 
         try {
-            // 2. Garantia de precisão decimal no servidor
-            $calculated = round((float)$validated['calculated_amount'], 2);
+            $date = $validated['date'];
+            $arenaId = $request->input('arena_id'); // Captura a arena se enviada
+
+            // 2. CÁLCULO DE SEGURANÇA (O servidor pergunta ao banco quanto deve ter em caixa)
+            $calculatedSystem = FinancialTransaction::whereDate('paid_at', $date)
+                ->when($arenaId, function ($q) use ($arenaId) {
+                    return $q->where('arena_id', $arenaId);
+                })
+                ->sum('amount');
+
+            // 3. Precisão decimal
+            $calculated = round((float)$calculatedSystem, 2);
             $actual     = round((float)$validated['actual_amount'], 2);
             $difference = round($actual - $calculated, 2);
 
-            // 3. Persistência no banco de dados
-            // Usamos updateOrCreate para permitir que o gestor corrija um fechamento se o caixa for reaberto
+            // 4. Persistência no banco de dados
+            // Usamos updateOrCreate para permitir correções se o caixa for reaberto
             Cashier::updateOrCreate(
-                ['date' => $validated['date']],
                 [
-                    'user_id'           => Auth::id(), // Nome corrigido pela sua migration
-                    'calculated_amount' => $calculated,
+                    'date'     => $date,
+                    'arena_id' => $arenaId // Garante o fechamento por unidade
+                ],
+                [
+                    'user_id'           => Auth::id(),
+                    'calculated_amount' => $calculated, // Gravado via servidor, sem risco de erro nulo
                     'actual_amount'     => $actual,
                     'difference'        => $difference,
                     'status'            => 'closed',
-                    'closing_time'      => now(), // Nome da coluna na sua estrutura de DB
-                    'notes'             => $request->input('notes'), // Caso queira salvar observações
+                    'closing_time'      => now(),
+                    'notes'             => $request->input('notes'),
                 ]
             );
 
             return response()->json([
                 'success'    => true,
                 'message'    => 'Caixa fechado com sucesso!',
-                'difference' => $difference
+                'difference' => $difference,
+                'system_sum' => $calculated
             ]);
         } catch (\Exception $e) {
-            \Log::error("Erro ao fechar caixa: " . $e->getMessage());
+            \Log::error("Erro crítico ao fechar caixa: " . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Erro ao processar o fechamento do caixa.'
+                'message' => 'Erro ao processar o fechamento: ' . $e->getMessage()
             ], 500);
         }
     }
