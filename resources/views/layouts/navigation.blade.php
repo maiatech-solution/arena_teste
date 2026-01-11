@@ -3,8 +3,16 @@
         <div class="flex justify-between h-16">
             <div class="flex">
                 <div class="shrink-0 flex items-center">
-                    <a href="{{ Auth::check() && Auth::user()->is_gestor ? route('dashboard') : route('home') }}">
-                        <x-application-logo class="block h-9 w-auto fill-current text-gray-800" />
+                    <a href="{{ Auth::check() && Auth::user()->is_gestor ? route('dashboard') : route('home') }}" class="flex items-center gap-3">
+                        <x-application-logo class="block h-9 w-auto fill-current text-indigo-600" />
+                        <div class="flex flex-col border-l border-gray-300 pl-3">
+                            <span class="text-lg font-black text-gray-900 leading-none uppercase tracking-tighter">
+                                {{ $site_info->nome_fantasia ?? 'Arena' }}
+                            </span>
+                            <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-widest leading-tight">
+                                Gestão Online
+                            </span>
+                        </div>
                     </a>
                 </div>
 
@@ -48,7 +56,14 @@
                 <x-dropdown align="right" width="48">
                     <x-slot name="trigger">
                         <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
-                            <div>{{ Auth::user()->name }}</div>
+                            <div class="flex flex-col text-right me-2">
+                                <div class="text-[10px] font-black uppercase text-indigo-500 leading-none">
+                                    {{ $site_info->nome_fantasia ?? 'Estabelecimento' }}
+                                </div>
+                                <div class="text-sm font-bold text-gray-700 leading-tight">
+                                    {{ Auth::user()->name }}
+                                </div>
+                            </div>
                             <div class="ms-1">
                                 <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
@@ -56,6 +71,7 @@
                             </div>
                         </button>
                     </x-slot>
+
                     <x-slot name="content">
                         <x-dropdown-link :href="route('profile.edit')">
                             {{ __('Meu Perfil') }}
@@ -129,15 +145,18 @@
             @endif
         </div>
 
-        <div class="pt-4 pb-1 border-t border-gray-200">
+        <div class="pt-4 pb-1 border-t border-gray-200 bg-gray-50">
             <div class="px-4">
+                <div class="text-[10px] font-black uppercase text-indigo-600 leading-none mb-1">{{ $site_info->nome_fantasia ?? '' }}</div>
                 <div class="font-medium text-base text-gray-800">{{ Auth::user()->name ?? '' }}</div>
                 <div class="font-medium text-sm text-gray-500">{{ Auth::user()->email ?? '' }}</div>
             </div>
+
             <div class="mt-3 space-y-1">
                 <x-responsive-nav-link :href="route('profile.edit')">
                     {{ __('Meu Perfil') }}
                 </x-responsive-nav-link>
+
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
                     <x-responsive-nav-link :href="route('logout')" onclick="event.preventDefault(); this.closest('form').submit();">
