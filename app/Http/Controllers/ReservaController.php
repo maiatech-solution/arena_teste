@@ -2136,20 +2136,27 @@ class ReservaController extends Controller
             $arena = \App\Models\Arena::find($arenaId);
             $nomeQuadra = $arena ? $arena->name : "Quadra #{$arenaId}";
 
-            // 7. Preparação da Mensagem de WhatsApp com Distinção de Quadra
-            $whatsappNumber = '91985320997';
-            $dataFmt = Carbon::parse($reserva->date)->format('d/m/Y');
-            $horaFmt = Carbon::parse($reserva->start_time)->format('H:i');
+            // 7. Preparação da Mensagem de WhatsApp Dinâmica
+            $company = \App\Models\CompanyInfo::first();
+            $whatsappNumber = $company->whatsapp_suporte ?? '91985320997';
+            $arenaNome = $company->nome_fantasia ?? 'Elite Soccer';
 
-            $messageText = "🚨 *NOVA SOLICITAÇÃO DE AGENDAMENTO*\n\n" .
+            $dataFmt = \Carbon\Carbon::parse($reserva->date)->format('d/m/Y');
+            $horaFmt = \Carbon\Carbon::parse($reserva->start_time)->format('H:i');
+            $nomeQuadra = $reserva->arena->name;
+
+            // Texto ajustado para solicitar PIX e Valor do Sinal
+            $messageText = "🚨 *PRÉ-RESERVA SOLICITADA*\n\n" .
+                "🏟️ *Estabelecimento:* {$arenaNome}\n" .
                 "👤 *Cliente:* {$reserva->client_name}\n" .
-                "🏟️ *Quadra:* {$nomeQuadra}\n" .
+                "⚽ *Quadra:* {$nomeQuadra}\n" .
                 "📅 *Data:* {$dataFmt}\n" .
                 "⏰ *Horário:* {$horaFmt}\n" .
-                "📝 *Status:* PENDENTE\n\n" .
-                "O cliente aguarda a confirmação via WhatsApp.";
+                "📝 *Status:* AGUARDANDO PAGAMENTO\n\n" .
+                "Olá! Acabei de solicitar esta reserva pelo site. Poderia me enviar a *Chave PIX* e o *Valor do Sinal* para que eu possa realizar o pagamento e confirmar meu horário?";
 
-            $whatsappLink = "https://api.whatsapp.com/send?phone={$whatsappNumber}&text=" . urlencode($messageText);
+            // Link final com prefixo 55 e URL Encode
+            $whatsappLink = "https://api.whatsapp.com/send?phone=55{$whatsappNumber}&text=" . urlencode($messageText);
 
             return redirect()->route('reserva.index')
                 ->with('success', 'Solicitação enviada! Clique no botão abaixo para falar com o gestor.')

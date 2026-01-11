@@ -626,11 +626,11 @@
                         <input type="tel" name="client_contact" id="client_contact" required maxlength="11"
                             pattern="\d{11}"
                             title="O WhatsApp deve conter apenas 11 dígitos (DDD + Número)."
-                            placeholder="Ex: 91985320997"
+                            placeholder="Ex: 91999999999"
                             class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
 
                         <p id="whatsapp-error-message" class="text-xs text-red-600 mt-1 hidden font-semibold">
-                            ⚠️ Por favor, insira exatamente 11 dígitos (Ex: 91985320997).
+                            ⚠️ Por favor, insira exatamente 11 dígitos (Ex: 91999999999).
                         </p>
 
                         {{-- Exibição de Reputação/VIP --}}
