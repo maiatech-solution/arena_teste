@@ -13,6 +13,7 @@ use App\Http\Controllers\ApiReservaController;
 use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\FinanceiroController;
 use App\Http\Controllers\Admin\ArenaController;
+use App\Http\Controllers\Admin\CompanyInfoController; // IMPORTAÇÃO ADICIONADA
 
 // 🏠 ROTA RAIZ
 Route::get('/', function () {
@@ -78,16 +79,13 @@ Route::middleware(['auth', 'gestor'])->group(function () {
 
         // 📅 3. GESTÃO DE RESERVAS
         Route::prefix('reservas')->name('reservas.')->group(function () {
-            // Adicionado {arena_id?} para permitir visualizar a agenda de uma quadra específica
             Route::get('/dashboard/{arena_id?}', [AdminController::class, 'indexReservasDashboard'])->name('index');
-
             Route::get('/pendentes', [AdminController::class, 'indexReservas'])->name('pendentes');
             Route::get('/confirmadas', [AdminController::class, 'confirmed_index'])->name('confirmadas');
             Route::get('/todas', [AdminController::class, 'indexTodas'])->name('todas');
             Route::get('/rejeitadas', [AdminController::class, 'indexReservasRejeitadas'])->name('rejeitadas');
             Route::get('/{reserva}/show', [AdminController::class, 'showReserva'])->name('show');
 
-            // Ações de Status e Modificações
             Route::patch('/confirmar/{reserva}', [ReservaController::class, 'confirmar'])->name('confirmar');
             Route::patch('/rejeitar/{reserva}', [ReservaController::class, 'rejeitar'])->name('rejeitar');
             Route::patch('/{reserva}/update-price', [AdminController::class, 'updatePrice'])->name('update_price');
@@ -95,15 +93,11 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::patch('/{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('cancelar');
             Route::patch('/{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('cancelar_pontual');
             Route::delete('/{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('cancelar_serie');
-
-            // ✅ ROTA ADICIONADA: Resolve o erro RouteNotFound na view de histórico do cliente
             Route::post('/cancel-client-series/{masterId}', [AdminController::class, 'cancelClientSeries'])->name('cancel_client_series');
-
-            // 🎯 Ajuste de Nome para o seu JS (admin.reservas.no_show)
             Route::post('/{reserva}/no-show', [PaymentController::class, 'registerNoShow'])->name('no_show');
         });
 
-        // 👥 4. GESTÃO DE USUÁRIOS (Ajustado para UserController)
+        // 👥 4. GESTÃO DE USUÁRIOS
         Route::prefix('users')->name('users.')->group(function () {
             Route::get('/', [UserController::class, 'index'])->name('index');
             Route::get('/create', [UserController::class, 'create'])->name('create');
@@ -111,12 +105,10 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::get('/{user}/edit', [UserController::class, 'edit'])->name('edit');
             Route::put('/{user}', [UserController::class, 'update'])->name('update');
             Route::delete('/{user}', [UserController::class, 'destroy'])->name('destroy');
-
-            // 🎯 Rota do Histórico que acabamos de criar
             Route::get('/{user}/reservas', [UserController::class, 'reservas'])->name('reservas');
         });
 
-        // 💰 5. MÓDULO FINANCEIRO & PAGAMENTOS (OPERAÇÕES DIÁRIAS)
+        // 💰 5. MÓDULO FINANCEIRO & PAGAMENTOS
         Route::prefix('pagamentos')->name('payment.')->group(function () {
             Route::get('/', [PaymentController::class, 'index'])->name('index');
             Route::get('/status-caixa', [PaymentController::class, 'isCashierClosed'])->name('caixa.status');
@@ -125,7 +117,7 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::post('/{reserva}/finalizar', [PaymentController::class, 'processPayment'])->name('finalize');
         });
 
-        // 📊 6. RELATÓRIOS ANALÍTICOS (VISÃO GERENCIAL)
+        // 📊 6. RELATÓRIOS ANALÍTICOS
         Route::prefix('financeiro')->name('financeiro.')->group(function () {
             Route::get('/', [FinanceiroController::class, 'index'])->name('dashboard');
             Route::get('/faturamento', [FinanceiroController::class, 'relatorioFaturamento'])->name('relatorio_faturamento');
@@ -134,6 +126,13 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::get('/ocupacao', [FinanceiroController::class, 'relatorioOcupacao'])->name('relatorio_ocupacao');
             Route::get('/ranking', [FinanceiroController::class, 'relatorioRanking'])->name('relatorio_ranking');
         });
+
+        // 🏢 7. DADOS DA EMPRESA (Elite Soccer - Local Único)
+        Route::prefix('dados-empresa')->name('company.')->group(function () {
+            Route::get('/', [CompanyInfoController::class, 'edit'])->name('edit');
+            Route::put('/', [CompanyInfoController::class, 'update'])->name('update');
+        });
+
     });
 
     // APIs FINANCEIRAS (AJAX)
