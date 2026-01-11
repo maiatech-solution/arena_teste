@@ -1,5 +1,4 @@
 <x-app-layout>
-    {{-- Captura a função da URL ou define um padrão se não estiver presente --}}
     @php
         $role = request()->query('role', 'cliente');
         $isGestor = in_array($role, ['gestor', 'admin']);
@@ -13,7 +12,6 @@
         </h2>
     </x-slot>
 
-    {{-- A largura da div principal foi alterada de max-w-3xl para max-w-7xl para corresponder ao layout do index --}}
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg p-8">
@@ -22,65 +20,49 @@
                 <form method="POST" action="{{ route('admin.users.store') }}" class="space-y-6">
                     @csrf
 
-                    <!-- Campo Nome -->
                     <div>
                         <x-input-label for="name" value="Nome Completo" />
                         <x-text-input id="name" name="name" type="text" class="mt-1 block w-full" :value="old('name')" required autofocus />
                         <x-input-error class="mt-2" :messages="$errors->get('name')" />
                     </div>
 
-                    <!-- Campo Email -->
                     <div>
                         <x-input-label for="email" value="Email" />
                         <x-text-input id="email" name="email" type="email" class="mt-1 block w-full" :value="old('email')" required />
                         <x-input-error class="mt-2" :messages="$errors->get('email')" />
                     </div>
 
-                    <!-- Campo Função (Role) - Fixo, mas visível -->
                     <div>
                         <x-input-label for="role_display" value="Função" />
                         <x-text-input id="role_display" type="text" class="mt-1 block w-full bg-gray-100 dark:bg-gray-700 cursor-not-allowed"
                                       value="{{ ucfirst($role) }}" disabled />
 
-                        {{-- Input Oculto para enviar o valor real da função --}}
                         <input type="hidden" name="role" value="{{ $role }}">
                         <x-input-error class="mt-2" :messages="$errors->get('role')" />
                     </div>
 
-                    <!-- Campo Contato WhatsApp -->
                     <div>
                         <x-input-label for="whatsapp_contact" value="Contato WhatsApp" />
                         <x-text-input id="whatsapp_contact" name="whatsapp_contact" type="text" class="mt-1 block w-full"
-                                      :value="old('whatsapp_contact')" placeholder="(99) 99999-9999" required />
+                                      :value="old('whatsapp_contact')" placeholder="(99) 99999-9999" maxlength="15" required />
                         <x-input-error class="mt-2" :messages="$errors->get('whatsapp_contact')" />
                     </div>
 
-                    {{-- Campos de Senha (Visível Apenas para Gestores/Admins) --}}
+                    {{-- Campos de Senha --}}
                     @if ($isGestor)
                         <hr class="border-gray-200 dark:border-gray-700 pt-4">
-
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            <!-- Campo Senha -->
                             <div>
                                 <x-input-label for="password" value="Senha" />
                                 <x-text-input id="password" name="password" type="password" class="mt-1 block w-full" required />
                                 <x-input-error class="mt-2" :messages="$errors->get('password')" />
                             </div>
-
-                            <!-- Campo Confirmação de Senha -->
                             <div>
                                 <x-input-label for="password_confirmation" value="Confirmação de Senha" />
                                 <x-text-input id="password_confirmation" name="password_confirmation" type="password" class="mt-1 block w-full" required />
                                 <x-input-error class="mt-2" :messages="$errors->get('password_confirmation')" />
                             </div>
                         </div>
-
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">A senha é obrigatória para Gestores/Administradores.</p>
-                    @else
-                        {{-- Mensagem para Clientes --}}
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                            O campo de senha está oculto para Clientes. Se necessário, a senha será definida através de um fluxo de convite ou primeiro login.
-                        </p>
                     @endif
 
                     <div class="flex items-center justify-end mt-4">
@@ -96,4 +78,15 @@
             </div>
         </div>
     </div>
+
+    {{-- Script de Máscara Simples --}}
+    <script>
+        const inputTel = document.getElementById('whatsapp_contact');
+        inputTel.addEventListener('keyup', (e) => {
+            let v = e.target.value.replace(/\D/g, "");
+            v = v.replace(/^(\d{2})(\d)/g, "($1) $2");
+            v = v.replace(/(\d)(\d{4})$/, "$1-$2");
+            e.target.value = v;
+        });
+    </script>
 </x-app-layout>
