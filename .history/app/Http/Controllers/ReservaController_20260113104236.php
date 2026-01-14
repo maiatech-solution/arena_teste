@@ -564,7 +564,6 @@ class ReservaController extends Controller
      * @return array
      * @throws \Exception
      */
-
     public function cancelSeries(int $masterId, string $reason, bool $shouldRefund, float $amountPaidRef)
     {
         $today = Carbon::today()->toDateString();
@@ -585,7 +584,7 @@ class ReservaController extends Controller
                 Reserva::STATUS_CONCLUIDA,
                 'completed',
                 'concluida',
-                Reserva::STATUS_CANCELADA
+                Reserva::STATUS_CANCELADA // Inclui canceladas para garantir limpeza de "restos"
             ])
             ->get();
 
@@ -607,43 +606,33 @@ class ReservaController extends Controller
                 $slotStartDateTime->setTime($timePart->hour, $timePart->minute, $timePart->second);
             }
 
-            // Se a reserva for de hoje mas o horário já passou, não cancelamos para não sumir do histórico de hoje
-            if ($slotStartDateTime->isPast() && $slot->date->isToday()) {
+            if ($slotStartDateTime->isPast() && !$slot->date->isToday()) {
                 continue;
             }
 
-            // 🛡️ PASSO FINANCEIRO: Antes de deletar, zeramos o saldo devedor no banco
-            // Isso evita que relatórios financeiros "leiam" dívidas de reservas excluídas.
-            $pagoJa = (float)($slot->total_paid ?? 0);
-            $slot->update([
-                'final_price' => $pagoJa,
-                'status' => Reserva::STATUS_CANCELADA
-            ]);
-
-            // 🛑 PASSO 1: Recria o slot fixo (Livre/Verde) para liberar a agenda para outros
+            // 🛑 PASSO 1: Recria o slot fixo (Livre/Verde)
             $this->recreateFixedSlot($slot);
 
-            // 🛑 PASSO 2: Limpa transações financeiras individuais deste horário específico
+            // 🛑 PASSO 2: Limpa transações financeiras individuais desse slot
             FinancialTransaction::where('reserva_id', $slot->id)
                 ->whereIn('type', [FinancialTransaction::TYPE_SIGNAL, FinancialTransaction::TYPE_PAYMENT])
                 ->delete();
 
-            // 🛑 PASSO 3: Deleta a ocupação para o Dashboard mostrar o horário como Disponível
+            // 🛑 PASSO 3: Deleta a reserva ocupada para o Dashboard mostrar o Verde
             $slot->delete();
 
             $cancelledCount++;
         }
 
-        // 2. Registro Financeiro de Estorno ou Retenção (Impacta o caixa consolidado de HOJE)
+        // 2. Registro Financeiro de Estorno ou Retenção (Impacta o caixa de HOJE)
         if ($amountPaidRef > 0) {
             if ($shouldRefund) {
-                // Gera uma SAÍDA no caixa
                 FinancialTransaction::create([
                     'reserva_id'     => $masterId,
                     'arena_id'       => $anchorReserva->arena_id,
                     'user_id'        => $anchorReserva->user_id,
                     'manager_id'     => $managerId,
-                    'amount'         => -$amountPaidRef, // Negativo para saída
+                    'amount'         => -$amountPaidRef, // Valor negativo para saída de caixa
                     'type'           => FinancialTransaction::TYPE_REFUND,
                     'payment_method' => 'outro',
                     'description'    => "ESTORNO SÉRIE RECORRENTE: " . $reason . " (Master #{$masterId})",
@@ -651,7 +640,6 @@ class ReservaController extends Controller
                 ]);
                 $messageFinance = " O valor de R$ " . number_format($amountPaidRef, 2, ',', '.') . " foi estornado do caixa.";
             } else {
-                // Registra que o valor foi retido pela arena como multa/taxa
                 FinancialTransaction::create([
                     'reserva_id'     => $masterId,
                     'arena_id'       => $anchorReserva->arena_id,
@@ -663,7 +651,7 @@ class ReservaController extends Controller
                     'description'    => "Retenção de valor de série: " . $reason,
                     'paid_at'        => now(),
                 ]);
-                $messageFinance = " O valor foi mantido como retenção pela arena.";
+                $messageFinance = " O valor foi mantido como retenção.";
             }
         }
 
@@ -1498,7 +1486,7 @@ class ReservaController extends Controller
             ]);
 
             // 3. Lógica Inteligente de Inventário 🏟️
-            // Só recriamos o slot fixo (Verde) se NÃO houver mais NINGUÉM pendente
+            // Só recriamos o slot fixo (Verde) se NÃO houver mais NINGUÉM pendente 
             // ou confirmado para este mesmo horário nesta arena específica.
             $hasOtherInterests = Reserva::where('date', $reserva->date)
                 ->where('arena_id', $reserva->arena_id)

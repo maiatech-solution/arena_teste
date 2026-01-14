@@ -653,64 +653,74 @@ class AdminController extends Controller
     }
 
     /**
-     * ✅ CORRIGIDO: Cancela TODAS as reservas futuras de uma série recorrente.
-     * Ajustado para limpar saldos devedores e sincronizar com o Caixa.
+     * ✅ CORRIGIDO: Cancela TODAS as reservas futuras de uma série recorrente (DELETE /admin/reservas/{reserva}/cancelar-serie).
+     * Esta função encerra o contrato mensalista e processa o estorno do valor pago hoje, se solicitado.
      */
     public function cancelarSerieRecorrente(Request $request, Reserva $reserva)
     {
+        // 1. Validação de Integridade: Verifica se realmente é uma reserva de mensalista
         if (!$reserva->is_recurrent) {
-            return response()->json(['success' => false, 'message' => 'A reserva não pertence a uma série recorrente.'], 400);
+            return response()->json([
+                'success' => false,
+                'message' => 'A reserva não pertence a uma série recorrente. Use a rota de cancelamento pontual.'
+            ], 400);
         }
 
-        $statusPermitidos = [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA, 'completed', 'concluida'];
+        // 🚩 2. AJUSTE DE STATUS: Permite cancelar mesmo que o horário de hoje já esteja pago (Caso do Amaral)
+        $statusPermitidos = [
+            Reserva::STATUS_CONFIRMADA,
+            Reserva::STATUS_CONCLUIDA,
+            'completed',
+            'concluida'
+        ];
 
         if (!in_array($reserva->status, $statusPermitidos)) {
-            return response()->json(['success' => false, 'message' => 'O status atual não permite o cancelamento da série.'], 400);
+            return response()->json([
+                'success' => false,
+                'message' => 'Não é possível cancelar a série: o status atual da reserva (' . $reserva->status . ') não permite esta ação.'
+            ], 400);
         }
 
+        // 3. Validação dos dados vindos do Modal
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
             'should_refund' => 'required|boolean',
-            'paid_amount_ref' => 'required|numeric|min:0',
+            'paid_amount_ref' => 'required|numeric|min:0', // Valor pago hoje para possível estorno
         ]);
 
+        // 4. Identifica o ID mestre da série (se a reserva atual não for a mestre, busca a original)
         $masterId = $reserva->recurrent_series_id ?? $reserva->id;
 
         DB::beginTransaction();
         try {
-            // 💰 AJUSTE FINANCEIRO DA RESERVA ATUAL (A que disparou o cancelamento)
-            // Se houver estorno, o valor final vira 0. Se não houver, vira o que já foi pago (sinal).
-            $pagoHoje = (float)($reserva->total_paid ?? 0);
-            if ($validated['should_refund']) {
-                $reserva->final_price = 0;
-            } else {
-                $reserva->final_price = $pagoHoje;
-            }
-
-            $reserva->cancellation_reason = '[Gestor - Cancelamento Série] ' . $validated['cancellation_reason'];
-            $reserva->save();
-
-            // 🛑 DELEGAÇÃO: Chama o método que limpa as reservas FUTURAS
-            // Importante: No seu ReservaController->cancelSeries, garanta que ele também
-            // faça "final_price = total_paid" para todas as reservas da série com este masterId.
+            // 🛑 5. DELEGAÇÃO: O método cancelSeries no ReservaController deve:
+            // - Percorrer todos os horários futuros com este masterId.
+            // - Trocar o status para 'cancelled'.
+            // - Recriar os slots 'fixed' (verdes) para liberar a agenda.
+            // - Se should_refund for true, gerar uma transação de SAÍDA no caixa de hoje.
             $result = $this->reservaController->cancelSeries(
                 $masterId,
-                $reserva->cancellation_reason,
+                '[Gestor - Cancelamento Série] ' . $validated['cancellation_reason'],
                 $validated['should_refund'],
                 (float) $validated['paid_amount_ref']
             );
 
             DB::commit();
 
-            $message = "Série cancelada ({$result['cancelled_count']} slots liberados). " .
-                "Saldos ajustados para evitar pendências no caixa. " .
-                ($result['message_finance'] ?? '');
+            $message = "Toda a série recorrente futura (total de {$result['cancelled_count']} slots) foi cancelada com sucesso! Os horários foram liberados." . ($result['message_finance'] ?? '');
 
-            return response()->json(['success' => true, 'message' => $message], 200);
+            return response()->json([
+                'success' => true,
+                'message' => $message
+            ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao cancelar série recorrente ID: {$masterId}.", ['exception' => $e]);
-            return response()->json(['success' => false, 'message' => 'Erro interno: ' . $e->getMessage()], 500);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro interno ao cancelar a série recorrente: ' . $e->getMessage()
+            ], 500);
         }
     }
 

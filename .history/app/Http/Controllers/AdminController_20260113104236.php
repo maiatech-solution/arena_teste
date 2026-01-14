@@ -314,8 +314,8 @@ class AdminController extends Controller
     /**
      * ✅ CORRIGIDO: Registra a falta do cliente (No-Show) - DELEGADO.
      * Delega a manipulação de status e transações financeiras.
-
-
+     
+    
      *public function registerNoShow(Request $request, Reserva $reserva)
      *{
      *if ($reserva->status !== Reserva::STATUS_CONFIRMADA) {
@@ -417,72 +417,49 @@ class AdminController extends Controller
     }
 
     /**
-     * Atualiza o preço de uma reserva específica ou de toda a série (PATCH).
-     * Ajustado para sincronizar price e final_price para o Caixa.
+     * Atualiza o preço de uma reserva específica via requisição AJAX (PATCH).
      */
     public function updatePrice(Request $request, Reserva $reserva)
     {
+        // 1. Validação dos dados
         $validated = $request->validate([
-            'new_price'     => 'required|numeric|min:0',
+            'new_price' => 'required|numeric|min:0',
             'justification' => 'required|string|min:5',
-            'scope'         => 'nullable|string|in:single,series',
         ], [
             'new_price.required' => 'O novo preço é obrigatório.',
-            'justification.min'  => 'A justificativa deve ter pelo menos 5 caracteres.',
+            'justification.required' => 'A justificativa para alteração de preço é obrigatória.',
         ]);
 
-        $newPrice = (float) $validated['new_price'];
-        $totalPago = (float) ($reserva->total_paid ?? 0);
-
-        // 1. Impedir que o novo preço seja menor que o valor já pago (Evita saldo negativo)
-        if ($newPrice < $totalPago) {
-            return response()->json([
-                'success' => false,
-                'message' => "🛑 Operação Negada: O cliente já pagou R$ " . number_format($totalPago, 2, ',', '.') . ". O novo preço total não pode ser menor que o valor já recebido.",
-            ], 403);
-        }
-
-        // 2. Se estiver 100% PAGO, bloqueamos para não quebrar o fechamento do caixa já realizado
-        if ($reserva->payment_status === 'paid' && $newPrice != $reserva->final_price) {
-            return response()->json([
-                'success' => false,
-                'message' => "🛑 Esta reserva já está totalmente paga. Para alterar o valor, estorne o pagamento primeiro.",
-            ], 403);
-        }
-
         try {
-            $scope = $request->input('scope', 'single');
-            $adminName = auth()->user()->name;
+            // 2. Verifica se o preço realmente mudou
+            $oldPrice = $reserva->price;
+            $newPrice = $validated['new_price'];
+            $justification = $validated['justification'];
 
-            if ($scope === 'series' && $reserva->recurrent_series_id) {
-                // 🔄 ATUALIZAÇÃO EM SÉRIE
-                // Atualizamos price e final_price de todas as pendentes/parciais futuras
-                $affectedCount = \App\Models\Reserva::where('recurrent_series_id', $reserva->recurrent_series_id)
-                    ->where('date', '>=', $reserva->date)
-                    ->where('payment_status', '!=', 'paid')
-                    ->update([
-                        'price' => $newPrice,
-                        'final_price' => $newPrice
-                    ]);
-
-                \Log::info("Preço em SÉRIE (ID: {$reserva->recurrent_series_id}) alterado para R$ {$newPrice} por {$adminName}. Motivo: {$validated['justification']}");
-
-                $msg = "Preço da série atualizado ({$affectedCount} reservas)! O Caixa refletirá o novo saldo.";
-            } else {
-                // 📍 ATUALIZAÇÃO PONTUAL
-                // Sincroniza price e final_price para que o Caixa leia o valor correto
-                $reserva->price = $newPrice;
-                $reserva->final_price = $newPrice;
-                $reserva->save();
-
-                \Log::info("Preço da Reserva #{$reserva->id} alterado para R$ {$newPrice} por {$adminName}. Motivo: {$validated['justification']}");
-
-                $msg = "Preço atualizado com sucesso! O saldo devedor foi recalculado.";
+            if ((float)$oldPrice == (float)$newPrice) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'O preço não foi alterado. O valor novo é igual ao valor antigo.',
+                ], 400);
             }
 
-            return response()->json(['success' => true, 'message' => $msg]);
+            // 3. Atualiza o preço na reserva
+            $reserva->price = $newPrice;
+            $reserva->save();
+
+            // 4. Opcional: Registrar a auditoria da mudança de preço
+            Log::info("Preço da Reserva ID {$reserva->id} alterado de R$ {$oldPrice} para R$ {$newPrice} por " . auth()->user()->name . ". Justificativa: {$justification}");
+
+            return response()->json([
+                'success' => true,
+                'message' => "Preço atualizado para R$ " . number_format($newPrice, 2, ',', '.') . " com sucesso. A tela será recarregada.",
+            ]);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Erro ao processar: ' . $e->getMessage()], 500);
+            // Erro geral do servidor
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao processar a alteração de preço: ' . $e->getMessage(),
+            ], 500);
         }
     }
 
@@ -590,15 +567,16 @@ class AdminController extends Controller
 
 
     /**
-     * ✅ CORRIGIDO: Cancela UMA reserva de uma série recorrente.
-     * Ajustado para zerar o saldo devedor no caixa ao cancelar.
+     * ✅ CORRIGIDO: Cancela UMA reserva de uma série recorrente (PATCH /admin/reservas/{reserva}/cancelar-pontual).
+     * Delega a manipulação de status e transações financeiras.
      */
     public function cancelarReservaRecorrente(Request $request, Reserva $reserva)
     {
         if (!$reserva->is_recurrent) {
-            return response()->json(['success' => false, 'message' => 'A reserva não é recorrente.'], 400);
+            return response()->json(['success' => false, 'message' => 'A reserva não é recorrente. Use a rota de cancelamento pontual.'], 400);
         }
 
+        // 🚩 AJUSTE: Aceita reservas Confirmadas ou Concluídas (Pagas)
         $statusPermitidos = [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA, 'completed', 'concluida'];
 
         if (!in_array($reserva->status, $statusPermitidos)) {
@@ -608,109 +586,103 @@ class AdminController extends Controller
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
             'should_refund' => 'required|boolean',
-            'paid_amount_ref' => 'required|numeric|min:0',
+            'paid_amount_ref' => 'required|numeric|min:0', // 🚩 O Controller espera este nome
         ]);
 
         DB::beginTransaction();
         try {
-            // 💰 LÓGICA DE CAIXA: Zerar saldo devedor
-            // Se NÃO houver estorno, o valor final da reserva passa a ser o que já foi pago.
-            // Se HOUVER estorno (should_refund = true), o finalizeStatus cuidará da saída,
-            // mas o final_price deve ser zerado para não haver cobrança futura.
-
-            $pagoAteAgora = (float)($reserva->total_paid ?? 0);
-
-            if ($validated['should_refund']) {
-                $reserva->final_price = 0; // Se devolveu o dinheiro, o valor da venda é zero
-            } else {
-                $reserva->final_price = $pagoAteAgora; // Se reteve o sinal, o valor da venda é o sinal
-            }
-
-            $reserva->cancellation_reason = '[Gestor - Pontual Recorrência] ' . $validated['cancellation_reason'];
-            $reserva->save();
-
-            // Delega a manipulação financeira (Estorno no caixa, se aplicável)
+            // O finalizeStatus cuidará de criar a saída no caixa se should_refund for true
             $result = $this->reservaController->finalizeStatus(
                 $reserva,
                 Reserva::STATUS_CANCELADA,
-                $reserva->cancellation_reason,
+                '[Gestor - Pontual Recorrência] ' . $validated['cancellation_reason'],
                 $validated['should_refund'],
                 (float) $validated['paid_amount_ref']
             );
 
             DB::commit();
-
-            $message = "Reserva cancelada com sucesso! O saldo foi zerado no caixa." . ($result['message_finance'] ?? '');
+            $message = "Reserva recorrente pontual cancelada com sucesso! O horário foi liberado." . ($result['message_finance'] ?? '');
             return response()->json(['success' => true, 'message' => $message], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao cancelar reserva RECORRENTE PONTUAL ID: {$reserva->id}.", ['exception' => $e]);
             return response()->json([
                 'success' => false,
-                'message' => 'Erro interno ao cancelar: ' . $e->getMessage()
+                'message' => 'Erro interno ao cancelar a reserva pontual: ' . $e->getMessage()
             ], 500);
         }
     }
 
+
     /**
-     * ✅ CORRIGIDO: Cancela TODAS as reservas futuras de uma série recorrente.
-     * Ajustado para limpar saldos devedores e sincronizar com o Caixa.
+     * ✅ CORRIGIDO: Cancela TODAS as reservas futuras de uma série recorrente (DELETE /admin/reservas/{reserva}/cancelar-serie).
+     * Esta função encerra o contrato mensalista e processa o estorno do valor pago hoje, se solicitado.
      */
     public function cancelarSerieRecorrente(Request $request, Reserva $reserva)
     {
+        // 1. Validação de Integridade: Verifica se realmente é uma reserva de mensalista
         if (!$reserva->is_recurrent) {
-            return response()->json(['success' => false, 'message' => 'A reserva não pertence a uma série recorrente.'], 400);
+            return response()->json([
+                'success' => false,
+                'message' => 'A reserva não pertence a uma série recorrente. Use a rota de cancelamento pontual.'
+            ], 400);
         }
 
-        $statusPermitidos = [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA, 'completed', 'concluida'];
+        // 🚩 2. AJUSTE DE STATUS: Permite cancelar mesmo que o horário de hoje já esteja pago (Caso do Amaral)
+        $statusPermitidos = [
+            Reserva::STATUS_CONFIRMADA,
+            Reserva::STATUS_CONCLUIDA,
+            'completed',
+            'concluida'
+        ];
 
         if (!in_array($reserva->status, $statusPermitidos)) {
-            return response()->json(['success' => false, 'message' => 'O status atual não permite o cancelamento da série.'], 400);
+            return response()->json([
+                'success' => false,
+                'message' => 'Não é possível cancelar a série: o status atual da reserva (' . $reserva->status . ') não permite esta ação.'
+            ], 400);
         }
 
+        // 3. Validação dos dados vindos do Modal
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
             'should_refund' => 'required|boolean',
-            'paid_amount_ref' => 'required|numeric|min:0',
+            'paid_amount_ref' => 'required|numeric|min:0', // Valor pago hoje para possível estorno
         ]);
 
+        // 4. Identifica o ID mestre da série (se a reserva atual não for a mestre, busca a original)
         $masterId = $reserva->recurrent_series_id ?? $reserva->id;
 
         DB::beginTransaction();
         try {
-            // 💰 AJUSTE FINANCEIRO DA RESERVA ATUAL (A que disparou o cancelamento)
-            // Se houver estorno, o valor final vira 0. Se não houver, vira o que já foi pago (sinal).
-            $pagoHoje = (float)($reserva->total_paid ?? 0);
-            if ($validated['should_refund']) {
-                $reserva->final_price = 0;
-            } else {
-                $reserva->final_price = $pagoHoje;
-            }
-
-            $reserva->cancellation_reason = '[Gestor - Cancelamento Série] ' . $validated['cancellation_reason'];
-            $reserva->save();
-
-            // 🛑 DELEGAÇÃO: Chama o método que limpa as reservas FUTURAS
-            // Importante: No seu ReservaController->cancelSeries, garanta que ele também
-            // faça "final_price = total_paid" para todas as reservas da série com este masterId.
+            // 🛑 5. DELEGAÇÃO: O método cancelSeries no ReservaController deve:
+            // - Percorrer todos os horários futuros com este masterId.
+            // - Trocar o status para 'cancelled'.
+            // - Recriar os slots 'fixed' (verdes) para liberar a agenda.
+            // - Se should_refund for true, gerar uma transação de SAÍDA no caixa de hoje.
             $result = $this->reservaController->cancelSeries(
                 $masterId,
-                $reserva->cancellation_reason,
+                '[Gestor - Cancelamento Série] ' . $validated['cancellation_reason'],
                 $validated['should_refund'],
                 (float) $validated['paid_amount_ref']
             );
 
             DB::commit();
 
-            $message = "Série cancelada ({$result['cancelled_count']} slots liberados). " .
-                "Saldos ajustados para evitar pendências no caixa. " .
-                ($result['message_finance'] ?? '');
+            $message = "Toda a série recorrente futura (total de {$result['cancelled_count']} slots) foi cancelada com sucesso! Os horários foram liberados." . ($result['message_finance'] ?? '');
 
-            return response()->json(['success' => true, 'message' => $message], 200);
+            return response()->json([
+                'success' => true,
+                'message' => $message
+            ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao cancelar série recorrente ID: {$masterId}.", ['exception' => $e]);
-            return response()->json(['success' => false, 'message' => 'Erro interno: ' . $e->getMessage()], 500);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro interno ao cancelar a série recorrente: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -761,7 +733,7 @@ class AdminController extends Controller
         if ($statusFilter === 'all') {
             $query->whereIn('status', [Reserva::STATUS_REJEITADA, Reserva::STATUS_CANCELADA]);
         } else {
-            // Se o usuário selecionou 'canceled' no HTML, o Laravel converterá
+            // Se o usuário selecionou 'canceled' no HTML, o Laravel converterá 
             // mas para garantir, vamos aceitar o que vier do request de forma dinâmica
             $query->where('status', $statusFilter);
         }

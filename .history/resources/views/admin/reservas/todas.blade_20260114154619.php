@@ -376,83 +376,85 @@
                                     </td>
 
 
-                                    {{-- 8. AÇÕES REVISADAS (Manutenção + Preço + Cancelamentos) --}}
-                                    <td class="px-4 py-3 text-sm font-medium min-w-[120px]">
-                                        <div class="flex flex-col space-y-1.5">
-
-                                            {{-- 🔍 BOTÃO DETALHES (Sempre visível) --}}
+                                    {{-- 8. AÇÕES --}}
+                                    {{-- 8. AÇÕES --}}
+                                    <td class="px-4 py-3 text-sm font-medium min-w-[100px]">
+                                        <div class="flex flex-col space-y-1">
+                                            {{-- Botão Detalhes: Sempre visível --}}
                                             <a href="{{ route('admin.reservas.show', $reserva) }}"
-                                                class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center transition">
+                                                class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center">
                                                 Detalhes
                                             </a>
 
-                                            {{-- 🛠️ LÓGICA DE MANUTENÇÃO (Para Slots ou Reservas Ativas) --}}
-                                            @if ($reserva->status === 'maintenance')
-                                                {{-- Se já está em manutenção, o botão é para LIBERAR --}}
-                                                <button
-                                                    onclick="handleFixedSlotToggle({{ $reserva->id }}, 'confirmed')"
-                                                    class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center transition">
-                                                    Liberar Agenda
-                                                </button>
-                                            @else
-                                                {{-- Se não está em manutenção, permite ATIVAR Manutenção --}}
-                                                @php
-                                                    $isOccupied =
-                                                        ($reserva->client_name || $reserva->user_id) &&
-                                                        !$reserva->is_fixed;
-                                                    $displayClient =
-                                                        $reserva->client_name ??
-                                                        ($reserva->user->name ?? 'Cliente Externo');
-                                                @endphp
-                                                <button
-                                                    onclick="handleFixedSlotToggle({{ $reserva->id }}, 'maintenance', {{ $isOccupied ? 'true' : 'false' }}, '{{ $displayClient }}')"
-                                                    class="bg-pink-600 hover:bg-pink-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center transition">
-                                                    Manutenção
-                                                </button>
-                                            @endif
-
-                                            {{-- 💰 LÓGICA DE PREÇO E CANCELAMENTOS (Apenas se houver um cliente/reserva ativa) --}}
-                                            @if (!$reserva->is_fixed && in_array($reserva->status, ['confirmed', 'pending', 'concluida', 'completed']))
-                                                {{-- BOTÃO AJUSTAR PREÇO --}}
-                                                <button
-                                                    onclick="openPriceUpdateModal({{ $reserva->id }}, {{ $reserva->price ?? 0 }}, '{{ $displayClient }}', {{ $reserva->is_recurrent ? 'true' : 'false' }})"
-                                                    class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase transition">
-                                                    Ajustar Valor
-                                                </button>
-
-                                                {{-- BOTÃO CANCELAR PONTUAL (Apenas o dia) --}}
-                                                <button
-                                                    onclick="openCancellationModal({{ $reserva->id }}, 'PATCH', CANCEL_PONTUAL_URL, 'Deseja cancelar esta reserva específica? O saldo devedor será zerado.', 'Cancelar Dia', {{ $reserva->total_paid > 0 ? 'true' : 'false' }}, {{ $reserva->total_paid ?? 0 }})"
-                                                    class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase transition">
-                                                    Cancelar Dia
-                                                </button>
-
-                                                {{-- BOTÃO CANCELAR SÉRIE (Apenas se for recorrente) --}}
-                                                @if ($reserva->is_recurrent)
+                                            @if ($reserva->is_fixed)
+                                                {{-- LÓGICA DE MANUTENÇÃO PARA SLOTS FIXOS --}}
+                                                @if ($reserva->status === 'maintenance')
                                                     <button
-                                                        onclick="openCancellationModal({{ $reserva->id }}, 'DELETE', CANCEL_SERIE_URL, '🚨 ATENÇÃO: Isso cancelará TODA a série futura deste mensalista e liberará os horários.', 'Encerrar Mensalista', {{ $reserva->total_paid > 0 ? 'true' : 'false' }}, {{ $reserva->total_paid ?? 0 }})"
-                                                        class="bg-red-800 hover:bg-red-900 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase transition">
-                                                        Cancelar Série
+                                                        onclick="handleFixedSlotToggle({{ $reserva->id }}, 'confirmed')"
+                                                        class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center">
+                                                        Liberar
+                                                    </button>
+                                                @else
+                                                    <button
+                                                        onclick="handleFixedSlotToggle({{ $reserva->id }}, 'maintenance')"
+                                                        class="bg-pink-600 hover:bg-pink-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center">
+                                                        Manutenção
                                                     </button>
                                                 @endif
+                                            @else
+                                                {{-- LÓGICA PARA RESERVAS DE CLIENTES --}}
+                                                @if (in_array($reserva->status, ['cancelled', 'rejected', 'no_show']))
+                                                    {{-- Código de Reativação que você já tem... --}}
+                                                    @php
+                                                        $dateValue = is_object($reserva->date)
+                                                            ? $reserva->date->format('Y-m-d')
+                                                            : (string) $reserva->date;
+                                                        $onlyDate = substr(trim($dateValue), 0, 10);
+                                                        $onlyTime = substr(trim($reserva->end_time), 0, 8);
+                                                        try {
+                                                            $reservaEndTime = \Carbon\Carbon::parse(
+                                                                $onlyDate . ' ' . $onlyTime,
+                                                            );
+                                                            $isExpired = now()->greaterThan($reservaEndTime);
+                                                        } catch (\Exception $e) {
+                                                            $isExpired = true;
+                                                        }
+                                                    @endphp
 
-                                                {{-- BOTÃO NO-SHOW (FALTA) --}}
-                                                <button
-                                                    onclick="openNoShowModal({{ $reserva->id }}, 'Registrar Falta', 'O cliente não apareceu? Isso registrará a falta e zerará a pendência de atraso.', REGISTER_NOSHOW_URL)"
-                                                    class="bg-black hover:bg-gray-800 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase transition">
-                                                    Falta (No-Show)
-                                                </button>
+                                                    @if ($isExpired)
+                                                        <div
+                                                            class="bg-gray-200 text-gray-400 px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center cursor-not-allowed">
+                                                            Encerrado
+                                                        </div>
+                                                    @else
+                                                        <button
+                                                            onclick="openReactivationModal({{ $reserva->id }}, 'Reativar', 'Deseja reativar esta reserva?', REACTIVATE_URL)"
+                                                            class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
+                                                            Reativar
+                                                        </button>
+                                                    @endif
+                                                @elseif (in_array($reserva->status, ['confirmed', 'pending']))
+                                                    {{-- Botão de Caixa --}}
+                                                    <a href="{{ route('admin.payment.index', ['reserva_id' => $reserva->id, 'data_reserva' => \Carbon\Carbon::parse($reserva->date)->format('Y-m-d')]) }}"
+                                                        class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center">
+                                                        Caixa
+                                                    </a>
+
+                                                    {{-- ✅ NOVO: Botão de Preço (Ajuste de Valor) --}}
+                                                    <button
+                                                        onclick="openPriceUpdateModal({{ $reserva->id }}, {{ $reserva->price ?? 0 }}, '{{ $reserva->client_name ?? 'Reserva' }}', {{ $reserva->is_recurrent ? 'true' : 'false' }})"
+                                                        class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
+                                                        Ajustar Valor
+                                                    </button>
+
+                                                    {{-- Cancelamento --}}
+                                                    <button
+                                                        onclick="openCancellationModal({{ $reserva->id }}, 'PATCH', '{{ route('admin.reservas.cancelar_pontual', ':id') }}', 'Cancelar reserva do dia?', 'Cancelar Dia')"
+                                                        class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase">
+                                                        Cancelar
+                                                    </button>
+                                                @endif
                                             @endif
-
-                                            {{-- 🔄 BOTÃO REATIVAR (Para Canceladas ou Rejeitadas) --}}
-                                            @if (in_array($reserva->status, ['cancelled', 'rejected', 'no_show']))
-                                                <button
-                                                    onclick="openReactivationModal({{ $reserva->id }}, 'Reativar Agendamento', 'Deseja colocar esta reserva de volta na agenda?', REACTIVATE_URL)"
-                                                    class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase transition">
-                                                    Reativar
-                                                </button>
-                                            @endif
-
                                         </div>
                                     </td>
                                 </tr>
@@ -925,21 +927,19 @@
         }
 
         /**
-         * Listener para Confirmação da Alteração de Preço (Versão com Escopo)
+         * Listener para Confirmação da Alteração de Preço
          */
         document.getElementById('confirm-price-update-btn').addEventListener('click', function() {
             const newPrice = parseFloat(document.getElementById('new-price-input').value);
             const justification = document.getElementById('price-justification-input').value.trim();
             const justificationError = document.getElementById('price-justification-error');
 
-            // 1. Validação de Preço
+            // Validações
             if (isNaN(newPrice) || newPrice < 0) {
                 alert("Por favor, insira um preço válido (número maior ou igual a zero).");
                 document.getElementById('new-price-input').focus();
                 return;
             }
-
-            // 2. Validação de Justificativa
             if (justification.length < 5) {
                 justificationError.textContent =
                     'Por favor, forneça um motivo de alteração com pelo menos 5 caracteres.';
@@ -949,25 +949,15 @@
             }
             justificationError.classList.add('hidden');
 
-            // 3. CAPTURA O ESCOPO (O pulo do gato)
-            // Se a reserva for recorrente, pegamos o valor do rádio. Se não for, enviamos 'single' por padrão.
-            let scope = 'single';
-            if (isCurrentReservaRecurrent) {
-                const selectedRadio = document.querySelector('input[name="price_scope"]:checked');
-                scope = selectedRadio ? selectedRadio.value : 'single';
-            }
-
             if (currentReservaId) {
-                // 4. Envia a requisição AJAX incluindo o campo 'scope'
+                // Envia a requisição AJAX para alteração de preço
                 sendAjaxRequest(currentReservaId, 'PATCH', UPDATE_PRICE_URL, justification, {
-                    new_price: newPrice,
-                    scope: scope // O seu Controller Laravel vai usar isso para saber se faz o update em massa
+                    new_price: newPrice
                 });
             } else {
                 alert("Erro: Dados da reserva para alteração de preço não configurados corretamente.");
             }
         });
-
 
         // --- FUNÇÕES GERAIS ---
 
