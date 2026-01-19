@@ -389,10 +389,7 @@
 
                 <form method="POST" action="{{ route('admin.reservas.reativar_manutencao', $reserva->id) }}"
                     class="space-y-3">
-                    @csrf
-                    @method('PATCH')
-
-                    <input type="hidden" name="status" value="maintenance">
+                    @csrf @method('PATCH')
 
                     {{-- Opção 1: Restaurar o agendamento anterior --}}
                     <button type="submit" name="action" value="restore_client"

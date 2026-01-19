@@ -390,7 +390,7 @@
                                             @if ($reserva->status === 'maintenance')
                                                 {{-- Se já está em manutenção, o botão é para LIBERAR --}}
                                                 <button onclick="handleFixedSlotToggle({{ $reserva->id }}, 'free')"
-                                                    class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase text-center transition">
+                                                    class="bg-emerald-500 hover:bg-emerald-600 ...">
                                                     Liberar Agenda
                                                 </button>
                                             @else

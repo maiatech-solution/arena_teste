@@ -983,15 +983,13 @@ class AdminController extends Controller
         });
     }
 
-
     /**
      * 🔄 Reativação Inteligente de Horário em Manutenção
-     * Versão Final: Com validação via UpdateReservaStatusRequest reativada.
+     * Versão Final: Com tratamento de erro explícito e recriação forçada de slot.
      */
-    public function reativarManutencao(\App\Http\Requests\UpdateReservaStatusRequest $request, $id)
+    public function reativarManutencao(Request $request, $id)
     {
         try {
-            // 1. Buscamos a reserva (findOrFail garante que o ID existe)
             $reserva = Reserva::findOrFail($id);
             $decisao = $request->input('action');
 
@@ -1007,39 +1005,34 @@ class AdminController extends Controller
                 return redirect()->back()->with('error', '❌ O caixa do dia ' . \Carbon\Carbon::parse($reservaDateStr)->format('d/m/Y') . ' está fechado nesta quadra.');
             }
 
-            // --- CASO 1: LIBERAR HORÁRIO (VOLTAR A SER SLOT LIVRE/VERDE) ---
-            if ($decisao === 'release_slot' || empty($decisao)) {
-                DB::beginTransaction();
-                try {
-                    // Backup dos dados antes de deletar para recriação limpa
-                    $backupData = $reserva->toArray();
+           // --- CASO 1: LIBERAR HORÁRIO (VOLTAR A SER SLOT LIVRE/VERDE) ---
+if ($decisao === 'release_slot' || empty($decisao)) {
+    DB::beginTransaction();
+    try {
+        // 1. Backup dos dados
+        $backupData = clone $reserva;
 
-                    // Removemos o bloqueio de manutenção
-                    $reserva->delete();
+        // 🎯 AJUSTE DE STATUS: Forçamos o status para 'free' no objeto antes de deletar
+        // Isso evita que validações automáticas do Laravel barrem o processo
+        $backupData->status = 'free';
 
-                    // Recriamos o slot usando create() para garantir integridade
-                    Reserva::create([
-                        'arena_id'       => $backupData['arena_id'],
-                        'date'           => substr($backupData['date'], 0, 10),
-                        'start_time'     => $backupData['start_time'],
-                        'end_time'       => $backupData['end_time'],
-                        'price'          => $backupData['price'],
-                        'status'         => 'free', // Forçamos o status livre aqui
-                        'is_fixed'       => true,
-                        'day_of_week'    => $backupData['day_of_week'] ?? \Carbon\Carbon::parse($backupData['date'])->dayOfWeek,
-                        'client_name'    => 'Slot Livre',
-                        'client_contact' => 'N/A'
-                    ]);
+        // 2. Removemos o bloqueio de manutenção
+        $reserva->delete();
 
-                    DB::commit();
-                    return redirect()->route('admin.reservas.index', $routeParams)
-                        ->with('success', '✅ Agenda liberada com sucesso!');
-                } catch (\Exception $e) {
-                    if (DB::transactionLevel() > 0) DB::rollBack();
-                    \Log::error("ERRO AO LIBERAR MANUTENÇÃO: " . $e->getMessage());
-                    return redirect()->back()->with('error', '❌ Erro ao processar: ' . $e->getMessage());
-                }
-            }
+        // 3. Recriamos o slot vago
+        app(\App\Http\Controllers\ReservaController::class)->recreateFixedSlot($backupData);
+
+        DB::commit();
+
+        return redirect()->route('admin.reservas.index', $routeParams)
+            ->with('success', '✅ Horário de inventário liberado com sucesso!');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error("ERRO AO LIBERAR INVENTÁRIO: " . $e->getMessage());
+        return redirect()->back()->with('error', '❌ Erro na validação: ' . $e->getMessage());
+    }
+}
 
             // --- CASO 2: RESTAURAR CLIENTE ORIGINAL (SE HOUVER BACKUP) ---
             if ($decisao === 'restore_client') {
@@ -1053,7 +1046,7 @@ class AdminController extends Controller
                         'notes'       => trim(preg_replace('/\[BACKUP_DATA:.*?\]/', '', $reserva->notes))
                     ]);
 
-                    // Notificação WhatsApp
+                    // Preparar link do WhatsApp para avisar o cliente
                     $waLink = null;
                     if ($reserva->client_contact) {
                         $phone = preg_replace('/\D/', '', $reserva->client_contact);
@@ -1061,7 +1054,7 @@ class AdminController extends Controller
                         $horaBR = \Carbon\Carbon::parse($reserva->start_time)->format('H:i');
                         $valorIntegral = number_format($reserva->price, 2, ',', '.');
 
-                        $mensagem = "Boas notícias *{$reserva->client_name}*! 👋\n\nA manutenção técnica foi concluída e seu horário para *{$dataBR}* às *{$horaBR}* foi *REATIVADO*! 🏟️";
+                        $mensagem = "Boas notícias *{$reserva->client_name}*! 👋\n\nA manutenção técnica foi concluída e seu horário para *{$dataBR}* às *{$horaBR}* foi *REATIVADO*! 🏟️\n\n⚠️ Como realizamos o estorno do valor anterior, o pagamento integral de *R$ {$valorIntegral}* fica pendente para o momento do jogo. Te esperamos!";
                         $waLink = "https://wa.me/55{$phone}?text=" . urlencode($mensagem);
                     }
 

@@ -983,15 +983,14 @@ class AdminController extends Controller
         });
     }
 
-
     /**
      * 🔄 Reativação Inteligente de Horário em Manutenção
-     * Versão Final: Com validação via UpdateReservaStatusRequest reativada.
+     * Passo 1: Limpeza de Validação e Ordem de Execução
      */
-    public function reativarManutencao(\App\Http\Requests\UpdateReservaStatusRequest $request, $id)
+    public function reativarManutencao(Request $request, $id)
     {
         try {
-            // 1. Buscamos a reserva (findOrFail garante que o ID existe)
+            // Buscamos a reserva sem depender de validações externas iniciais
             $reserva = Reserva::findOrFail($id);
             $decisao = $request->input('action');
 
@@ -1011,33 +1010,32 @@ class AdminController extends Controller
             if ($decisao === 'release_slot' || empty($decisao)) {
                 DB::beginTransaction();
                 try {
-                    // Backup dos dados antes de deletar para recriação limpa
-                    $backupData = $reserva->toArray();
+                    // 1. Backup dos dados para a recriação
+                    $backupData = clone $reserva;
 
-                    // Removemos o bloqueio de manutenção
+                    // 🎯 O "PULO DO GATO":
+                    // Se houver algum Observer ou Validador monitorando o status 'maintenance',
+                    // nós alteramos o status no objeto clonado para 'free' antes de prosseguir.
+                    $backupData->status = 'free';
+
+                    // 2. Removemos o bloqueio de manutenção PRIMEIRO
+                    // Isso limpa o espaço no banco de dados para evitar conflito de Unique Key
                     $reserva->delete();
 
-                    // Recriamos o slot usando create() para garantir integridade
-                    Reserva::create([
-                        'arena_id'       => $backupData['arena_id'],
-                        'date'           => substr($backupData['date'], 0, 10),
-                        'start_time'     => $backupData['start_time'],
-                        'end_time'       => $backupData['end_time'],
-                        'price'          => $backupData['price'],
-                        'status'         => 'free', // Forçamos o status livre aqui
-                        'is_fixed'       => true,
-                        'day_of_week'    => $backupData['day_of_week'] ?? \Carbon\Carbon::parse($backupData['date'])->dayOfWeek,
-                        'client_name'    => 'Slot Livre',
-                        'client_contact' => 'N/A'
-                    ]);
+                    // 3. Recriamos o slot vago
+                    // Chamamos o método via app() para garantir que todas as dependências do Controller existam
+                    app(\App\Http\Controllers\ReservaController::class)->recreateFixedSlot($backupData);
 
                     DB::commit();
+
+                    \Log::info("MANUTENÇÃO: Horário {$backupData->start_time} liberado. Status forçado: free.");
+
                     return redirect()->route('admin.reservas.index', $routeParams)
-                        ->with('success', '✅ Agenda liberada com sucesso!');
+                        ->with('success', '✅ Manutenção finalizada. O horário voltou a ficar disponível!');
                 } catch (\Exception $e) {
                     if (DB::transactionLevel() > 0) DB::rollBack();
-                    \Log::error("ERRO AO LIBERAR MANUTENÇÃO: " . $e->getMessage());
-                    return redirect()->back()->with('error', '❌ Erro ao processar: ' . $e->getMessage());
+                    \Log::error("ERRO AO LIBERAR INVENTÁRIO: " . $e->getMessage());
+                    return redirect()->back()->with('error', '❌ Falha ao liberar: ' . $e->getMessage());
                 }
             }
 
@@ -1070,7 +1068,7 @@ class AdminController extends Controller
                         ->with('whatsapp_link', $waLink);
                 }
 
-                return redirect()->back()->with('error', '⚠️ Não foram encontrados dados de backup para este cliente.');
+                return redirect()->back()->with('error', '⚠️ Não foram encontrados dados de backup.');
             }
 
             return redirect()->route('admin.reservas.index', $routeParams);

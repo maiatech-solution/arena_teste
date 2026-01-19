@@ -27,11 +27,9 @@ class UpdateReservaStatusRequest extends FormRequest
             'status' => [
                 'required',
                 'string',
-                // ADICIONADO: 'free' e 'maintenance' para permitir a reativação inteligente
-                Rule::in(['confirmed', 'cancelled', 'rejected', 'free', 'maintenance']),
+                // O status SÓ pode ser 'confirmed', 'cancelled' ou 'rejected'.
+                Rule::in(['confirmed', 'cancelled', 'rejected']),
             ],
-            // Adicionamos a action como opcional para não quebrar a validação
-            'action' => ['nullable', 'string'],
         ];
     }
 
@@ -42,7 +40,7 @@ class UpdateReservaStatusRequest extends FormRequest
     {
         return [
             'status.required' => 'O campo status é obrigatório para atualização.',
-            'status.in' => 'O status fornecido não é válido.',
+            'status.in' => 'O status fornecido não é válido. Os valores permitidos são: confirmado, cancelado ou rejeitado.',
         ];
     }
 }

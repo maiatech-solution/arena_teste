@@ -42,7 +42,7 @@ class UpdateReservaStatusRequest extends FormRequest
     {
         return [
             'status.required' => 'O campo status é obrigatório para atualização.',
-            'status.in' => 'O status fornecido não é válido.',
+            'status.in' => 'O status fornecido não é válido. Os valores permitidos são: confirmado, cancelado ou rejeitado.',
         ];
     }
 }

@@ -983,12 +983,11 @@ class AdminController extends Controller
         });
     }
 
-
     /**
      * 🔄 Reativação Inteligente de Horário em Manutenção
-     * Versão Final: Com validação via UpdateReservaStatusRequest reativada.
+     * Ajustado: Usa Request comum para burlar validações rígidas de status de cliente.
      */
-    public function reativarManutencao(\App\Http\Requests\UpdateReservaStatusRequest $request, $id)
+    public function reativarManutencao(\Illuminate\Http\Request $request, $id)
     {
         try {
             // 1. Buscamos a reserva (findOrFail garante que o ID existe)
@@ -1003,6 +1002,7 @@ class AdminController extends Controller
 
             // 🎯 VALIDAÇÃO DE CAIXA
             $reservaDateStr = \Carbon\Carbon::parse($reserva->date)->toDateString();
+            // Usando a chamada estática para o FinanceiroController
             if (\App\Http\Controllers\FinanceiroController::isCashClosed($reservaDateStr, $reserva->arena_id)) {
                 return redirect()->back()->with('error', '❌ O caixa do dia ' . \Carbon\Carbon::parse($reservaDateStr)->format('d/m/Y') . ' está fechado nesta quadra.');
             }
@@ -1011,13 +1011,13 @@ class AdminController extends Controller
             if ($decisao === 'release_slot' || empty($decisao)) {
                 DB::beginTransaction();
                 try {
-                    // Backup dos dados antes de deletar para recriação limpa
+                    // Backup dos dados antes de deletar
                     $backupData = $reserva->toArray();
 
                     // Removemos o bloqueio de manutenção
                     $reserva->delete();
 
-                    // Recriamos o slot usando create() para garantir integridade
+                    // Recriamos o slot usando uma instância limpa para evitar interferência de Observers
                     Reserva::create([
                         'arena_id'       => $backupData['arena_id'],
                         'date'           => substr($backupData['date'], 0, 10),

@@ -983,101 +983,101 @@ class AdminController extends Controller
         });
     }
 
-
     /**
-     * 🔄 Reativação Inteligente de Horário em Manutenção
-     * Versão Final: Com validação via UpdateReservaStatusRequest reativada.
-     */
-    public function reativarManutencao(\App\Http\Requests\UpdateReservaStatusRequest $request, $id)
-    {
-        try {
-            // 1. Buscamos a reserva (findOrFail garante que o ID existe)
-            $reserva = Reserva::findOrFail($id);
-            $decisao = $request->input('action');
+ * 🔄 Reativação Inteligente de Horário em Manutenção
+ * Ajustado: Usa Request comum para burlar validações rígidas de status de cliente.
+ */
+public function reativarManutencao(\Illuminate\Http\Request $request, $id)
+{
+    try {
+        // 1. Buscamos a reserva (findOrFail garante que o ID existe)
+        $reserva = Reserva::findOrFail($id);
+        $decisao = $request->input('action');
 
-            // Parâmetros para retornar ao calendário no dia e arena corretos
-            $routeParams = [
-                'arena_id' => $reserva->arena_id,
-                'date'     => \Carbon\Carbon::parse($reserva->date)->format('Y-m-d')
-            ];
+        // Parâmetros para retornar ao calendário no dia e arena corretos
+        $routeParams = [
+            'arena_id' => $reserva->arena_id,
+            'date'     => \Carbon\Carbon::parse($reserva->date)->format('Y-m-d')
+        ];
 
-            // 🎯 VALIDAÇÃO DE CAIXA
-            $reservaDateStr = \Carbon\Carbon::parse($reserva->date)->toDateString();
-            if (\App\Http\Controllers\FinanceiroController::isCashClosed($reservaDateStr, $reserva->arena_id)) {
-                return redirect()->back()->with('error', '❌ O caixa do dia ' . \Carbon\Carbon::parse($reservaDateStr)->format('d/m/Y') . ' está fechado nesta quadra.');
-            }
-
-            // --- CASO 1: LIBERAR HORÁRIO (VOLTAR A SER SLOT LIVRE/VERDE) ---
-            if ($decisao === 'release_slot' || empty($decisao)) {
-                DB::beginTransaction();
-                try {
-                    // Backup dos dados antes de deletar para recriação limpa
-                    $backupData = $reserva->toArray();
-
-                    // Removemos o bloqueio de manutenção
-                    $reserva->delete();
-
-                    // Recriamos o slot usando create() para garantir integridade
-                    Reserva::create([
-                        'arena_id'       => $backupData['arena_id'],
-                        'date'           => substr($backupData['date'], 0, 10),
-                        'start_time'     => $backupData['start_time'],
-                        'end_time'       => $backupData['end_time'],
-                        'price'          => $backupData['price'],
-                        'status'         => 'free', // Forçamos o status livre aqui
-                        'is_fixed'       => true,
-                        'day_of_week'    => $backupData['day_of_week'] ?? \Carbon\Carbon::parse($backupData['date'])->dayOfWeek,
-                        'client_name'    => 'Slot Livre',
-                        'client_contact' => 'N/A'
-                    ]);
-
-                    DB::commit();
-                    return redirect()->route('admin.reservas.index', $routeParams)
-                        ->with('success', '✅ Agenda liberada com sucesso!');
-                } catch (\Exception $e) {
-                    if (DB::transactionLevel() > 0) DB::rollBack();
-                    \Log::error("ERRO AO LIBERAR MANUTENÇÃO: " . $e->getMessage());
-                    return redirect()->back()->with('error', '❌ Erro ao processar: ' . $e->getMessage());
-                }
-            }
-
-            // --- CASO 2: RESTAURAR CLIENTE ORIGINAL (SE HOUVER BACKUP) ---
-            if ($decisao === 'restore_client') {
-                if (preg_match('/\[BACKUP_DATA:(.*?)\]/', $reserva->notes, $matches)) {
-                    $dados = json_decode($matches[1], true);
-
-                    $reserva->update([
-                        'client_name' => $dados['name'] ?? 'Cliente Recuperado',
-                        'status'      => 'confirmed',
-                        'is_fixed'    => ($dados['is_fixed'] === true || $dados['is_fixed'] === 'true' || $dados['is_fixed'] === 1),
-                        'notes'       => trim(preg_replace('/\[BACKUP_DATA:.*?\]/', '', $reserva->notes))
-                    ]);
-
-                    // Notificação WhatsApp
-                    $waLink = null;
-                    if ($reserva->client_contact) {
-                        $phone = preg_replace('/\D/', '', $reserva->client_contact);
-                        $dataBR = \Carbon\Carbon::parse($reserva->date)->format('d/m');
-                        $horaBR = \Carbon\Carbon::parse($reserva->start_time)->format('H:i');
-                        $valorIntegral = number_format($reserva->price, 2, ',', '.');
-
-                        $mensagem = "Boas notícias *{$reserva->client_name}*! 👋\n\nA manutenção técnica foi concluída e seu horário para *{$dataBR}* às *{$horaBR}* foi *REATIVADO*! 🏟️";
-                        $waLink = "https://wa.me/55{$phone}?text=" . urlencode($mensagem);
-                    }
-
-                    return redirect()->route('admin.reservas.show', $reserva->id)
-                        ->with('success', '👤 Reserva de ' . $reserva->client_name . ' restaurada!')
-                        ->with('whatsapp_link', $waLink);
-                }
-
-                return redirect()->back()->with('error', '⚠️ Não foram encontrados dados de backup para este cliente.');
-            }
-
-            return redirect()->route('admin.reservas.index', $routeParams);
-        } catch (\Exception $e) {
-            if (DB::transactionLevel() > 0) DB::rollBack();
-            \Log::error("FALHA CRÍTICA NA REATIVAÇÃO: " . $e->getMessage());
-            return redirect()->back()->with('error', '❌ Erro interno: ' . $e->getMessage());
+        // 🎯 VALIDAÇÃO DE CAIXA
+        $reservaDateStr = \Carbon\Carbon::parse($reserva->date)->toDateString();
+        // Usando a chamada estática para o FinanceiroController
+        if (\App\Http\Controllers\FinanceiroController::isCashClosed($reservaDateStr, $reserva->arena_id)) {
+            return redirect()->back()->with('error', '❌ O caixa do dia ' . \Carbon\Carbon::parse($reservaDateStr)->format('d/m/Y') . ' está fechado nesta quadra.');
         }
+
+        // --- CASO 1: LIBERAR HORÁRIO (VOLTAR A SER SLOT LIVRE/VERDE) ---
+        if ($decisao === 'release_slot' || empty($decisao)) {
+            DB::beginTransaction();
+            try {
+                // Backup dos dados antes de deletar
+                $backupData = $reserva->toArray();
+
+                // Removemos o bloqueio de manutenção
+                $reserva->delete();
+
+                // Recriamos o slot usando uma instância limpa para evitar interferência de Observers
+                Reserva::create([
+                    'arena_id'       => $backupData['arena_id'],
+                    'date'           => substr($backupData['date'], 0, 10),
+                    'start_time'     => $backupData['start_time'],
+                    'end_time'       => $backupData['end_time'],
+                    'price'          => $backupData['price'],
+                    'status'         => 'free', // Forçamos o status livre aqui
+                    'is_fixed'       => true,
+                    'day_of_week'    => $backupData['day_of_week'] ?? \Carbon\Carbon::parse($backupData['date'])->dayOfWeek,
+                    'client_name'    => 'Slot Livre',
+                    'client_contact' => 'N/A'
+                ]);
+
+                DB::commit();
+                return redirect()->route('admin.reservas.index', $routeParams)
+                    ->with('success', '✅ Agenda liberada com sucesso!');
+            } catch (\Exception $e) {
+                if (DB::transactionLevel() > 0) DB::rollBack();
+                \Log::error("ERRO AO LIBERAR MANUTENÇÃO: " . $e->getMessage());
+                return redirect()->back()->with('error', '❌ Erro ao processar: ' . $e->getMessage());
+            }
+        }
+
+        // --- CASO 2: RESTAURAR CLIENTE ORIGINAL (SE HOUVER BACKUP) ---
+        if ($decisao === 'restore_client') {
+            if (preg_match('/\[BACKUP_DATA:(.*?)\]/', $reserva->notes, $matches)) {
+                $dados = json_decode($matches[1], true);
+
+                $reserva->update([
+                    'client_name' => $dados['name'] ?? 'Cliente Recuperado',
+                    'status'      => 'confirmed',
+                    'is_fixed'    => ($dados['is_fixed'] === true || $dados['is_fixed'] === 'true' || $dados['is_fixed'] === 1),
+                    'notes'       => trim(preg_replace('/\[BACKUP_DATA:.*?\]/', '', $reserva->notes))
+                ]);
+
+                // Notificação WhatsApp
+                $waLink = null;
+                if ($reserva->client_contact) {
+                    $phone = preg_replace('/\D/', '', $reserva->client_contact);
+                    $dataBR = \Carbon\Carbon::parse($reserva->date)->format('d/m');
+                    $horaBR = \Carbon\Carbon::parse($reserva->start_time)->format('H:i');
+                    $valorIntegral = number_format($reserva->price, 2, ',', '.');
+
+                    $mensagem = "Boas notícias *{$reserva->client_name}*! 👋\n\nA manutenção técnica foi concluída e seu horário para *{$dataBR}* às *{$horaBR}* foi *REATIVADO*! 🏟️";
+                    $waLink = "https://wa.me/55{$phone}?text=" . urlencode($mensagem);
+                }
+
+                return redirect()->route('admin.reservas.show', $reserva->id)
+                    ->with('success', '👤 Reserva de ' . $reserva->client_name . ' restaurada!')
+                    ->with('whatsapp_link', $waLink);
+            }
+
+            return redirect()->back()->with('error', '⚠️ Não foram encontrados dados de backup para este cliente.');
+        }
+
+        return redirect()->route('admin.reservas.index', $routeParams);
+    } catch (\Exception $e) {
+        if (DB::transactionLevel() > 0) DB::rollBack();
+        \Log::error("FALHA CRÍTICA NA REATIVAÇÃO: " . $e->getMessage());
+        return redirect()->back()->with('error', '❌ Erro interno: ' . $e->getMessage());
     }
+}
 }

@@ -27,10 +27,10 @@ class UpdateReservaStatusRequest extends FormRequest
             'status' => [
                 'required',
                 'string',
-                // ADICIONADO: 'free' e 'maintenance' para permitir a reativação inteligente
-                Rule::in(['confirmed', 'cancelled', 'rejected', 'free', 'maintenance']),
+                // Adicionamos 'free' e 'maintenance' à lista permitida
+                \Illuminate\Validation\Rule::in(['confirmed', 'cancelled', 'rejected', 'free', 'maintenance']),
             ],
-            // Adicionamos a action como opcional para não quebrar a validação
+            // Permitimos o campo 'action' que o formulário envia
             'action' => ['nullable', 'string'],
         ];
     }
