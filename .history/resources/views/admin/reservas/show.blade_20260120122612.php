@@ -56,39 +56,19 @@
                     <div
                         class="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
                         <div class="flex justify-between items-start mb-8 border-b dark:border-gray-700 pb-6">
-                            <div class="space-y-1">
+                            <div>
                                 <label
-                                    class="text-[10px] font-black text-indigo-500 uppercase tracking-widest block">Responsável</label>
-
-                                <div class="flex items-center gap-4">
-                                    <h3
-                                        class="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
-                                        {{ $reserva->client_name }}
-                                    </h3>
-
-                                    {{-- Botão de Sincronizar (Aparece apenas se houver um usuário vinculado) --}}
-                                    @if ($reserva->user_id)
-                                        <form action="{{ route('admin.reservas.sincronizar', $reserva->id) }}"
-                                            method="POST" class="inline">
-                                            @csrf
-                                            <button type="submit"
-                                                class="inline-flex items-center gap-1 text-[10px] font-black uppercase bg-blue-50 text-blue-600 px-3 py-1 rounded-full hover:bg-blue-600 hover:text-white transition-all shadow-sm border border-blue-100"
-                                                title="Atualizar dados com base no cadastro do cliente">
-                                                🔄 Sincronizar Dados
-                                            </button>
-                                        </form>
-                                    @endif
-                                </div>
-
-                                <div class="flex items-center gap-2 mt-2">
-                                    <p class="text-sm text-gray-500 font-mono">
-                                        📞 {{ $reserva->client_contact ?? 'Não informado' }}
-                                    </p>
-
-                                    {{-- Botão de WhatsApp --}}
-                                    @if ($reserva->client_contact && in_array($reserva->status, ['confirmed', 'pending', 'maintenance', 'completed']))
+                                    class="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Responsável</label>
+                                <h3
+                                    class="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
+                                    {{ $reserva->client_name }}
+                                </h3>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <p class="text-sm text-gray-500 font-mono">📞
+                                        {{ $reserva->client_contact ?? 'Não informado' }}</p>
+                                    @if ($reserva->client_contact)
                                         <a href="https://wa.me/55{{ preg_replace('/\D/', '', $reserva->client_contact) }}"
-                                            target="_blank" title="Conversar com cliente"
+                                            target="_blank"
                                             class="inline-flex items-center justify-center w-6 h-6 bg-emerald-100 text-emerald-600 rounded-full hover:bg-emerald-500 hover:text-white transition-all shadow-sm">
                                             <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
                                                 <path
@@ -99,13 +79,11 @@
                                     @endif
                                 </div>
                             </div>
-
                             <div class="text-right">
                                 <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Data e
                                     Horário</label>
                                 <p class="text-xl font-bold dark:text-gray-200">
-                                    {{ \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') }}
-                                </p>
+                                    {{ \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') }}</p>
                                 <p class="text-indigo-600 font-black">
                                     {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }}h -
                                     {{ \Carbon\Carbon::parse($reserva->end_time)->format('H:i') }}h
@@ -278,6 +256,26 @@
                                     </div>
                                 @endif
 
+                                <div class="grid grid-cols-2 gap-2 mt-4">
+                                    @if ($isClosed)
+                                        <button type="button" onclick="alert('🚫 Caixa Fechado')"
+                                            class="w-full bg-gray-100 text-gray-400 py-3 rounded-2xl font-black text-[10px] uppercase cursor-not-allowed border border-gray-200">No-Show
+                                            🔒</button>
+                                        <button type="button" onclick="alert('🚫 Caixa Fechado')"
+                                            class="w-full bg-gray-100 text-gray-400 py-3 rounded-2xl font-black text-[10px] uppercase cursor-not-allowed border border-gray-200">Cancelar
+                                            🔒</button>
+                                    @else
+                                        <form action="{{ route('admin.reservas.no_show', $reserva->id) }}"
+                                            method="POST" onsubmit="return confirm('Marcar como Falta?');">
+                                            @csrf
+
+                                        </form>
+
+                                        @php $cancellationRoute = $reserva->is_recurrent ? 'admin.reservas.cancelar_pontual' : 'admin.reservas.cancelar'; @endphp
+
+                                    @endif
+                                </div>
+
                                 @if (!$isClosed)
                                     <button type="button"
                                         onclick="openMaintenanceModal('{{ $reserva->id }}', '{{ $reserva->total_paid ?? 0 }}')"
@@ -313,7 +311,6 @@
             <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onclick="closeMaintenanceModal()"></div>
             <div
                 class="relative bg-white dark:bg-gray-800 rounded-[2.5rem] max-w-md w-full p-8 shadow-2xl border border-pink-100 transform transition-all">
-
                 <div class="mb-6">
                     <div class="w-12 h-12 bg-pink-100 rounded-full flex items-center justify-center mb-4">
                         <span class="text-2xl">🛠️</span>
@@ -330,15 +327,13 @@
                             Ação Financeira
                         </label>
                         <div class="grid grid-cols-1 gap-2">
-
-                            {{-- OPÇÃO 1: ESTORNO (Padrão para Pontuais) --}}
                             <label
                                 class="relative flex flex-col p-4 border-2 border-gray-100 rounded-2xl cursor-pointer hover:bg-gray-50 transition has-[:checked]:border-pink-500 has-[:checked]:bg-pink-50/30">
                                 <div class="flex items-center gap-3">
                                     <input type="radio" name="finance_action" value="refund" checked
                                         class="text-pink-600 focus:ring-pink-500">
                                     <span class="font-black text-xs uppercase text-gray-700 dark:text-gray-300">
-                                        Devolver Valor (Estorno)
+                                        Devolver Valor (Caixa)
                                     </span>
                                 </div>
                                 <p class="text-[10px] text-pink-600 mt-2 font-bold uppercase italic">
@@ -346,21 +341,16 @@
                                 </p>
                             </label>
 
-                            {{-- OPÇÃO 2: CRÉDITO (Apenas Mensalistas) --}}
                             @if ($reserva->is_recurrent)
                                 <label
                                     class="relative flex flex-col p-4 border-2 border-gray-100 rounded-2xl cursor-pointer hover:bg-gray-50 transition has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50/30">
                                     <div class="flex items-center gap-3">
-                                        {{-- 🟢 AJUSTADO: value="credit" para alinhar com o Controller e Log --}}
                                         <input type="radio" name="finance_action" value="credit"
                                             class="text-indigo-600 focus:ring-indigo-500">
                                         <span class="font-black text-xs uppercase text-gray-700 dark:text-gray-300">
-                                            Transferir p/ Próximo Jogo
+                                            Mover p/ Próximo Horário
                                         </span>
                                     </div>
-                                    <p class="text-[10px] text-indigo-600 mt-2 font-bold uppercase italic">
-                                        ✅ O valor será movido para a reserva da semana seguinte.
-                                    </p>
                                 </label>
                             @endif
                         </div>
@@ -368,21 +358,21 @@
 
                     <div class="mb-6">
                         <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 px-1">
-                            Motivo do Bloqueio
+                            Motivo
                         </label>
                         <textarea id="maintenance_reason" required rows="2"
-                            class="w-full rounded-2xl border-gray-200 dark:bg-gray-900 dark:border-gray-700 text-sm dark:text-white focus:ring-pink-500 focus:border-pink-500"
-                            placeholder="Ex: Reparo na iluminação, troca de rede..."></textarea>
+                            class="w-full rounded-2xl border-gray-200 dark:bg-gray-900 dark:border-gray-700 text-sm dark:text-white"
+                            placeholder="Ex: Reparo rede..."></textarea>
                     </div>
 
                     <div class="flex gap-3">
                         <button type="button" onclick="closeMaintenanceModal()"
-                            class="flex-1 py-4 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-2xl font-black uppercase text-[10px] hover:bg-gray-200 transition">
+                            class="flex-1 py-4 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-2xl font-black uppercase text-[10px]">
                             Cancelar
                         </button>
                         <button type="submit" id="btnConfirmMaintenance"
-                            class="flex-[2] py-4 bg-pink-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg hover:bg-pink-700 transition active:scale-95">
-                            Confirmar Bloqueio
+                            class="flex-[2] py-4 bg-pink-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg">
+                            Confirmar
                         </button>
                     </div>
                 </form>
@@ -416,7 +406,7 @@
                     <input type="hidden" name="status" value="maintenance">
 
                     {{-- Opção 1: Restaurar o agendamento anterior --}}
-                    <button type="submit" name="action" value="restore_client" id="btnRestoreClientAction"
+                    <button type="submit" name="action" value="restore_client"
                         class="w-full p-4 border-2 border-indigo-50 dark:border-gray-700 rounded-2xl hover:bg-indigo-50 dark:hover:bg-gray-700 transition text-left flex items-start gap-4 group">
                         <div class="bg-indigo-100 dark:bg-indigo-900 p-2 rounded-lg text-xl">👤</div>
                         <div>
@@ -459,18 +449,18 @@
         let currentCancellationUrl = '';
         window.currentReservaMaintenanceId = "{{ $reserva->id }}";
 
-        // Dados da reserva (Constantes para mensagens e alertas)
-        const clienteNome = "{{ $reserva->client_name }}".replace('🛠️ MANUTENÇÃO (', '').replace(')', '');
+        // Dados da reserva para uso no WhatsApp
+        const clienteNome = "{{ $reserva->client_name }}";
         const clienteContato = "{{ preg_replace('/\D/', '', $reserva->client_contact) }}";
         const reservaData = "{{ \Carbon\Carbon::parse($reserva->date)->format('d/m') }}";
         const reservaHora = "{{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }}";
         const valorTotal = "{{ number_format($reserva->price, 2, ',', '.') }}";
-        // Captura o valor pago atual da reserva (será 0 se foi transferido/estornado)
-        const jaPagoNoAto = parseFloat("{{ $reserva->total_paid ?? 0 }}");
 
         function safeAddEventListener(id, event, callback) {
             const el = document.getElementById(id);
-            if (el) el.addEventListener(event, callback);
+            if (el) {
+                el.addEventListener(event, callback);
+            }
         }
 
         function goBackAndReload() {
@@ -563,11 +553,13 @@
             const submitBtn = document.getElementById('btnConfirmMaintenance');
             const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
+            // 1. Validação básica de motivo
             if (reason.length < 5) {
                 alert('Por favor, descreva o motivo (mínimo 5 caracteres).');
                 return;
             }
 
+            // 2. Feedback visual de carregamento
             submitBtn.disabled = true;
             const originalText = submitBtn.textContent;
             submitBtn.textContent = 'PROCESSANDO...';
@@ -575,6 +567,7 @@
             const url = "{{ route('admin.reservas.mover_manutencao', ':id') }}".replace(':id', window
                 .currentReservaMaintenanceId);
 
+            // 3. Execução da requisição via Fetch
             fetch(url, {
                     method: 'PATCH',
                     headers: {
@@ -589,19 +582,39 @@
                 })
                 .then(async response => {
                     const data = await response.json();
-                    if (!response.ok) throw new Error(data.message || 'Erro no servidor');
 
+                    if (!response.ok) {
+                        throw new Error(data.message || 'Erro no servidor');
+                    }
+
+                    // ✅ SUCESSO:
                     if (data.success) {
-                        if (data.whatsapp_link) localStorage.setItem('pending_wa_link', data.whatsapp_link);
+                        // Guardamos o link no "escaninho" do navegador antes de recarregar
+                        if (data.whatsapp_link) {
+                            localStorage.setItem('pending_wa_link', data.whatsapp_link);
+                        }
+
                         setTimeout(() => {
                             window.location.reload();
                         }, 150);
                     }
                 })
                 .catch(error => {
+                    // ❌ TRATAMENTO DE ERRO
                     alert('Falha na operação: ' + error.message);
+
+                    // Restaura o botão para permitir nova tentativa
                     submitBtn.disabled = false;
                     submitBtn.textContent = originalText;
+                })
+                .finally(() => {
+                    // Limpeza de estado de carregamento caso o reload demore ou falhe
+                    if (submitBtn.textContent === 'PROCESSANDO...') {
+                        setTimeout(() => {
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = originalText;
+                        }, 2000);
+                    }
                 });
         });
 
@@ -616,40 +629,35 @@
             document.getElementById('reactivateDecisionModal').classList.add('hidden');
         }
 
-        // Interceptar clique de restauração com alerta financeiro inteligente
+        // Interceptar clique de restauração para alertar sobre pagamento integral
         document.querySelectorAll('button[value="restore_client"]').forEach(btn => {
             btn.addEventListener('click', function(e) {
-                let subtituloFinanceiro = "";
-
-                // Se a reserva atual não tem valor pago (foi movido ou estornado)
-                if (jaPagoNoAto <= 0) {
-                    subtituloFinanceiro =
-                        `\n\n⚠️ NOTA FINANCEIRA:\nComo o valor original foi transferido para outro horário ou estornado, esta reserva voltará com SALDO DEVEDOR TOTAL de R$ ${valorTotal}.`;
-                }
-
                 const confirmar = confirm(
-                    `Deseja restaurar o horário das ${reservaHora}h para ${clienteNome}?` +
-                    subtituloFinanceiro
+                    `Atenção: Ao reativar o horário para ${clienteNome}, o cliente deverá pagar o valor INTEGRAL de R$ ${valorTotal}, pois o valor anterior foi estornado no momento da manutenção. Confirmar?`
                 );
 
-                if (!confirmar) {
+                if (confirmar) {
+                    // Prepara mensagem de retorno amigável
+                    const msgRetorno =
+                        `Olá *${clienteNome}*! Boas notícias: a manutenção da quadra foi concluída e o seu horário das ${reservaHora}h está *REATIVADO*. Como realizamos o estorno anteriormente, o pagamento integral de R$ ${valorTotal} fica pendente para o momento do jogo. Te aguardamos!`;
+
+                } else {
                     e.preventDefault();
                 }
             });
         });
 
-        // =========================================================================
-        // 📱 WHATSAPP PENDENTE (PÓS-RELOAD)
-        // =========================================================================
+        // Adicione isso logo antes de fechar a tag
+
         window.addEventListener('load', () => {
             const pendingWA = localStorage.getItem('pending_wa_link');
             const manualCard = document.getElementById('waNotificationCardManual');
             const manualBtn = document.getElementById('waNotificationBtnManual');
 
             if (pendingWA && manualCard) {
-                manualCard.classList.remove('hidden');
-                manualBtn.href = pendingWA;
-                localStorage.removeItem('pending_wa_link');
+                manualCard.classList.remove('hidden'); // Mostra o card reserva
+                manualBtn.href = pendingWA; // Coloca o link no botão
+                localStorage.removeItem('pending_wa_link'); // Limpa para não repetir
             }
         });
     </script>

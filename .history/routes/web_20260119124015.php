@@ -87,9 +87,6 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::get('/rejeitadas', [AdminController::class, 'indexReservasRejeitadas'])->name('rejeitadas');
             Route::get('/{reserva}/show', [AdminController::class, 'showReserva'])->name('show');
 
-            // 🔄 ROTA DE SINCRONIZAÇÃO (ADICIONADA AQUI)
-            Route::post('/{id}/sincronizar', [AdminController::class, 'sincronizarDadosUsuario'])->name('sincronizar');
-
             // Ações de Confirmação e Rejeição
             Route::patch('/confirmar/{reserva}', [ReservaController::class, 'confirmar'])->name('confirmar');
             Route::patch('/rejeitar/{reserva}', [ReservaController::class, 'rejeitar'])->name('rejeitar');
@@ -109,7 +106,6 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::post('/cancel-client-series/{masterId}', [AdminController::class, 'cancelClientSeries'])->name('cancel_client_series');
             Route::post('/{reserva}/no-show', [PaymentController::class, 'registerNoShow'])->name('no_show');
         });
-
         // 👥 4. GESTÃO DE USUÁRIOS
         Route::prefix('users')->name('users.')->group(function () {
             Route::get('/', [UserController::class, 'index'])->name('index');

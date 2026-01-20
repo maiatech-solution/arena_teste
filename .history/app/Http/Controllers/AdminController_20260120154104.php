@@ -200,7 +200,7 @@ class AdminController extends Controller
         }
 
         // 7. Ordenação e Paginação
-        $reservas = $query->orderBy('date', 'asc') // Mais recentes primeiro costuma ser melhor para "Todas"
+        $reservas = $query->orderBy('date', 'desc') // Mais recentes primeiro costuma ser melhor para "Todas"
             ->orderBy('start_time', 'asc')
             ->paginate(20)
             ->appends($request->all());
@@ -903,7 +903,7 @@ class AdminController extends Controller
     }
 
     /**
-     * 🛠️ Move para MANUTENÇÃO transferindo crédito ou realizando estorno automático.
+     * 🛠️ Move para MANUTENÇÃO transferindo crédito para a próxima reserva.
      */
     public function moverManutencao(Request $request, $id)
     {
@@ -918,11 +918,21 @@ class AdminController extends Controller
                 $contatoOriginal = $reserva->client_contact;
                 $userIdOriginal = $reserva->user_id;
 
-                // Formatadores de data e hora para a mensagem
+                // Formatadores para a mensagem
                 $dataReserva = date('d/m', strtotime($reserva->date));
                 $horaReserva = date('H:i', strtotime($reserva->start_time));
 
-                // 1. LÓGICA DE MOVIMENTAÇÃO DE CRÉDITO
+                // 1. BACKUP (Marcação para reativação)
+                $backupData = [
+                    'name' => $nomeOriginal,
+                    'contact' => $contatoOriginal,
+                    'status' => $reserva->status,
+                    'user_id' => $userIdOriginal,
+                    'total_paid_orig' => $valorOriginal
+                ];
+                $backupString = "###BACKUP###" . json_encode($backupData) . "###END###";
+
+                // 2. LÓGICA DE MOVIMENTAÇÃO (Somente se solicitado 'credit' ou 'transfer')
                 $transferenciaSucesso = false;
                 if ($valorOriginal > 0 && ($action === 'transfer' || $action === 'credit')) {
                     $idDaSerie = $reserva->recurrent_series_id ?? $reserva->id;
@@ -954,19 +964,7 @@ class AdminController extends Controller
                     }
                 }
 
-                // 2. BACKUP (Marcação para reativação inteligente)
-                // 'finance_action' registra se o dinheiro viajou (credit) ou saiu (refund)
-                $backupData = [
-                    'name' => $nomeOriginal,
-                    'contact' => $contatoOriginal,
-                    'status' => $reserva->status,
-                    'user_id' => $userIdOriginal,
-                    'total_paid_orig' => $valorOriginal,
-                    'finance_action' => $transferenciaSucesso ? 'credit' : 'refund'
-                ];
-                $backupString = "###BACKUP###" . json_encode($backupData) . "###END###";
-
-                // 3. SE NÃO TRANSFERIU E TINHA VALOR, FAZ ESTORNO NO CAIXA
+                // 3. SE NÃO TRANSFERIU E TINHA VALOR, FAZ ESTORNO
                 if ($valorOriginal > 0 && !$transferenciaSucesso) {
                     FinancialTransaction::create([
                         'reserva_id' => $reserva->id,
@@ -979,7 +977,7 @@ class AdminController extends Controller
                     ]);
                 }
 
-                // 4. ATUALIZA A RESERVA PARA STATUS DE MANUTENÇÃO
+                // 4. ATUALIZA PARA MANUTENÇÃO
                 DB::table('reservas')->where('id', $id)->update([
                     'status' => 'maintenance',
                     'client_name' => "🛠️ MANUTENÇÃO ({$nomeOriginal})",
@@ -993,20 +991,11 @@ class AdminController extends Controller
                 $msg = "Olá {$nomeOriginal}! 👋\n\n";
                 $msg .= "Informamos que o seu horário do dia {$dataReserva} às {$horaReserva} precisou ser interrompido para MANUTENÇÃO DE EMERGÊNCIA na quadra ({$motivo}).";
 
-                if ($valorOriginal > 0) {
+                // Se houve estorno (tinha valor e não foi transferido)
+                if ($valorOriginal > 0 && !$transferenciaSucesso) {
                     $valorFormatado = number_format($valorOriginal, 2, ',', '.');
-
-                    if ($transferenciaSucesso) {
-                        // CENÁRIO: Crédito transferido para a próxima semana
-                        $proximaData = \Carbon\Carbon::parse($reserva->date)->addWeek()->format('d/m');
-
-                        $msg .= "\n\n⭐ *SOBRE O SEU PAGAMENTO:* Como seu horário é recorrente, o valor de R$ {$valorFormatado} foi TRANSFERIDO para o seu próximo jogo no dia {$proximaData}.";
-                        $msg .= "\n\nAssim que a manutenção for concluída, avisaremos você!";
-                    } else {
-                        // CENÁRIO: Estorno realizado
-                        $msg .= "\n\n💰 *SOBRE O SEU PAGAMENTO:* Como o horário foi cancelado, já retiramos o valor de R$ {$valorFormatado} do nosso caixa para estorno.";
-                        $msg .= "\n\nPor favor, envie sua *CHAVE PIX* agora para realizarmos a devolução imediata do seu dinheiro.";
-                    }
+                    $msg .= "\n\n💰 *SOBRE O SEU PAGAMENTO:* Como o horário foi cancelado, já retiramos o valor de R$ {$valorFormatado} do nosso caixa para estorno.";
+                    $msg .= "\n\nPor favor, envie sua *CHAVE PIX* agora para realizarmos a devolução imediata do seu dinheiro.";
                 }
 
                 $waLink = "https://wa.me/55" . preg_replace('/\D/', '', $contatoOriginal) . "?text=" . urlencode($msg);
@@ -1026,100 +1015,94 @@ class AdminController extends Controller
 
     /**
      * 🔄 Reativação Inteligente de Horário em Manutenção via Backup
-     * Blindado contra exclusões acidentais e ajustado para mensagens financeiras.
+     * Ajustado para mensagens financeiras condicionais.
      */
     public function reativarManutencao(\App\Http\Requests\UpdateReservaStatusRequest $request, $id)
     {
-        // 🛡️ Iniciamos uma transação para garantir que nada suma em caso de erro
-        return DB::transaction(function () use ($request, $id) {
-            try {
-                $reserva = Reserva::findOrFail($id);
-                $decisao = $request->input('action');
+        try {
+            $reserva = Reserva::findOrFail($id);
+            $decisao = $request->input('action');
 
-                // --- CASO 1: APENAS LIBERAR O SLOT (VOLTAR A SER VERDE/LIVRE) ---
-                if ($decisao === 'release_slot' || empty($decisao)) {
+            // Caso 1: Apenas liberar o slot (voltar a ser verde/livre)
+            if ($decisao === 'release_slot' || empty($decisao)) {
+                $backupData = $reserva->toArray();
+                $reserva->delete();
 
-                    // 🛑 SEGURANÇA: Não usamos mais delete().
-                    // Apenas limpamos os dados para que o registro vire um slot vago.
+                Reserva::create([
+                    'arena_id'       => $backupData['arena_id'],
+                    'date'           => substr($backupData['date'], 0, 10),
+                    'start_time'     => $backupData['start_time'],
+                    'end_time'       => $backupData['end_time'],
+                    'price'          => $backupData['price'],
+                    'status'         => 'free',
+                    'is_fixed'       => true,
+                    'client_name'    => 'Slot Livre',
+                    'client_contact' => 'N/A'
+                ]);
+
+                return redirect()->back()->with('success', '✅ Agenda liberada com sucesso!');
+            }
+
+            // Caso 2: Restaurar o cliente original usando o Backup
+            if ($decisao === 'restore_client') {
+                if (preg_match('/###BACKUP###(.*?)###END###/s', $reserva->notes, $matches)) {
+                    $dados = json_decode($matches[1], true);
+
+                    // Extraímos o valor original do backup para a lógica da mensagem
+                    $valorOriginal = (float) ($dados['total_paid_orig'] ?? 0);
+                    $nomeCliente   = $dados['name'] ?? 'Cliente';
+
+                    // 1. Atualiza a reserva para o estado original
                     $reserva->update([
-                        'status'         => 'free',
-                        'is_fixed'       => true,
-                        'client_name'    => 'Slot Livre',
-                        'client_contact' => 'N/A',
-                        'user_id'        => null,
-                        'total_paid'     => 0,
-                        'signal_value'   => 0,
-                        'payment_status' => 'pending',
-                        'notes'          => null, // Limpa o backup da manutenção
+                        'client_name'    => $nomeCliente,
+                        'status'         => 'confirmed',
+                        'user_id'        => $dados['user_id'] ?? $reserva->user_id,
+                        'is_fixed'       => false,
+                        'notes'          => trim(preg_replace('/###BACKUP###.*?###END###/s', '', $reserva->notes))
                     ]);
 
-                    return redirect()->back()->with('success', '✅ Agenda liberada com sucesso! O horário agora está vago.');
-                }
+                    // 2. Formatação de dados para a mensagem
+                    $dataReserva = date('d/m', strtotime($reserva->date));
+                    $horaReserva = date('H:i', strtotime($reserva->start_time));
+                    $valorIntegral = number_format($reserva->price, 2, ',', '.');
+                    $valorPagoFormatado = number_format($valorOriginal, 2, ',', '.');
 
-                // --- CASO 2: RESTAURAR O CLIENTE ORIGINAL USANDO O BACKUP ---
-                if ($decisao === 'restore_client') {
-                    if (preg_match('/###BACKUP###(.*?)###END###/s', $reserva->notes, $matches)) {
-                        $dados = json_decode($matches[1], true);
+                    // --- 🚀 CONSTRUÇÃO DA MENSAGEM ---
+                    $msg = "Boas notícias {$nomeCliente}! 📢\n\n";
+                    $msg .= "A manutenção técnica foi concluída e seu horário para {$dataReserva} às {$horaReserva} foi REATIVADO! 🏟️";
 
-                        // Recuperamos os dados financeiros e de identificação do backup
-                        $valorOriginal = (float) ($dados['total_paid_orig'] ?? 0);
-                        $acaoRealizada = $dados['finance_action'] ?? 'refund';
-                        $nomeCliente   = $dados['name'] ?? 'Cliente';
-
-                        // 1. Atualiza a reserva com os dados recuperados
-                        $reserva->update([
-                            'client_name'    => $nomeCliente,
-                            'status'         => 'confirmed',
-                            'user_id'        => $dados['user_id'] ?? $reserva->user_id,
-                            'is_fixed'       => false,
-                            'notes'          => trim(preg_replace('/###BACKUP###.*?###END###/s', '', $reserva->notes))
-                        ]);
-
-                        // 2. Formatação de dados para a mensagem do WhatsApp
-                        $dataReserva = date('d/m', strtotime($reserva->date));
-                        $horaReserva = date('H:i', strtotime($reserva->start_time));
-                        $valorIntegral = number_format($reserva->price, 2, ',', '.');
-                        $valorPagoFormatado = number_format($valorOriginal, 2, ',', '.');
-
-                        // --- 🚀 CONSTRUÇÃO DA MENSAGEM ---
-                        $msg = "Boas notícias {$nomeCliente}! 📢\n\n";
-                        $msg .= "A manutenção técnica foi concluída e seu horário para {$dataReserva} às {$horaReserva} foi REATIVADO! 🏟️";
-
-                        // Verificação rigorosa se existia pagamento (maior que zero)
-                        if ($valorOriginal > 0.01) {
-                            // SÓ USA A FRASE DE MENSALISTA SE REALMENTE FOI TRANSFERIDO O CRÉDITO
-                            if ($reserva->is_recurrent && $acaoRealizada === 'credit') {
-                                $proximaData = \Carbon\Carbon::parse($reserva->date)->addWeek()->format('d/m');
-                                $msg .= "\n\n📋 *SOBRE O PAGAMENTO:* Como seu horário é recorrente, o valor que deu de R$ {$valorPagoFormatado} ficou para o seu próximo jogo dia {$proximaData}.";
-                                $msg .= "\nNo jogo do dia {$dataReserva} você terá de pagar o valor integral do seu horário.";
-                            }
-                            // SE FOI ESTORNADO (MESMO SENDO RECORRENTE)
-                            else {
-                                $msg .= "\n\n💰 *SOBRE O PAGAMENTO:* Como realizamos o estorno do valor anterior, o pagamento integral de R$ {$valorIntegral} fica pendente para o momento do jogo. Te esperamos!";
-                            }
+                    // SÓ ADICIONA INFO FINANCEIRA SE O CLIENTE TINHA PAGO ALGO (Sinal ou Total)
+                    if ($valorOriginal > 0) {
+                        if ($reserva->is_recurrent) {
+                            // CENÁRIO A: MENSALISTA RECORRENTE (Valor foi para a próxima semana)
+                            $proximaData = \Carbon\Carbon::parse($reserva->date)->addWeek()->format('d/m');
+                            $msg .= "\n\n📋 *SOBRE O PAGAMENTO:* Como seu horário é recorrente, o valor que deu de R$ {$valorPagoFormatado} ficou para o seu próximo jogo dia {$proximaData}.";
+                            $msg .= "\nNo jogo do dia {$dataReserva} você terá de pagar o valor integral do seu horário.";
                         } else {
-                            // SE O VALOR ERA 0
-                            $msg .= "\n\nTe aguardamos para a partida!";
+                            // CENÁRIO B: PONTUAL COM ESTORNO (Pagamento integral hoje)
+                            $msg .= "\n\n💰 *SOBRE O PAGAMENTO:* Como realizamos o estorno do valor anterior, o pagamento integral de R$ {$valorIntegral} fica pendente para o momento do jogo. Te esperamos!";
                         }
-
-                        $telefoneLimpo = preg_replace('/\D/', '', $dados['contact'] ?? '');
-                        $waLink = "https://wa.me/55{$telefoneLimpo}?text=" . urlencode($msg);
-
-                        return redirect()->route('admin.reservas.show', $reserva->id)->with([
-                            'success'       => '👤 Cliente restaurado com sucesso!',
-                            'whatsapp_link' => $waLink
-                        ]);
+                    } else {
+                        // CENÁRIO C: NÃO HAVIA PAGAMENTO PRÉVIO
+                        $msg .= "\n\nTe aguardamos para a partida!";
                     }
 
-                    return redirect()->back()->with('error', '⚠️ Falha: Dados de backup não encontrados nas notas.');
+                    // 3. Link final do WhatsApp
+                    $telefoneLimpo = preg_replace('/\D/', '', $dados['contact'] ?? '');
+                    $waLink = "https://wa.me/55{$telefoneLimpo}?text=" . urlencode($msg);
+
+                    return redirect()->route('admin.reservas.show', $reserva->id)->with([
+                        'success'       => '👤 Cliente restaurado com sucesso!',
+                        'whatsapp_link' => $waLink
+                    ]);
                 }
 
-                return redirect()->back();
-            } catch (\Exception $e) {
-                \Log::error("Erro na reativação de manutenção: " . $e->getMessage());
-                return redirect()->back()->with('error', '❌ Erro interno: ' . $e->getMessage());
+                return redirect()->back()->with('error', '⚠️ Falha: Dados de backup não encontrados nas notas.');
             }
-        });
+        } catch (\Exception $e) {
+            \Log::error("Erro na reativação de manutenção: " . $e->getMessage());
+            return redirect()->back()->with('error', '❌ Erro interno: ' . $e->getMessage());
+        }
     }
 
     public function sincronizarDadosUsuario($id)

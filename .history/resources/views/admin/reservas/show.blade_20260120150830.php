@@ -56,36 +56,19 @@
                     <div
                         class="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
                         <div class="flex justify-between items-start mb-8 border-b dark:border-gray-700 pb-6">
-                            <div class="space-y-1">
+                            <div>
                                 <label
-                                    class="text-[10px] font-black text-indigo-500 uppercase tracking-widest block">Responsável</label>
-
-                                <div class="flex items-center gap-4">
-                                    <h3
-                                        class="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
-                                        {{ $reserva->client_name }}
-                                    </h3>
-
-                                    {{-- Botão de Sincronizar (Aparece apenas se houver um usuário vinculado) --}}
-                                    @if ($reserva->user_id)
-                                        <form action="{{ route('admin.reservas.sincronizar', $reserva->id) }}"
-                                            method="POST" class="inline">
-                                            @csrf
-                                            <button type="submit"
-                                                class="inline-flex items-center gap-1 text-[10px] font-black uppercase bg-blue-50 text-blue-600 px-3 py-1 rounded-full hover:bg-blue-600 hover:text-white transition-all shadow-sm border border-blue-100"
-                                                title="Atualizar dados com base no cadastro do cliente">
-                                                🔄 Sincronizar Dados
-                                            </button>
-                                        </form>
-                                    @endif
-                                </div>
-
-                                <div class="flex items-center gap-2 mt-2">
+                                    class="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Responsável</label>
+                                <h3
+                                    class="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
+                                    {{ $reserva->client_name }}
+                                </h3>
+                                <div class="flex items-center gap-2 mt-1">
                                     <p class="text-sm text-gray-500 font-mono">
                                         📞 {{ $reserva->client_contact ?? 'Não informado' }}
                                     </p>
 
-                                    {{-- Botão de WhatsApp --}}
+                                    {{-- Ajuste: Verificamos se há contato E se o status permite interação --}}
                                     @if ($reserva->client_contact && in_array($reserva->status, ['confirmed', 'pending', 'maintenance', 'completed']))
                                         <a href="https://wa.me/55{{ preg_replace('/\D/', '', $reserva->client_contact) }}"
                                             target="_blank" title="Conversar com cliente"
@@ -99,13 +82,11 @@
                                     @endif
                                 </div>
                             </div>
-
                             <div class="text-right">
                                 <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Data e
                                     Horário</label>
                                 <p class="text-xl font-bold dark:text-gray-200">
-                                    {{ \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') }}
-                                </p>
+                                    {{ \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') }}</p>
                                 <p class="text-indigo-600 font-black">
                                     {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }}h -
                                     {{ \Carbon\Carbon::parse($reserva->end_time)->format('H:i') }}h

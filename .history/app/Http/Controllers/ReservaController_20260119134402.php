@@ -872,24 +872,6 @@ class ReservaController extends Controller
             return response()->json(['success' => false, 'message' => 'Erro interno ao identificar ou criar o cliente.'], 500);
         }
 
-        // 🛡️ NOVO PASSO: TRAVA DE CONFLITO DE MENSALISTA FUTURO
-        // Verifica se já existe um mensalista (recorrente) ativo para este horário em datas futuras
-        $futureMensalista = Reserva::where('arena_id', $arenaId)
-            ->where('start_time', $startTimeNormalized)
-            ->where('is_recurrent', true)
-            ->where('is_fixed', false)
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA])
-            ->where('date', '>', $initialDate->toDateString()) // Checa as semanas seguintes
-            ->where('user_id', '!=', $clientUser->id)
-            ->first();
-
-        if ($futureMensalista) {
-            return response()->json([
-                'success' => false,
-                'message' => "⚠️ BLOQUEIO DE RECORRÊNCIA: O cliente '{$futureMensalista->client_name}' já é o mensalista deste horário nas próximas semanas. Você só pode realizar um agendamento PONTUAL para este dia específico."
-            ], 422);
-        }
-
         // 4. Coleta datas futuras
         $datesToSchedule = [];
         $dateIterate = $initialDate->copy();
@@ -985,7 +967,7 @@ class ReservaController extends Controller
             if ($signalValue > 0) {
                 FinancialTransaction::create([
                     'reserva_id' => $masterReserva->id,
-                    'arena_id'   => $masterReserva->arena_id,
+                    'arena_id'   => $masterReserva->arena_id, // ✅ ADICIONADO: Obrigatório para o novo Model
                     'user_id'    => $clientUser->id,
                     'manager_id' => Auth::id(),
                     'amount'     => $signalValue,

@@ -200,7 +200,7 @@ class AdminController extends Controller
         }
 
         // 7. Ordenação e Paginação
-        $reservas = $query->orderBy('date', 'asc') // Mais recentes primeiro costuma ser melhor para "Todas"
+        $reservas = $query->orderBy('date', 'desc') // Mais recentes primeiro costuma ser melhor para "Todas"
             ->orderBy('start_time', 'asc')
             ->paginate(20)
             ->appends($request->all());

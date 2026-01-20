@@ -56,36 +56,19 @@
                     <div
                         class="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
                         <div class="flex justify-between items-start mb-8 border-b dark:border-gray-700 pb-6">
-                            <div class="space-y-1">
+                            <div>
                                 <label
-                                    class="text-[10px] font-black text-indigo-500 uppercase tracking-widest block">Responsável</label>
-
-                                <div class="flex items-center gap-4">
-                                    <h3
-                                        class="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
-                                        {{ $reserva->client_name }}
-                                    </h3>
-
-                                    {{-- Botão de Sincronizar (Aparece apenas se houver um usuário vinculado) --}}
-                                    @if ($reserva->user_id)
-                                        <form action="{{ route('admin.reservas.sincronizar', $reserva->id) }}"
-                                            method="POST" class="inline">
-                                            @csrf
-                                            <button type="submit"
-                                                class="inline-flex items-center gap-1 text-[10px] font-black uppercase bg-blue-50 text-blue-600 px-3 py-1 rounded-full hover:bg-blue-600 hover:text-white transition-all shadow-sm border border-blue-100"
-                                                title="Atualizar dados com base no cadastro do cliente">
-                                                🔄 Sincronizar Dados
-                                            </button>
-                                        </form>
-                                    @endif
-                                </div>
-
-                                <div class="flex items-center gap-2 mt-2">
+                                    class="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Responsável</label>
+                                <h3
+                                    class="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
+                                    {{ $reserva->client_name }}
+                                </h3>
+                                <div class="flex items-center gap-2 mt-1">
                                     <p class="text-sm text-gray-500 font-mono">
                                         📞 {{ $reserva->client_contact ?? 'Não informado' }}
                                     </p>
 
-                                    {{-- Botão de WhatsApp --}}
+                                    {{-- Ajuste: Verificamos se há contato E se o status permite interação --}}
                                     @if ($reserva->client_contact && in_array($reserva->status, ['confirmed', 'pending', 'maintenance', 'completed']))
                                         <a href="https://wa.me/55{{ preg_replace('/\D/', '', $reserva->client_contact) }}"
                                             target="_blank" title="Conversar com cliente"
@@ -99,13 +82,11 @@
                                     @endif
                                 </div>
                             </div>
-
                             <div class="text-right">
                                 <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Data e
                                     Horário</label>
                                 <p class="text-xl font-bold dark:text-gray-200">
-                                    {{ \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') }}
-                                </p>
+                                    {{ \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') }}</p>
                                 <p class="text-indigo-600 font-black">
                                     {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }}h -
                                     {{ \Carbon\Carbon::parse($reserva->end_time)->format('H:i') }}h
@@ -416,7 +397,7 @@
                     <input type="hidden" name="status" value="maintenance">
 
                     {{-- Opção 1: Restaurar o agendamento anterior --}}
-                    <button type="submit" name="action" value="restore_client" id="btnRestoreClientAction"
+                    <button type="submit" name="action" value="restore_client"
                         class="w-full p-4 border-2 border-indigo-50 dark:border-gray-700 rounded-2xl hover:bg-indigo-50 dark:hover:bg-gray-700 transition text-left flex items-start gap-4 group">
                         <div class="bg-indigo-100 dark:bg-indigo-900 p-2 rounded-lg text-xl">👤</div>
                         <div>
@@ -459,18 +440,18 @@
         let currentCancellationUrl = '';
         window.currentReservaMaintenanceId = "{{ $reserva->id }}";
 
-        // Dados da reserva (Constantes para mensagens e alertas)
-        const clienteNome = "{{ $reserva->client_name }}".replace('🛠️ MANUTENÇÃO (', '').replace(')', '');
+        // Dados da reserva para uso no WhatsApp
+        const clienteNome = "{{ $reserva->client_name }}";
         const clienteContato = "{{ preg_replace('/\D/', '', $reserva->client_contact) }}";
         const reservaData = "{{ \Carbon\Carbon::parse($reserva->date)->format('d/m') }}";
         const reservaHora = "{{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }}";
         const valorTotal = "{{ number_format($reserva->price, 2, ',', '.') }}";
-        // Captura o valor pago atual da reserva (será 0 se foi transferido/estornado)
-        const jaPagoNoAto = parseFloat("{{ $reserva->total_paid ?? 0 }}");
 
         function safeAddEventListener(id, event, callback) {
             const el = document.getElementById(id);
-            if (el) el.addEventListener(event, callback);
+            if (el) {
+                el.addEventListener(event, callback);
+            }
         }
 
         function goBackAndReload() {
@@ -563,11 +544,13 @@
             const submitBtn = document.getElementById('btnConfirmMaintenance');
             const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
+            // 1. Validação básica de motivo
             if (reason.length < 5) {
                 alert('Por favor, descreva o motivo (mínimo 5 caracteres).');
                 return;
             }
 
+            // 2. Feedback visual de carregamento
             submitBtn.disabled = true;
             const originalText = submitBtn.textContent;
             submitBtn.textContent = 'PROCESSANDO...';
@@ -575,6 +558,7 @@
             const url = "{{ route('admin.reservas.mover_manutencao', ':id') }}".replace(':id', window
                 .currentReservaMaintenanceId);
 
+            // 3. Execução da requisição via Fetch
             fetch(url, {
                     method: 'PATCH',
                     headers: {
@@ -589,19 +573,39 @@
                 })
                 .then(async response => {
                     const data = await response.json();
-                    if (!response.ok) throw new Error(data.message || 'Erro no servidor');
 
+                    if (!response.ok) {
+                        throw new Error(data.message || 'Erro no servidor');
+                    }
+
+                    // ✅ SUCESSO:
                     if (data.success) {
-                        if (data.whatsapp_link) localStorage.setItem('pending_wa_link', data.whatsapp_link);
+                        // Guardamos o link no "escaninho" do navegador antes de recarregar
+                        if (data.whatsapp_link) {
+                            localStorage.setItem('pending_wa_link', data.whatsapp_link);
+                        }
+
                         setTimeout(() => {
                             window.location.reload();
                         }, 150);
                     }
                 })
                 .catch(error => {
+                    // ❌ TRATAMENTO DE ERRO
                     alert('Falha na operação: ' + error.message);
+
+                    // Restaura o botão para permitir nova tentativa
                     submitBtn.disabled = false;
                     submitBtn.textContent = originalText;
+                })
+                .finally(() => {
+                    // Limpeza de estado de carregamento caso o reload demore ou falhe
+                    if (submitBtn.textContent === 'PROCESSANDO...') {
+                        setTimeout(() => {
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = originalText;
+                        }, 2000);
+                    }
                 });
         });
 
@@ -616,40 +620,35 @@
             document.getElementById('reactivateDecisionModal').classList.add('hidden');
         }
 
-        // Interceptar clique de restauração com alerta financeiro inteligente
+        // Interceptar clique de restauração para alertar sobre pagamento integral
         document.querySelectorAll('button[value="restore_client"]').forEach(btn => {
             btn.addEventListener('click', function(e) {
-                let subtituloFinanceiro = "";
-
-                // Se a reserva atual não tem valor pago (foi movido ou estornado)
-                if (jaPagoNoAto <= 0) {
-                    subtituloFinanceiro =
-                        `\n\n⚠️ NOTA FINANCEIRA:\nComo o valor original foi transferido para outro horário ou estornado, esta reserva voltará com SALDO DEVEDOR TOTAL de R$ ${valorTotal}.`;
-                }
-
                 const confirmar = confirm(
-                    `Deseja restaurar o horário das ${reservaHora}h para ${clienteNome}?` +
-                    subtituloFinanceiro
+                    `Atenção: Ao reativar o horário para ${clienteNome}, o cliente deverá pagar o valor INTEGRAL de R$ ${valorTotal}, pois o valor anterior foi estornado no momento da manutenção. Confirmar?`
                 );
 
-                if (!confirmar) {
+                if (confirmar) {
+                    // Prepara mensagem de retorno amigável
+                    const msgRetorno =
+                        `Olá *${clienteNome}*! Boas notícias: a manutenção da quadra foi concluída e o seu horário das ${reservaHora}h está *REATIVADO*. Como realizamos o estorno anteriormente, o pagamento integral de R$ ${valorTotal} fica pendente para o momento do jogo. Te aguardamos!`;
+
+                } else {
                     e.preventDefault();
                 }
             });
         });
 
-        // =========================================================================
-        // 📱 WHATSAPP PENDENTE (PÓS-RELOAD)
-        // =========================================================================
+        // Adicione isso logo antes de fechar a tag
+
         window.addEventListener('load', () => {
             const pendingWA = localStorage.getItem('pending_wa_link');
             const manualCard = document.getElementById('waNotificationCardManual');
             const manualBtn = document.getElementById('waNotificationBtnManual');
 
             if (pendingWA && manualCard) {
-                manualCard.classList.remove('hidden');
-                manualBtn.href = pendingWA;
-                localStorage.removeItem('pending_wa_link');
+                manualCard.classList.remove('hidden'); // Mostra o card reserva
+                manualBtn.href = pendingWA; // Coloca o link no botão
+                localStorage.removeItem('pending_wa_link'); // Limpa para não repetir
             }
         });
     </script>

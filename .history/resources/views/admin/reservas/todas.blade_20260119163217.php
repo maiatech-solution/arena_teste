@@ -91,9 +91,8 @@
                     </div>
                 @endif
 
-                <div class="mb-6 flex flex-wrap gap-3">
-
-                    {{-- Botão Voltar --}}
+                <!-- Botão de Volta para o Dashboard de Reservas -->
+                <div class="mb-6">
                     <a href="{{ route('admin.reservas.index') }}"
                         class="inline-flex items-center px-4 py-2 bg-gray-200 border border-transparent rounded-md font-semibold text-xs text-gray-800 uppercase tracking-widest hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition ease-in-out duration-150">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -103,27 +102,8 @@
                         </svg>
                         Voltar ao Painel de Reservas
                     </a>
-
-                    @php
-                        $hoje = \Carbon\Carbon::today()->toDateString();
-                        // Verifica se o filtro de "Hoje" já está aplicado na URL
-                        $isFiltradoHoje = request('start_date') == $hoje && request('end_date') == $hoje;
-                    @endphp
-
-                    {{-- Botão "Agendados para Hoje" (Adaptado para a rota 'todas') --}}
-                    <a href="{{ $isFiltradoHoje ? route('admin.reservas.todas') : route('admin.reservas.todas', ['start_date' => $hoje, 'end_date' => $hoje]) }}"
-                        class="inline-flex items-center px-4 py-2.5 rounded-lg font-bold text-xs uppercase tracking-widest transition duration-150 shadow-md border {{ $isFiltradoHoje ? 'bg-blue-600 text-white border-blue-700 hover:bg-blue-700' : 'bg-white border-blue-500 text-blue-600 hover:bg-blue-50' }}"
-                        title="{{ $isFiltradoHoje ? 'Remover filtro e ver tudo' : 'Mostrar apenas registros de hoje' }}">
-
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                            xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z">
-                            </path>
-                        </svg>
-                        {{ $isFiltradoHoje ? 'Ver Todo o Histórico' : 'Agendados para Hoje' }}
-                    </a>
                 </div>
+
 
                 <div class="flex flex-col mb-8 space-y-4">
                     <div class="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6 w-full">
@@ -142,8 +122,7 @@
                                     <option value="confirmed"
                                         {{ ($filterStatus ?? '') === 'confirmed' ? 'selected' : '' }}>Confirmadas
                                     </option>
-                                    <option value="pending"
-                                        {{ ($filterStatus ?? '') === 'pending' ? 'selected' : '' }}>
+                                    <option value="pending" {{ ($filterStatus ?? '') === 'pending' ? 'selected' : '' }}>
                                         Pendentes</option>
                                     <option value="cancelled"
                                         {{ ($filterStatus ?? '') === 'cancelled' ? 'selected' : '' }}>Canceladas
@@ -221,8 +200,8 @@
                                         <a href="{{ route('admin.reservas.todas', ['only_mine' => $isOnlyMine ? 'true' : 'false']) }}"
                                             class="text-red-500 hover:text-red-700 h-full p-2 transition duration-150 flex-shrink-0 flex items-center justify-center rounded-lg border border-red-200"
                                             title="Limpar Busca e Filtros">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5"
-                                                viewBox="0 0 20 20" fill="currentColor">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20"
+                                                fill="currentColor">
                                                 <path fill-rule="evenodd"
                                                     d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
                                                     clip-rule="evenodd" />
