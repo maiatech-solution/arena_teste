@@ -686,7 +686,7 @@
                                                 {{-- EXIBIÇÃO DA DATA DO JOGO (Se for diferente de hoje) --}}
                                                 @if ($ehPagamentoAntecipado)
                                                     <span
-                                                        class="ml-3 bg-fuchsia-600 text-white px-2 py-0.5 rounded text-[11px] font-black">
+                                                        class="ml-3 bg-fuchsia-600 text-white px-2 py-0.5 rounded text-[11px] font-black animate-pulse">
                                                         📅 JOGO: {{ $dataDoJogo }}
                                                     </span>
                                                 @endif
