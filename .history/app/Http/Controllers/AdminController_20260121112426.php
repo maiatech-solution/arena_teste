@@ -1042,9 +1042,10 @@ class AdminController extends Controller
     }
 
 
+
     /**
      * 🔄 Reativação Inteligente de Horário em Manutenção via Backup
-     * Ajustado para resetar o status financeiro após estorno/transferência.
+     * Padronizado para ler a data real de destino do crédito (Fila de Crédito).
      */
     public function reativarManutencao(\App\Http\Requests\UpdateReservaStatusRequest $request, $id)
     {
@@ -1078,20 +1079,13 @@ class AdminController extends Controller
                         $valorOriginal = (float) ($dados['total_paid_orig'] ?? 0);
                         $acaoRealizada = $dados['finance_action'] ?? 'refund';
                         $nomeCliente   = $dados['name'] ?? 'Cliente';
-                        $dataDestino   = $dados['dest_date'] ?? null;
+                        $dataDestino   = $dados['dest_date'] ?? null; // 📅 Captura a data exata da fila de crédito
 
-                        // 🧠 CORREÇÃO FINANCEIRA:
-                        // Se estamos reativando, significa que o dinheiro que existia ou foi estornado
-                        // para o bolso do cliente ou foi para outra data. Portanto, esta reserva
-                        // reativada começa com SALDO ZERO e status PENDENTE.
                         $reserva->update([
                             'client_name'    => $nomeCliente,
                             'status'         => 'confirmed',
                             'user_id'        => $dados['user_id'] ?? $reserva->user_id,
                             'is_fixed'       => false,
-                            'total_paid'     => 0,         // Zera o financeiro
-                            'signal_value'   => 0,         // Zera o sinal
-                            'payment_status' => 'pending',   // Força status PENDENTE no caixa
                             'notes'          => trim(preg_replace('/###BACKUP###.*?###END###/s', '', $reserva->notes))
                         ]);
 
@@ -1100,13 +1094,15 @@ class AdminController extends Controller
                         $valorIntegral = number_format($reserva->price, 2, ',', '.');
                         $valorPagoFormatado = number_format($valorOriginal, 2, ',', '.');
 
-                        // --- 🚀 CONSTRUÇÃO DA MENSAGEM ---
+                        // --- 🚀 CONSTRUÇÃO DA MENSAGEM PADRONIZADA ---
                         $msg = "Boas notícias {$nomeCliente}! 👋\n\n";
                         $msg .= "A manutenção técnica foi concluída e seu horário para {$dataReserva} às {$horaReserva} foi REATIVADO! 🏟️";
 
                         if ($valorOriginal > 0.01) {
                             if ($reserva->is_recurrent && $acaoRealizada === 'credit') {
+                                // 🎯 Se não tiver a data no backup (reservas antigas), calcula a próxima semana como segurança
                                 $dataExibicao = $dataDestino ?? \Carbon\Carbon::parse($reserva->date)->addWeek()->format('d/m');
+
                                 $msg .= "\n\n⭐ Como seu horário é recorrente, o valor que deu de R$ {$valorPagoFormatado} ficou para o seu próximo jogo dia {$dataExibicao}.";
                                 $msg .= "\nNo jogo do dia {$dataReserva} você terá de pagar o valor integral do seu horário.";
                             } else {

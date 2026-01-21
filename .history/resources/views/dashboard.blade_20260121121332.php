@@ -397,44 +397,34 @@
                     </div>
 
 
-                    {{-- Legenda Otimizada e Responsiva --}}
-                    <div
-                        class="flex sm:flex-wrap items-center gap-4 mb-6 overflow-x-auto pb-2 scrollbar-hide whitespace-wrap justify-center">
-
-                        <div
-                            class="flex items-center px-2 py-1 bg-fuchsia-50 rounded-md border border-fuchsia-100 flex-shrink-0">
-                            <span class="w-3 h-3 rounded-full bg-fuchsia-700 mr-1.5"></span>
-                            <span class="text-[11px] text-fuchsia-700 font-bold uppercase">Fixo</span>
+                    {{-- Legenda ATUALIZADA para incluir status Pago/Falta --}}
+                    <div class="flex flex-wrap gap-2 mb-4 text-sm font-medium">
+                        <div class="flex items-center p-2 bg-fuchsia-50 rounded-lg shadow-sm">
+                            <span class="inline-block w-4 h-4 rounded-full bg-fuchsia-700 mr-2"></span>
+                            <span>Reservado Recorrente (Fixo)</span>
                         </div>
-
-                        <div
-                            class="flex items-center px-2 py-1 bg-indigo-50 rounded-md border border-indigo-100 flex-shrink-0">
-                            <span class="w-3 h-3 rounded-full bg-indigo-600 mr-1.5"></span>
-                            <span class="text-[11px] text-indigo-700 font-bold uppercase">Avulso</span>
+                        <div class="flex items-center p-2 bg-indigo-50 rounded-lg shadow-sm">
+                            <span class="inline-block w-4 h-4 rounded-full bg-indigo-600 mr-2"></span>
+                            <span class="text-indigo-600 font-bold">Reservado Avulso (Rápido)</span>
                         </div>
-
-                        <div
-                            class="flex items-center px-2 py-1 bg-pink-50 rounded-md border border-pink-200 flex-shrink-0">
-                            <span class="w-3 h-3 rounded-full bg-pink-600 mr-1.5"></span>
-                            <span class="text-[11px] text-pink-700 font-bold uppercase">Manutenção</span>
+                        {{-- NOVO: Manutenção Técnica --}}
+                        <div class="flex items-center p-2 bg-pink-50 rounded-lg shadow-sm border border-pink-100">
+                            <span class="inline-block w-4 h-4 rounded-full bg-pink-600 mr-2"></span>
+                            <span class="text-pink-700 font-bold">Manutenção Técnica</span>
                         </div>
-
-                        <div
-                            class="flex items-center px-2 py-1 bg-red-50 rounded-md border border-red-100 flex-shrink-0">
-                            <span class="w-3 h-3 rounded-full bg-red-600 mr-1.5"></span>
-                            <span class="text-[11px] text-red-700 font-bold uppercase">Falta</span>
+                        {{-- NOVO: Adicionado Falta/No-Show --}}
+                        <div class="flex items-center p-2 bg-red-50 rounded-lg shadow-sm">
+                            <span class="inline-block w-4 h-4 rounded-full bg-red-600 mr-2"></span>
+                            <span class="text-red-600 font-bold">FALTA (No-Show)</span>
                         </div>
-
-                        <div
-                            class="flex items-center px-2 py-1 bg-gray-100 rounded-md border border-gray-200 flex-shrink-0 opacity-70">
-                            <span class="w-3 h-3 rounded-full bg-gray-500 mr-1.5"></span>
-                            <span class="text-[11px] text-gray-700 font-bold uppercase">Pago</span>
+                        {{-- Pago/Faded --}}
+                        <div class="flex items-center p-2 bg-gray-100 rounded-lg shadow-sm">
+                            <span class="inline-block w-4 h-4 rounded-full bg-gray-400 mr-2 opacity-50"></span>
+                            <span class="text-gray-600 font-bold">Resolvido/PAGO (Faded)</span>
                         </div>
-
-                        <div
-                            class="flex items-center px-2 py-1 bg-green-50 rounded-md border border-green-200 flex-shrink-0">
-                            <span class="w-3 h-3 rounded-full bg-green-500 mr-1.5"></span>
-                            <span class="text-[11px] text-green-700 font-bold uppercase">Livre</span>
+                        <div class="flex items-center p-2 bg-green-50 rounded-lg shadow-sm">
+                            <span class="inline-block w-4 h-4 rounded-full bg-green-500 mr-2"></span>
+                            <span class="text-green-600 font-bold">Disponível (Horários Abiertos)</span>
                         </div>
                     </div>
 
@@ -821,6 +811,7 @@
                 </form>
             </div>
         </div>
+
 
 
         <script>
@@ -1862,7 +1853,7 @@
                 // 📅 0. Identifica a data e hora do clique
                 const eventDate = moment(event.start).format('YYYY-MM-DD');
                 const isToday = eventDate === moment().format('YYYY-MM-DD');
-                const isPast = moment(event.start).isBefore(moment());
+                const isPast = moment(event.start).isBefore(moment()); // ✨ Nova verificação: Já passou?
 
                 // 🛑 1. TRAVA DE SEGURANÇA LOCAL (Cache por Data)
                 if (window.closedDatesCache && window.closedDatesCache[eventDate] === true) {
@@ -1896,49 +1887,32 @@
                     event.classNames.includes('fc-event-available') ||
                     info.el.classList.contains('fc-event-available');
 
-                // 🛠️ VERIFICAÇÃO DE MANUTENÇÃO (Status Pink)
-                if (status === 'maintenance') {
-                    if (typeof window.openMaintenanceModal === "function") {
-                        window.openMaintenanceModal(event.id, props.notes);
-                    }
-                    return;
-                }
-
                 // A. SLOT LIVRE (VERDE) -> ABRE AGENDAMENTO RÁPIDO
                 if (isAvailable) {
+                    // ... (Mantém sua lógica original de agendamento rápido sem alterações) ...
                     const modal = document.getElementById('quick-booking-modal');
                     if (!modal) return;
                     const arenaFilter = document.getElementById('filter_arena');
                     const selectedArenaId = props.arena_id || (arenaFilter ? arenaFilter.value : '');
                     const selectedArenaName = props.arena_name || (arenaFilter ? arenaFilter.options[arenaFilter
                         .selectedIndex]?.text : 'N/A');
-
                     const setVal = (id, val) => {
                         const el = document.getElementById(id);
                         if (el) el.value = val;
                     };
-
                     setVal('quick-schedule-id', props.schedule_id || '');
                     setVal('quick-arena-id', selectedArenaId);
                     setVal('quick-date', eventDate);
                     setVal('quick-start-time', moment(event.start).format('HH:mm'));
                     setVal('quick-end-time', moment(event.end).format('HH:mm'));
                     setVal('reserva-id-to-update', event.id || '');
-
                     const priceRaw = parseFloat(props.price || 0);
                     const priceFormatted = priceRaw.toFixed(2).replace('.', ',');
                     setVal('quick-price', priceFormatted);
-
                     const displayArea = document.getElementById('slot-info-display');
                     if (displayArea) {
                         displayArea.innerHTML =
-                            `<div class="space-y-1 border-l-4 border-green-500 pl-3">
-                    <p class="text-xs uppercase text-gray-500 font-bold tracking-wider">Informações da Reserva</p>
-                    <p><strong>Quadra:</strong> <span class="text-indigo-600">${selectedArenaName}</span></p>
-                    <p><strong>Data:</strong> ${moment(event.start).format('DD/MM/YYYY')}</p>
-                    <p><strong>Hora:</strong> ${moment(event.start).format('HH:mm')} às ${moment(event.end).format('HH:mm')}</p>
-                    <p><strong>Preço Sugerido:</strong> <span class="text-green-600 font-bold">R$ ${priceFormatted}</span></p>
-                </div>`;
+                            `<div class="space-y-1 border-l-4 border-green-500 pl-3"><p class="text-xs uppercase text-gray-500 font-bold tracking-wider">Informações da Reserva</p><p><strong>Quadra:</strong> <span class="text-indigo-600">${selectedArenaName}</span></p><p><strong>Data:</strong> ${moment(event.start).format('DD/MM/YYYY')}</p><p><strong>Hora:</strong> ${moment(event.start).format('HH:mm')} às ${moment(event.end).format('HH:mm')}</p><p><strong>Preço Sugerido:</strong> <span class="text-green-600 font-bold">R$ ${priceFormatted}</span></p></div>`;
                     }
                     setVal('client_name', '');
                     setVal('client_contact', '');
@@ -1949,13 +1923,15 @@
                     return;
                 }
 
-                // B. PENDENTE E FUTURA (LARANJA)
+                // B. PENDENTE E FUTURA (LARANJA - AINDA NÃO ACONTECEU)
+                // ✨ Só abre o modal de aprovação se a reserva for pendente E NÃO estiver atrasada.
                 if (status === 'pending' && !isPast) {
                     if (typeof openPendingActionModal === "function") openPendingActionModal(event);
                     return;
                 }
 
-                // C. RESERVA EXISTENTE (CONFIRMADA, RECORRENTE OU PAGO)
+                // C. RESERVA EXISTENTE (CONFIRMADA, PAGO OU PENDENTE ATRASADA)
+                // ✨ Aqui a Daniela/Julia que estão atrasadas cairão no Modal de Detalhes Completo.
                 const reservaId = event.id;
                 const prefixRegex =
                     /^\s*(?:\(?(?:PAGO|FALTA|ATRASADO|CANCELADO|REJEITADA|PENDENTE|A\sVENCER\/FALTA|RECORR(?:E)?|SINAL|RESOLVIDO)\)?[\.:\s]*\s*)+/i;
@@ -1974,8 +1950,9 @@
                 const eventModal = document.getElementById('event-modal');
 
                 if (contentArea && actionsArea && eventModal) {
+                    // ✨ Título dinâmico para indicar o atraso no modal
                     const modalTitle = (status === 'pending' && isPast) ? 'Detalhes de Reserva ATRASADA' :
-                        'Detalhes da Reserva';
+                        'Detalhes da Reserva Confirmada';
                     eventModal.querySelector('h3').textContent = modalTitle;
 
                     contentArea.innerHTML = `
@@ -1989,38 +1966,24 @@
 
                     actionsArea.innerHTML = `
             <div class="grid grid-cols-1 gap-2">
-                ${!isFinalized && status !== 'cancelled' ?
-                    `<button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                                <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
-                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+                ${!isFinalized && status !== 'cancelled' ? `
+                                                    <button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
+                                                        <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
+                                                    </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
-                <div class="grid grid-cols-2 gap-2 mt-1">
-                    <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})"
-                        class="px-2 py-2 bg-gray-100 text-gray-700 text-[10px] font-bold rounded-lg border border-gray-300 shadow-sm hover:bg-gray-200 transition uppercase">
-                        Cancelar Dia
-                    </button>
-                    <button onclick="acionarManutencao('${reservaId}')"
-                        class="px-2 py-2 bg-pink-100 text-pink-700 text-[10px] font-bold rounded-lg border border-pink-200 hover:bg-pink-200 transition uppercase flex items-center justify-center gap-1">
-                        🛠️ Manutenção
-                    </button>
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                    ${!isFinalized && status !== 'no_show' ?
+                        `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')" class="px-2 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition">FALTA</button>`
+                        : ''}
+
+                    <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})" class="px-2 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg border border-gray-300 shadow-sm hover:bg-gray-200 transition">CANCELAR DIA</button>
                 </div>
 
-                ${!isFinalized && status !== 'no_show' ?
-                    `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')"
-                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
-                                FALTA (NO-SHOW)
-                            </button>`
-                    : ''}
-
                 ${isRecurrent ?
-                    `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition uppercase">
-                                CANCELAR SÉRIE
-                            </button>`
+                    `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition">CANCELAR SÉRIE</button>`
                     : ''}
 
-                <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold">
-                    Fechar
-                </button>
+                <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">Fechar</button>
             </div>`;
 
                     eventModal.classList.remove('hidden');
@@ -2048,53 +2011,32 @@
                 var calendarEl = document.getElementById('calendar');
                 if (!calendarEl) return;
 
-                // --- 1. Verificações Iniciais e Periódicas ---
-
-                // Checagem de Reservas Pendentes (Mantido 30s)
+                // --- 1. Verificações Iniciais ---
                 checkPendingReservations();
                 setInterval(checkPendingReservations, 30000);
 
-                /**
-                 * ✅ MELHORIA: Consolidação da Varredura do Caixa e Auto-Refresh da Agenda
-                 * Verifica o caixa de hoje e força a atualização dos eventos a cada 5 minutos
-                 */
-                async function syncDashboardState() {
+                // ✅ NOVO: Varredura apenas do dia ATUAL para não poluir o Dashboard
+                async function checkCurrentDayCaixa() {
                     const hoje = moment().format('YYYY-MM-DD');
                     try {
                         const response = await fetch(`{{ route('admin.payment.caixa.status') }}?date=${hoje}`);
                         const status = await response.json();
 
                         if (!status.isOpen) {
-                            // Só mostra a mensagem se ainda não estiver marcado como fechado no cache local
-                            if (!window.closedDatesCache || !window.closedDatesCache[hoje]) {
-                                showDashboardMessage(
-                                    `Atenção: O caixa do dia atual (${moment(hoje).format('DD/MM')}) está fechado.`,
-                                    'warning'
-                                );
-                            }
+                            showDashboardMessage(
+                                `Atenção: O caixa do dia atual (${moment(hoje).format('DD/MM')}) está fechado.`,
+                                'warning');
 
                             if (!window.closedDatesCache) window.closedDatesCache = {};
                             window.closedDatesCache[hoje] = true;
-                        } else {
-                            // Caso o caixa tenha sido aberto em outra aba/dispositivo
-                            if (window.closedDatesCache) window.closedDatesCache[hoje] = false;
-                        }
 
-                        // Refetch de eventos para atualizar cores (ex: reservas que acabaram de atrasar)
-                        if (window.calendar) {
-                            window.calendar.refetchEvents();
-                            // O render() garante que a classe 'cashier-closed-locked' seja aplicada/removida
-                            window.calendar.render();
+                            if (window.calendar) window.calendar.render();
                         }
-
                     } catch (e) {
-                        console.error("Erro na sincronização do Dashboard:", e);
+                        console.error("Erro no check-up de caixa inicial:", e);
                     }
                 }
-
-                // Executa agora e agenda para cada 5 minutos (300.000 ms)
-                syncDashboardState();
-                setInterval(syncDashboardState, 300000);
+                checkCurrentDayCaixa();
 
                 // --- 2. Listeners de Formulário e Filtros ---
                 const quickBookingForm = document.getElementById('quick-booking-form');
@@ -2118,7 +2060,6 @@
                 }
 
                 // --- 3. Inicialização do Calendário ---
-                // Chamamos isCashierOpen uma vez para garantir o estado inicial antes do FullCalendar
                 isCashierOpen().then(() => {
                     console.log("Status do caixa verificado. Iniciando calendário...");
 
@@ -2157,7 +2098,8 @@
                                                 const eventStart = moment(e.start);
                                                 if (!eventStart.isSame(now, 'day'))
                                                     return true;
-                                                // Mantém visível por meia hora após o início
+
+                                                // ✅ Filtro de 30 minutos: Mantém visível por meia hora após o início
                                                 return eventStart.isAfter(now.clone()
                                                     .subtract(30, 'minutes'));
                                             });
@@ -2177,11 +2119,13 @@
                             const titleEl = info.el.querySelector('.fc-event-title');
                             const eventDate = moment(info.event.start).format('YYYY-MM-DD');
 
+                            // 🚩 REGRA DE OURO: Se o status for cancelado ou rejeitado, removemos do visual
                             if (status === 'cancelled' || status === 'rejected') {
                                 info.el.style.display = 'none';
                                 return;
                             }
 
+                            // Trava visual se a data estiver no cache de fechados
                             const isLocked = window.closedDatesCache && window.closedDatesCache[
                                 eventDate] === true;
                             if (isLocked) {
@@ -2190,30 +2134,49 @@
                                 info.el.style.cursor = 'not-allowed';
                             }
 
+                            // Limpa classes anteriores para evitar conflitos de cores
                             info.el.classList.remove(
                                 'fc-event-available', 'fc-event-recurrent', 'fc-event-quick',
                                 'fc-event-pending', 'fc-event-paid', 'fc-event-no-show',
                                 'fc-event-maintenance'
                             );
 
-                            // --- Lógica de Cores ---
+                            // 🔴 LÓGICA DE ESTILIZAÇÃO POR STATUS
+
+                            // 1. RESOLVIDO / PAGO (Faded)
                             if (['pago', 'completed', 'resolvido', 'concluida'].includes(status) ||
                                 paymentStatus === 'paid') {
                                 info.el.classList.add('fc-event-paid');
-                            } else if (status === 'no_show') {
+                            }
+
+                            // 2. FALTA (No-Show)
+                            else if (status === 'no_show') {
                                 info.el.classList.add('fc-event-no-show');
-                            } else if (status === 'pending') {
+                            }
+
+                            // 3. PENDENTE (Laranja - Aguardando aprovação)
+                            else if (status === 'pending') {
                                 const isPast = moment(info.event.end).isBefore(moment());
                                 info.el.classList.add('fc-event-pending');
+
+                                // Se estiver pendente e já passou da hora, aplicamos um alerta visual
                                 if (isPast && titleEl) {
                                     titleEl.innerHTML =
                                         '⚠️ <span style="font-weight: 800;">EXPIRADA:</span> ' + titleEl
                                         .textContent;
                                 }
-                            } else if (status === 'maintenance') {
+                            }
+
+                            // 🛠️ 4. MANUTENÇÃO (Pink - Novo)
+                            else if (status === 'maintenance') {
                                 info.el.classList.add('fc-event-maintenance');
-                                if (titleEl) titleEl.innerHTML = '🛠️ MANUTENÇÃO';
-                            } else if (status === 'free' || info.event.classNames.includes(
+                                if (titleEl) {
+                                    titleEl.innerHTML = '🛠️ MANUTENÇÃO';
+                                }
+                            }
+
+                            // 5. LIVRE (Verde)
+                            else if (status === 'free' || info.event.classNames.includes(
                                     'fc-event-available')) {
                                 info.el.classList.add('fc-event-available');
                                 if (titleEl) {
@@ -2221,20 +2184,27 @@
                                         ',');
                                     titleEl.textContent = 'LIVRE - R$ ' + price;
                                 }
-                            } else {
+                            }
+
+                            // 6. CONFIRMADAS (Aqui entra a lógica de ATRASADA por horário)
+                            else {
                                 const now = moment();
                                 const eventEnd = moment(info.event.end);
                                 const isPast = eventEnd.isBefore(now);
 
                                 if (isPast && (status === 'confirmed' || status === 'confirmada')) {
+                                    // ✨ RESERVA CONFIRMADA QUE JÁ PASSOU DO HORÁRIO (Atraso de Recebimento)
                                     info.el.classList.add('fc-event-no-show');
-                                    info.el.classList.add('animate-pulse-red');
+                                    info.el.classList.add(
+                                        'animate-pulse-red'); // 🔥 Usa a animação do seu CSS
+
                                     if (titleEl) {
                                         titleEl.innerHTML =
                                             '<span style="font-weight: 900;">⚠️ ATRASADA:</span> ' +
                                             titleEl.textContent;
                                     }
                                 } else {
+                                    // Confirmada normal (Dentro do horário ou futura)
                                     info.el.classList.add(props.is_recurrent ? 'fc-event-recurrent' :
                                         'fc-event-quick');
                                 }
@@ -2340,17 +2310,6 @@
                 }
             }
 
-
-            // 🛠️ FUNÇÃO SIMPLIFICADA: Redireciona para os detalhes da reserva
-            window.acionarManutencao = function(reservaId) {
-                // Usamos a constante SHOW_RESERVA_URL que você já tem definida no seu script
-                // Ela vai transformar ':id' no número real da reserva (ex: /admin/reservas/150/show)
-                const urlDetalhes = SHOW_RESERVA_URL.replace(':id', reservaId);
-
-                // Faz o navegador navegar para essa URL
-                window.location.href = urlDetalhes;
-            };
-
             // EXPOSIÇÃO GLOBAL DE FUNÇÕES
             window.closeEventModal = closeEventModal;
             window.cancelarPontual = cancelarPontual;
@@ -2362,8 +2321,5 @@
             window.closePendingActionModal = closePendingActionModal;
             window.openNoShowModal = openNoShowModal;
             window.closeNoShowModal = closeNoShowModal;
-
-            // ✅ ADICIONE ESTA LINHA AQUI:
-            window.acionarManutencao = acionarManutencao;
         </script>
 </x-app-layout>

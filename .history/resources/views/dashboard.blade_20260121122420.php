@@ -822,6 +822,42 @@
             </div>
         </div>
 
+        {{-- MODAL DE GERENCIAMENTO DE MANUTENÇÃO (REATIVAR) --}}
+        <div id="maintenance-modal" class="modal-overlay hidden" onclick="closeMaintenanceModal()">
+            <div class="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full transition-all duration-300 transform scale-100"
+                onclick="event.stopPropagation()">
+
+                <h3 class="text-xl font-bold text-pink-700 mb-4 border-b pb-2 flex items-center">
+                    🛠️ Gerenciar Manutenção
+                </h3>
+
+                <div id="maintenance-content" class="space-y-4 text-gray-700 mb-6">
+                    {{-- Injetado via JS --}}
+                </div>
+
+                <form id="maintenance-action-form" method="POST" class="space-y-3">
+                    @csrf
+                    @method('PATCH')
+
+                    <button type="submit" name="action" value="restore_client"
+                        class="w-full px-4 py-3 bg-pink-600 text-white font-bold rounded-lg hover:bg-pink-700 transition shadow-md flex items-center justify-center gap-2">
+                        <span>👤 Reativar Cliente Original</span>
+                    </button>
+
+                    <button type="submit" name="action" value="release_slot"
+                        class="w-full px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition">
+                        🔓 Liberar Horário (Vago)
+                    </button>
+
+                    <button type="button" onclick="closeMaintenanceModal()"
+                        class="w-full px-4 py-2 text-gray-400 hover:text-gray-600 text-sm transition text-center">
+                        Fechar
+                    </button>
+                </form>
+            </div>
+        </div>
+
+
 
         <script>
             window.closedDatesCache = {};
@@ -1896,12 +1932,13 @@
                     event.classNames.includes('fc-event-available') ||
                     info.el.classList.contains('fc-event-available');
 
-                // 🛠️ VERIFICAÇÃO DE MANUTENÇÃO (Status Pink)
+                // 🛠️ NOVO: VERIFICAÇÃO DE MANUTENÇÃO (Status Pink)
+                // Se o clique for em um horário bloqueado por manutenção técnica
                 if (status === 'maintenance') {
                     if (typeof window.openMaintenanceModal === "function") {
                         window.openMaintenanceModal(event.id, props.notes);
                     }
-                    return;
+                    return; // Interrompe para não seguir para agendamento livre
                 }
 
                 // A. SLOT LIVRE (VERDE) -> ABRE AGENDAMENTO RÁPIDO
@@ -1949,13 +1986,13 @@
                     return;
                 }
 
-                // B. PENDENTE E FUTURA (LARANJA)
+                // B. PENDENTE E FUTURA (LARANJA - AINDA NÃO ACONTECEU)
                 if (status === 'pending' && !isPast) {
                     if (typeof openPendingActionModal === "function") openPendingActionModal(event);
                     return;
                 }
 
-                // C. RESERVA EXISTENTE (CONFIRMADA, RECORRENTE OU PAGO)
+                // C. RESERVA EXISTENTE (CONFIRMADA, PAGO OU PENDENTE ATRASADA)
                 const reservaId = event.id;
                 const prefixRegex =
                     /^\s*(?:\(?(?:PAGO|FALTA|ATRASADO|CANCELADO|REJEITADA|PENDENTE|A\sVENCER\/FALTA|RECORR(?:E)?|SINAL|RESOLVIDO)\)?[\.:\s]*\s*)+/i;
@@ -1975,7 +2012,7 @@
 
                 if (contentArea && actionsArea && eventModal) {
                     const modalTitle = (status === 'pending' && isPast) ? 'Detalhes de Reserva ATRASADA' :
-                        'Detalhes da Reserva';
+                        'Detalhes da Reserva Confirmada';
                     eventModal.querySelector('h3').textContent = modalTitle;
 
                     contentArea.innerHTML = `
@@ -1991,36 +2028,22 @@
             <div class="grid grid-cols-1 gap-2">
                 ${!isFinalized && status !== 'cancelled' ?
                     `<button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                                <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
-                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+                                        <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
+                                    </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
-                <div class="grid grid-cols-2 gap-2 mt-1">
-                    <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})"
-                        class="px-2 py-2 bg-gray-100 text-gray-700 text-[10px] font-bold rounded-lg border border-gray-300 shadow-sm hover:bg-gray-200 transition uppercase">
-                        Cancelar Dia
-                    </button>
-                    <button onclick="acionarManutencao('${reservaId}')"
-                        class="px-2 py-2 bg-pink-100 text-pink-700 text-[10px] font-bold rounded-lg border border-pink-200 hover:bg-pink-200 transition uppercase flex items-center justify-center gap-1">
-                        🛠️ Manutenção
-                    </button>
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                    ${!isFinalized && status !== 'no_show' ?
+                        `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')" class="px-2 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition">FALTA</button>`
+                        : ''}
+
+                    <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})" class="px-2 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg border border-gray-300 shadow-sm hover:bg-gray-200 transition">CANCELAR DIA</button>
                 </div>
 
-                ${!isFinalized && status !== 'no_show' ?
-                    `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')"
-                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
-                                FALTA (NO-SHOW)
-                            </button>`
-                    : ''}
-
                 ${isRecurrent ?
-                    `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition uppercase">
-                                CANCELAR SÉRIE
-                            </button>`
+                    `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition">CANCELAR SÉRIE</button>`
                     : ''}
 
-                <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold">
-                    Fechar
-                </button>
+                <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">Fechar</button>
             </div>`;
 
                     eventModal.classList.remove('hidden');
@@ -2048,53 +2071,32 @@
                 var calendarEl = document.getElementById('calendar');
                 if (!calendarEl) return;
 
-                // --- 1. Verificações Iniciais e Periódicas ---
-
-                // Checagem de Reservas Pendentes (Mantido 30s)
+                // --- 1. Verificações Iniciais ---
                 checkPendingReservations();
                 setInterval(checkPendingReservations, 30000);
 
-                /**
-                 * ✅ MELHORIA: Consolidação da Varredura do Caixa e Auto-Refresh da Agenda
-                 * Verifica o caixa de hoje e força a atualização dos eventos a cada 5 minutos
-                 */
-                async function syncDashboardState() {
+                // ✅ NOVO: Varredura apenas do dia ATUAL para não poluir o Dashboard
+                async function checkCurrentDayCaixa() {
                     const hoje = moment().format('YYYY-MM-DD');
                     try {
                         const response = await fetch(`{{ route('admin.payment.caixa.status') }}?date=${hoje}`);
                         const status = await response.json();
 
                         if (!status.isOpen) {
-                            // Só mostra a mensagem se ainda não estiver marcado como fechado no cache local
-                            if (!window.closedDatesCache || !window.closedDatesCache[hoje]) {
-                                showDashboardMessage(
-                                    `Atenção: O caixa do dia atual (${moment(hoje).format('DD/MM')}) está fechado.`,
-                                    'warning'
-                                );
-                            }
+                            showDashboardMessage(
+                                `Atenção: O caixa do dia atual (${moment(hoje).format('DD/MM')}) está fechado.`,
+                                'warning');
 
                             if (!window.closedDatesCache) window.closedDatesCache = {};
                             window.closedDatesCache[hoje] = true;
-                        } else {
-                            // Caso o caixa tenha sido aberto em outra aba/dispositivo
-                            if (window.closedDatesCache) window.closedDatesCache[hoje] = false;
-                        }
 
-                        // Refetch de eventos para atualizar cores (ex: reservas que acabaram de atrasar)
-                        if (window.calendar) {
-                            window.calendar.refetchEvents();
-                            // O render() garante que a classe 'cashier-closed-locked' seja aplicada/removida
-                            window.calendar.render();
+                            if (window.calendar) window.calendar.render();
                         }
-
                     } catch (e) {
-                        console.error("Erro na sincronização do Dashboard:", e);
+                        console.error("Erro no check-up de caixa inicial:", e);
                     }
                 }
-
-                // Executa agora e agenda para cada 5 minutos (300.000 ms)
-                syncDashboardState();
-                setInterval(syncDashboardState, 300000);
+                checkCurrentDayCaixa();
 
                 // --- 2. Listeners de Formulário e Filtros ---
                 const quickBookingForm = document.getElementById('quick-booking-form');
@@ -2118,7 +2120,6 @@
                 }
 
                 // --- 3. Inicialização do Calendário ---
-                // Chamamos isCashierOpen uma vez para garantir o estado inicial antes do FullCalendar
                 isCashierOpen().then(() => {
                     console.log("Status do caixa verificado. Iniciando calendário...");
 
@@ -2157,7 +2158,8 @@
                                                 const eventStart = moment(e.start);
                                                 if (!eventStart.isSame(now, 'day'))
                                                     return true;
-                                                // Mantém visível por meia hora após o início
+
+                                                // ✅ Filtro de 30 minutos: Mantém visível por meia hora após o início
                                                 return eventStart.isAfter(now.clone()
                                                     .subtract(30, 'minutes'));
                                             });
@@ -2177,11 +2179,13 @@
                             const titleEl = info.el.querySelector('.fc-event-title');
                             const eventDate = moment(info.event.start).format('YYYY-MM-DD');
 
+                            // 🚩 REGRA DE OURO: Se o status for cancelado ou rejeitado, removemos do visual
                             if (status === 'cancelled' || status === 'rejected') {
                                 info.el.style.display = 'none';
                                 return;
                             }
 
+                            // Trava visual se a data estiver no cache de fechados
                             const isLocked = window.closedDatesCache && window.closedDatesCache[
                                 eventDate] === true;
                             if (isLocked) {
@@ -2190,30 +2194,49 @@
                                 info.el.style.cursor = 'not-allowed';
                             }
 
+                            // Limpa classes anteriores para evitar conflitos de cores
                             info.el.classList.remove(
                                 'fc-event-available', 'fc-event-recurrent', 'fc-event-quick',
                                 'fc-event-pending', 'fc-event-paid', 'fc-event-no-show',
                                 'fc-event-maintenance'
                             );
 
-                            // --- Lógica de Cores ---
+                            // 🔴 LÓGICA DE ESTILIZAÇÃO POR STATUS
+
+                            // 1. RESOLVIDO / PAGO (Faded)
                             if (['pago', 'completed', 'resolvido', 'concluida'].includes(status) ||
                                 paymentStatus === 'paid') {
                                 info.el.classList.add('fc-event-paid');
-                            } else if (status === 'no_show') {
+                            }
+
+                            // 2. FALTA (No-Show)
+                            else if (status === 'no_show') {
                                 info.el.classList.add('fc-event-no-show');
-                            } else if (status === 'pending') {
+                            }
+
+                            // 3. PENDENTE (Laranja - Aguardando aprovação)
+                            else if (status === 'pending') {
                                 const isPast = moment(info.event.end).isBefore(moment());
                                 info.el.classList.add('fc-event-pending');
+
+                                // Se estiver pendente e já passou da hora, aplicamos um alerta visual
                                 if (isPast && titleEl) {
                                     titleEl.innerHTML =
                                         '⚠️ <span style="font-weight: 800;">EXPIRADA:</span> ' + titleEl
                                         .textContent;
                                 }
-                            } else if (status === 'maintenance') {
+                            }
+
+                            // 🛠️ 4. MANUTENÇÃO (Pink - Novo)
+                            else if (status === 'maintenance') {
                                 info.el.classList.add('fc-event-maintenance');
-                                if (titleEl) titleEl.innerHTML = '🛠️ MANUTENÇÃO';
-                            } else if (status === 'free' || info.event.classNames.includes(
+                                if (titleEl) {
+                                    titleEl.innerHTML = '🛠️ MANUTENÇÃO';
+                                }
+                            }
+
+                            // 5. LIVRE (Verde)
+                            else if (status === 'free' || info.event.classNames.includes(
                                     'fc-event-available')) {
                                 info.el.classList.add('fc-event-available');
                                 if (titleEl) {
@@ -2221,20 +2244,27 @@
                                         ',');
                                     titleEl.textContent = 'LIVRE - R$ ' + price;
                                 }
-                            } else {
+                            }
+
+                            // 6. CONFIRMADAS (Aqui entra a lógica de ATRASADA por horário)
+                            else {
                                 const now = moment();
                                 const eventEnd = moment(info.event.end);
                                 const isPast = eventEnd.isBefore(now);
 
                                 if (isPast && (status === 'confirmed' || status === 'confirmada')) {
+                                    // ✨ RESERVA CONFIRMADA QUE JÁ PASSOU DO HORÁRIO (Atraso de Recebimento)
                                     info.el.classList.add('fc-event-no-show');
-                                    info.el.classList.add('animate-pulse-red');
+                                    info.el.classList.add(
+                                        'animate-pulse-red'); // 🔥 Usa a animação do seu CSS
+
                                     if (titleEl) {
                                         titleEl.innerHTML =
                                             '<span style="font-weight: 900;">⚠️ ATRASADA:</span> ' +
                                             titleEl.textContent;
                                     }
                                 } else {
+                                    // Confirmada normal (Dentro do horário ou futura)
                                     info.el.classList.add(props.is_recurrent ? 'fc-event-recurrent' :
                                         'fc-event-quick');
                                 }
@@ -2340,15 +2370,48 @@
                 }
             }
 
+            // --- FUNÇÕES PARA O MODAL DE MANUTENÇÃO (PINK) ---
 
-            // 🛠️ FUNÇÃO SIMPLIFICADA: Redireciona para os detalhes da reserva
-            window.acionarManutencao = function(reservaId) {
-                // Usamos a constante SHOW_RESERVA_URL que você já tem definida no seu script
-                // Ela vai transformar ':id' no número real da reserva (ex: /admin/reservas/150/show)
-                const urlDetalhes = SHOW_RESERVA_URL.replace(':id', reservaId);
+            window.openMaintenanceModal = function(reservaId, notes) {
+                const modal = document.getElementById('maintenance-modal');
+                const content = document.getElementById('maintenance-content');
+                const form = document.getElementById('maintenance-action-form');
 
-                // Faz o navegador navegar para essa URL
-                window.location.href = urlDetalhes;
+                // Define a rota dinâmica para a reativação
+                form.action = `/admin/reservas/${reservaId}/reativar-manutencao`;
+
+                let clienteBackup = "Cliente não identificado";
+
+                // Tenta extrair o nome do cliente que foi guardado nas notas durante a manutenção
+                if (notes && notes.includes('###BACKUP###')) {
+                    try {
+                        const jsonStr = notes.match(/###BACKUP###(.*?)###END###/s)[1];
+                        const dados = JSON.parse(jsonStr);
+                        clienteBackup = dados.name || clienteBackup;
+                    } catch (e) {
+                        console.error("Erro ao ler backup do cliente");
+                    }
+                }
+
+                content.innerHTML = `
+        <div class="p-4 bg-pink-50 border-l-4 border-pink-500 rounded-r-lg">
+            <p class="text-[10px] font-black text-pink-600 uppercase tracking-widest mb-1">Horário em Manutenção</p>
+            <p class="text-gray-700 text-sm mb-2">Este horário está bloqueado tecnicamente, mas pertencia a:</p>
+            <p class="text-xl font-black text-pink-900">${clienteBackup}</p>
+        </div>
+        <p class="text-xs text-gray-500 px-1">O que deseja fazer com este horário?</p>
+    `;
+
+                modal.classList.remove('hidden');
+                modal.style.display = 'flex';
+            };
+
+            window.closeMaintenanceModal = function() {
+                const modal = document.getElementById('maintenance-modal');
+                if (modal) {
+                    modal.classList.add('hidden');
+                    modal.style.display = 'none';
+                }
             };
 
             // EXPOSIÇÃO GLOBAL DE FUNÇÕES
@@ -2362,8 +2425,5 @@
             window.closePendingActionModal = closePendingActionModal;
             window.openNoShowModal = openNoShowModal;
             window.closeNoShowModal = closeNoShowModal;
-
-            // ✅ ADICIONE ESTA LINHA AQUI:
-            window.acionarManutencao = acionarManutencao;
         </script>
 </x-app-layout>

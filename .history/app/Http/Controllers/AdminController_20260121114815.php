@@ -1042,6 +1042,7 @@ class AdminController extends Controller
     }
 
 
+
     /**
      * 🔄 Reativação Inteligente de Horário em Manutenção via Backup
      * Ajustado para resetar o status financeiro após estorno/transferência.
