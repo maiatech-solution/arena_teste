@@ -291,7 +291,7 @@ class PaymentController extends Controller
 
 
     /**
-     * Processa o Pagamento (Integrado com trava de segurança e suporte a virada de meia-noite)
+     * Processa o Pagamento (Integrado com trava de segurança)
      */
     public function processPayment(Request $request, $reservaId)
     {
@@ -310,7 +310,6 @@ class PaymentController extends Controller
             'amount_paid'     => 'required|numeric|min:0',
             'payment_method'  => 'required|string|max:50',
             'apply_to_series' => 'nullable|boolean',
-            'payment_date'    => 'nullable|date', // Validamos a data que vem do Modal
         ]);
 
         try {
@@ -321,26 +320,30 @@ class PaymentController extends Controller
                 $amountReceivedNow = round((float) $validated['amount_paid'], 2);
                 $newTotalPaid = round((float) $reserva->total_paid + $amountReceivedNow, 2);
 
+                // 2. Validação de segurança
                 if ($newTotalPaid > $finalPrice) {
                     throw new \Exception("O valor total pago não pode ser maior que o preço final.");
                 }
 
+                // 3. Determinação do Status Visual (Cor do Dashboard)
                 $newVisualStatus = $reserva->status;
                 if ($newTotalPaid >= $finalPrice && $finalPrice > 0) {
                     $paymentStatus = 'paid';
-                    $newVisualStatus = 'completed';
+                    $newVisualStatus = 'completed'; // Força a cor CINZA
                 } elseif ($newTotalPaid > 0) {
                     $paymentStatus = 'partial';
                 }
 
+                // 4. Update consolidado (Sincroniza Banco de Dados)
                 $reserva->update([
                     'total_paid'     => $newTotalPaid,
                     'final_price'    => $finalPrice,
                     'payment_status' => $paymentStatus,
-                    'status'         => $newVisualStatus,
+                    'status'         => $newVisualStatus, // Atualiza a cor no mapa
                     'manager_id'     => Auth::id(),
                 ]);
 
+                // 5. Ajuste de Recorrência
                 if (!empty($validated['apply_to_series']) && $reserva->recurrent_series_id) {
                     Reserva::where('recurrent_series_id', $reserva->recurrent_series_id)
                         ->where('date', '>', $reserva->date)
@@ -350,10 +353,6 @@ class PaymentController extends Controller
                             'final_price' => $finalPrice
                         ]);
                 }
-
-                // --- Lógica de Data Operacional (O Segredo para fechar o caixa certo) ---
-                // Prioridade: 1. Data enviada pelo modal | 2. Data da reserva | 3. Agora
-                $dataParaRegistro = $validated['payment_date'] ?? $reserva->date ?? now();
 
                 // 6. Auditoria Financeira
                 if ($amountReceivedNow > 0) {
@@ -366,7 +365,7 @@ class PaymentController extends Controller
                         'type'           => ($paymentStatus === 'paid') ? FinancialTransaction::TYPE_PAYMENT : 'partial_payment',
                         'payment_method' => $validated['payment_method'],
                         'description'    => "Pagamento reserva #{$reserva->id} | {$reserva->arena->name}",
-                        'paid_at'        => $dataParaRegistro, // Gravamos com a data correta do caixa aberto
+                        'paid_at'        => now(),
                     ]);
                 }
             });
@@ -384,21 +383,18 @@ class PaymentController extends Controller
 
 
     /**
-     * Registra Falta (No-Show) - Com lógica de data operacional para virada de dia
+     * Registra Falta (No-Show) - Com lógica de bloqueio de usuário
      */
     public function registerNoShow(Request $request, $reservaId)
     {
         $reserva = Reserva::with(['arena', 'user'])->findOrFail($reservaId);
 
-        // --- AJUSTE DE DATA OPERACIONAL ---
-        // Priorizamos a data enviada pela view (caixa aberto), caso contrário usamos a data da reserva.
-        $dataOperacional = $request->input('payment_date') ?? $reserva->date;
-
-        // 🛡️ TRAVA: Verifica se o caixa da data em questão já está encerrado
-        if (\App\Http\Controllers\FinanceiroController::isCashClosed($dataOperacional)) {
+        // 🛡️ TRAVA: Verifica o caixa de HOJE (onde o dinheiro se move agora)
+        $hoje = \Carbon\Carbon::today()->toDateString();
+        if (\App\Http\Controllers\FinanceiroController::isCashClosed($hoje)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Ação bloqueada: O caixa de ' . \Carbon\Carbon::parse($dataOperacional)->format('d/m/Y') . ' já está encerrado.'
+                'message' => 'Ação bloqueada: O caixa de HOJE (' . \Carbon\Carbon::parse($hoje)->format('d/m/Y') . ') já está encerrado.'
             ], 403);
         }
 
@@ -408,13 +404,14 @@ class PaymentController extends Controller
             $totalOriginalPago = round((float) $reserva->total_paid, 2);
             $shouldRefund = $request->boolean('should_refund');
             $valorParaEstornar = round((float) $request->input('refund_amount', 0), 2);
+            $motivoFalta = $request->input('no_show_reason', 'Falta não justificada');
 
             $horario = \Carbon\Carbon::parse($reserva->start_time)->format('H:i');
             $infoContexto = " | Jogo: " . \Carbon\Carbon::parse($reserva->date)->format('d/m') . " às {$horario}";
 
             if ($totalOriginalPago > 0) {
                 if ($shouldRefund && $valorParaEstornar > 0) {
-                    // 💰 REGISTRA A SAÍDA (ESTORNO) NO CAIXA DA DATA OPERACIONAL
+                    // 💰 REGISTRA A SAÍDA NO CAIXA DE HOJE
                     FinancialTransaction::create([
                         'reserva_id'     => $reserva->id,
                         'arena_id'       => $reserva->arena_id,
@@ -424,7 +421,7 @@ class PaymentController extends Controller
                         'type'           => 'refund',
                         'payment_method' => 'cash_out',
                         'description'    => "SAÍDA (Estorno No-Show) #{$reserva->id} | Cliente: {$reserva->client_name}" . $infoContexto,
-                        'paid_at'        => $dataOperacional, // <--- DATA CORRIGIDA
+                        'paid_at'        => now(),
                     ]);
 
                     FinancialTransaction::where('reserva_id', $reserva->id)
@@ -433,8 +430,7 @@ class PaymentController extends Controller
                             'description' => DB::raw("CONCAT(description, ' (No-Show c/ Estorno em " . date('d/m') . ")')")
                         ]);
                 } else {
-                    // 🔒 RETENÇÃO (Multa)
-                    // Atualiza as transações originais para o tipo multa
+                    // 🔒 RETENÇÃO
                     FinancialTransaction::where('reserva_id', $reserva->id)
                         ->update([
                             'type'           => 'no_show_penalty',
@@ -442,7 +438,7 @@ class PaymentController extends Controller
                             'description'    => DB::raw("CONCAT(description, ' [RETIDO COMO MULTA EM " . date('d/m') . "]')")
                         ]);
 
-                    // LOG visual que aparece no extrato da data operacional
+                    // LOG visual no caixa de hoje
                     FinancialTransaction::create([
                         'reserva_id'     => $reserva->id,
                         'arena_id'       => $reserva->arena_id,
@@ -450,13 +446,12 @@ class PaymentController extends Controller
                         'amount'         => 0,
                         'type'           => 'no_show_penalty',
                         'payment_method' => 'retained_funds',
-                        'description'    => "LOG: Falta marcada. Valor de R$ {$totalOriginalPago} (Reserva #{$reserva->id}) retido como multa.",
-                        'paid_at'        => $dataOperacional, // <--- DATA CORRIGIDA
+                        'description'    => "LOG: Falta marcada hoje. Valor de R$ {$totalOriginalPago} (Reserva #{$reserva->id}) retido como multa.",
+                        'paid_at'        => now(),
                     ]);
                 }
             }
 
-            // Lógica de bloqueio de usuário (mantida)
             if ($reserva->user) {
                 $user = $reserva->user;
                 $user->increment('no_show_count');
@@ -469,7 +464,7 @@ class PaymentController extends Controller
             $reserva->delete();
 
             DB::commit();
-            return response()->json(['success' => true, 'message' => 'Falta registrada e financeiro processado com sucesso.']);
+            return response()->json(['success' => true, 'message' => 'Falta registrada e financeiro processado no caixa de hoje.']);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro no No-Show #{$reservaId}: " . $e->getMessage());

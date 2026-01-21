@@ -1498,24 +1498,12 @@
             document.getElementById('noShowReservaId').value = id;
             document.getElementById('noShowClientName').innerText = clientName;
             document.getElementById('noShowPaidAmount').value = paidAmount;
-
-            // --- LÓGICA DE DATA OPERACIONAL (CRUCIAL PARA AUDITORIA) ---
-            // Captura a data que o gestor está visualizando no filtro de data do topo
-            const dataDoCaixa = document.getElementById('js_cashierDate')?.value;
-            const inputDataNoShow = document.getElementById('noShowPaymentDate');
-
-            if (dataDoCaixa && inputDataNoShow) {
-                inputDataNoShow.value = dataDoCaixa;
-            }
-            // ---------------------------------------------------------
-
             document.getElementById('noShowAmountDisplay').innerText = paidAmount.toLocaleString('pt-BR', {
                 style: 'currency',
                 currency: 'BRL'
             });
 
             const refundControls = document.getElementById('refundControls');
-            // Se houve pagamento prévio (sinal), mostra opções de estorno ou retenção
             paidAmount > 0 ? refundControls.classList.remove('hidden') : refundControls.classList.add('hidden');
 
             document.getElementById('noShowModal').classList.replace('hidden', 'flex');

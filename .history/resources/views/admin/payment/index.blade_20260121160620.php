@@ -1077,12 +1077,8 @@
                                 </p>
                             </div>
 
-                            {{-- CAMPOS OCULTOS --}}
                             <input type="hidden" id="noShowReservaId" name="reserva_id">
                             <input type="hidden" id="noShowPaidAmount" name="paid_amount">
-
-                            {{-- CAMPO ADICIONADO: Garante que o estorno caia na data do caixa --}}
-                            <input type="hidden" id="noShowPaymentDate" name="payment_date">
 
                             {{-- CONTROLE DE ESTORNO EVOLUÍDO --}}
                             <div id="refundControls"
@@ -1113,11 +1109,11 @@
                                             <span class="text-gray-500 font-bold">R$</span>
                                         </div>
                                         <input type="number" step="0.01" id="custom_refund_amount"
-                                            name="refund_amount"
+                                            name="custom_refund_amount"
                                             class="pl-10 block w-full rounded-md border-red-300 dark:border-red-700 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-800 dark:text-red-400 font-black text-xl">
                                     </div>
                                     <p class="mt-1 text-[9px] text-gray-400 dark:text-gray-500 italic font-medium">*
-                                        Este valor será subtraído do saldo do caixa exibido na tela.</p>
+                                        Este valor será subtraído do saldo do caixa de hoje.</p>
                                 </div>
                             </div>
 
@@ -1498,24 +1494,12 @@
             document.getElementById('noShowReservaId').value = id;
             document.getElementById('noShowClientName').innerText = clientName;
             document.getElementById('noShowPaidAmount').value = paidAmount;
-
-            // --- LÓGICA DE DATA OPERACIONAL (CRUCIAL PARA AUDITORIA) ---
-            // Captura a data que o gestor está visualizando no filtro de data do topo
-            const dataDoCaixa = document.getElementById('js_cashierDate')?.value;
-            const inputDataNoShow = document.getElementById('noShowPaymentDate');
-
-            if (dataDoCaixa && inputDataNoShow) {
-                inputDataNoShow.value = dataDoCaixa;
-            }
-            // ---------------------------------------------------------
-
             document.getElementById('noShowAmountDisplay').innerText = paidAmount.toLocaleString('pt-BR', {
                 style: 'currency',
                 currency: 'BRL'
             });
 
             const refundControls = document.getElementById('refundControls');
-            // Se houve pagamento prévio (sinal), mostra opções de estorno ou retenção
             paidAmount > 0 ? refundControls.classList.remove('hidden') : refundControls.classList.add('hidden');
 
             document.getElementById('noShowModal').classList.replace('hidden', 'flex');
