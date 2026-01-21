@@ -1235,9 +1235,8 @@
                                             class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                             <span class="text-indigo-500 font-bold">R$</span>
                                         </div>
-                                        {{-- CORREÇÃO NO ATRIBUTO NAME ABAIXO: de "actual_cash_amount" para "actual_amount" --}}
                                         <input type="number" step="0.01" id="actualCashAmount"
-                                            name="actual_amount" required
+                                            name="actual_cash_amount" required
                                             class="pl-10 block w-full rounded-md border-indigo-300 dark:border-indigo-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white font-black text-2xl"
                                             placeholder="0,00">
                                     </div>
@@ -1325,11 +1324,11 @@
                                     class="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 text-left">
                                     Justificativa da Reabertura <span class="text-red-500">*</span>
                                 </label>
-                                {{-- A única mudança necessária é o name="reason" abaixo --}}
-                                <textarea id="reopen_reason" name="reason" rows="3" required
+                                <textarea id="reopen_reason" name="reopen_reason" rows="3" required
                                     class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-700 dark:text-white font-medium text-sm"
                                     placeholder="Descreva o motivo da reabertura (Ex: Erro no lançamento da Reserva #123)"></textarea>
                             </div>
+
                             <input type="hidden" id="reopenCashDate" name="date">
                             <div id="openCash-error-message"
                                 class="hidden mt-3 p-3 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-bold rounded-lg border border-red-200 dark:border-red-800 text-left">

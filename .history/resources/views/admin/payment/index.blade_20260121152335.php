@@ -1235,9 +1235,8 @@
                                             class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                             <span class="text-indigo-500 font-bold">R$</span>
                                         </div>
-                                        {{-- CORREÇÃO NO ATRIBUTO NAME ABAIXO: de "actual_cash_amount" para "actual_amount" --}}
                                         <input type="number" step="0.01" id="actualCashAmount"
-                                            name="actual_amount" required
+                                            name="actual_cash_amount" required
                                             class="pl-10 block w-full rounded-md border-indigo-300 dark:border-indigo-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white font-black text-2xl"
                                             placeholder="0,00">
                                     </div>
@@ -1325,11 +1324,11 @@
                                     class="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 text-left">
                                     Justificativa da Reabertura <span class="text-red-500">*</span>
                                 </label>
-                                {{-- A única mudança necessária é o name="reason" abaixo --}}
-                                <textarea id="reopen_reason" name="reason" rows="3" required
+                                <textarea id="reopen_reason" name="reopen_reason" rows="3" required
                                     class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-700 dark:text-white font-medium text-sm"
                                     placeholder="Descreva o motivo da reabertura (Ex: Erro no lançamento da Reserva #123)"></textarea>
                             </div>
+
                             <input type="hidden" id="reopenCashDate" name="date">
                             <div id="openCash-error-message"
                                 class="hidden mt-3 p-3 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-bold rounded-lg border border-red-200 dark:border-red-800 text-left">
@@ -1366,6 +1365,11 @@
 
     <script>
         // --- Funções de Suporte e Formatação ---
+        function showMessage(message, isSuccess = true) {
+            console.log(isSuccess ? '✅ SUCESSO: ' : '❌ ERRO: ', message);
+        }
+
+        // Garante precisão matemática transformando valores em centavos (inteiros)
         function toCents(value) {
             return Math.round(parseFloat(value || 0) * 100);
         }
@@ -1393,14 +1397,14 @@
 
             if (shouldRefund) {
                 customDiv.classList.remove('hidden');
-                inputRefund.value = paidAmount.toFixed(2);
+                inputRefund.value = paidAmount.toFixed(2); // Sugere estorno total
             } else {
                 customDiv.classList.add('hidden');
                 inputRefund.value = 0;
             }
         }
 
-        // --- Lógica de Cálculo de Pagamento ---
+        // --- Lógica de Cálculo de Pagamento (Troco e Saldos) ---
         function calculateAmountDue() {
             const finalPriceEl = document.getElementById('modalFinalPrice');
             const signalRawEl = document.getElementById('modalSignalAmountRaw');
@@ -1409,6 +1413,7 @@
 
             if (!finalPriceEl || !amountPaidEl) return;
 
+            // Reset visual
             trocoMessageEl.classList.add('hidden');
             amountPaidEl.classList.remove('border-yellow-500', 'bg-yellow-50');
 
@@ -1419,6 +1424,7 @@
             updateRecurrentTogglePrice(fromCents(finalPriceCents));
 
             if (balanceCents < 0) {
+                // O sinal já pago é maior que o novo preço final -> Gerar Troco
                 const trocoCents = Math.abs(balanceCents);
                 amountPaidEl.value = "0.00";
                 trocoMessageEl.innerHTML =
@@ -1442,6 +1448,7 @@
             const finalPriceCents = toCents(finalPriceEl.value);
             const signalAmountCents = toCents(signalRawEl.value);
             const amountPaidNowCents = toCents(amountPaidEl.value);
+
             const overpaymentCents = (signalAmountCents + amountPaidNowCents) - finalPriceCents;
 
             if (overpaymentCents > 0) {
@@ -1455,9 +1462,10 @@
             }
         }
 
-        // --- Abertura de Modais ---
+        // --- Abertura de Modais com Verificação de Segurança ---
         function openPaymentModal(id, totalPrice, remaining, signalAmount, clientName, isRecurrent = false) {
-            if (document.getElementById('js_isActionDisabled')?.value === '1') return alert('🚫 Caixa Fechado.');
+            const isClosed = document.getElementById('js_isActionDisabled')?.value === '1';
+            if (isClosed) return alert('🚫 Caixa Fechado: Não é possível realizar baixas.');
 
             document.getElementById('modalReservaId').value = id;
             document.getElementById('modalClientName').innerText = clientName;
@@ -1469,45 +1477,89 @@
             document.getElementById('modalFinalPrice').value = totalPrice.toFixed(2);
 
             const recurrentOption = document.getElementById('recurrentOption');
-            if (recurrentOption) isRecurrent ? recurrentOption.classList.remove('hidden') : recurrentOption.classList.add(
-                'hidden');
+            if (recurrentOption) {
+                isRecurrent ? recurrentOption.classList.remove('hidden') : recurrentOption.classList.add('hidden');
+            }
 
             calculateAmountDue();
             document.getElementById('paymentModal').classList.replace('hidden', 'flex');
         }
 
-        function openNoShowModal(id, clientName, paidAmount) {
-            document.getElementById('noShowReservaId').value = id;
-            document.getElementById('noShowClientName').innerText = clientName;
-            document.getElementById('noShowPaidAmount').value = paidAmount;
-            document.getElementById('noShowAmountDisplay').innerText = paidAmount.toLocaleString('pt-BR', {
-                style: 'currency',
-                currency: 'BRL'
+        // --- Lógica de Fechamento (Auditoria de Físico vs Sistema) ---
+        function calculateDifference() {
+            const calculatedAmountEl = document.getElementById('valor-liquido-total-real'); // KPI do topo
+            const diffMessageEl = document.getElementById('differenceMessage');
+            const actualAmountInput = document.getElementById('actualCashAmount');
+            const submitBtn = document.getElementById('submitCloseCashBtn');
+
+            if (!calculatedAmountEl || !actualAmountInput) return;
+
+            let systemValue = calculatedAmountEl.innerText.replace(/[^\d,]/g, '').replace(',', '.');
+            const systemCents = toCents(systemValue);
+            const actualCents = toCents(actualAmountInput.value);
+            const diffCents = actualCents - systemCents;
+
+            diffMessageEl.className = 'mt-3 p-3 text-sm font-bold rounded-lg text-center border';
+
+            if (diffCents === 0) {
+                diffMessageEl.innerHTML = '✅ Caixa Perfeito!';
+                diffMessageEl.classList.add('bg-green-100', 'text-green-700', 'border-green-200');
+                submitBtn.className = submitBtn.className.replace(/bg-\w+-\d+/, 'bg-indigo-600');
+            } else if (diffCents > 0) {
+                diffMessageEl.innerHTML = `⚠️ Sobra no Físico: R$ ${fromCents(diffCents).replace('.', ',')}`;
+                diffMessageEl.classList.add('bg-amber-100', 'text-amber-700', 'border-amber-200');
+                submitBtn.className = submitBtn.className.replace(/bg-\w+-\d+/, 'bg-amber-600');
+            } else {
+                diffMessageEl.innerHTML = `🚨 Falta no Físico: R$ ${fromCents(Math.abs(diffCents)).replace('.', ',')}`;
+                diffMessageEl.classList.add('bg-red-100', 'text-red-700', 'border-red-200');
+                submitBtn.className = submitBtn.className.replace(/bg-\w+-\d+/, 'bg-red-600');
+            }
+            diffMessageEl.classList.remove('hidden');
+        }
+
+        // --- Verificador de Status do Caixa (Bloqueia fechamento se houver pendências) ---
+        function checkCashierStatus() {
+            const btn = document.getElementById('openCloseCashModalBtn');
+            const statusEl = document.getElementById('cashStatus');
+            const totalReservations = parseInt(document.getElementById('js_totalReservas')?.value || 0);
+            const isFiltered = document.getElementById('js_isFiltered')?.value === '1';
+
+            if (!btn || !statusEl) return;
+
+            if (isFiltered) {
+                btn.disabled = true;
+                statusEl.innerHTML = "💡 Limpe o filtro para fechar.";
+                return;
+            }
+
+            const finalStatuses = ['pago', 'falta', 'cancelada', 'rejeitada', 'no_show', 'paid'];
+            let completed = 0;
+
+            document.querySelectorAll('table tbody tr').forEach(row => {
+                const statusText = row.querySelector('td:nth-child(3)')?.innerText.trim().toLowerCase();
+                if (finalStatuses.some(s => statusText?.includes(s))) completed++;
             });
 
-            const refundControls = document.getElementById('refundControls');
-            paidAmount > 0 ? refundControls.classList.remove('hidden') : refundControls.classList.add('hidden');
-
-            document.getElementById('noShowModal').classList.replace('hidden', 'flex');
+            if (totalReservations > 0 && completed < totalReservations) {
+                btn.disabled = true;
+                statusEl.innerHTML = `🚨 Pendentes: ${totalReservations - completed}`;
+                statusEl.classList.add('text-red-500');
+            } else {
+                btn.disabled = false;
+                statusEl.innerHTML = "✅ Pronto para fechar!";
+                statusEl.classList.replace('text-red-500', 'text-green-600');
+            }
         }
 
-        function openCloseCashModal() {
-            const date = document.getElementById('js_cashierDate').value;
-            const systemValue = document.getElementById('valor-liquido-total-real').innerText;
-            document.getElementById('closeCashDate').value = date;
-            document.getElementById('closeCashDateDisplay').innerText = date.split('-').reverse().join('/');
-            document.getElementById('calculatedLiquidAmount').innerText = systemValue;
-            document.getElementById('closeCashModal').classList.replace('hidden', 'flex');
-            calculateDifference();
-        }
+        // --- Event Listeners Iniciais ---
+        document.addEventListener('DOMContentLoaded', () => {
+            checkCashierStatus();
+            document.getElementById('actualCashAmount')?.addEventListener('input', calculateDifference);
+            document.getElementById('modalFinalPrice')?.addEventListener('input', calculateAmountDue);
+            document.getElementById('modalAmountPaid')?.addEventListener('input', checkManualOverpayment);
+        });
 
-        function openCash(date) {
-            document.getElementById('reopenCashDate').value = date;
-            document.getElementById('openCashDateDisplay').innerText = date.split('-').reverse().join('/');
-            document.getElementById('openCashModal').classList.replace('hidden', 'flex');
-        }
-
-        // --- Fechamento de Modais ---
+        // Funções de Fechamento Simples
         function closePaymentModal() {
             document.getElementById('paymentModal').classList.replace('flex', 'hidden');
         }
@@ -1524,111 +1576,82 @@
             document.getElementById('openCashModal').classList.replace('flex', 'hidden');
         }
 
-        // --- Lógica de Diferença de Caixa ---
-        function calculateDifference() {
-            const systemEl = document.getElementById('valor-liquido-total-real');
-            const actualInput = document.getElementById('actualCashAmount');
-            const diffMessageEl = document.getElementById('differenceMessage');
-            const submitBtn = document.getElementById('submitCloseCashBtn');
+        // --- PROCESSAR PAGAMENTO (ENVIO AJAX) ---
+        document.getElementById('paymentForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const id = document.getElementById('modalReservaId').value;
+            const submitBtn = document.getElementById('submitPaymentBtn');
+            const spinner = document.getElementById('submitPaymentSpinner');
+            const errorMsg = document.getElementById('payment-error-message');
 
-            if (!systemEl || !actualInput) return;
+            submitBtn.disabled = true;
+            spinner.classList.remove('hidden');
+            errorMsg.classList.add('hidden');
 
-            const systemValue = systemEl.innerText.replace(/[^\d,]/g, '').replace(',', '.');
-            const diffCents = toCents(actualInput.value) - toCents(systemValue);
-
-            diffMessageEl.className = 'mt-3 p-3 text-sm font-bold rounded-lg text-center border';
-            if (diffCents === 0) {
-                diffMessageEl.innerHTML = '✅ Caixa Perfeito!';
-                diffMessageEl.classList.add('bg-green-100', 'text-green-700', 'border-green-200');
-            } else if (diffCents > 0) {
-                diffMessageEl.innerHTML = `⚠️ Sobra no Físico: R$ ${fromCents(diffCents).replace('.', ',')}`;
-                diffMessageEl.classList.add('bg-amber-100', 'text-amber-700', 'border-amber-200');
-            } else {
-                diffMessageEl.innerHTML = `🚨 Falta no Físico: R$ ${fromCents(Math.abs(diffCents)).replace('.', ',')}`;
-                diffMessageEl.classList.add('bg-red-100', 'text-red-700', 'border-red-200');
-            }
-            diffMessageEl.classList.remove('hidden');
-        }
-
-        function checkCashierStatus() {
-            const btn = document.getElementById('openCloseCashModalBtn');
-            const statusEl = document.getElementById('cashStatus');
-            if (!btn || !statusEl) return;
-            if (document.getElementById('js_isFiltered').value === '1') {
-                statusEl.innerHTML = "💡 Limpe o filtro para fechar.";
-                return;
-            }
-            const total = parseInt(document.getElementById('js_totalReservas').value || 0);
-            let completed = 0;
-            const finalS = ['pago', 'falta', 'cancelada', 'rejeitada', 'no_show', 'paid'];
-            document.querySelectorAll('table tbody tr').forEach(row => {
-                const text = row.querySelector('td:nth-child(3)')?.innerText.trim().toLowerCase();
-                if (finalS.some(s => text?.includes(s))) completed++;
-            });
-            if (total > 0 && completed < total) {
-                btn.disabled = true;
-                statusEl.innerHTML = `🚨 Pendentes: ${total - completed}`;
-            } else {
-                btn.disabled = false;
-                statusEl.innerHTML = "✅ Pronto para fechar!";
-                statusEl.classList.replace('text-red-500', 'text-green-600');
-            }
-        }
-
-        // --- Event Listeners e Ajax ---
-        document.addEventListener('DOMContentLoaded', () => {
-            checkCashierStatus();
-            document.getElementById('actualCashAmount')?.addEventListener('input', calculateDifference);
-            document.getElementById('modalFinalPrice')?.addEventListener('input', calculateAmountDue);
-            document.getElementById('modalAmountPaid')?.addEventListener('input', checkManualOverpayment);
+            fetch(`/admin/payment/process/${id}`, {
+                    method: 'POST',
+                    body: new FormData(this),
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute(
+                            'content'),
+                        'Accept': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        throw new Error(data.message || 'Erro ao processar pagamento');
+                    }
+                })
+                .catch(error => {
+                    errorMsg.innerText = error.message;
+                    errorMsg.classList.remove('hidden');
+                })
+                .finally(() => {
+                    submitBtn.disabled = false;
+                    spinner.classList.add('hidden');
+                });
         });
 
-        // AJAX Genérico para formulários
-        function setupAjaxForm(formId, btnId, spinnerId, errorId, urlTemplate) {
-            const form = document.getElementById(formId);
-            if (!form) return;
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const btn = document.getElementById(btnId);
-                const spinner = document.getElementById(spinnerId);
-                const error = document.getElementById(errorId);
-                const id = document.getElementById('modalReservaId')?.value || document.getElementById(
-                    'noShowReservaId')?.value || '';
+        // --- REGISTRAR FALTA / NO-SHOW (ENVIO AJAX) ---
+        document.getElementById('noShowForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const id = document.getElementById('noShowReservaId').value;
+            const submitBtn = document.getElementById('submitNoShowBtn');
+            const spinner = document.getElementById('submitNoShowSpinner');
+            const errorMsg = document.getElementById('noshow-error-message');
 
-                btn.disabled = true;
-                spinner.classList.remove('hidden');
-                error.classList.add('hidden');
+            submitBtn.disabled = true;
+            spinner.classList.remove('hidden');
+            errorMsg.classList.add('hidden');
 
-                fetch(urlTemplate.replace('{id}', id), {
-                        method: 'POST',
-                        body: new FormData(this),
-                        headers: {
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute(
-                                'content'),
-                            'Accept': 'application/json'
-                        }
-                    })
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.success) window.location.reload();
-                        else throw new Error(data.message || 'Erro ao processar');
-                    })
-                    .catch(err => {
-                        error.innerText = err.message;
-                        error.classList.remove('hidden');
-                        btn.disabled = false;
-                        spinner.classList.add('hidden');
-                    });
-            });
-        }
-
-        setupAjaxForm('paymentForm', 'submitPaymentBtn', 'submitPaymentSpinner', 'payment-error-message',
-            '/admin/pagamentos/{id}/finalizar');
-        setupAjaxForm('noShowForm', 'submitNoShowBtn', 'submitNoShowSpinner', 'noshow-error-message',
-            '/admin/reservas/{id}/no-show');
-        setupAjaxForm('closeCashForm', 'submitCloseCashBtn', 'submitCloseCashSpinner', 'closecash-error-message',
-            '/admin/pagamentos/fechar-caixa');
-        setupAjaxForm('openCashForm', 'submitOpenCashBtn', 'submitOpenCashSpinner', 'openCash-error-message',
-            '/admin/pagamentos/abrir-caixa');
+            fetch(`/admin/payment/no-show/${id}`, {
+                    method: 'POST',
+                    body: new FormData(this),
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute(
+                            'content'),
+                        'Accept': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        throw new Error(data.message || 'Erro ao registrar falta');
+                    }
+                })
+                .catch(error => {
+                    errorMsg.innerText = error.message;
+                    errorMsg.classList.remove('hidden');
+                })
+                .finally(() => {
+                    submitBtn.disabled = false;
+                    spinner.classList.add('hidden');
+                });
+        });
     </script>
 </x-app-layout>

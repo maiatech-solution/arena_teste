@@ -1648,7 +1648,7 @@
                 const refundAmount = parseFloat(refundAmountInput.value) || 0;
                 const valueErrorSpan = document.getElementById('no-show-error-span');
 
-                // 2. Reset de estados de erro
+                // 2. Reset de estados de erro (limpa avisos anteriores)
                 reasonErrorSpan.classList.add('hidden');
                 reasonInput.classList.remove('border-red-600', 'bg-red-50');
                 valueErrorSpan.classList.add('hidden');
@@ -1672,13 +1672,14 @@
                 }
 
                 const reservaId = document.getElementById('no-show-reserva-id').value;
+                // Rota formatada (substituindo o placeholder :id pelo ID real)
                 const url = NO_SHOW_URL.replace(':id', reservaId);
                 const submitBtn = document.getElementById('confirm-no-show-btn');
 
-                // 3. Preparação dos dados - REMOVIDO O _method PATCH
-                // Sua rota no web.php é: Route::post('/{reserva}/no-show'...)
+                // 3. Preparação dos dados para a API (COM SPOOFING DE MÉTODO)
                 const bodyData = {
-                    _token: csrfToken,
+                    _token: csrfToken, // Token obrigatório do Laravel
+                    _method: 'PATCH', // 🚀 CORREÇÃO: Força o Laravel a entender como PATCH
                     no_show_reason: reason,
                     notes: reason,
                     should_refund: shouldRefund,
@@ -1692,7 +1693,7 @@
 
                 try {
                     const response = await fetch(url, {
-                        method: 'POST', // 🚀 POST puro para bater com a rota do web.php
+                        method: 'POST', // Enviamos via POST para que o corpo (body) seja lido
                         headers: {
                             'Content-Type': 'application/json',
                             'X-CSRF-TOKEN': csrfToken,
@@ -1705,10 +1706,12 @@
                     const result = await response.json();
 
                     if (response.ok && result.success) {
+                        // SUCESSO: Fecha o modal e atualiza o calendário
                         closeNoShowModal();
                         showDashboardMessage(result.message || "Falta registrada com sucesso.", 'success');
                         if (window.calendar) window.calendar.refetchEvents();
                     } else {
+                        // ERRO DE REGRA DE NEGÓCIO (Ex: Caixa fechado)
                         showDashboardMessage(result.message || "Erro ao processar falta.", 'error');
                         if (window.calendar) window.calendar.refetchEvents();
                     }
@@ -1716,6 +1719,7 @@
                     console.error('Erro de Rede:', error);
                     showDashboardMessage("Erro de conexão com o servidor.", 'error');
                 } finally {
+                    // Restaura o botão independente do resultado
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Confirmar Falta';
                 }
@@ -1992,8 +1996,8 @@
             <div class="grid grid-cols-1 gap-2">
                 ${!isFinalized && status !== 'cancelled' ?
                     `<button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                                                <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
-                                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+                                        <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
+                                    </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
                 <div class="grid grid-cols-2 gap-2 mt-1">
                     <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})"
@@ -2008,15 +2012,15 @@
 
                 ${!isFinalized && status !== 'no_show' ?
                     `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')"
-                                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
-                                                FALTA (NO-SHOW)
-                                            </button>`
+                                        class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
+                                        FALTA (NO-SHOW)
+                                    </button>`
                     : ''}
 
                 ${isRecurrent ?
                     `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition uppercase">
-                                                CANCELAR SÉRIE
-                                            </button>`
+                                        CANCELAR SÉRIE
+                                    </button>`
                     : ''}
 
                 <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold">

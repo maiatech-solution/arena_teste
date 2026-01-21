@@ -29,13 +29,10 @@
                         <div class="text-[10px] font-bold text-green-50 uppercase tracking-tighter truncate">
                             💰 Saldo {{ request('arena_id') ? 'da Arena' : 'Geral do Caixa' }}
                         </div>
-
-                        {{-- AQUI ESTÁ A CORREÇÃO: ADICIONADO O ID PARA O JAVASCRIPT CONSEGUIR LER --}}
-                        <div id="valor-liquido-total-real" class="mt-1 text-2xl font-extrabold text-white truncate"
+                        <div class="mt-1 text-2xl font-extrabold text-white truncate"
                             title="Valor exato: {{ $totalRecebidoDiaLiquido }}">
                             R$ {{ number_format($totalRecebidoDiaLiquido, 2, ',', '.') }}
                         </div>
-
                         <div class="text-[9px] text-green-100 mt-1 italic leading-tight">
                             {{ request('arena_id') ? 'Dinheiro/Pix desta quadra.' : 'Total real em dinheiro/pix hoje.' }}
                         </div>
@@ -607,23 +604,6 @@
 
                     @php
                         $groupedTransactions = $financialTransactions->groupBy('reserva_id');
-
-                        // DICIONÁRIO DE TRADUÇÃO PARA DADOS DO BANCO
-                        $traducao = [
-                            'no_show_penalty' => 'Multa de Falta',
-                            'retained_funds' => 'Valor Retido',
-                            'payment' => 'Pagamento',
-                            'partial_payment' => 'Pagt. Parcial',
-                            'signal' => 'Sinal/Entrada',
-                            'refund' => 'Estorno',
-                            'pix' => 'PIX',
-                            'money' => 'Dinheiro',
-                            'credit_card' => 'Crédito',
-                            'debit_card' => 'Débito',
-                            'transfer' => 'Transf.',
-                            'other' => 'Outro',
-                            'outro' => 'Outro',
-                        ];
                     @endphp
 
                     <div class="overflow-x-auto">
@@ -632,15 +612,12 @@
                                 <tr>
                                     <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Hora</th>
                                     <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">ID</th>
-                                    <th
-                                        class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase text-left">
-                                        Pagador / Gestor</th>
-                                    <th
-                                        class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase text-left">
-                                        Tipo | Forma</th>
-                                    <th
-                                        class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase text-left">
-                                        Descrição</th>
+                                    <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Pagador /
+                                        Gestor</th>
+                                    <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Tipo |
+                                        Forma</th>
+                                    <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Descrição
+                                    </th>
                                     <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">Valor
                                     </th>
                                 </tr>
@@ -660,12 +637,11 @@
                                     @endphp
 
                                     @if ($reservaId)
-                                        <tr
-                                            class="bg-gray-100 dark:bg-gray-700/60 border-t-2 border-indigo-500 text-left">
+                                        <tr class="bg-gray-100 dark:bg-gray-700/60 border-t-2 border-indigo-500">
                                             <td colspan="5"
                                                 class="px-4 py-2.5 text-sm font-bold text-gray-800 dark:text-gray-100">
                                                 <span
-                                                    class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-600 text-white mr-3 uppercase text-left">Reserva</span>
+                                                    class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-600 text-white mr-3 uppercase">Reserva</span>
                                                 ID: {{ $reservaId }} — {{ $clientName }}
 
                                                 @if ($ehPagamentoAntecipado)
@@ -707,11 +683,11 @@
                                                 $amount >= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-black';
                                         @endphp
                                         <tr class="{{ $rowClass }} transition duration-150">
-                                            <td class="px-4 py-3 text-sm text-gray-500 font-mono italic text-left">
+                                            <td class="px-4 py-3 text-sm text-gray-500 font-mono italic">
                                                 {{ \Carbon\Carbon::parse($transaction->paid_at)->format('H:i:s') }}
                                             </td>
                                             <td
-                                                class="px-4 py-3 text-sm font-medium {{ $isRefund ? 'text-red-700' : 'text-indigo-600' }} text-left">
+                                                class="px-4 py-3 text-sm font-medium {{ $isRefund ? 'text-red-700' : 'text-indigo-600' }}">
                                                 #{{ $transaction->reserva_id ?? '--' }}
                                             </td>
                                             <td class="px-4 py-3 text-sm text-left">
@@ -721,13 +697,11 @@
                                                     {{ $transaction->manager->name ?? 'Sistema' }}</div>
                                             </td>
                                             <td class="px-4 py-3 text-sm text-left">
-                                                {{-- AQUI É FEITA A TRADUÇÃO DINÂMICA --}}
                                                 <div class="text-[10px] font-extrabold uppercase text-gray-500">
-                                                    {{ $traducao[strtolower($transaction->type)] ?? $transaction->type }}
-                                                </div>
+                                                    {{ $traducao[$transaction->type] ?? $transaction->type }}</div>
                                                 <div
                                                     class="text-[9px] px-1 bg-gray-100 dark:bg-gray-700 w-fit rounded font-bold text-gray-600 dark:text-gray-400">
-                                                    ({{ $traducao[strtolower($transaction->payment_method)] ?? $transaction->payment_method }})
+                                                    ({{ $traducao[$transaction->payment_method] ?? $transaction->payment_method }})
                                                 </div>
                                             </td>
                                             <td
@@ -1041,20 +1015,20 @@
     </div>
 
 
+
     {{-- MODAL 2: REGISTRAR FALTA (NO-SHOW) COM ESTORNO FLEXÍVEL --}}
     <div id="noShowModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
-        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"
-            onclick="closeNoShowModal()"></div>
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
 
         <div
-            class="relative bg-white dark:bg-gray-800 rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full border dark:border-gray-700">
+            class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
             <form id="noShowForm">
                 @csrf
                 <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <div class="sm:flex sm:items-start">
                         <div
                             class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 sm:mx-0 sm:h-10 sm:w-10">
-                            <svg class="h-6 w-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor"
+                            <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor"
                                 viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L12 12M6 6l12 12">
@@ -1063,14 +1037,14 @@
                         </div>
                         <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
                             <h3
-                                class="text-lg leading-6 font-black text-gray-900 dark:text-white uppercase tracking-tight">
+                                class="text-lg leading-6 font-bold text-gray-900 dark:text-white uppercase tracking-tight">
                                 Registrar Falta (No-Show)
                             </h3>
 
                             <div
                                 class="mt-2 p-3 bg-red-50 dark:bg-red-900/10 rounded-lg border border-red-100 dark:border-red-900/50">
                                 <p class="text-sm text-red-800 dark:text-red-300 font-medium">
-                                    Cliente: <span id="noShowClientName" class="font-black uppercase"></span>
+                                    Cliente: <span id="noShowClientName" class="font-black"></span>
                                 </p>
                             </div>
 
@@ -1082,13 +1056,13 @@
                                 class="mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hidden border border-gray-200 dark:border-gray-600 space-y-4">
                                 <div>
                                     <label for="should_refund"
-                                        class="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">
+                                        class="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">
                                         Dinheiro Recebido: <span id="noShowAmountDisplay"
-                                            class="text-indigo-600 dark:text-indigo-400 font-bold"></span>
+                                            class="text-indigo-600"></span>
                                     </label>
                                     <select id="should_refund" name="should_refund"
                                         onchange="toggleCustomRefundInput()"
-                                        class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:text-white font-bold">
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:text-white font-bold">
                                         <option value="false">Reter valor total (Multa de No-Show)</option>
                                         <option value="true">Estornar / Devolver Valor ao Cliente</option>
                                     </select>
@@ -1107,22 +1081,22 @@
                                         </div>
                                         <input type="number" step="0.01" id="custom_refund_amount"
                                             name="custom_refund_amount"
-                                            class="pl-10 block w-full rounded-md border-red-300 dark:border-red-700 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-800 dark:text-red-400 font-black text-xl">
+                                            class="pl-10 block w-full rounded-md border-red-300 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-800 dark:text-red-400 font-black text-xl">
                                     </div>
-                                    <p class="mt-1 text-[9px] text-gray-400 dark:text-gray-500 italic font-medium">*
-                                        Este valor será subtraído do saldo do caixa de hoje.</p>
+                                    <p class="mt-1 text-[9px] text-gray-400 italic font-medium">* Este valor será
+                                        subtraído do caixa de hoje.</p>
                                 </div>
                             </div>
 
                             {{-- MOTIVO --}}
                             <div class="mt-4">
                                 <label for="no_show_reason"
-                                    class="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+                                    class="block text-xs font-black text-gray-500 uppercase tracking-widest">
                                     Motivo / Observação (Obrigatório)
                                 </label>
                                 <textarea id="no_show_reason" name="no_show_reason" rows="2" required
-                                    class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-700 dark:text-white text-sm"
-                                    placeholder="Descreva o motivo da falta..."></textarea>
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-700 dark:text-white text-sm"
+                                    placeholder="Ex: Não compareceu e não atendeu as ligações."></textarea>
                             </div>
 
                             {{-- BLOQUEIO --}}
@@ -1139,19 +1113,18 @@
                             </div>
 
                             <div id="noshow-error-message"
-                                class="hidden mt-3 p-3 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-bold rounded-lg border border-red-200 dark:border-red-800">
+                                class="hidden mt-3 p-3 bg-red-100 text-red-700 text-xs font-bold rounded-lg border border-red-200">
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div
-                    class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2 text-left">
+                <div class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
                     <button type="submit" id="submitNoShowBtn"
-                        class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-6 py-2.5 bg-red-600 text-base font-black text-white hover:bg-red-700 focus:ring-2 focus:ring-red-500 sm:w-auto sm:text-sm transition duration-150">
+                        class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-6 py-2.5 bg-red-600 text-base font-black text-white hover:bg-red-700 focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:w-auto sm:text-sm transition duration-150">
                         <span id="submitNoShowText">CONFIRMAR FALTA</span>
                         <svg id="submitNoShowSpinner" class="animate-spin ml-2 h-4 w-4 text-white hidden"
-                            fill="none" viewBox="0 0 24 24">
+                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
                                 stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor"
@@ -1160,7 +1133,7 @@
                         </svg>
                     </button>
                     <button type="button" onclick="closeNoShowModal()"
-                        class="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 dark:border-gray-600 shadow-sm px-6 py-2.5 bg-white dark:bg-gray-800 text-base font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 sm:mt-0 sm:w-auto sm:text-sm transition duration-150">
+                        class="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-6 py-2.5 bg-white dark:bg-gray-800 text-base font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 sm:mt-0 sm:w-auto sm:text-sm transition duration-150">
                         VOLTAR
                     </button>
                 </div>
@@ -1171,86 +1144,83 @@
 
     {{-- MODAL 3: FECHAR CAIXA (CLOSE CASH) --}}
     <div id="closeCashModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
-        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"
-            onclick="closeCloseCashModal()"></div>
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
 
         <div
-            class="relative bg-white dark:bg-gray-800 rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full border dark:border-gray-700">
+            class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
             <form id="closeCashForm">
                 @csrf
                 <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <div class="sm:flex sm:items-start">
                         <div
                             class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100 dark:bg-indigo-900/30 sm:mx-0 sm:h-10 sm:w-10">
-                            <svg class="h-6 w-6 text-indigo-600 dark:text-indigo-400" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="h-6 w-6 text-indigo-600" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
                                 </path>
                             </svg>
                         </div>
                         <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                            <h3 class="text-lg leading-6 font-black text-gray-900 dark:text-white uppercase tracking-tight"
+                            <h3 class="text-lg leading-6 font-bold text-gray-900 dark:text-white uppercase tracking-tight"
                                 id="modal-title">
-                                Fechamento: <span id="closeCashDateDisplay"
-                                    class="text-indigo-600 dark:text-indigo-400"></span>
+                                Fechamento de Caixa: <span id="closeCashDateDisplay" class="text-indigo-600"></span>
                             </h3>
 
-                            {{-- AVISO DE ESCOPO --}}
+                            {{-- ALERTA DE FILTRO ATIVO --}}
                             @if (request('arena_id'))
                                 <div
                                     class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                                     <p
                                         class="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase leading-tight">
-                                        ⚠️ Atenção: O sistema está filtrado por Arena, mas o fechamento é sempre
-                                        relativo ao **TOTAL GERAL** do dia.
+                                        ⚠️ Atenção: Você está visualizando uma Arena específica, mas o fechamento é
+                                        sempre do **TOTAL GERAL**.
                                     </p>
                                 </div>
                             @endif
 
                             <div class="mt-4 space-y-4">
-                                {{-- VALOR CALCULADO PELO SISTEMA --}}
+                                {{-- VALOR CALCULADO --}}
                                 <div>
                                     <label
-                                        class="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">
-                                        Total Esperado (Saldo em Sistema)
+                                        class="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+                                        Total Esperado (Sistema)
                                     </label>
                                     <div id="calculatedLiquidAmount"
-                                        class="mt-1 block w-full bg-gray-50 dark:bg-gray-900 p-3 rounded-md font-black text-2xl text-indigo-600 dark:text-indigo-400 border border-gray-200 dark:border-gray-700">
+                                        class="mt-1 block w-full bg-gray-100 dark:bg-gray-900 p-3 rounded-md font-black text-2xl text-indigo-600 border border-gray-200 dark:border-gray-700">
                                         R$ 0,00
                                     </div>
-                                    <p class="text-[10px] text-gray-400 mt-1 italic">Soma de todas as entradas
-                                        registradas no sistema.</p>
+                                    <p class="text-[10px] text-gray-400 mt-1">Soma de todas as entradas menos estornos
+                                        do dia.</p>
                                 </div>
 
-                                {{-- VALOR INFORMADO PELO OPERADOR --}}
+                                {{-- VALOR FÍSICO --}}
                                 <div
                                     class="p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border-2 border-indigo-100 dark:border-indigo-800">
                                     <label for="actualCashAmount"
-                                        class="block text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest mb-1 text-left">
-                                        Valor Total em Caixa Físico (Contado)
+                                        class="block text-xs font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest mb-1">
+                                        Valor Total em Caixa Físico
                                     </label>
                                     <div class="relative">
                                         <div
                                             class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                             <span class="text-indigo-500 font-bold">R$</span>
                                         </div>
-                                        {{-- CORREÇÃO NO ATRIBUTO NAME ABAIXO: de "actual_cash_amount" para "actual_amount" --}}
                                         <input type="number" step="0.01" id="actualCashAmount"
-                                            name="actual_amount" required
-                                            class="pl-10 block w-full rounded-md border-indigo-300 dark:border-indigo-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white font-black text-2xl"
+                                            name="actual_cash_amount" required
+                                            class="pl-10 block w-full rounded-md border-indigo-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white font-black text-2xl"
                                             placeholder="0,00">
                                     </div>
                                 </div>
 
-                                {{-- MENSAGEM DE CONFERÊNCIA (DIFERENÇA) --}}
+                                {{-- MENSAGEM DE DIFERENÇA (DINÂMICA VIA JS) --}}
                                 <div id="differenceMessage"
-                                    class="hidden mt-3 p-3 text-sm font-bold rounded-lg text-center border transition-all duration-300">
+                                    class="hidden mt-3 p-3 text-sm font-bold rounded-lg text-center border">
                                 </div>
 
                                 <input type="hidden" id="closeCashDate" name="date">
                                 <div id="closecash-error-message"
-                                    class="hidden mt-3 p-3 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-bold rounded-lg border border-red-200 dark:border-red-800">
+                                    class="hidden mt-3 p-3 bg-red-100 text-red-700 text-xs font-bold rounded-lg border border-red-200">
                                 </div>
                             </div>
                         </div>
@@ -1258,12 +1228,12 @@
                 </div>
 
                 <div
-                    class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2 border-t border-gray-100 dark:border-gray-700 text-left">
+                    class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2 border-t border-gray-100 dark:border-gray-700">
                     <button type="submit" id="submitCloseCashBtn"
-                        class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-6 py-2.5 bg-indigo-600 text-base font-black text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 sm:w-auto sm:text-sm transition duration-150 uppercase tracking-wider">
-                        <span id="submitCloseCashText">Confirmar Fechamento</span>
+                        class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-6 py-2.5 bg-indigo-600 text-base font-black text-white hover:bg-indigo-700 focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:w-auto sm:text-sm transition duration-150 uppercase tracking-wider">
+                        <span id="submitCloseCashText">Confirmar Fechamento Geral</span>
                         <svg id="submitCloseCashSpinner" class="animate-spin ml-2 h-4 w-4 text-white hidden"
-                            fill="none" viewBox="0 0 24 24">
+                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
                                 stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor"
@@ -1272,7 +1242,7 @@
                         </svg>
                     </button>
                     <button type="button" onclick="closeCloseCashModal()"
-                        class="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 dark:border-gray-600 shadow-sm px-6 py-2.5 bg-white dark:bg-gray-800 text-base font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 sm:mt-0 sm:w-auto sm:text-sm transition duration-150">
+                        class="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-6 py-2.5 bg-white dark:bg-gray-800 text-base font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 sm:mt-0 sm:w-auto sm:text-sm transition duration-150">
                         VOLTAR
                     </button>
                 </div>
@@ -1281,21 +1251,20 @@
     </div>
 
 
-    {{-- MODAL 4: ABRIR CAIXA (OPEN CASH) - Exige Justificativa para Auditoria --}}
+    {{-- MODAL 4: ABRIR CAIXA (OPEN CASH) - Exige Justificativa --}}
     <div id="openCashModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4"
         aria-labelledby="modal-title" role="dialog" aria-modal="true">
-        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"
-            onclick="closeOpenCashModal()"></div>
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
 
         <div
-            class="relative bg-white dark:bg-gray-800 rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full border dark:border-gray-700">
+            class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
             <form id="openCashForm">
                 @csrf
                 <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <div class="sm:flex sm:items-start">
                         <div
                             class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 sm:mx-0 sm:h-10 sm:w-10">
-                            <svg class="h-6 w-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor"
+                            <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor"
                                 viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.3 16c-.77 1.333.192 3 1.732 3z">
@@ -1303,7 +1272,7 @@
                             </svg>
                         </div>
                         <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                            <h3 class="text-lg leading-6 font-black text-gray-900 dark:text-white uppercase tracking-tight"
+                            <h3 class="text-lg leading-6 font-bold text-gray-900 dark:text-white uppercase tracking-tight"
                                 id="modal-title">
                                 Reabrir Caixa Diário
                             </h3>
@@ -1314,37 +1283,37 @@
                                     O caixa do dia <span id="openCashDateDisplay" class="font-black underline"></span>
                                     está <strong>FECHADO</strong>.
                                 </p>
-                                <p class="mt-1 text-xs text-red-600 dark:text-red-500 italic font-medium text-left">
-                                    A reabertura permite novas baixas e alterações, mas gera um registro de auditoria no
+                                <p class="mt-1 text-xs text-red-600 dark:text-red-500 italic font-medium">
+                                    A reabertura permite novas baixas e alterações, mas gera um log de auditoria no
                                     sistema.
                                 </p>
                             </div>
 
                             <div class="mt-4">
                                 <label for="reopen_reason"
-                                    class="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 text-left">
+                                    class="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1">
                                     Justificativa da Reabertura <span class="text-red-500">*</span>
                                 </label>
-                                {{-- A única mudança necessária é o name="reason" abaixo --}}
-                                <textarea id="reopen_reason" name="reason" rows="3" required
-                                    class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-700 dark:text-white font-medium text-sm"
-                                    placeholder="Descreva o motivo da reabertura (Ex: Erro no lançamento da Reserva #123)"></textarea>
+                                <textarea id="reopen_reason" name="reopen_reason" rows="3" required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-700 dark:text-white font-medium text-sm"
+                                    placeholder="Descreva detalhadamente o motivo (Ex: Erro no lançamento da Reserva #123)"></textarea>
                             </div>
+
                             <input type="hidden" id="reopenCashDate" name="date">
                             <div id="openCash-error-message"
-                                class="hidden mt-3 p-3 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-bold rounded-lg border border-red-200 dark:border-red-800 text-left">
+                                class="hidden mt-3 p-3 bg-red-100 text-red-700 text-xs font-bold rounded-lg border border-red-200">
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div
-                    class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2 border-t border-gray-100 dark:border-gray-700 text-left">
+                    class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2 border-t border-gray-100 dark:border-gray-700">
                     <button type="submit" id="submitOpenCashBtn"
-                        class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-6 py-2.5 bg-red-600 text-base font-black text-white hover:bg-red-700 focus:ring-2 focus:ring-red-500 sm:w-auto sm:text-sm transition duration-150 uppercase tracking-widest">
+                        class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-6 py-2.5 bg-red-600 text-base font-black text-white hover:bg-red-700 focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:w-auto sm:text-sm transition duration-150 uppercase tracking-widest">
                         <span id="submitOpenCashText">Confirmar Reabertura</span>
                         <svg id="submitOpenCashSpinner" class="animate-spin ml-2 h-4 w-4 text-white hidden"
-                            fill="none" viewBox="0 0 24 24">
+                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
                                 stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor"
@@ -1353,7 +1322,7 @@
                         </svg>
                     </button>
                     <button type="button" onclick="closeOpenCashModal()"
-                        class="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 dark:border-gray-600 shadow-sm px-6 py-2.5 bg-white dark:bg-gray-800 text-base font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 sm:mt-0 sm:w-auto sm:text-sm transition duration-150">
+                        class="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-6 py-2.5 bg-white dark:bg-gray-800 text-base font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 sm:mt-0 sm:w-auto sm:text-sm transition duration-150">
                         CANCELAR
                     </button>
                 </div>
@@ -1365,26 +1334,20 @@
     {{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA --}}
 
     <script>
-        // --- Funções de Suporte e Formatação ---
-        function toCents(value) {
-            return Math.round(parseFloat(value || 0) * 100);
-        }
-
-        function fromCents(cents) {
-            return (cents / 100).toFixed(2);
+        // --- Funções de Suporte ---
+        function showMessage(message, isSuccess = true) {
+            console.log(isSuccess ? 'SUCESSO: ' : 'ERRO: ', message);
         }
 
         function updateRecurrentTogglePrice(newPrice) {
             const currentNewPriceEl = document.getElementById('currentNewPrice');
             if (currentNewPriceEl) {
                 const newPriceFloat = parseFloat(newPrice) || 0;
-                currentNewPriceEl.innerText = newPriceFloat.toLocaleString('pt-BR', {
-                    minimumFractionDigits: 2
-                });
+                currentNewPriceEl.innerText = newPriceFloat.toFixed(2).replace('.', ',');
             }
         }
 
-        // --- Controle de Estorno no No-Show ---
+        // --- Lógica de Controle de Estorno (NOVO) ---
         function toggleCustomRefundInput() {
             const shouldRefund = document.getElementById('should_refund').value === 'true';
             const customDiv = document.getElementById('customRefundDiv');
@@ -1393,6 +1356,7 @@
 
             if (shouldRefund) {
                 customDiv.classList.remove('hidden');
+                // Sugere o valor total pago por padrão, mas permite editar
                 inputRefund.value = paidAmount.toFixed(2);
             } else {
                 customDiv.classList.add('hidden');
@@ -1401,6 +1365,17 @@
         }
 
         // --- Lógica de Cálculo de Pagamento ---
+
+        // Funções Auxiliares para Precisão Financeira
+        function toCents(value) {
+            return Math.round(parseFloat(value || 0) * 100);
+        }
+
+        function fromCents(cents) {
+            return (cents / 100).toFixed(2);
+        }
+
+        // --- Lógica de Cálculo de Pagamento Refinada ---
         function calculateAmountDue() {
             const finalPriceEl = document.getElementById('modalFinalPrice');
             const signalRawEl = document.getElementById('modalSignalAmountRaw');
@@ -1409,24 +1384,36 @@
 
             if (!finalPriceEl || !amountPaidEl) return;
 
+            // Reset visual inicial
             trocoMessageEl.classList.add('hidden');
-            amountPaidEl.classList.remove('border-yellow-500', 'bg-yellow-50');
+            amountPaidEl.classList.remove('focus:border-yellow-500', 'border-yellow-500', 'bg-yellow-50');
+            amountPaidEl.classList.add('focus:border-green-500');
 
+            // Cálculos usando centavos para evitar erros de ponto flutuante
             const finalPriceCents = toCents(finalPriceEl.value);
             const signalAmountCents = toCents(signalRawEl.value);
             const balanceCents = finalPriceCents - signalAmountCents;
 
+            // Atualiza o label da recorrência (se houver) com o valor formatado
             updateRecurrentTogglePrice(fromCents(finalPriceCents));
 
             if (balanceCents < 0) {
+                // CASO: O sinal pago é maior que o novo preço final (Gerar Troco)
                 const trocoCents = Math.abs(balanceCents);
                 amountPaidEl.value = "0.00";
+
                 trocoMessageEl.innerHTML =
-                    `🚨 <strong>ATENÇÃO:</strong> Devolver Troco: R$ ${fromCents(trocoCents).replace('.', ',')}`;
+                    `🚨 <strong>ATENÇÃO:</strong> Troco a Devolver: R$ ${fromCents(trocoCents).replace('.', ',')}`;
                 trocoMessageEl.classList.remove('hidden');
-                amountPaidEl.classList.add('border-yellow-500', 'bg-yellow-50');
+
+                // Alerta visual no input
+                amountPaidEl.classList.remove('focus:border-green-500');
+                amountPaidEl.classList.add('focus:border-yellow-500', 'border-yellow-500', 'bg-yellow-50');
             } else {
+                // CASO: Existe saldo a pagar ou valor exato
                 amountPaidEl.value = fromCents(balanceCents);
+
+                // Verifica se o usuário digitar manualmente um valor maior que o saldo
                 checkManualOverpayment();
             }
         }
@@ -1439,196 +1426,493 @@
 
             if (!finalPriceEl || !amountPaidEl) return;
 
+            // Converte tudo para centavos (inteiros) para cálculo seguro
             const finalPriceCents = toCents(finalPriceEl.value);
             const signalAmountCents = toCents(signalRawEl.value);
             const amountPaidNowCents = toCents(amountPaidEl.value);
-            const overpaymentCents = (signalAmountCents + amountPaidNowCents) - finalPriceCents;
+
+            // Atualiza o label de recorrência com o valor do input atual
+            updateRecurrentTogglePrice(fromCents(finalPriceCents));
+
+            const totalReceivedCents = signalAmountCents + amountPaidNowCents;
+            const overpaymentCents = totalReceivedCents - finalPriceCents;
+
+            // Reset Visual
+            trocoMessageEl.classList.add('hidden');
+            amountPaidEl.classList.remove('focus:border-yellow-500', 'border-yellow-500', 'bg-yellow-50');
+            amountPaidEl.classList.add('focus:border-green-500');
 
             if (overpaymentCents > 0) {
-                trocoMessageEl.innerHTML =
-                    `🚨 <strong>ATENÇÃO:</strong> Devolver Troco: R$ ${fromCents(overpaymentCents).replace('.', ',')}`;
+                // CASO: O usuário digitou um valor que somado ao sinal ultrapassa o preço final
+                const trocoFormatted = fromCents(overpaymentCents).replace('.', ',');
+
+                trocoMessageEl.innerHTML = `🚨 <strong>ATENÇÃO:</strong> Troco a Devolver: R$ ${trocoFormatted}`;
                 trocoMessageEl.classList.remove('hidden');
-                amountPaidEl.classList.add('border-yellow-500', 'bg-yellow-50');
+
+                // Alerta visual no input
+                amountPaidEl.classList.remove('focus:border-green-500');
+                amountPaidEl.classList.add('focus:border-yellow-500', 'border-yellow-500', 'bg-yellow-50');
             } else {
-                trocoMessageEl.classList.add('hidden');
-                amountPaidEl.classList.remove('border-yellow-500', 'bg-yellow-50');
+                // Se o valor total recebido for menor ou igual ao preço final,
+                // garantimos que o cálculo base de saldo devedor seja consistente.
+                const balanceCents = finalPriceCents - signalAmountCents;
+
+                // Se o sinal sozinho já cobre o valor (preço baixou), volta para a lógica principal
+                if (balanceCents < 0) {
+                    calculateAmountDue();
+                }
             }
         }
 
-        // --- Abertura de Modais ---
+        // --- Lógica do Pagamento Refinada ---
         function openPaymentModal(id, totalPrice, remaining, signalAmount, clientName, isRecurrent = false) {
-            if (document.getElementById('js_isActionDisabled')?.value === '1') return alert('🚫 Caixa Fechado.');
+            // 1. Verificação de Segurança Robusta
+            const isClosedInput = document.getElementById('js_isActionDisabled');
+            const isClosed = isClosedInput && isClosedInput.value === '1';
 
+            if (isClosed) {
+                // Sugestão: Use um Toast ou Notificação customizada se tiver no projeto
+                alert('🚫 Ações Bloqueadas: O caixa para esta data já foi encerrado e não permite novas movimentações.');
+                return;
+            }
+
+            // 2. Reset de Estados de Erro anteriores
+            const errorDiv = document.getElementById('payment-error-message');
+            if (errorDiv) errorDiv.classList.add('hidden');
+
+            const trocoMsg = document.getElementById('trocoMessage');
+            if (trocoMsg) trocoMsg.classList.add('hidden');
+
+            // 3. Preenchimento de Dados Básicos
             document.getElementById('modalReservaId').value = id;
             document.getElementById('modalClientName').innerText = clientName;
-            document.getElementById('modalSignalAmount').innerText = signalAmount.toLocaleString('pt-BR', {
+
+            // 4. Formatação de Moeda para Exibição
+            const formattedSignal = new Intl.NumberFormat('pt-BR', {
                 style: 'currency',
                 currency: 'BRL'
-            });
+            }).format(signalAmount);
+
+            document.getElementById('modalSignalAmount').innerText = formattedSignal;
+
+            // 5. Atribuição de Valores Raw (usando .toFixed(2) para garantir o formato decimal HTML5)
             document.getElementById('modalSignalAmountRaw').value = signalAmount.toFixed(2);
             document.getElementById('modalFinalPrice').value = totalPrice.toFixed(2);
 
-            const recurrentOption = document.getElementById('recurrentOption');
-            if (recurrentOption) isRecurrent ? recurrentOption.classList.remove('hidden') : recurrentOption.classList.add(
-                'hidden');
+            // 6. Tratamento de Recorrência
+            const recurrentOptionEl = document.getElementById('recurrentOption');
+            const applyToSeriesCheckbox = document.getElementById('apply_to_series');
 
+            if (recurrentOptionEl && applyToSeriesCheckbox) {
+                if (isRecurrent) {
+                    recurrentOptionEl.classList.remove('hidden');
+                    applyToSeriesCheckbox.checked = true; // Por padrão, sugere atualizar a série
+                } else {
+                    recurrentOptionEl.classList.add('hidden');
+                    applyToSeriesCheckbox.checked = false;
+                }
+            }
+
+            // 7. Cálculo Inicial e Abertura
+            // Chamamos a função refinada anteriormente para já calcular o saldo/troco
             calculateAmountDue();
-            document.getElementById('paymentModal').classList.replace('hidden', 'flex');
+
+            const modal = document.getElementById('paymentModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+
+                // Foco automático no campo de valor pago para agilizar a operação
+                setTimeout(() => {
+                    document.getElementById('modalAmountPaid').focus();
+                    document.getElementById('modalAmountPaid').select();
+                }, 100);
+            }
         }
 
+        function closePaymentModal() {
+            document.getElementById('paymentModal').classList.replace('flex', 'hidden');
+            checkCashierStatus();
+        }
+
+        document.getElementById('paymentForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const reservaId = document.getElementById('modalReservaId').value;
+            const finalPrice = parseFloat(document.getElementById('modalFinalPrice').value).toFixed(2);
+            const amountPaid = parseFloat(document.getElementById('modalAmountPaid').value).toFixed(2);
+            const paymentMethod = document.getElementById('modalPaymentMethod').value;
+            const applyToSeries = document.getElementById('apply_to_series').checked;
+            const csrfToken = document.querySelector('input[name="_token"]').value;
+
+            const submitBtn = document.getElementById('submitPaymentBtn');
+            const errorMessageDiv = document.getElementById('payment-error-message');
+
+            if (paymentMethod === '') {
+                errorMessageDiv.textContent = 'Por favor, selecione a Forma de Pagamento.';
+                errorMessageDiv.classList.remove('hidden');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            document.getElementById('submitPaymentText').classList.add('hidden');
+            document.getElementById('submitPaymentSpinner').classList.remove('hidden');
+
+            fetch(`/admin/pagamentos/${reservaId}/finalizar`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        reserva_id: reservaId,
+                        final_price: finalPrice,
+                        amount_paid: amountPaid,
+                        payment_method: paymentMethod,
+                        apply_to_series: applyToSeries
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        throw new Error(data.message);
+                    }
+                })
+                .catch(error => {
+                    errorMessageDiv.textContent = error.message;
+                    errorMessageDiv.classList.remove('hidden');
+                })
+                .finally(() => {
+                    submitBtn.disabled = false;
+                    document.getElementById('submitPaymentText').classList.remove('hidden');
+                    document.getElementById('submitPaymentSpinner').classList.add('hidden');
+                });
+        });
+
+        // --- Lógica de No-Show (REVISADA) ---
         function openNoShowModal(id, clientName, paidAmount) {
+            const isClosed = document.getElementById('js_isActionDisabled').value === '1';
+            if (isClosed) {
+                alert("Ações bloqueadas. O caixa para esta data está FECHADO.");
+                return;
+            }
+
             document.getElementById('noShowReservaId').value = id;
             document.getElementById('noShowClientName').innerText = clientName;
             document.getElementById('noShowPaidAmount').value = paidAmount;
-            document.getElementById('noShowAmountDisplay').innerText = paidAmount.toLocaleString('pt-BR', {
-                style: 'currency',
-                currency: 'BRL'
-            });
 
             const refundControls = document.getElementById('refundControls');
-            paidAmount > 0 ? refundControls.classList.remove('hidden') : refundControls.classList.add('hidden');
+            const displayAmount = document.getElementById('noShowAmountDisplay');
+            const customDiv = document.getElementById('customRefundDiv');
 
-            document.getElementById('noShowModal').classList.replace('hidden', 'flex');
-        }
+            if (paidAmount > 0) {
+                refundControls.classList.remove('hidden');
+                displayAmount.innerText = paidAmount.toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL"
+                });
+                // Resetar para reter por padrão ao abrir
+                document.getElementById('should_refund').value = 'false';
+                customDiv.classList.add('hidden');
+            } else {
+                refundControls.classList.add('hidden');
+            }
 
-        function openCloseCashModal() {
-            const date = document.getElementById('js_cashierDate').value;
-            const systemValue = document.getElementById('valor-liquido-total-real').innerText;
-            document.getElementById('closeCashDate').value = date;
-            document.getElementById('closeCashDateDisplay').innerText = date.split('-').reverse().join('/');
-            document.getElementById('calculatedLiquidAmount').innerText = systemValue;
-            document.getElementById('closeCashModal').classList.replace('hidden', 'flex');
-            calculateDifference();
-        }
-
-        function openCash(date) {
-            document.getElementById('reopenCashDate').value = date;
-            document.getElementById('openCashDateDisplay').innerText = date.split('-').reverse().join('/');
-            document.getElementById('openCashModal').classList.replace('hidden', 'flex');
-        }
-
-        // --- Fechamento de Modais ---
-        function closePaymentModal() {
-            document.getElementById('paymentModal').classList.replace('flex', 'hidden');
+            document.getElementById('noShowModal').classList.remove('hidden');
+            document.getElementById('noShowModal').classList.add('flex');
         }
 
         function closeNoShowModal() {
             document.getElementById('noShowModal').classList.replace('flex', 'hidden');
+            checkCashierStatus();
+        }
+
+        document.getElementById('noShowForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const reservaId = document.getElementById('noShowReservaId').value;
+            const notes = document.getElementById('no_show_reason').value; // Valor do textarea
+            const blockUser = document.getElementById('block_user').checked;
+            const shouldRefund = document.getElementById('should_refund').value === 'true';
+            const refundAmount = document.getElementById('custom_refund_amount').value;
+            const csrfToken = document.querySelector('input[name="_token"]').value;
+
+            const submitBtn = document.getElementById('submitNoShowBtn');
+            const submitText = document.getElementById('submitNoShowText');
+            const submitSpinner = document.getElementById('submitNoShowSpinner');
+
+            // Estado de carregamento
+            submitBtn.disabled = true;
+            if (submitText) submitText.classList.add('hidden');
+            if (submitSpinner) submitSpinner.classList.remove('hidden');
+
+            fetch(`/admin/reservas/${reservaId}/no-show`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        no_show_reason: notes, // 🚀 AJUSTADO: Agora coincide com o Controller
+                        block_user: blockUser,
+                        should_refund: shouldRefund,
+                        refund_amount: refundAmount
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        // Sucesso: Recarrega para atualizar KPIs e tabelas
+                        location.reload();
+                    } else {
+                        // Erro controlado vindo do Controller (ex: caixa fechado)
+                        alert("Aviso: " + data.message);
+                        resetNoShowButton();
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("Erro crítico ao processar o No-Show. Verifique o console.");
+                    resetNoShowButton();
+                });
+
+            function resetNoShowButton() {
+                submitBtn.disabled = false;
+                if (submitText) submitText.classList.remove('hidden');
+                if (submitSpinner) submitSpinner.classList.add('hidden');
+            }
+        });
+
+        // --- Fechamento de Caixa Refinado (MODAL 3) ---
+        function calculateDifference() {
+            const calculatedAmountEl = document.getElementById('valor-liquido-total-real');
+            const diffMessageEl = document.getElementById('differenceMessage');
+            const actualAmountInput = document.getElementById('actualCashAmount');
+            const submitBtn = document.getElementById('submitCloseCashBtn');
+
+            if (!calculatedAmountEl || !diffMessageEl || !actualAmountInput) return;
+
+            // 1. Limpeza rigorosa da string de moeda (Ex: "R$ 1.250,50" -> "1250.50")
+            let calculatedText = calculatedAmountEl.innerText
+                .replace('R$', '') // Remove o símbolo
+                .replace(/\./g, '') // Remove pontos de milhar
+                .replace(',', '.') // Troca vírgula decimal por ponto
+                .trim();
+
+            // 2. Conversão para Centavos (Inteiros) para cálculo seguro
+            const calculatedCents = toCents(calculatedText);
+            const actualCents = toCents(actualAmountInput.value);
+            const differenceCents = actualCents - calculatedCents;
+
+            // 3. Reset visual
+            diffMessageEl.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-amber-100', 'text-amber-700',
+                'bg-green-100', 'text-green-700', 'border-red-200', 'border-amber-200', 'border-green-200');
+            diffMessageEl.classList.add('border');
+
+            // 4. Lógica de exibição baseada na diferença
+            if (differenceCents === 0) {
+                diffMessageEl.innerHTML = '✅ <strong>Caixa Exato!</strong> Os valores conferem perfeitamente.';
+                diffMessageEl.classList.add('bg-green-100', 'text-green-700', 'border-green-200');
+                if (submitBtn) submitBtn.classList.replace('bg-amber-600', 'bg-indigo-600');
+
+            } else if (differenceCents > 0) {
+                const diffFormatted = fromCents(differenceCents).replace('.', ',');
+                diffMessageEl.innerHTML =
+                    `⚠️ <strong>Sobra de Caixa: R$ ${diffFormatted}</strong><br><span class="text-[10px] font-normal">O valor físico informado é MAIOR que o registrado no sistema.</span>`;
+                diffMessageEl.classList.add('bg-amber-100', 'text-amber-700', 'border-amber-200');
+                // Alerta o gestor mudando a cor do botão de ação
+                if (submitBtn) submitBtn.classList.replace('bg-indigo-600', 'bg-amber-600');
+
+            } else {
+                const diffFormatted = fromCents(Math.abs(differenceCents)).replace('.', ',');
+                diffMessageEl.innerHTML =
+                    `🚨 <strong>Falta de Caixa: R$ ${diffFormatted}</strong><br><span class="text-[10px] font-normal">O valor físico informado é MENOR que o esperado pelo sistema.</span>`;
+                diffMessageEl.classList.add('bg-red-100', 'text-red-700', 'border-red-200');
+                // Alerta crítico no botão
+                if (submitBtn) submitBtn.classList.replace('bg-indigo-600', 'bg-red-600');
+            }
+
+            diffMessageEl.classList.remove('hidden');
+        }
+
+        function openCloseCashModal() {
+            const totalText = document.getElementById('valor-liquido-total-real').innerText;
+            const cashierDate = document.getElementById('js_cashierDate').value;
+
+            document.getElementById('closeCashDate').value = cashierDate;
+            document.getElementById('closeCashDateDisplay').innerText =
+                new Date(cashierDate + 'T00:00:00').toLocaleDateString('pt-BR');
+            document.getElementById('calculatedLiquidAmount').innerText = totalText;
+
+            const rawValue = totalText.replace(/[^\d,]/g, '').replace(',', '.');
+            document.getElementById('actualCashAmount').value = parseFloat(rawValue).toFixed(2);
+
+            calculateDifference();
+            document.getElementById('closeCashModal').classList.replace('hidden', 'flex');
         }
 
         function closeCloseCashModal() {
             document.getElementById('closeCashModal').classList.replace('flex', 'hidden');
         }
 
+        document.getElementById('closeCashForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const submitBtn = document.getElementById('submitCloseCashBtn');
+            const date = document.getElementById('closeCashDate').value;
+            const actualAmount = document.getElementById('actualCashAmount').value;
+            const csrfToken = document.querySelector('input[name="_token"]').value;
+
+            submitBtn.disabled = true;
+            const btnText = document.getElementById('submitCloseCashText');
+            if (btnText) btnText.innerText = "PROCESSANDO...";
+
+            fetch(`/admin/pagamentos/fechar-caixa`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        date: date,
+                        actual_amount: actualAmount
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert("Erro ao fechar caixa: " + data.message);
+                        submitBtn.disabled = false;
+                        if (btnText) btnText.innerText = "Confirmar Fechamento Geral";
+                    }
+                })
+                .catch(err => {
+                    alert("Erro de conexão com o servidor.");
+                    submitBtn.disabled = false;
+                });
+        });
+
+        // --- Abertura de Caixa (MODAL 4) ---
+        function openCash(date) {
+            const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('pt-BR');
+            document.getElementById('reopenCashDate').value = date;
+            document.getElementById('openCashDateDisplay').innerText = formattedDate;
+            document.getElementById('openCashModal').classList.replace('hidden', 'flex');
+        }
+
         function closeOpenCashModal() {
             document.getElementById('openCashModal').classList.replace('flex', 'hidden');
         }
 
-        // --- Lógica de Diferença de Caixa ---
-        function calculateDifference() {
-            const systemEl = document.getElementById('valor-liquido-total-real');
-            const actualInput = document.getElementById('actualCashAmount');
-            const diffMessageEl = document.getElementById('differenceMessage');
-            const submitBtn = document.getElementById('submitCloseCashBtn');
+        document.getElementById('openCashForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const date = document.getElementById('reopenCashDate').value;
+            const reason = document.getElementById('reopen_reason').value;
+            const csrfToken = document.querySelector('input[name="_token"]').value;
 
-            if (!systemEl || !actualInput) return;
-
-            const systemValue = systemEl.innerText.replace(/[^\d,]/g, '').replace(',', '.');
-            const diffCents = toCents(actualInput.value) - toCents(systemValue);
-
-            diffMessageEl.className = 'mt-3 p-3 text-sm font-bold rounded-lg text-center border';
-            if (diffCents === 0) {
-                diffMessageEl.innerHTML = '✅ Caixa Perfeito!';
-                diffMessageEl.classList.add('bg-green-100', 'text-green-700', 'border-green-200');
-            } else if (diffCents > 0) {
-                diffMessageEl.innerHTML = `⚠️ Sobra no Físico: R$ ${fromCents(diffCents).replace('.', ',')}`;
-                diffMessageEl.classList.add('bg-amber-100', 'text-amber-700', 'border-amber-200');
-            } else {
-                diffMessageEl.innerHTML = `🚨 Falta no Físico: R$ ${fromCents(Math.abs(diffCents)).replace('.', ',')}`;
-                diffMessageEl.classList.add('bg-red-100', 'text-red-700', 'border-red-200');
-            }
-            diffMessageEl.classList.remove('hidden');
-        }
+            fetch(`/admin/pagamentos/abrir-caixa`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken
+                    },
+                    body: JSON.stringify({
+                        date,
+                        reason
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert(data.message);
+                    }
+                });
+        });
 
         function checkCashierStatus() {
             const btn = document.getElementById('openCloseCashModalBtn');
             const statusEl = document.getElementById('cashStatus');
+            const inputTotal = document.getElementById('js_totalReservas');
+            const inputFilter = document.getElementById('js_isFiltered');
+            const valorLiquidoEl = document.getElementById('valor-liquido-total-real');
+
             if (!btn || !statusEl) return;
-            if (document.getElementById('js_isFiltered').value === '1') {
-                statusEl.innerHTML = "💡 Limpe o filtro para fechar.";
+
+            const totalReservations = inputTotal ? parseInt(inputTotal.value) : 0;
+            const isFiltered = inputFilter && inputFilter.value === '1';
+
+            let totalCashToday = 0;
+            if (valorLiquidoEl) {
+                let rawText = valorLiquidoEl.innerText.replace(/[^\d,]/g, '').replace(',', '.');
+                totalCashToday = parseFloat(rawText) || 0;
+            }
+
+            if (isFiltered) {
+                btn.disabled = true;
+                statusEl.innerHTML = "💡 Limpe o filtro de arena para fechar.";
+                statusEl.style.color = "#f59e0b";
                 return;
             }
-            const total = parseInt(document.getElementById('js_totalReservas').value || 0);
-            let completed = 0;
-            const finalS = ['pago', 'falta', 'cancelada', 'rejeitada', 'no_show', 'paid'];
-            document.querySelectorAll('table tbody tr').forEach(row => {
-                const text = row.querySelector('td:nth-child(3)')?.innerText.trim().toLowerCase();
-                if (finalS.some(s => text?.includes(s))) completed++;
+
+            if (totalReservations === 0) {
+                if (totalCashToday > 0) {
+                    btn.disabled = false;
+                    statusEl.innerHTML = "✅ Pronto para Fechar (Entradas Antecipadas)";
+                    statusEl.style.color = "#16a34a";
+                } else {
+                    btn.disabled = true;
+                    statusEl.innerHTML = "⚪ Nenhum movimento hoje.";
+                    statusEl.style.color = "#6b7280";
+                }
+                return;
+            }
+
+            const finalStatuses = ['pago completo', 'pago', 'finalizado', 'falta', 'cancelada', 'rejeitada', 'no_show',
+                'paid', 'complete'
+            ];
+            let completedOnScreen = 0;
+            const rows = document.querySelectorAll('table tbody tr');
+
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 3) {
+                    const statusCell = cells[2];
+                    const textContent = statusCell.innerText.trim().toLowerCase();
+                    const dataStatus = statusCell.getAttribute('data-status') ? statusCell.getAttribute(
+                        'data-status').toLowerCase() : '';
+                    if (finalStatuses.includes(textContent) || finalStatuses.includes(dataStatus)) {
+                        completedOnScreen++;
+                    }
+                }
             });
-            if (total > 0 && completed < total) {
+
+            if (completedOnScreen < totalReservations) {
                 btn.disabled = true;
-                statusEl.innerHTML = `🚨 Pendentes: ${total - completed}`;
+                statusEl.innerHTML = `🚨 Pendentes: ${totalReservations - completedOnScreen} reservas.`;
+                statusEl.style.color = "#ef4444";
             } else {
                 btn.disabled = false;
-                statusEl.innerHTML = "✅ Pronto para fechar!";
-                statusEl.classList.replace('text-red-500', 'text-green-600');
+                statusEl.innerHTML = "✅ Pronto para Fechamento!";
+                statusEl.style.color = "#16a34a";
             }
         }
 
-        // --- Event Listeners e Ajax ---
+        // --- Inicialização ---
         document.addEventListener('DOMContentLoaded', () => {
             checkCashierStatus();
-            document.getElementById('actualCashAmount')?.addEventListener('input', calculateDifference);
-            document.getElementById('modalFinalPrice')?.addEventListener('input', calculateAmountDue);
-            document.getElementById('modalAmountPaid')?.addEventListener('input', checkManualOverpayment);
+            const actualCashInput = document.getElementById('actualCashAmount');
+            if (actualCashInput) actualCashInput.addEventListener('input', calculateDifference);
+            const modalFinalPriceEl = document.getElementById('modalFinalPrice');
+            if (modalFinalPriceEl) modalFinalPriceEl.addEventListener('input', calculateAmountDue);
+            const modalAmountPaidEl = document.getElementById('modalAmountPaid');
+            if (modalAmountPaidEl) modalAmountPaidEl.addEventListener('input', checkManualOverpayment);
         });
-
-        // AJAX Genérico para formulários
-        function setupAjaxForm(formId, btnId, spinnerId, errorId, urlTemplate) {
-            const form = document.getElementById(formId);
-            if (!form) return;
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const btn = document.getElementById(btnId);
-                const spinner = document.getElementById(spinnerId);
-                const error = document.getElementById(errorId);
-                const id = document.getElementById('modalReservaId')?.value || document.getElementById(
-                    'noShowReservaId')?.value || '';
-
-                btn.disabled = true;
-                spinner.classList.remove('hidden');
-                error.classList.add('hidden');
-
-                fetch(urlTemplate.replace('{id}', id), {
-                        method: 'POST',
-                        body: new FormData(this),
-                        headers: {
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute(
-                                'content'),
-                            'Accept': 'application/json'
-                        }
-                    })
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.success) window.location.reload();
-                        else throw new Error(data.message || 'Erro ao processar');
-                    })
-                    .catch(err => {
-                        error.innerText = err.message;
-                        error.classList.remove('hidden');
-                        btn.disabled = false;
-                        spinner.classList.add('hidden');
-                    });
-            });
-        }
-
-        setupAjaxForm('paymentForm', 'submitPaymentBtn', 'submitPaymentSpinner', 'payment-error-message',
-            '/admin/pagamentos/{id}/finalizar');
-        setupAjaxForm('noShowForm', 'submitNoShowBtn', 'submitNoShowSpinner', 'noshow-error-message',
-            '/admin/reservas/{id}/no-show');
-        setupAjaxForm('closeCashForm', 'submitCloseCashBtn', 'submitCloseCashSpinner', 'closecash-error-message',
-            '/admin/pagamentos/fechar-caixa');
-        setupAjaxForm('openCashForm', 'submitOpenCashBtn', 'submitOpenCashSpinner', 'openCash-error-message',
-            '/admin/pagamentos/abrir-caixa');
     </script>
 </x-app-layout>

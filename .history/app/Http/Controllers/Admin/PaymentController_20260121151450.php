@@ -383,13 +383,18 @@ class PaymentController extends Controller
 
 
     /**
+
      * Registra Falta (No-Show) - Com lógica de bloqueio de usuário
+
      */
+
     public function registerNoShow(Request $request, $reservaId)
     {
+        // 1. Eager loading
         $reserva = Reserva::with(['arena', 'user'])->findOrFail($reservaId);
 
-        // 🛡️ TRAVA: Verifica o caixa de HOJE (onde o dinheiro se move agora)
+        // 2. TRAVA DE SEGURANÇA CORRIGIDA: Verifica o caixa de HOJE (Data atual)
+        // O dinheiro sai ou é retido no momento da ação, portanto, no caixa atual.
         $hoje = \Carbon\Carbon::today()->toDateString();
         if (\App\Http\Controllers\FinanceiroController::isCashClosed($hoje)) {
             return response()->json([
@@ -421,16 +426,18 @@ class PaymentController extends Controller
                         'type'           => 'refund',
                         'payment_method' => 'cash_out',
                         'description'    => "SAÍDA (Estorno No-Show) #{$reserva->id} | Cliente: {$reserva->client_name}" . $infoContexto,
-                        'paid_at'        => now(),
+                        'paid_at'        => now(), // Cai no caixa de hoje
                     ]);
 
+                    // Atualiza a descrição da entrada original para histórico
                     FinancialTransaction::where('reserva_id', $reserva->id)
                         ->where('type', '!=', 'refund')
                         ->update([
-                            'description' => DB::raw("CONCAT(description, ' (No-Show c/ Estorno em " . date('d/m') . ")')")
+                            'description' => DB::raw("CONCAT(description, ' (No-Show com Estorno realizado em " . date('d/m') . ")')")
                         ]);
                 } else {
-                    // 🔒 RETENÇÃO
+                    // 🔒 RETENÇÃO (Transforma o sinal em multa)
+                    // Atualizamos a transação original (que pode ser de outro dia)
                     FinancialTransaction::where('reserva_id', $reserva->id)
                         ->update([
                             'type'           => 'no_show_penalty',
@@ -438,7 +445,7 @@ class PaymentController extends Controller
                             'description'    => DB::raw("CONCAT(description, ' [RETIDO COMO MULTA EM " . date('d/m') . "]')")
                         ]);
 
-                    // LOG visual no caixa de hoje
+                    // ✅ NOVO: Cria um registro de R$ 0,00 no caixa de HOJE apenas para auditoria visual
                     FinancialTransaction::create([
                         'reserva_id'     => $reserva->id,
                         'arena_id'       => $reserva->arena_id,
@@ -446,29 +453,42 @@ class PaymentController extends Controller
                         'amount'         => 0,
                         'type'           => 'no_show_penalty',
                         'payment_method' => 'retained_funds',
-                        'description'    => "LOG: Falta marcada hoje. Valor de R$ {$totalOriginalPago} (Reserva #{$reserva->id}) retido como multa.",
+                        'description'    => "LOG: Falta marcada hoje. Valor de R$ {$totalOriginalPago} da Reserva #{$reserva->id} foi retido como multa.",
                         'paid_at'        => now(),
                     ]);
                 }
             }
 
+            // 3. Penalidade ao Usuário
             if ($reserva->user) {
                 $user = $reserva->user;
                 $user->increment('no_show_count');
+
                 if ($user->no_show_count >= 3) {
                     $user->update(['is_blocked' => true]);
+                    Log::warning("Usuário ID {$user->id} bloqueado automaticamente (3 No-Shows).");
                 }
             }
 
+            // 4. Liberação do Slot no Calendário
             app(\App\Http\Controllers\ReservaController::class)->recreateFixedSlot($reserva);
+
+            // 5. Deleção da Reserva
             $reserva->delete();
 
             DB::commit();
-            return response()->json(['success' => true, 'message' => 'Falta registrada e financeiro processado no caixa de hoje.']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Falta registrada e financeiro processado no caixa de hoje.'
+            ]);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Erro no No-Show #{$reservaId}: " . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Erro ao processar: ' . $e->getMessage()], 500);
+            Log::error("Erro Crítico no No-Show Reserva #{$reservaId}: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao processar: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

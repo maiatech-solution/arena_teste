@@ -818,20 +818,20 @@ class AdminController extends Controller
      */
     public function indexFinancialDashboard(Request $request)
     {
-        // 1. Definição da data e da ARENA
+        // 1. Definição da data e da ARENA (Filtro essencial) 🏟️
         $selectedDate = $request->input('date', Carbon::today()->toDateString());
         $date = Carbon::parse($selectedDate)->toDateString();
-        $arenaId = $request->input('arena_id');
+        $arenaId = $request->input('arena_id'); // 🎯 NOVO: Captura o filtro de quadra
         $search = $request->input('search');
         $reservaId = $request->input('reserva_id');
 
-        // 2. Consulta de Reservas do Dia (Tabela principal)
+        // 2. Consulta de Reservas com Filtro de Arena e Eager Loading
         $reservasQuery = Reserva::where('is_fixed', false)
-            ->with('arena')
+            ->with('arena') // 🏟️ Para exibir o nome da quadra na tabela
             ->whereDate('date', $date)
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, 'completed', 'no_show', 'canceled'])
+            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, Reserva::STATUS_CONCLUIDA, Reserva::STATUS_CANCELADA, Reserva::STATUS_NO_SHOW])
             ->when($arenaId, function ($query, $arenaId) {
-                return $query->where('arena_id', $arenaId);
+                return $query->where('arena_id', $arenaId); // Filtra por quadra
             })
             ->when($reservaId, function ($query, $reservaId) {
                 return $query->where('id', $reservaId);
@@ -845,33 +845,25 @@ class AdminController extends Controller
             ->orderBy('start_time')
             ->get();
 
-        // 3. 💰 CÁLCULOS FINANCEIROS BLINDADOS 💰
+        // 3. Cálculos Financeiros Segmentados 💰
 
-        // 3.1 Total Real em Caixa (Tudo que entrou de fato hoje, incluindo multas)
+        // 3.1 Total Recebido (Filtrado por Arena se houver)
         $totalReceived = FinancialTransaction::whereDate('paid_at', $date)
             ->when($arenaId, function ($query, $arenaId) {
                 return $query->where('arena_id', $arenaId);
             })
             ->sum('amount');
 
-        // 3.2 Receita Total Exibida (Soma de jogos confirmados + multas de quem faltou)
-        // Isso evita que o gráfico caia quando você marca No-Show retendo o valor.
-        $receitaMultas = FinancialTransaction::whereDate('paid_at', $date)
-            ->where('type', 'no_show_penalty')
-            ->when($arenaId, function ($query, $arenaId) {
-                return $query->where('arena_id', $arenaId);
-            })
-            ->sum('amount');
-
-        // 3.3 Transações para a tabela de auditoria
+        // Transações para auditoria (Filtradas)
         $financialTransactions = FinancialTransaction::whereDate('paid_at', $date)
             ->when($arenaId, function ($query, $arenaId) {
                 return $query->where('arena_id', $arenaId);
             })
-            ->orderBy('paid_at', 'desc')
+            ->orderBy('paid_at', 'asc')
             ->get();
 
-        // 3.4 Pendências (Somente de quem ainda vai jogar)
+        // 3.2 Total Esperado e Pendente (Baseado na query filtrada de reservas)
+        // Usamos as reservas ativas da quadra selecionada
         $activeReservas = Reserva::where('is_fixed', false)
             ->whereDate('date', $date)
             ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
@@ -884,10 +876,10 @@ class AdminController extends Controller
         $totalPaidBySignals = $activeReservas->sum('total_paid');
         $totalPending = $totalExpected - $totalPaidBySignals;
 
-        // 3.5 Contador de Faltas (Busca no financeiro para não perder o dado se a reserva for deletada)
-        $noShowCount = FinancialTransaction::whereDate('paid_at', $date)
-            ->where('type', 'no_show_penalty')
-            ->where('amount', '>', 0) // Garante que foi uma retenção
+        // 3.3 No-Show (Filtrado)
+        $noShowCount = Reserva::whereDate('date', $date)
+            ->where('is_fixed', false)
+            ->where('status', Reserva::STATUS_NO_SHOW)
             ->when($arenaId, function ($query, $arenaId) {
                 return $query->where('arena_id', $arenaId);
             })
@@ -897,12 +889,12 @@ class AdminController extends Controller
             'reservas' => $reservasQuery,
             'financialTransactions' => $financialTransactions,
             'selectedDate' => $selectedDate,
-            'arenaId' => $arenaId,
-            'arenas' => \App\Models\Arena::all(),
+            'arenaId' => $arenaId, // Passa o ID para manter o select preenchido
+            'arenas' => \App\Models\Arena::all(), // 🏟️ Lista de quadras para o filtro
             'highlightReservaId' => $reservaId,
-            'totalReceived' => $totalReceived, // Saldo Real
+            'totalReceived' => $totalReceived,
             'totalPending' => max(0, $totalPending),
-            'totalExpected' => $totalExpected + $receitaMultas, // Receita total (Jogos + Multas)
+            'totalExpected' => $totalExpected,
             'noShowCount' => $noShowCount,
             'pageTitle' => 'Gerenciamento de Caixa & Pagamentos',
             'search' => $search,
