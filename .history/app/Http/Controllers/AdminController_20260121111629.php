@@ -903,8 +903,7 @@ class AdminController extends Controller
     }
 
     /**
-     * 🛠️ Move para MANUTENÇÃO com Fila de Crédito Inteligente
-     * Protege valores já pagos e distribui o saldo por múltiplas datas se necessário.
+     * 🛠️ Move para MANUTENÇÃO transferindo crédito ou realizando estorno automático.
      */
     public function moverManutencao(Request $request, $id)
     {
@@ -922,14 +921,14 @@ class AdminController extends Controller
                 $dataReserva = date('d/m', strtotime($reserva->date));
                 $horaReserva = date('H:i', strtotime($reserva->start_time));
 
-                // 1. LÓGICA DE MOVIMENTAÇÃO DE CRÉDITO COM PROTEÇÃO DE TRANSBORDO
+                // 1. LÓGICA DE MOVIMENTAÇÃO DE CRÉDITO INTELIGENTE
                 $transferenciaSucesso = false;
-                $datasDestino = [];
+                $reservaDestinoData = null;
 
                 if ($valorOriginal > 0 && ($action === 'transfer' || $action === 'credit')) {
                     $idDaSerie = $reserva->recurrent_series_id ?? $reserva->id;
 
-                    // Busca todas as futuras reservas da série que não estão canceladas
+                    // Busca todas as futuras reservas da série (ordem cronológica)
                     $proximasReservas = Reserva::where(function ($q) use ($idDaSerie) {
                         $q->where('recurrent_series_id', $idDaSerie)->orWhere('id', $idDaSerie);
                     })
@@ -939,44 +938,36 @@ class AdminController extends Controller
                         ->orderBy('date', 'asc')
                         ->get();
 
-                    $montanteParaDistribuir = $valorOriginal;
-
                     foreach ($proximasReservas as $proxima) {
-                        if ($montanteParaDistribuir <= 0) break;
+                        $saldoDevedor = (float)$proxima->price - (float)$proxima->total_paid;
 
-                        $precoTotal = (float)$proxima->price;
-                        $jaPago = (float)$proxima->total_paid;
-                        $saldoDevedor = $precoTotal - $jaPago;
-
-                        // Se a reserva destino ainda tem saldo a pagar
+                        // 🎯 SÓ TRANSFERE SE A RESERVA NÃO ESTIVER PAGA COMPLETA
                         if ($saldoDevedor > 0) {
-                            $valorInjetado = min($montanteParaDistribuir, $saldoDevedor);
-                            $novoTotalPago = $jaPago + $valorInjetado;
+                            $novoTotal = (float)$proxima->total_paid + $valorOriginal;
 
+                            // Atualiza a reserva destino somando o valor (sem sobrescrever o que já existia)
                             DB::table('reservas')->where('id', $proxima->id)->update([
-                                'total_paid'     => $novoTotalPago,
-                                'signal_value'   => $novoTotalPago,
-                                'payment_status' => ($novoTotalPago >= $precoTotal) ? 'paid' : 'partial',
+                                'total_paid'     => $novoTotal,
+                                'signal_value'   => $novoTotal, // Atualiza sinal para controle
+                                'payment_status' => ($novoTotal >= $proxima->price) ? 'paid' : 'partial',
                                 'user_id'        => $userIdOriginal,
                                 'client_name'    => $nomeOriginal,
                                 'status'         => 'confirmed'
                             ]);
 
-                            // Vincula o rastro financeiro à reserva que recebeu o crédito
+                            // Move o registro financeiro para a nova reserva
                             DB::table('financial_transactions')
                                 ->where('reserva_id', $reserva->id)
                                 ->update(['reserva_id' => $proxima->id]);
 
-                            $montanteParaDistribuir -= $valorInjetado;
                             $transferenciaSucesso = true;
-                            $datasDestino[] = date('d/m', strtotime($proxima->date));
+                            $reservaDestinoData = date('d/m', strtotime($proxima->date));
+                            break; // Dinheiro depositado, encerra o loop
                         }
                     }
                 }
 
                 // 2. BACKUP (Marcação para reativação inteligente)
-                $reservaDestinoData = !empty($datasDestino) ? implode(', ', array_unique($datasDestino)) : null;
-
                 $backupData = [
                     'name' => $nomeOriginal,
                     'contact' => $contatoOriginal,
@@ -984,11 +975,11 @@ class AdminController extends Controller
                     'user_id' => $userIdOriginal,
                     'total_paid_orig' => $valorOriginal,
                     'finance_action' => $transferenciaSucesso ? 'credit' : 'refund',
-                    'dest_date' => $reservaDestinoData
+                    'dest_date' => $reservaDestinoData // Guarda a data para a reativação usar
                 ];
                 $backupString = "###BACKUP###" . json_encode($backupData) . "###END###";
 
-                // 3. SE NÃO TRANSFERIU (OU OPÇÃO ESTORNO), REGISTRA O ESTORNO
+                // 3. SE NÃO TRANSFERIU (OU OPÇÃO ESTORNO), FAZ ESTORNO NO CAIXA
                 if ($valorOriginal > 0 && !$transferenciaSucesso) {
                     FinancialTransaction::create([
                         'reserva_id' => $reserva->id,
@@ -1011,7 +1002,7 @@ class AdminController extends Controller
                     'notes' => $backupString . "\n" . ($reserva->notes ?? '')
                 ]);
 
-                // --- 🚀 MENSAGEM WHATSAPP ---
+                // --- 🚀 MENSAGEM ---
                 $msg = "Olá {$nomeOriginal}! 👋\n\n";
                 $msg .= "Informamos que o seu horário do dia {$dataReserva} às {$horaReserva} precisou ser interrompido para MANUTENÇÃO DE EMERGÊNCIA na quadra ({$motivo}).";
 
@@ -1019,7 +1010,7 @@ class AdminController extends Controller
                     $valorFormatado = number_format($valorOriginal, 2, ',', '.');
 
                     if ($transferenciaSucesso) {
-                        $msg .= "\n\n⭐ *SOBRE O SEU PAGAMENTO:* Como seu horário é recorrente, o valor de R$ {$valorFormatado} foi TRANSFERIDO para cobrir saldo(s) no(s) jogo(s) de: {$reservaDestinoData}.";
+                        $msg .= "\n\n⭐ *SOBRE O SEU PAGAMENTO:* Como seu horário é recorrente, o valor de R$ {$valorFormatado} foi TRANSFERIDO para o seu jogo no dia {$reservaDestinoData}.";
                         $msg .= "\n\nAssim que a manutenção for concluída, avisaremos você!";
                     } else {
                         $msg .= "\n\n💰 *SOBRE O SEU PAGAMENTO:* Como o horário foi cancelado, já retiramos o valor de R$ {$valorFormatado} do nosso caixa para estorno.";
@@ -1035,7 +1026,6 @@ class AdminController extends Controller
                     'whatsapp_link' => $waLink
                 ]);
             } catch (\Exception $e) {
-                \Log::error("Erro moverManutencao: " . $e->getMessage());
                 return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
             }
         });
