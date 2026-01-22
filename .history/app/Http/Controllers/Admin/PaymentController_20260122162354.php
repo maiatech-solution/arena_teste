@@ -558,7 +558,7 @@ class PaymentController extends Controller
         }
     }
 
-    /**
+   /**
      * 💸 MOVIMENTAÇÃO AVULSA: Sangria (Saída) ou Reforço (Entrada)
      * Refinado para garantir vínculo obrigatório com uma Arena e isolamento de caixa.
      */

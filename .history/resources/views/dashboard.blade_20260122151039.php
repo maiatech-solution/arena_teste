@@ -1865,33 +1865,25 @@
                 const isToday = eventDate === moment().format('YYYY-MM-DD');
                 const isPast = moment(event.start).isBefore(moment());
 
-                // 🏟️ Captura a arena atual para validação precisa
-                const currentArenaId = document.getElementById('filter_arena')?.value || '';
-                const cacheKey = `${eventDate}_${currentArenaId}`;
-
-                // 🛑 1. TRAVA DE SEGURANÇA LOCAL (Cache por Data + Arena)
-                if (window.closedDatesCache && window.closedDatesCache[cacheKey] === true) {
+                // 🛑 1. TRAVA DE SEGURANÇA LOCAL (Cache por Data)
+                if (window.closedDatesCache && window.closedDatesCache[eventDate] === true) {
                     const msg = isToday ?
-                        "Ação bloqueada: O caixa desta arena para HOJE está fechado." :
-                        `Ação bloqueada: O caixa desta arena para o dia ${moment(eventDate).format('DD/MM')} está fechado.`;
+                        "Ação bloqueada: O caixa de HOJE está fechado." :
+                        `Ação bloqueada: O caixa do dia ${moment(eventDate).format('DD/MM')} está fechado.`;
                     showDashboardMessage(msg, 'error');
                     return;
                 }
 
-                // 🎯 2. VERIFICAÇÃO EM TEMPO REAL (Sincronização com Servidor incluindo Arena)
+                // 🎯 2. VERIFICAÇÃO EM TEMPO REAL (Sincronização com Servidor)
                 try {
-                    const response = await fetch(
-                        `{{ route('admin.payment.caixa.status') }}?date=${eventDate}&arena_id=${currentArenaId}`);
+                    const response = await fetch(`{{ route('admin.payment.caixa.status') }}?date=${eventDate}`);
                     const statusCaixa = await response.json();
-
                     if (!statusCaixa.isOpen) {
                         if (!window.closedDatesCache) window.closedDatesCache = {};
-                        window.closedDatesCache[cacheKey] = true; // Salva com a chave composta
-
+                        window.closedDatesCache[eventDate] = true;
                         showDashboardMessage(
-                            `Ação Bloqueada: O caixa desta arena para o dia ${moment(eventDate).format('DD/MM')} está fechado.`,
+                            `Ação Bloqueada: O caixa do dia ${moment(eventDate).format('DD/MM')} está fechado.`,
                             'error');
-
                         if (window.calendar) window.calendar.render();
                         return;
                     }
@@ -2000,8 +1992,8 @@
             <div class="grid grid-cols-1 gap-2">
                 ${!isFinalized && status !== 'cancelled' ?
                     `<button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                                                                                <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
-                                                                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+                                                        <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
+                                                    </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
                 <div class="grid grid-cols-2 gap-2 mt-1">
                     <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})"
@@ -2016,14 +2008,16 @@
 
                 ${!isFinalized && status !== 'no_show' ?
                     `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')"
-                                                                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
-                                                                                FALTA (NO-SHOW)
-                                                                            </button>` : ''}
+                                                        class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
+                                                        FALTA (NO-SHOW)
+                                                    </button>`
+                    : ''}
 
                 ${isRecurrent ?
                     `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition uppercase">
-                                                                                CANCELAR SÉRIE
-                                                                            </button>` : ''}
+                                                        CANCELAR SÉRIE
+                                                    </button>`
+                    : ''}
 
                 <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold">
                     Fechar
@@ -2034,6 +2028,7 @@
                     eventModal.style.display = 'flex';
                 }
             };
+
 
             // --- FUNÇÕES DE SUPORTE (FORA DA eventClick) ---
             window.closeQuickBookingModal = function() {
@@ -2066,43 +2061,31 @@
                  */
                 async function syncDashboardState() {
                     const hoje = moment().format('YYYY-MM-DD');
-                    // 🏟️ Captura a arena atual para sincronizar o status do caixa correto
-                    const arenaId = document.getElementById('filter_arena')?.value || '';
-                    const cacheKey = `${hoje}_${arenaId}`;
-
                     try {
-                        // 🚀 Adicionado arena_id na URL para não misturar Futebol com Vôlei
-                        const response = await fetch(
-                            `{{ route('admin.payment.caixa.status') }}?date=${hoje}&arena_id=${arenaId}`);
+                        const response = await fetch(`{{ route('admin.payment.caixa.status') }}?date=${hoje}`);
                         const status = await response.json();
 
                         if (!status.isOpen) {
-                            // Só mostra a mensagem se ainda não estiver marcado como fechado no cache local para ESTA arena
-                            if (!window.closedDatesCache || !window.closedDatesCache[cacheKey]) {
+                            // Só mostra a mensagem se ainda não estiver marcado como fechado no cache local
+                            if (!window.closedDatesCache || !window.closedDatesCache[hoje]) {
                                 showDashboardMessage(
-                                    `Atenção: O caixa desta arena para HOJE (${moment(hoje).format('DD/MM')}) está fechado.`,
+                                    `Atenção: O caixa do dia atual (${moment(hoje).format('DD/MM')}) está fechado.`,
                                     'warning'
                                 );
                             }
 
                             if (!window.closedDatesCache) window.closedDatesCache = {};
-                            window.closedDatesCache[cacheKey] = true;
+                            window.closedDatesCache[hoje] = true;
                         } else {
                             // Caso o caixa tenha sido aberto em outra aba/dispositivo
-                            if (window.closedDatesCache) window.closedDatesCache[cacheKey] = false;
+                            if (window.closedDatesCache) window.closedDatesCache[hoje] = false;
                         }
 
-                        // 🛡️ VERIFICAÇÃO DE SEGURANÇA: Só executa se o objeto calendar e as funções existirem
-                        if (window.calendar && typeof window.calendar.refetchEvents === 'function') {
+                        // Refetch de eventos para atualizar cores (ex: reservas que acabaram de atrasar)
+                        if (window.calendar) {
                             window.calendar.refetchEvents();
-
-                            // O render() garante que a classe 'cashier-closed-locked' seja aplicada/removida no eventDidMount
-                            if (typeof window.calendar.render === 'function') {
-                                window.calendar.render();
-                            }
-                        } else {
-                            console.warn(
-                                "[DEBUG] Sincronização ignorada: Calendário FullCalendar ainda não está pronto.");
+                            // O render() garante que a classe 'cashier-closed-locked' seja aplicada/removida
+                            window.calendar.render();
                         }
 
                     } catch (e) {
@@ -2153,70 +2136,36 @@
                             right: 'dayGridMonth,timeGridWeek,timeGridDay'
                         },
                         eventSources: [{
-                                // 1. Reservas Confirmadas
                                 url: CONFIRMED_API_URL,
                                 method: 'GET',
                                 extraParams: () => ({
-                                    // Garante que o ID da arena atual seja enviado em cada busca
                                     arena_id: document.getElementById('filter_arena')?.value ||
-                                        '',
-                                    // Timestamp para evitar cache de requisições GET
-                                    _: new Date().getTime()
+                                        ''
                                 })
                             },
                             {
-                                // 2. Slots Disponíveis (Lógica Manual com Debug e Cache-Busting)
                                 events: function(fetchInfo, successCallback, failureCallback) {
                                     const arenaId = document.getElementById('filter_arena')
                                         ?.value || '';
-
-                                    // Adicionamos um parâmetro de tempo (_) para garantir que o navegador
-                                    // busque dados frescos do servidor, ignorando o cache de rede.
                                     const url =
-                                        `${AVAILABLE_API_URL}?start=${fetchInfo.startStr}&end=${fetchInfo.endStr}&arena_id=${arenaId}&_=${new Date().getTime()}`;
+                                        `${AVAILABLE_API_URL}?start=${fetchInfo.startStr}&end=${fetchInfo.endStr}&arena_id=${arenaId}`;
 
-                                    console.log(
-                                        `[DEBUG CALENDÁRIO] Buscando slots para Arena: ${arenaId}`
-                                        );
-
-                                    fetch(url, {
-                                            cache: "no-store"
-                                        }) // Instrução para o browser não cachear o JSON
-                                        .then(r => {
-                                            if (!r.ok) throw new Error(
-                                                `HTTP error! status: ${r.status}`);
-                                            return r.json();
-                                        })
+                                    fetch(url)
+                                        .then(r => r.json())
                                         .then(events => {
-                                            console.log(
-                                                `[DEBUG CALENDÁRIO] Servidor retornou ${events.length} slots brutos para Arena ${arenaId}.`
-                                                );
-
                                             const now = moment();
                                             const filtered = events.filter(e => {
                                                 const eventStart = moment(e.start);
-
-                                                // Se não for hoje, mantém o slot visível
                                                 if (!eventStart.isSame(now, 'day'))
                                                     return true;
-
-                                                // Para HOJE: Mantém visível por meia hora após o início planejado
-                                                // (Evita que slots "fujam" da tela por pequenos atrasos no relógio)
-                                                const isVisible = eventStart.isAfter(now
-                                                    .clone().subtract(30, 'minutes')
-                                                    );
-                                                return isVisible;
+                                                // Mantém visível por meia hora após o início
+                                                return eventStart.isAfter(now.clone()
+                                                    .subtract(30, 'minutes'));
                                             });
-
-                                            console.log(
-                                                `[DEBUG CALENDÁRIO] Após filtro de 30min: ${filtered.length} slots visíveis.`
-                                                );
                                             successCallback(filtered);
                                         })
                                         .catch(err => {
-                                            console.error(
-                                                "[DEBUG CALENDÁRIO] Erro na requisição de slots:",
-                                                err);
+                                            console.error("Erro ao buscar slots livres:", err);
                                             failureCallback(err);
                                         });
                                 }
@@ -2229,37 +2178,26 @@
                             const titleEl = info.el.querySelector('.fc-event-title');
                             const eventDate = moment(info.event.start).format('YYYY-MM-DD');
 
-                            // 1. Esconde eventos cancelados ou rejeitados imediatamente
                             if (status === 'cancelled' || status === 'rejected') {
                                 info.el.style.display = 'none';
                                 return;
                             }
 
-                            // 2. 🛡️ VERIFICAÇÃO DE BLOQUEIO POR ARENA (Independência de Quadras)
-                            const currentArena = document.getElementById('filter_arena')?.value || '';
-                            const cacheKey = `${eventDate}_${currentArena}`;
-
                             const isLocked = window.closedDatesCache && window.closedDatesCache[
-                                cacheKey] === true;
-
+                                eventDate] === true;
                             if (isLocked) {
                                 info.el.classList.add('cashier-closed-locked');
                                 info.el.style.pointerEvents = 'none';
                                 info.el.style.cursor = 'not-allowed';
-                            } else {
-                                info.el.classList.remove('cashier-closed-locked');
-                                info.el.style.pointerEvents = 'auto';
-                                info.el.style.cursor = 'pointer';
                             }
 
-                            // 3. Limpa todas as classes de status para evitar sobreposição de cores
                             info.el.classList.remove(
                                 'fc-event-available', 'fc-event-recurrent', 'fc-event-quick',
                                 'fc-event-pending', 'fc-event-paid', 'fc-event-no-show',
                                 'fc-event-maintenance'
                             );
 
-                            // 4. 🎨 APLICAÇÃO DA LÓGICA DE CORES
+                            // --- Lógica de Cores ---
                             if (['pago', 'completed', 'resolvido', 'concluida'].includes(status) ||
                                 paymentStatus === 'paid') {
                                 info.el.classList.add('fc-event-paid');
@@ -2308,32 +2246,6 @@
 
                     calendarInstance.render();
                     window.calendar = calendarInstance;
-
-                    // --- 🚀 ESCUTADOR DE TROCA DE ARENA (Sincronização Corrigida) ---
-                    const filterArenaEl = document.getElementById('filter_arena');
-                    if (filterArenaEl) {
-                        filterArenaEl.addEventListener('change', function() {
-                            const hoje = moment().format('YYYY-MM-DD');
-                            const novaArenaId = this.value;
-
-                            console.log(
-                                `[DASHBOARD] Mudando para Arena ${novaArenaId}. Resetando estado...`);
-
-                            // 1. Limpamos o cache local para esquecer a trava da quadra anterior
-                            window.closedDatesCache = {};
-
-                            // 2. Verificamos o status do caixa especificamente para a NOVA arena
-                            isCashierOpen(hoje).then(() => {
-                                if (window.calendar) {
-                                    // 3. Forçamos o calendário a buscar os eventos e rodar o eventDidMount novamente
-                                    window.calendar.refetchEvents();
-                                    console.log(
-                                        "[DASHBOARD] Calendário atualizado para a arena selecionada."
-                                    );
-                                }
-                            });
-                        });
-                    }
                 });
             };
 
@@ -2355,19 +2267,18 @@
                     // 3. Enviamos data E arena_id na URL
                     const response = await fetch(
                         `{{ route('admin.payment.caixa.status') }}?date=${targetDate}&arena_id=${arenaId}`);
-
                     if (!response.ok) return true;
 
                     const data = await response.json();
                     const isClosedNow = !data.isOpen;
 
                     // 4. 🧠 Cache Inteligente: Guardamos o status por Data + Arena
+                    // Isso evita que ao mudar de quadra o sistema use o status da quadra errada
                     const cacheKey = `${targetDate}_${arenaId}`;
                     window.closedDatesCache[cacheKey] = isClosedNow;
 
-                    // 5. 🛡️ AJUSTE DE SEGURANÇA: Só tenta renderizar se o FullCalendar já existir e for uma função
-                    // Isso evita o erro "is not a function" durante o carregamento inicial da página
-                    if (isClosedNow && window.calendar && typeof window.calendar.render === 'function') {
+                    // 5. Se o caixa estiver fechado, manda o calendário se redesenhar (para pintar de cinza)
+                    if (isClosedNow && window.calendar) {
                         window.calendar.render();
                     }
 

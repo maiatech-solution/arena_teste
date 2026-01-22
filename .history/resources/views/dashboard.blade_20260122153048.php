@@ -2000,8 +2000,8 @@
             <div class="grid grid-cols-1 gap-2">
                 ${!isFinalized && status !== 'cancelled' ?
                     `<button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                                                                                <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
-                                                                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+                                                                        <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
+                                                                    </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
                 <div class="grid grid-cols-2 gap-2 mt-1">
                     <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})"
@@ -2016,14 +2016,14 @@
 
                 ${!isFinalized && status !== 'no_show' ?
                     `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')"
-                                                                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
-                                                                                FALTA (NO-SHOW)
-                                                                            </button>` : ''}
+                                                                        class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
+                                                                        FALTA (NO-SHOW)
+                                                                    </button>` : ''}
 
                 ${isRecurrent ?
                     `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition uppercase">
-                                                                                CANCELAR SÉRIE
-                                                                            </button>` : ''}
+                                                                        CANCELAR SÉRIE
+                                                                    </button>` : ''}
 
                 <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold">
                     Fechar
@@ -2157,31 +2157,24 @@
                                 url: CONFIRMED_API_URL,
                                 method: 'GET',
                                 extraParams: () => ({
-                                    // Garante que o ID da arena atual seja enviado em cada busca
                                     arena_id: document.getElementById('filter_arena')?.value ||
-                                        '',
-                                    // Timestamp para evitar cache de requisições GET
-                                    _: new Date().getTime()
+                                        ''
                                 })
                             },
                             {
-                                // 2. Slots Disponíveis (Lógica Manual com Debug e Cache-Busting)
+                                // 2. Slots Disponíveis (Lógica Manual com Debug)
                                 events: function(fetchInfo, successCallback, failureCallback) {
                                     const arenaId = document.getElementById('filter_arena')
                                         ?.value || '';
-
-                                    // Adicionamos um parâmetro de tempo (_) para garantir que o navegador
-                                    // busque dados frescos do servidor, ignorando o cache de rede.
                                     const url =
-                                        `${AVAILABLE_API_URL}?start=${fetchInfo.startStr}&end=${fetchInfo.endStr}&arena_id=${arenaId}&_=${new Date().getTime()}`;
+                                        `${AVAILABLE_API_URL}?start=${fetchInfo.startStr}&end=${fetchInfo.endStr}&arena_id=${arenaId}`;
 
                                     console.log(
-                                        `[DEBUG CALENDÁRIO] Buscando slots para Arena: ${arenaId}`
+                                        `[DEBUG CALENDÁRIO] Buscando slots livres para Arena: ${arenaId}`
                                         );
+                                    console.log(`[DEBUG CALENDÁRIO] URL: ${url}`);
 
-                                    fetch(url, {
-                                            cache: "no-store"
-                                        }) // Instrução para o browser não cachear o JSON
+                                    fetch(url)
                                         .then(r => {
                                             if (!r.ok) throw new Error(
                                                 `HTTP error! status: ${r.status}`);
@@ -2189,19 +2182,17 @@
                                         })
                                         .then(events => {
                                             console.log(
-                                                `[DEBUG CALENDÁRIO] Servidor retornou ${events.length} slots brutos para Arena ${arenaId}.`
+                                                `[DEBUG CALENDÁRIO] Servidor retornou ${events.length} slots brutos.`
                                                 );
 
                                             const now = moment();
                                             const filtered = events.filter(e => {
                                                 const eventStart = moment(e.start);
-
-                                                // Se não for hoje, mantém o slot visível
+                                                // Se não for hoje, mantém
                                                 if (!eventStart.isSame(now, 'day'))
                                                     return true;
 
-                                                // Para HOJE: Mantém visível por meia hora após o início planejado
-                                                // (Evita que slots "fujam" da tela por pequenos atrasos no relógio)
+                                                // Se for hoje, aplica a regra dos 30 minutos
                                                 const isVisible = eventStart.isAfter(now
                                                     .clone().subtract(30, 'minutes')
                                                     );
@@ -2329,7 +2320,7 @@
                                     window.calendar.refetchEvents();
                                     console.log(
                                         "[DASHBOARD] Calendário atualizado para a arena selecionada."
-                                    );
+                                        );
                                 }
                             });
                         });

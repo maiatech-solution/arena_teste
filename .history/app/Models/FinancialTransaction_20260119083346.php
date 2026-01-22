@@ -14,12 +14,14 @@ class FinancialTransaction extends Model
 
     /**
      * ✅ Constantes de Tipo de Transação
+     * Centralizar aqui evita erros de digitação nas Controllers
      */
     public const TYPE_SIGNAL = 'signal';
     public const TYPE_PAYMENT = 'payment';
     public const TYPE_REFUND = 'refund';
     public const TYPE_NO_SHOW_PENALTY = 'no_show_penalty';
 
+    // Constantes de retenção específicas
     public const TYPE_RETEN_NOSHOW_COMP = 'RETEN_NOSHOW_COMP';
     public const TYPE_RETEN_CANC_COMP = 'RETEN_CANC_COMP';
     public const TYPE_RETEN_CANC_P_COMP = 'RETEN_CANC_P_COMP';
@@ -45,48 +47,30 @@ class FinancialTransaction extends Model
 
     /**
      * 🛡️ TRAVA DE SEGURANÇA GLOBAL
-     * Impede criação ou exclusão de transação em caixa fechado por Arena.
+     * Impede criação de transação em caixa fechado, agindo como um "trigger" de aplicação.
      */
     protected static function boot()
     {
         parent::boot();
 
-        // Bloqueia a criação (Pagamentos, Sinais, Reforços)
         static::creating(function ($transaction) {
+            // 1. Ignora se for via console (Seeds, Migrations, etc)
             if (app()->runningInConsole()) return;
 
+            // 2. Determina a data da transação com precisão
             $dateToCheck = $transaction->paid_at
                 ? \Carbon\Carbon::parse($transaction->paid_at)->toDateString()
                 : now()->toDateString();
 
-            // Verifica se o caixa daquela ARENA específica está fechado
+            // 3. Verificação Direta via Model (Evita instanciar Controller no Model)
+            // Isso é mais rápido e segue as melhores práticas de design
             $isClosed = \App\Models\Cashier::where('date', $dateToCheck)
-                ->where('arena_id', $transaction->arena_id)
                 ->where('status', 'closed')
                 ->exists();
 
             if ($isClosed) {
                 $formattedDate = \Carbon\Carbon::parse($dateToCheck)->format('d/m/Y');
-                throw new \Exception("Bloqueio de Segurança: O caixa desta arena para o dia {$formattedDate} já está encerrado. Reabra-o para lançar movimentações.");
-            }
-        });
-
-        // Bloqueia a exclusão (Estornos, Exclusão de Reservas)
-        static::deleting(function ($transaction) {
-            if (app()->runningInConsole()) return;
-
-            $dateToCheck = $transaction->paid_at
-                ? \Carbon\Carbon::parse($transaction->paid_at)->toDateString()
-                : now()->toDateString();
-
-            // Verifica se o caixa daquela ARENA específica está fechado
-            $isClosed = \App\Models\Cashier::where('date', $dateToCheck)
-                ->where('arena_id', $transaction->arena_id)
-                ->where('status', 'closed')
-                ->exists();
-
-            if ($isClosed) {
-                throw new \Exception("Bloqueio de Segurança: Não é possível excluir ou estornar movimentações de uma arena com caixa encerrado.");
+                throw new \Exception("Bloqueio de Segurança: O caixa do dia {$formattedDate} já está encerrado. Reabra-o para lançar movimentações.");
             }
         });
     }
@@ -94,11 +78,13 @@ class FinancialTransaction extends Model
     /**
      * ✅ RELAÇÕES
      */
+
     public function arena(): BelongsTo
     {
         return $this->belongsTo(Arena::class);
     }
 
+    // withDefault evita erro de "tentar ler propriedade de nulo" se a reserva for deletada
     public function reserva(): BelongsTo
     {
         return $this->belongsTo(Reserva::class)->withDefault([
@@ -119,6 +105,7 @@ class FinancialTransaction extends Model
 
     /**
      * ✅ HELPER DE SCOPE
+     * Facilita pegar apenas entradas ou apenas saídas (estornos)
      */
     public function scopeCredits($query)
     {

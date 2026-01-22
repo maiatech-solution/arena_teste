@@ -560,30 +560,28 @@ class PaymentController extends Controller
 
     /**
      * 💸 MOVIMENTAÇÃO AVULSA: Sangria (Saída) ou Reforço (Entrada)
-     * Refinado para garantir vínculo obrigatório com uma Arena e isolamento de caixa.
+     * Refinado para garantir vínculo obrigatório com uma Arena.
      */
     public function storeAvulsa(Request $request)
     {
-        // 1. Validação: arena_id é obrigatório para saber de qual caixa sai o dinheiro
+        // 1. Validação: arena_id agora é 'required' para evitar transações sem dono
         $validated = $request->validate([
             'date'           => 'required|date',
             'type'           => 'required|in:in,out',
             'amount'         => 'required|numeric|min:0.01',
             'payment_method' => 'required|string|max:50',
             'description'    => 'required|string|max:255',
-            'arena_id'       => 'required|exists:arenas,id',
+            'arena_id'       => 'required|exists:arenas,id', // Ajustado: nullable -> required
         ], [
             'arena_id.required' => 'Selecione a Arena para vincular esta movimentação.',
         ]);
 
         try {
-            // 2. 🎯 TRAVA DE SEGURANÇA AJUSTADA:
-            // Agora validamos se o caixa daquela arena específica está fechado.
-            // Isso evita que um lançamento avulso "quebre" a auditoria de um caixa já lacrado.
-            if (\App\Http\Controllers\FinanceiroController::isCashClosed($validated['date'], $validated['arena_id'])) {
+            // 2. Trava de segurança: impede movimentação em dia com caixa fechado
+            if (\App\Http\Controllers\FinanceiroController::isCashClosed($validated['date'])) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Ação bloqueada: O caixa desta arena para o dia ' . \Carbon\Carbon::parse($validated['date'])->format('d/m/Y') . ' já está encerrado.'
+                    'message' => 'Ação bloqueada: O caixa de ' . \Carbon\Carbon::parse($validated['date'])->format('d/m/Y') . ' já está encerrado.'
                 ], 403);
             }
 
@@ -596,15 +594,15 @@ class PaymentController extends Controller
             $transactionType = $validated['type'] === 'out' ? 'sangria' : 'reforco';
             $prefixLabel = $validated['type'] === 'out' ? '🔴 SANGRIA: ' : '🟢 REFORÇO: ';
 
-            // 5. Criação da transação
+            // 5. Criação da transação (Garantindo persistência auditável)
             FinancialTransaction::create([
-                'arena_id'       => $validated['arena_id'], // ✅ Vínculo obrigatório
+                'arena_id'       => $validated['arena_id'], // Usa o ID validado explicitamente
                 'manager_id'     => Auth::id(),
                 'amount'         => $finalAmount,
                 'type'           => $transactionType,
                 'payment_method' => $validated['payment_method'],
                 'description'    => $prefixLabel . $validated['description'],
-                // Registra a data do caixa com o horário real da operação para timeline correta
+                // Registra a data do caixa com o horário real da operação
                 'paid_at'        => $validated['date'] . ' ' . now()->format('H:i:s'),
             ]);
 

@@ -213,19 +213,14 @@ class FinanceiroController extends Controller
         try {
             $targetDate = $request->query('date', now()->format('Y-m-d'));
             $arenaId = $request->query('arena_id');
+            $hoje = now()->format('Y-m-d');
 
-            // 🎯 AJUSTE DE SEGURANÇA:
-            // O status deve ser estritamente vinculado à Arena selecionada no Dashboard.
-            // Se arena_id não for enviado, o sistema pode acabar pegando o status de outra quadra.
-            $caixa = Cashier::whereDate('date', $targetDate)
-                ->when($arenaId, function ($q) use ($arenaId) {
-                    return $q->where('arena_id', $arenaId);
-                })
+            $caixa = Cashier::where('date', $targetDate)
+                ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
                 ->first();
 
             if ($caixa) {
                 return response()->json([
-                    // Um caixa só é considerado "fechado" se o status for explicitamente 'closed'
                     'isOpen' => $caixa->status !== 'closed',
                     'date'   => $targetDate,
                     'status' => $caixa->status,
@@ -233,18 +228,14 @@ class FinanceiroController extends Controller
                 ]);
             }
 
-            // Caso não exista registro de caixa para essa data e arena,
-            // consideramos como aberto (status inicial do dia)
             return response()->json([
                 'isOpen' => true,
                 'date'   => $targetDate,
-                'status' => 'not_created',
-                'arena'  => $arenaId
+                'status' => 'not_created'
             ]);
         } catch (\Exception $e) {
             Log::error('Erro ao buscar status do caixa: ' . $e->getMessage());
-            // Em caso de erro técnico, retornamos true para não travar a usabilidade do gestor
-            return response()->json(['isOpen' => true, 'error' => $e->getMessage()], 200);
+            return response()->json(['isOpen' => true], 200);
         }
     }
 

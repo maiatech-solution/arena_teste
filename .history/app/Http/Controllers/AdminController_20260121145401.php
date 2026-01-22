@@ -996,14 +996,13 @@ class AdminController extends Controller
                 ];
                 $backupString = "###BACKUP###" . json_encode($backupData) . "###END###";
 
-                // 3. 🎯 SE NÃO TRANSFERIU (OU OPÇÃO ESTORNO), REGISTRA O ESTORNO
-                // AJUSTE: Passamos o arena_id explicitamente para validar o caixa correto
+                // 3. SE NÃO TRANSFERIU (OU OPÇÃO ESTORNO), REGISTRA O ESTORNO
                 if ($valorOriginal > 0 && !$transferenciaSucesso) {
                     FinancialTransaction::create([
-                        'reserva_id'     => $reserva->id,
-                        'arena_id'       => $reserva->arena_id, // Identificação crucial da quadra
-                        'amount'         => -$valorOriginal,
-                        'type'           => 'refund',
+                        'reserva_id' => $reserva->id,
+                        'arena_id'   => $reserva->arena_id,
+                        'amount'     => -$valorOriginal,
+                        'type'       => 'refund',
                         'payment_method' => 'outro',
                         'description'    => "ESTORNO AUTOMÁTICO (Manutenção): " . $motivo,
                         'paid_at'        => now(),

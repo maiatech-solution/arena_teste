@@ -142,15 +142,13 @@ class ApiReservaController extends Controller
                 ])
                 ->get();
 
-            // 🛡️ AJUSTE AQUI: Adicionado $arenaId no 'use' para a função enxergar a variável
-            $available = $slots->filter(function ($slot) use ($occupied, $financeiroController, $arenaId) {
+            $available = $slots->filter(function ($slot) use ($occupied, $financeiroController) {
                 $slotDate = $slot->date->format('Y-m-d');
                 $sStart = Carbon::parse($slot->start_time)->format('H:i:s');
                 $sEnd = Carbon::parse($slot->end_time)->format('H:i:s');
 
-                // 🛡️ AJUSTE AQUI: Passando $arenaId para validar apenas o caixa desta quadra específica
-                if ($financeiroController->isCashClosed($slotDate, $arenaId)) return false;
-
+                // Filtros de segurança (Caixa e Passado)
+                if ($financeiroController->isCashClosed($slotDate)) return false;
                 if (Carbon::parse($slotDate . ' ' . $sEnd)->isPast()) return false;
 
                 // Checa conflito: Se houver qualquer reserva ocupada (cliente ou manutenção) no mesmo horário

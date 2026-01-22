@@ -345,21 +345,15 @@ class ReservaController extends Controller
             throw new \Exception('A identificação da quadra (arena_id) é obrigatória para criar uma reserva.');
         }
 
-        // 🛡️ ADICIONADO: Validação Crítica de Caixa por Arena
-        // Isso impede que o bloqueio de uma arena (Futebol) afete outra (Vôlei)
-        $financeiroController = app(\App\Http\Controllers\FinanceiroController::class);
-        if ($financeiroController->isCashClosed($validatedData['date'], $arenaId)) {
-            throw new \Exception("Bloqueio de Segurança: O caixa desta arena para o dia " . date('d/m/Y', strtotime($validatedData['date'])) . " já está encerrado. Reabra-o para agendar.");
-        }
-
         // 2. Checagem de Conflito (Ajustado para o novo formato multiquadras)
+        // Parâmetros: date, start, end, arenaId, checkActiveOnly, excludeId
         if ($this->checkOverlap(
             $validatedData['date'],
             $validatedData['start_time'],
             $validatedData['end_time'],
             $arenaId,
             true,
-            null
+            null // Aqui não excluímos ID pois é uma criação nova
         )) {
             throw new \Exception('O horário selecionado já está ocupado por outra reserva confirmada nesta quadra.');
         }
@@ -385,6 +379,7 @@ class ReservaController extends Controller
 
         $totalPaid = $signalValue;
 
+        // Determinação automática do Status baseado no pagamento
         $paymentStatus = 'pending';
         $newReservaStatus = Reserva::STATUS_CONFIRMADA;
 
@@ -397,8 +392,9 @@ class ReservaController extends Controller
             }
         }
 
-        // 5. Consome o slot fixo antes de criar a reserva real
+        // 5. Consome o slot fixo antes de criar a reserva real (Garante integridade)
         if ($fixedSlotId) {
+            // Garantimos que só deletamos se pertencer à mesma arena
             Reserva::where('id', $fixedSlotId)
                 ->where('arena_id', $arenaId)
                 ->where('is_fixed', true)
@@ -431,10 +427,9 @@ class ReservaController extends Controller
 
         // 7. Registro da Transação Financeira do Sinal
         if ($signalValue > 0) {
-            // Criamos a transação passando explicitamente o arena_id
             \App\Models\FinancialTransaction::create([
                 'reserva_id'     => $newReserva->id,
-                'arena_id'       => $arenaId,
+                'arena_id'       => $newReserva->arena_id, // ✅ Vínculo direto com a quadra
                 'user_id'        => $newReserva->user_id,
                 'manager_id'     => \Illuminate\Support\Facades\Auth::id(),
                 'amount'         => $signalValue,
@@ -675,7 +670,9 @@ class ReservaController extends Controller
     // 🗓️ MÉTODOS API PARA O DASHBOARD (AGENDAMENTO RÁPIDO)
     // -------------------------------------------------------------------------
 
-
+    /**
+     * API: Cria uma reserva pontual (quick) a partir do Dashboard.
+     */
     /**
      * API: Cria uma reserva pontual (quick) ou recorrente a partir do Dashboard.
      */
@@ -694,6 +691,7 @@ class ReservaController extends Controller
                         return;
                     }
                     try {
+                        // Aqui usamos um parse genérico do Carbon para comparar
                         $startTimeCarbon = \Carbon\Carbon::parse($startTime);
                         $endTimeCarbon = \Carbon\Carbon::parse($value);
 
@@ -707,10 +705,10 @@ class ReservaController extends Controller
             ],
             'fixed_price' => 'nullable|numeric|min:0',
             'reserva_id_to_update' => 'required|exists:reservas,id',
-            'arena_id' => 'required',
+            'arena_id' => 'required', // 🏟️ CRUCIAL: Identifica a Quadra A
             'client_name' => 'required|string|max:255',
             'client_contact' => 'required|digits:11|max:255',
-            'signal_value' => 'nullable',
+            'signal_value' => 'nullable', // Tratado como string/numeric depois
             'payment_method' => 'required|string',
             'is_recurrent' => 'nullable|boolean',
             'notes' => 'nullable|string',
@@ -726,18 +724,6 @@ class ReservaController extends Controller
 
         $validated = $validator->validated();
 
-        // 🛡️ DEBUG & PROTEÇÃO: Validação de Caixa ANTES de processar
-        $financeiroController = app(\App\Http\Controllers\FinanceiroController::class);
-        $arenaId = $validated['arena_id'];
-        $dataReserva = $validated['date'];
-
-        if ($financeiroController->isCashClosed($dataReserva, $arenaId)) {
-            return response()->json([
-                'success' => false,
-                'message' => "Bloqueio de Segurança: O caixa desta arena para o dia " . date('d/m/Y', strtotime($dataReserva)) . " já está encerrado. Reabra-o para agendar."
-            ], 422);
-        }
-
         // 2. Redirecionamento de Lógica: Se for recorrente, delega para o método de série
         if ($request->boolean('is_recurrent')) {
             return $this->storeRecurrentReservaApi($request);
@@ -747,6 +733,7 @@ class ReservaController extends Controller
         $startTimeRaw = $validated['start_time'];
         $endTimeRaw = $validated['end_time'];
 
+        // 🎯 Ajuste para horários que terminam à meia-noite
         if ($startTimeRaw === '23:00' && ($endTimeRaw === '0:00' || $endTimeRaw === '00:00')) {
             $validated['end_time'] = '23:59';
         }
@@ -757,7 +744,7 @@ class ReservaController extends Controller
             return response()->json(['success' => false, 'message' => 'O slot selecionado não está mais disponível.'], 409);
         }
 
-        // 4. Tratamento do valor do sinal
+        // 4. Tratamento do valor do sinal (limpa pontuação se vier como "40,00")
         if (!empty($validated['signal_value'])) {
             $validated['signal_value'] = (float) str_replace(',', '.', str_replace('.', '', $validated['signal_value']));
         }
@@ -773,21 +760,21 @@ class ReservaController extends Controller
             return response()->json(['success' => false, 'message' => 'Erro ao processar dados do cliente.'], 500);
         }
 
+        // Preparação final dos dados para o createConfirmedReserva
         $validated['price'] = $validated['fixed_price'];
 
         DB::beginTransaction();
         try {
-            // 6. DELEGA A LÓGICA DE CRIAÇÃO
-            // IMPORTANTE: Se o erro persistir, o método 'createConfirmedReserva' também
-            // deve ser verificado se ele não chama isCashClosed() sem o arena_id lá dentro.
+            // 6. DELEGA A LÓGICA DE CRIAÇÃO CENTRALIZADA
             $newReserva = $this->createConfirmedReserva($validated, $clientUser, $reservaIdToUpdate);
 
-            // 🏟️ GARANTIA: Força a Arena correta
-            $newReserva->update(['arena_id' => $arenaId]);
+            // 🏟️ GARANTIA: Salva a Arena específica (Quadra A)
+            $newReserva->update(['arena_id' => $validated['arena_id']]);
 
             DB::commit();
 
             $message = "Agendamento pontual para {$newReserva->client_name} confirmado com sucesso!";
+
             if ($newReserva->signal_value > 0) {
                 $message .= " Sinal de R$ " . number_format($newReserva->signal_value, 2, ',', '.') . " registrado.";
             }
@@ -797,12 +784,9 @@ class ReservaController extends Controller
             DB::rollBack();
             Log::error("Erro no Agendamento Rápido: " . $e->getMessage());
 
-            // Se o erro capturado for o do caixa vindo de dentro do createConfirmedReserva
-            if (str_contains($e->getMessage(), 'caixa')) {
-                return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
-            }
-
+            // Tenta recuperar o slot livre se algo deu errado
             $this->recreateFixedSlot($oldReserva);
+
             return response()->json(['success' => false, 'message' => 'Erro ao salvar reserva: ' . $e->getMessage()], 500);
         }
     }
@@ -1195,15 +1179,14 @@ class ReservaController extends Controller
             return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404);
         }
 
-        // 🎯 VALIDAÇÃO DE SEGURANÇA AJUSTADA: CAIXA FECHADO POR ARENA
+        // 🎯 VALIDAÇÃO DE SEGURANÇA: CAIXA FECHADO
         $financeiroController = app(FinanceiroController::class);
         $reservaDate = Carbon::parse($reserva->date)->toDateString();
 
-        // ✅ CORREÇÃO: Passamos o arena_id da reserva para isolar o bloqueio
-        if ($financeiroController->isCashClosed($reservaDate, $reserva->arena_id)) {
+        if ($financeiroController->isCashClosed($reservaDate)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Erro: Não é possível finalizar o pagamento. O caixa desta quadra específica para o dia ' . Carbon::parse($reservaDate)->format('d/m/Y') . ' está fechado. Reabra o caixa da arena para continuar.',
+                'message' => 'Erro: Não é possível finalizar o pagamento. O caixa do dia ' . Carbon::parse($reservaDate)->format('d/m/Y') . ' está fechado. Reabra o caixa para continuar.',
             ], 403);
         }
 
@@ -1257,7 +1240,7 @@ class ReservaController extends Controller
             if ($amountPaidNow > 0) {
                 FinancialTransaction::create([
                     'reserva_id'     => $reserva->id,
-                    'arena_id'       => $reserva->arena_id, // ✅ Vínculo correto com a arena
+                    'arena_id'       => $reserva->arena_id, // ✅ ADICIONADO: Obrigatório para o novo Model
                     'user_id'        => $reserva->user_id,
                     'manager_id'     => Auth::id(),
                     'amount'         => $amountPaidNow,
@@ -1294,7 +1277,7 @@ class ReservaController extends Controller
                     if ($updatedCount > 0) {
                         $message = "Pagamento finalizado e preço da série atualizado com sucesso! ({$updatedCount} reservas alteradas)";
                     } else {
-                        $message = "Pagamento finalizado. Preço da série recorrente já estava atualizado.";
+                        $message = "Pagamento finalizado. Preço da série recorrente já estava atualizado ou nenhuma reserva futura elegível encontrada.";
                     }
                 } catch (\Exception $e) {
                     Log::error("Erro na query de propagação de preço para Master ID {$masterId}: " . $e->getMessage());
@@ -1309,7 +1292,7 @@ class ReservaController extends Controller
             return response()->json(['success' => true, 'message' => $message]);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Erro no processo de finalizarPagamento (ID: {$reservaId}): " . $e->getMessage());
+            Log::error("Erro no processo de finalizarPagamento (ID: {$reservaId}): " . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'success' => false,
                 'message' => 'Erro ao finalizar pagamento: ' . $e->getMessage()
@@ -1335,17 +1318,12 @@ class ReservaController extends Controller
             'paid_amount.required' => 'O valor pago é obrigatório para o gerenciamento de estorno.',
         ]);
 
-        // 🎯 VALIDAÇÃO DE SEGURANÇA AJUSTADA: CAIXA FECHADO POR ARENA
+        // 🎯 VALIDAÇÃO DE SEGURANÇA: CAIXA FECHADO
         $financeiroController = app(FinanceiroController::class);
         $reservaDate = Carbon::parse($reserva->date)->toDateString();
 
-        // ✅ CORREÇÃO: Passamos o arena_id da reserva.
-        // Se o Vôlei estiver aberto e o Futebol fechado, esta verificação agora permite o No-Show no Vôlei.
-        if ($financeiroController->isCashClosed($reservaDate, $reserva->arena_id)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erro: Não é possível registrar a falta/estorno. O caixa desta quadra específica para o dia ' . Carbon::parse($reservaDate)->format('d/m/Y') . ' está fechado.'
-            ], 403);
+        if ($financeiroController->isCashClosed($reservaDate)) {
+            return response()->json(['success' => false, 'message' => 'Erro: Não é possível registrar a falta/estorno. O caixa do dia ' . Carbon::parse($reservaDate)->format('d/m/Y') . ' está fechado.'], 403);
         }
         // FIM DA VALIDAÇÃO DE SEGURANÇA
 
@@ -1355,9 +1333,7 @@ class ReservaController extends Controller
 
         DB::beginTransaction();
         try {
-            // Delega a lógica centralizada para finalizeStatus.
-            // Como o finalizeStatus usa FinancialTransaction::create, os ajustes que fizemos
-            // no boot do Model garantirão que a transação de estorno ou retenção seja aceita.
+            // Delega a lógica centralizada para finalizeStatus
             $result = $this->finalizeStatus(
                 $reserva,
                 Reserva::STATUS_NO_SHOW,
@@ -1374,12 +1350,7 @@ class ReservaController extends Controller
             DB::rollBack();
             $logMessage = "Erro fatal ao marcar falta (No-Show) ID: {$reserva->id}: " . $e->getMessage();
             Log::error($logMessage, ['exception' => $e]);
-
-            // Se o erro vier do bloqueio do Model, ele será capturado aqui
-            return response()->json([
-                'success' => false,
-                'message' => 'Erro ao registrar a falta: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Erro interno ao registrar a falta: ' . $e->getMessage()], 500);
         }
     }
 
@@ -1389,13 +1360,12 @@ class ReservaController extends Controller
      */
     public function confirmar(Request $request, Reserva $reserva)
     {
-        // 1. Validação de Segurança AJUSTADA: Caixa Fechado por Arena
+        // 1. Validação de Segurança: Caixa Fechado
         $financeiroController = app(FinanceiroController::class);
         $reservaDateStr = $reserva->date->toDateString();
 
-        // ✅ CORREÇÃO: Passamos o arena_id da reserva para validar apenas esta quadra
-        if ($financeiroController->isCashClosed($reservaDateStr, $reserva->arena_id)) {
-            return redirect()->back()->with('error', 'Erro: Não é possível confirmar. O caixa desta quadra específica para o dia ' . $reserva->date->format('d/m/Y') . ' está fechado. Reabra o caixa da arena para continuar.');
+        if ($financeiroController->isCashClosed($reservaDateStr)) {
+            return redirect()->back()->with('error', 'Erro: Não é possível confirmar. O caixa do dia ' . $reserva->date->format('d/m/Y') . ' está fechado.');
         }
 
         // 2. Validação dos dados do Modal
@@ -1424,21 +1394,21 @@ class ReservaController extends Controller
                 'recurrent_series_id' => $isRecurrent ? $reserva->id : null,
             ]);
 
-            // 4. Consome o slot fixo
+            // 4. Consome o slot fixo (Utilizando o helper centralizado para manter consistência)
             $this->consumeFixedSlot($reserva);
 
             // 5. Registra o Sinal no Financeiro
             if ($signalValue > 0) {
                 FinancialTransaction::create([
                     'reserva_id' => $reserva->id,
-                    'arena_id'   => $reserva->arena_id, // ✅ Vínculo obrigatório com a arena
+                    'arena_id'   => $reserva->arena_id,
                     'user_id'    => $reserva->user_id,
                     'manager_id' => Auth::id(),
                     'amount'     => $signalValue,
                     'type'       => FinancialTransaction::TYPE_SIGNAL,
                     'payment_method' => $validated['payment_method'],
                     'description' => "Sinal recebido na confirmação da reserva (#{$reserva->id}).",
-                    'paid_at'    => now(),
+                    'paid_at'    => now(), // Data do recebimento real
                 ]);
             }
 
@@ -1519,10 +1489,9 @@ class ReservaController extends Controller
         $financeiroController = app(FinanceiroController::class);
         $reservaDateStr = $reserva->date->toDateString();
 
-        // 1. 🎯 VALIDAÇÃO DE CAIXA AJUSTADA: Agora com arena_id
-        // Se o caixa do Futebol estiver fechado, você ainda consegue rejeitar uma pendência no Vôlei.
-        if ($financeiroController->isCashClosed($reservaDateStr, $reserva->arena_id)) {
-            return redirect()->back()->with('error', 'Erro: O caixa desta arena específica para o dia ' . $reserva->date->format('d/m/Y') . ' está fechado. Reabra-o para processar a rejeição.');
+        // 1. Validação de Caixa
+        if ($financeiroController->isCashClosed($reservaDateStr)) {
+            return redirect()->back()->with('error', 'Erro: O caixa do dia ' . $reserva->date->format('d/m/Y') . ' está fechado.');
         }
 
         if ($reserva->status !== Reserva::STATUS_PENDENTE) {
@@ -1539,7 +1508,8 @@ class ReservaController extends Controller
             ]);
 
             // 3. Lógica Inteligente de Inventário 🏟️
-            // Já estava filtrando por arena_id, o que é excelente.
+            // Só recriamos o slot fixo (Verde) se NÃO houver mais NINGUÉM pendente
+            // ou confirmado para este mesmo horário nesta arena específica.
             $hasOtherInterests = Reserva::where('date', $reserva->date)
                 ->where('arena_id', $reserva->arena_id)
                 ->where('start_time', $reserva->start_time)
@@ -1548,7 +1518,6 @@ class ReservaController extends Controller
                 ->exists();
 
             if (!$hasOtherInterests) {
-                // Ao recriar o slot verde, o Model Reserva validará o arena_id.
                 $this->recreateFixedSlot($reserva);
             }
 
@@ -1559,7 +1528,7 @@ class ReservaController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro ao rejeitar reserva ID {$reserva->id}: " . $e->getMessage());
-            return redirect()->back()->with('error', 'Erro interno ao processar a rejeição: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Erro interno ao processar a rejeição.');
         }
     }
 
@@ -2115,19 +2084,16 @@ class ReservaController extends Controller
 
         $validated = $validator->validated();
         $date = $validated['data_reserva'];
-        $arenaId = $validated['arena_id']; // 🏟️ Captura a arena selecionada
 
-        // 2. 🎯 VALIDAÇÃO DE SEGURANÇA AJUSTADA: CAIXA FECHADO POR ARENA
+        // 2. Validação Preventiva de Caixa
         $financeiroController = app(FinanceiroController::class);
-
-        // ✅ CORREÇÃO: Passamos o arena_id vindo do formulário público.
-        // Isso permite que o cliente agende no Vôlei se apenas o caixa do Futebol estiver fechado.
-        if ($financeiroController->isCashClosed($date, $arenaId)) {
+        if ($financeiroController->isCashClosed($date)) {
             return redirect()->back()
                 ->withInput()
-                ->with('error', 'O agendamento para esta quadra no dia ' . Carbon::parse($date)->format('d/m/Y') . ' está temporariamente indisponível.');
+                ->with('error', 'O agendamento para o dia ' . Carbon::parse($date)->format('d/m/Y') . ' está indisponível (Caixa Fechado).');
         }
 
+        $arenaId = $validated['arena_id'];
         $startTimeRaw = $validated['hora_inicio'];
         $endTimeRaw = $validated['hora_fim'];
 
@@ -2146,7 +2112,7 @@ class ReservaController extends Controller
                 'whatsapp_contact' => $validated['contato_cliente'],
             ]);
 
-            // 3. Bloqueio de duplicidade para o mesmo cliente (Já com arena_id)
+            // 3. Bloqueio de duplicidade para o mesmo cliente
             $existing = \App\Models\Reserva::where('user_id', $clientUser->id)
                 ->where('arena_id', $arenaId)
                 ->where('date', $date)
@@ -2159,13 +2125,13 @@ class ReservaController extends Controller
                 return redirect()->back()->withInput()->with('error', "Você já tem uma solicitação enviada para este horário nesta quadra.");
             }
 
-            // 4. Trava de Segurança: Só bloqueia se houver alguém CONFIRMADO (Já com arena_id)
+            // 4. Trava de Segurança: Só bloqueia se houver alguém CONFIRMADO (Pago)
             if ($this->checkOverlap($date, $startTimeRaw, $endTimeRaw, $arenaId, true)) {
                 DB::rollBack();
                 return redirect()->back()->withInput()->with('error', 'Este horário acabou de ser fechado com outro cliente.');
             }
 
-            // 5. Criação da Reserva Pendente
+            // 5. Criação da Reserva Pendente (Modo Leilão - não consome o slot fixo ainda)
             $reserva = \App\Models\Reserva::create([
                 'user_id' => $clientUser->id,
                 'arena_id' => $arenaId,
@@ -2188,17 +2154,22 @@ class ReservaController extends Controller
 
             DB::commit();
 
-            // 6. Preparação da Mensagem de WhatsApp
+            // 6. Buscar o Nome da Arena para o WhatsApp
+            $arena = \App\Models\Arena::find($arenaId);
+            $nomeQuadra = $arena ? $arena->name : "Quadra #{$arenaId}";
+
+            // 7. Preparação da Mensagem de WhatsApp Dinâmica
             $company = \App\Models\CompanyInfo::first();
             $whatsappNumber = $company->whatsapp_suporte ?? '91985320997';
-            $arenaNomeFantasia = $company->nome_fantasia ?? 'Elite Soccer';
+            $arenaNome = $company->nome_fantasia ?? 'Elite Soccer';
 
             $dataFmt = \Carbon\Carbon::parse($reserva->date)->format('d/m/Y');
             $horaFmt = \Carbon\Carbon::parse($reserva->start_time)->format('H:i');
             $nomeQuadra = $reserva->arena->name;
 
+            // Texto ajustado para solicitar PIX e Valor do Sinal
             $messageText = "🚨 *PRÉ-RESERVA SOLICITADA*\n\n" .
-                "🏟️ *Estabelecimento:* {$arenaNomeFantasia}\n" .
+                "🏟️ *Estabelecimento:* {$arenaNome}\n" .
                 "👤 *Cliente:* {$reserva->client_name}\n" .
                 "⚽ *Quadra:* {$nomeQuadra}\n" .
                 "📅 *Data:* {$dataFmt}\n" .
@@ -2206,6 +2177,7 @@ class ReservaController extends Controller
                 "📝 *Status:* AGUARDANDO PAGAMENTO\n\n" .
                 "Olá! Acabei de solicitar esta reserva pelo site. Poderia me enviar a *Chave PIX* e o *Valor do Sinal* para que eu possa realizar o pagamento e confirmar meu horário?";
 
+            // Link final com prefixo 55 e URL Encode
             $whatsappLink = "https://api.whatsapp.com/send?phone=55{$whatsappNumber}&text=" . urlencode($messageText);
 
             return redirect()->route('reserva.index')
@@ -2216,7 +2188,7 @@ class ReservaController extends Controller
             Log::error("[STORE PUBLIC] Erro: " . $e->getMessage());
 
             if (str_contains(strtolower($e->getMessage()), 'caixa')) {
-                return redirect()->back()->withInput()->with('error', 'Não foi possível concluir o agendamento para esta quadra.');
+                return redirect()->back()->withInput()->with('error', 'Não foi possível concluir: O caixa para este dia está fechado.');
             }
 
             return redirect()->back()->withInput()->with('error', 'Erro interno ao processar agendamento.');

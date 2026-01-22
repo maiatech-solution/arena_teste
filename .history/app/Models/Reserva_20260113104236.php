@@ -96,10 +96,8 @@ class Reserva extends Model
                 ? $reserva->date->toDateString()
                 : $reserva->date;
 
-            // ✅ CORREÇÃO: Passamos o arena_id da reserva que está sendo criada.
-            // Agora o sistema verifica o caixa apenas daquela quadra específica.
-            if ($financeiro->isCashClosed($dateToCheck, $reserva->arena_id)) {
-                throw new \Exception("Bloqueio de Segurança: O caixa desta arena para o dia " . \Carbon\Carbon::parse($dateToCheck)->format('d/m/Y') . " já está encerrado. Reabra-o para agendar.");
+            if ($financeiro->isCashClosed($dateToCheck)) {
+                throw new \Exception("Bloqueio de Segurança: O caixa do dia " . \Carbon\Carbon::parse($dateToCheck)->format('d/m/Y') . " já está encerrado. Reabra-o para agendar.");
             }
         });
 
@@ -111,9 +109,8 @@ class Reserva extends Model
                 ? $reserva->date->toDateString()
                 : $reserva->date;
 
-            // ✅ CORREÇÃO: Passamos o arena_id da reserva que está sendo deletada.
-            if ($financeiro->isCashClosed($dateToCheck, $reserva->arena_id)) {
-                throw new \Exception("Bloqueio de Segurança: Não é possível excluir agendamentos de uma arena com caixa encerrado.");
+            if ($financeiro->isCashClosed($dateToCheck)) {
+                throw new \Exception("Bloqueio de Segurança: Não é possível excluir agendamentos de um dia com caixa encerrado.");
             }
         });
     }

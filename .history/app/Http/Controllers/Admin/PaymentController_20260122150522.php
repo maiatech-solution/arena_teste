@@ -413,12 +413,11 @@ class PaymentController extends Controller
         // --- AJUSTE DE DATA OPERACIONAL ---
         $dataOperacional = $request->input('payment_date') ?? $reserva->date;
 
-        // 🎯 AJUSTE DE SEGURANÇA: Verifica se o caixa da data E da arena específica já está encerrado
-        // Isso garante que você possa marcar No-Show na Arena 2 mesmo que a Arena 1 esteja fechada.
-        if (\App\Http\Controllers\FinanceiroController::isCashClosed($dataOperacional, $reserva->arena_id)) {
+        // 🛡️ TRAVA: Verifica se o caixa da data já está encerrado
+        if (\App\Http\Controllers\FinanceiroController::isCashClosed($dataOperacional)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Ação bloqueada: O caixa da unidade ' . ($reserva->arena->name ?? '') . ' para o dia ' . \Carbon\Carbon::parse($dataOperacional)->format('d/m/Y') . ' já está encerrado.'
+                'message' => 'Ação bloqueada: O caixa de ' . \Carbon\Carbon::parse($dataOperacional)->format('d/m/Y') . ' já está encerrado.'
             ], 403);
         }
 
@@ -438,8 +437,8 @@ class PaymentController extends Controller
                 if ($shouldRefund && $valorParaEstornar > 0) {
                     // 💰 REGISTRA A SAÍDA (ESTORNO)
                     FinancialTransaction::create([
-                        'reserva_id'     => null,
-                        'arena_id'       => $reserva->arena_id, // 🏟️ Vinculado à Arena correta
+                        'reserva_id'     => null, // REFINAMENTO: Desvinculamos para preservar o registro após o delete
+                        'arena_id'       => $reserva->arena_id,
                         'user_id'        => $reserva->user_id,
                         'manager_id'     => Auth::id(),
                         'amount'         => -$valorParaEstornar,
@@ -449,27 +448,27 @@ class PaymentController extends Controller
                         'paid_at'        => $dataOperacional,
                     ]);
 
-                    // Atualizamos as transações antigas (Sinal/Pagamento) para desvincular da reserva que será deletada
+                    // Atualizamos as transações antigas para informar que houve estorno
                     FinancialTransaction::where('reserva_id', $reserva->id)
                         ->where('type', '!=', 'refund')
                         ->update([
-                            'reserva_id'  => null,
+                            'reserva_id'  => null, // REFINAMENTO: Protege contra exclusão em cascata
                             'description' => DB::raw("CONCAT(description, ' (No-Show c/ Estorno em " . date('d/m') . ")')")
                         ]);
                 } else {
-                    // 🔒 RETENÇÃO (Multa): Transformamos os pagamentos existentes em multa
+                    // 🔒 RETENÇÃO (Multa): Transformamos os pagamentos existentes em multa e desvinculamos da reserva
                     FinancialTransaction::where('reserva_id', $reserva->id)
                         ->update([
-                            'reserva_id'     => null,
+                            'reserva_id'     => null, // REFINAMENTO: Protege contra exclusão em cascata
                             'type'           => 'no_show_penalty',
                             'payment_method' => 'retained_funds',
                             'description'    => DB::raw("CONCAT(description, ' [RETIDO COMO MULTA EM " . date('d/m') . " - Reserva #{$reserva->id}]')")
                         ]);
 
-                    // LOG visual no extrato do dia para conferência
+                    // LOG visual no extrato do dia
                     FinancialTransaction::create([
                         'reserva_id'     => null,
-                        'arena_id'       => $reserva->arena_id, // 🏟️ Vinculado à Arena correta
+                        'arena_id'       => $reserva->arena_id,
                         'manager_id'     => Auth::id(),
                         'amount'         => 0,
                         'type'           => 'no_show_penalty',
@@ -480,7 +479,7 @@ class PaymentController extends Controller
                 }
             }
 
-            // Lógica de reputação e bloqueio de usuário
+            // Lógica de bloqueio de usuário
             if ($reserva->user) {
                 $user = $reserva->user;
                 $user->increment('no_show_count');
@@ -489,10 +488,8 @@ class PaymentController extends Controller
                 }
             }
 
-            // 🏟️ Liberação do Inventário: Recria o slot verde na agenda
+            // Recria o horário se for fixista e deleta a reserva física
             app(\App\Http\Controllers\ReservaController::class)->recreateFixedSlot($reserva);
-
-            // Remove a reserva física (ocupação)
             $reserva->delete();
 
             DB::commit();
@@ -506,6 +503,10 @@ class PaymentController extends Controller
 
     /**
      * 🎯 LANÇAR COMO PENDÊNCIA (Pagar Depois):
+     * Finaliza a reserva para liberar o caixa do dia, mas mantém o status financeiro como 'unpaid'.
+     */
+    /**
+     * 🎯 LANÇAR COMO PENDÊNCIA (Pagar Depois):
      * Finaliza a reserva operacionalmente mas exige um motivo para a dívida.
      */
     public function markAsPendingDebt(Request $request, $reservaId)
@@ -517,16 +518,15 @@ class PaymentController extends Controller
             'reason' => 'required|string|min:5|max:255',
         ]);
 
-        // 🛡️ TRAVA DE CAIXA AJUSTADA: Agora com arena_id
-        // Verifica se o caixa daquela arena específica está encerrado para a data da reserva.
-        if (\App\Http\Controllers\FinanceiroController::isCashClosed($reserva->date, $reserva->arena_id)) {
+        // 🛡️ TRAVA: Verifica se o caixa já está encerrado
+        if (\App\Http\Controllers\FinanceiroController::isCashClosed($reserva->date)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Ação bloqueada: O caixa da unidade ' . ($reserva->arena->name ?? '') . ' para o dia ' . \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') . ' já está encerrado.'
+                'message' => 'Ação bloqueada: O caixa de ' . \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') . ' já está encerrado.'
             ], 403);
         }
 
-        // Se já está paga, impede a ação para evitar duplicidade de estados
+        // Se já está paga, impede a ação
         $totalDevido = ($reserva->final_price ?? $reserva->price);
         if ($reserva->total_paid >= $totalDevido && $totalDevido > 0) {
             return response()->json([
@@ -543,7 +543,7 @@ class PaymentController extends Controller
                     'status' => 'completed',
                     'payment_status' => ($reserva->total_paid > 0) ? 'partial' : 'unpaid',
                     'manager_id' => Auth::id(),
-                    // Registramos o MOTIVO real nas notas para auditoria futura
+                    // Registramos o MOTIVO real nas notas
                     'notes' => $reserva->notes . " | [DÍVIDA AUTORIZADA]: " . $validated['reason'] . " (por " . Auth::user()->name . " em " . now()->format('d/m H:i') . ")"
                 ]);
             });
@@ -554,36 +554,34 @@ class PaymentController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error("Erro ao pendenciar reserva #{$reservaId}: " . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Erro interno ao processar: ' . $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Erro interno ao processar.'], 500);
         }
     }
 
     /**
      * 💸 MOVIMENTAÇÃO AVULSA: Sangria (Saída) ou Reforço (Entrada)
-     * Refinado para garantir vínculo obrigatório com uma Arena e isolamento de caixa.
+     * Refinado para garantir vínculo obrigatório com uma Arena.
      */
     public function storeAvulsa(Request $request)
     {
-        // 1. Validação: arena_id é obrigatório para saber de qual caixa sai o dinheiro
+        // 1. Validação: arena_id agora é 'required' para evitar transações sem dono
         $validated = $request->validate([
             'date'           => 'required|date',
             'type'           => 'required|in:in,out',
             'amount'         => 'required|numeric|min:0.01',
             'payment_method' => 'required|string|max:50',
             'description'    => 'required|string|max:255',
-            'arena_id'       => 'required|exists:arenas,id',
+            'arena_id'       => 'required|exists:arenas,id', // Ajustado: nullable -> required
         ], [
             'arena_id.required' => 'Selecione a Arena para vincular esta movimentação.',
         ]);
 
         try {
-            // 2. 🎯 TRAVA DE SEGURANÇA AJUSTADA:
-            // Agora validamos se o caixa daquela arena específica está fechado.
-            // Isso evita que um lançamento avulso "quebre" a auditoria de um caixa já lacrado.
-            if (\App\Http\Controllers\FinanceiroController::isCashClosed($validated['date'], $validated['arena_id'])) {
+            // 2. Trava de segurança: impede movimentação em dia com caixa fechado
+            if (\App\Http\Controllers\FinanceiroController::isCashClosed($validated['date'])) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Ação bloqueada: O caixa desta arena para o dia ' . \Carbon\Carbon::parse($validated['date'])->format('d/m/Y') . ' já está encerrado.'
+                    'message' => 'Ação bloqueada: O caixa de ' . \Carbon\Carbon::parse($validated['date'])->format('d/m/Y') . ' já está encerrado.'
                 ], 403);
             }
 
@@ -596,15 +594,15 @@ class PaymentController extends Controller
             $transactionType = $validated['type'] === 'out' ? 'sangria' : 'reforco';
             $prefixLabel = $validated['type'] === 'out' ? '🔴 SANGRIA: ' : '🟢 REFORÇO: ';
 
-            // 5. Criação da transação
+            // 5. Criação da transação (Garantindo persistência auditável)
             FinancialTransaction::create([
-                'arena_id'       => $validated['arena_id'], // ✅ Vínculo obrigatório
+                'arena_id'       => $validated['arena_id'], // Usa o ID validado explicitamente
                 'manager_id'     => Auth::id(),
                 'amount'         => $finalAmount,
                 'type'           => $transactionType,
                 'payment_method' => $validated['payment_method'],
                 'description'    => $prefixLabel . $validated['description'],
-                // Registra a data do caixa com o horário real da operação para timeline correta
+                // Registra a data do caixa com o horário real da operação
                 'paid_at'        => $validated['date'] . ' ' . now()->format('H:i:s'),
             ]);
 

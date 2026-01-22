@@ -2000,8 +2000,8 @@
             <div class="grid grid-cols-1 gap-2">
                 ${!isFinalized && status !== 'cancelled' ?
                     `<button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                                                                                <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
-                                                                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+                                                                                        <span>💰 FINALIZAR PAGAMENTO / CAIXA</span>
+                                                                                    </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
                 <div class="grid grid-cols-2 gap-2 mt-1">
                     <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})"
@@ -2016,14 +2016,14 @@
 
                 ${!isFinalized && status !== 'no_show' ?
                     `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')"
-                                                                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
-                                                                                FALTA (NO-SHOW)
-                                                                            </button>` : ''}
+                                                                                        class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
+                                                                                        FALTA (NO-SHOW)
+                                                                                    </button>` : ''}
 
                 ${isRecurrent ?
                     `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition uppercase">
-                                                                                CANCELAR SÉRIE
-                                                                            </button>` : ''}
+                                                                                        CANCELAR SÉRIE
+                                                                                    </button>` : ''}
 
                 <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold">
                     Fechar
@@ -2177,7 +2177,7 @@
 
                                     console.log(
                                         `[DEBUG CALENDÁRIO] Buscando slots para Arena: ${arenaId}`
-                                        );
+                                    );
 
                                     fetch(url, {
                                             cache: "no-store"
@@ -2190,7 +2190,7 @@
                                         .then(events => {
                                             console.log(
                                                 `[DEBUG CALENDÁRIO] Servidor retornou ${events.length} slots brutos para Arena ${arenaId}.`
-                                                );
+                                            );
 
                                             const now = moment();
                                             const filtered = events.filter(e => {
@@ -2204,13 +2204,13 @@
                                                 // (Evita que slots "fujam" da tela por pequenos atrasos no relógio)
                                                 const isVisible = eventStart.isAfter(now
                                                     .clone().subtract(30, 'minutes')
-                                                    );
+                                                );
                                                 return isVisible;
                                             });
 
                                             console.log(
                                                 `[DEBUG CALENDÁRIO] Após filtro de 30min: ${filtered.length} slots visíveis.`
-                                                );
+                                            );
                                             successCallback(filtered);
                                         })
                                         .catch(err => {
@@ -2223,84 +2223,39 @@
                             }
                         ],
                         eventDidMount: function(info) {
-                            const props = info.event.extendedProps;
-                            const status = (props.status || '').toLowerCase();
-                            const paymentStatus = (props.payment_status || '').toLowerCase();
-                            const titleEl = info.el.querySelector('.fc-event-title');
                             const eventDate = moment(info.event.start).format('YYYY-MM-DD');
-
-                            // 1. Esconde eventos cancelados ou rejeitados imediatamente
-                            if (status === 'cancelled' || status === 'rejected') {
-                                info.el.style.display = 'none';
-                                return;
-                            }
-
-                            // 2. 🛡️ VERIFICAÇÃO DE BLOQUEIO POR ARENA (Independência de Quadras)
                             const currentArena = document.getElementById('filter_arena')?.value || '';
                             const cacheKey = `${eventDate}_${currentArena}`;
-
                             const isLocked = window.closedDatesCache && window.closedDatesCache[
                                 cacheKey] === true;
+                            const isAvailable = info.event.classNames.includes('fc-event-available') ||
+                                info.event.extendedProps.status === 'free';
 
-                            if (isLocked) {
-                                info.el.classList.add('cashier-closed-locked');
-                                info.el.style.pointerEvents = 'none';
-                                info.el.style.cursor = 'not-allowed';
-                            } else {
-                                info.el.classList.remove('cashier-closed-locked');
-                                info.el.style.pointerEvents = 'auto';
-                                info.el.style.cursor = 'pointer';
+                            // 🕵️ DEBUG CRÍTICO: Só loga os slots que estão sumindo (dia 22)
+                            if (eventDate === moment().format('YYYY-MM-DD') && isAvailable) {
+                                console.log(
+                                    `[DEBUG RENDER] Slot de HOJE detectado: ${info.event.startStr}`);
+                                console.log(
+                                    `Arena Atual: ${currentArena} | Travado no Cache: ${isLocked}`);
+                                console.log(`Elemento DOM:`, info.el);
                             }
 
-                            // 3. Limpa todas as classes de status para evitar sobreposição de cores
-                            info.el.classList.remove(
-                                'fc-event-available', 'fc-event-recurrent', 'fc-event-quick',
-                                'fc-event-pending', 'fc-event-paid', 'fc-event-no-show',
-                                'fc-event-maintenance'
-                            );
-
-                            // 4. 🎨 APLICAÇÃO DA LÓGICA DE CORES
-                            if (['pago', 'completed', 'resolvido', 'concluida'].includes(status) ||
-                                paymentStatus === 'paid') {
-                                info.el.classList.add('fc-event-paid');
-                            } else if (status === 'no_show') {
-                                info.el.classList.add('fc-event-no-show');
-                            } else if (status === 'pending') {
-                                const isPast = moment(info.event.end).isBefore(moment());
-                                info.el.classList.add('fc-event-pending');
-                                if (isPast && titleEl) {
-                                    titleEl.innerHTML =
-                                        '⚠️ <span style="font-weight: 800;">EXPIRADA:</span> ' + titleEl
-                                        .textContent;
-                                }
-                            } else if (status === 'maintenance') {
-                                info.el.classList.add('fc-event-maintenance');
-                                if (titleEl) titleEl.innerHTML = '🛠️ MANUTENÇÃO';
-                            } else if (status === 'free' || info.event.classNames.includes(
-                                    'fc-event-available')) {
-                                info.el.classList.add('fc-event-available');
-                                if (titleEl) {
-                                    const price = parseFloat(props.price || 0).toFixed(2).replace('.',
-                                        ',');
-                                    titleEl.textContent = 'LIVRE - R$ ' + price;
-                                }
+                            if (isLocked) {
+                                info.el.style.setProperty('display', 'none', 'important');
+                                return;
                             } else {
-                                const now = moment();
-                                const eventEnd = moment(info.event.end);
-                                const isPast = eventEnd.isBefore(now);
+                                // Força a visibilidade caso algum estilo anterior tenha escondido
+                                info.el.style.setProperty('display', 'block', 'important');
+                                info.el.style.setProperty('visibility', 'visible', 'important');
+                                info.el.style.setProperty('opacity', '1', 'important');
+                            }
 
-                                if (isPast && (status === 'confirmed' || status === 'confirmada')) {
-                                    info.el.classList.add('fc-event-no-show');
-                                    info.el.classList.add('animate-pulse-red');
-                                    if (titleEl) {
-                                        titleEl.innerHTML =
-                                            '<span style="font-weight: 900;">⚠️ ATRASADA:</span> ' +
-                                            titleEl.textContent;
-                                    }
-                                } else {
-                                    info.el.classList.add(props.is_recurrent ? 'fc-event-recurrent' :
-                                        'fc-event-quick');
-                                }
+                            // --- Lógica de Cores Simplificada para o Teste ---
+                            const status = (info.event.extendedProps.status || '').toLowerCase();
+                            if (isAvailable) {
+                                info.el.classList.add('fc-event-available');
+                                const titleEl = info.el.querySelector('.fc-event-title');
+                                if (titleEl) titleEl.innerText = "DISPONÍVEL";
                             }
                         },
                         eventClick: (info) => window.eventClick(info)
