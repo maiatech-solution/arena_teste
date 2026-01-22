@@ -15,58 +15,50 @@ class Cashier extends Model
         'date',
         'calculated_amount',
         'actual_amount',
-        'difference', // Adicione aqui se tiver a coluna no banco (recomendado)
         'status',
-        'user_id',    // Padronizado para user_id
+        'user_id', // ⬅️ Ajustado para bater com sua tabela (item 11 da lista anterior)
         'closing_time',
         'notes',
-        'reopen_reason', // Importante para o histórico de reabertura
-        'reopened_at',
-        'reopened_by'
     ];
 
     protected $casts = [
         'date' => 'date',
         'closing_time' => 'datetime',
-        'reopened_at' => 'datetime',
         'calculated_amount' => 'decimal:2',
         'actual_amount' => 'decimal:2',
-        'difference' => 'decimal:2',
     ];
 
     /**
-     * Se a coluna 'difference' NÃO existir no banco, mantenha este Accessor.
-     * Se existir, o Laravel usará o valor do banco automaticamente.
+     * Calcula a diferença (quebra) entre o esperado e o real.
+     * Positivo: Sobrou dinheiro | Negativo: Faltou dinheiro.
      */
-    public function getDifferenceAttribute($value)
+    public function getDifferenceAttribute(): float
     {
-        if ($value !== null) return (float) $value;
         return (float) ($this->actual_amount - $this->calculated_amount);
     }
 
+    /**
+     * Verifica se o caixa está lacrado.
+     */
     public function isClosed(): bool
     {
         return $this->status === 'closed';
     }
 
+    /**
+     * RELACIONAMENTO: Unidade (Arena) à qual este caixa pertence.
+     * Isso resolve o erro "RelationNotFoundException".
+     */
     public function arena(): BelongsTo
     {
         return $this->belongsTo(Arena::class);
     }
 
     /**
-     * Ajustado para usar 'user_id' conforme definido no fillable e na sua Controller
+     * RELACIONAMENTO: Usuário que realizou o fechamento.
      */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'user_id');
-    }
-
-    /**
-     * Relacionamento para saber quem reabriu o caixa
-     */
-    public function reopener(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'reopened_by');
+        return $this->belongsTo(User::class, 'closed_by_user_id');
     }
 }

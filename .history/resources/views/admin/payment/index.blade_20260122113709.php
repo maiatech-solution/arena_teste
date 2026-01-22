@@ -20,127 +20,127 @@
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
             {{-- 1. ESTRUTURA DE INDICADORES (KPIs) --}}
-            <div class="space-y-4 mb-6">
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
+            <div class="space-y-4">
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-3 lg:gap-4">
 
-                    {{-- CARD 1: SALDO LÍQUIDO (O que deve ter na gaveta agora) --}}
+                    {{-- CARD 1: SALDO EM CAIXA (LÍQUIDO REAL) --}}
                     <div
-                        class="bg-green-600 dark:bg-green-700 overflow-hidden shadow-lg rounded-xl p-4 flex flex-col justify-center border-b-4 border-green-900 transition-all hover:scale-105">
-                        <div class="text-[10px] font-bold text-green-50 uppercase tracking-tighter flex items-center">
-                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
-                                    d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z">
-                                </path>
-                            </svg>
-                            Saldo {{ request('arena_id') ? 'da Arena' : 'Geral' }}
+                        class="bg-green-600 dark:bg-green-700 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center border-b-4 border-green-900">
+                        <div class="text-[10px] font-bold text-green-50 uppercase tracking-tighter truncate">
+                            💰 Saldo {{ request('arena_id') ? 'da Arena' : 'Geral do Caixa' }}
                         </div>
-                        <div id="valor-liquido-total-real" class="mt-1 text-2xl font-black text-white truncate">
+
+                        {{-- AQUI ESTÁ A CORREÇÃO: ADICIONADO O ID PARA O JAVASCRIPT CONSEGUIR LER --}}
+                        <div id="valor-liquido-total-real" class="mt-1 text-2xl font-extrabold text-white truncate"
+                            title="Valor exato: {{ $totalRecebidoDiaLiquido }}">
                             R$ {{ number_format($totalRecebidoDiaLiquido, 2, ',', '.') }}
                         </div>
-                        <div class="text-[9px] text-green-100 mt-1 italic leading-tight font-medium">
-                            Total disponível em mãos {{ request('arena_id') ? '(nesta quadra)' : '(consolidado)' }}.
+
+                        <div class="text-[9px] text-green-100 mt-1 italic leading-tight">
+                            {{ request('arena_id') ? 'Dinheiro/Pix desta quadra.' : 'Total real em dinheiro/pix hoje.' }}
                         </div>
                     </div>
 
-                    {{-- CARD 2: REFORÇOS (Entradas Avulsas) --}}
+                    {{-- CARD 2: FATURAMENTO TOTAL --}}
                     <div
-                        class="bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-900 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center">
+                        class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-300 dark:border-indigo-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
                         <div
-                            class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-tighter flex items-center">
-                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
-                                    d="M12 4v16m8-8H4"></path>
-                            </svg>
-                            Reforços (Avulsos)
+                            class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
+                            🎾 Receita {{ request('arena_id') ? 'da Arena' : 'do Dia' }}
                         </div>
-                        <div class="mt-1 text-2xl font-black text-emerald-700 dark:text-emerald-500">
-                            R$
-                            {{ number_format($financialTransactions->where('type', 'reforco')->sum('amount'), 2, ',', '.') }}
+                        <div
+                            class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-indigo-700 dark:text-indigo-300 truncate">
+                            R$ {{ number_format($totalAntecipadoReservasDia, 2, ',', '.') }}
                         </div>
                         <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                            Dinheiro inserido manualmente.
+                            Faturamento total {{ request('arena_id') ? 'nesta arena.' : 'de hoje.' }}
                         </div>
                     </div>
 
-                    {{-- CARD 3: SANGRIA / SAÍDAS AVULSAS --}}
+                    {{-- CARD 3: VALORES PENDENTES --}}
                     <div
-                        class="bg-white dark:bg-gray-800 border border-red-200 dark:border-red-900 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center text-left">
+                        class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
                         <div
-                            class="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-tighter flex items-center">
-                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M20 12H4">
-                                </path>
-                            </svg>
-                            Sangrias / Saídas
+                            class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
+                            ⏳ Pendente
                         </div>
-                        <div class="mt-1 text-2xl font-black text-red-600 dark:text-red-500">
-                            R$
-                            {{ number_format(abs($financialTransactions->whereIn('type', ['sangria', 'refund', 'no_show_penalty'])->where('amount', '<', 0)->sum('amount')),2,',','.') }}
-                        </div>
-                        <div class="text-[9px] text-gray-500 mt-1 leading-tight font-medium">
-                            Retiradas e estornos registrados.
-                        </div>
-                    </div>
-
-                    {{-- CARD 4: VALORES PENDENTES --}}
-                    <div
-                        class="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center text-left">
                         <div
-                            class="text-[10px] font-bold text-amber-700 dark:text-amber-500 uppercase tracking-tighter flex items-center">
-                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
-                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            Pendente (A Receber)
-                        </div>
-                        <div class="mt-1 text-2xl font-black text-amber-700 dark:text-amber-400">
+                            class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-yellow-700 dark:text-yellow-300 truncate">
                             R$ {{ number_format($totalPending, 2, ',', '.') }}
                         </div>
-                        <div class="text-[9px] text-amber-600 dark:text-amber-500 mt-1 leading-tight font-bold">
-                            Dívidas autorizadas hoje.
+                        <div class="text-[9px] text-gray-500 mt-1 leading-tight">
+                            Valor em aberto {{ request('arena_id') ? 'desta arena.' : 'total.' }}
                         </div>
                     </div>
 
-                    {{-- CARD 5: OPERACIONAL (Agendamentos e Faltas) --}}
+                    {{-- CARD 4: AGENDAMENTOS ATIVOS --}}
                     <div
-                        class="bg-gray-50 dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center text-left">
-                        <div class="text-[10px] font-bold text-gray-600 dark:text-gray-400 uppercase tracking-tighter">
-                            📊 Jogos / Faltas
+                        class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
+                        <div
+                            class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
+                            📅 Ativas
                         </div>
-                        <div class="mt-1 text-xl font-black text-gray-900 dark:text-white flex items-baseline gap-1">
-                            <span>{{ $totalReservasDia }}</span>
-                            <span class="text-[10px] font-normal text-gray-500 uppercase">Totais</span>
-                            <span class="mx-1 text-gray-300">|</span>
-                            <span class="text-red-600">{{ $noShowCount }}</span>
-                            <span class="text-[10px] font-normal text-red-500 uppercase">Faltas</span>
+                        <div
+                            class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-gray-900 dark:text-white truncate">
+                            {{ $totalReservasDia }}
                         </div>
                         <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                            Volume operacional {{ request('arena_id') ? 'da quadra' : 'do dia' }}.
+                            Agendamentos {{ request('arena_id') ? 'nesta quadra.' : 'hoje.' }}
+                        </div>
+                    </div>
+
+                    {{-- CARD 5: FALTAS REGISTRADAS --}}
+                    <div
+                        class="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
+                        <div
+                            class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
+                            ❌ Faltas
+                        </div>
+                        <div
+                            class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-red-700 dark:text-red-300 truncate">
+                            {{ $noShowCount }}
+                        </div>
+                        <div class="text-[9px] text-gray-500 mt-1 leading-tight">
+                            Faltas totais {{ request('arena_id') ? 'nesta quadra.' : 'registradas.' }}
                         </div>
                     </div>
 
                 </div>
             </div>
 
-            {{-- 2. CONTROLE DE STATUS E DADOS (UNIFICADO) --}}
-            <div class="space-y-4">
-                {{-- 1. DADOS OCULTOS GLOBAIS (Sempre fora de condições para o JS nunca perder o ID) --}}
-                <div id="js_global_data">
-                    <input type="hidden" id="js_totalReservas" value="{{ $reservas->count() }}">
-                    <input type="hidden" id="js_totalPending" value="{{ $totalPending }}">
-                    <input type="hidden" id="js_arenaId" value="{{ request('arena_id') }}">
-                    <input type="hidden" id="js_isFiltered" value="{{ request('arena_id') ? '1' : '0' }}">
-                    <input type="hidden" id="js_cashierDate" value="{{ $selectedDate }}">
-                    <input type="hidden" id="js_isActionDisabled" value="{{ $isActionDisabled ? '1' : '0' }}">
-                    <input type="hidden" id="js_valorLiquidoArenaRaw" value="{{ $totalRecebidoDiaLiquido }}">
-                </div>
-
-                {{-- 2. INTERFACE VISUAL --}}
+            {{-- 2. FECHAMENTO DE CAIXA (Lógica Condicional de Segurança) --}}
+            @if (isset($cashierStatus) && $cashierStatus === 'closed')
+                {{-- Bloco para reabrir o caixa --}}
                 <div
-                    class="bg-gray-50 dark:bg-gray-700/50 overflow-hidden shadow-lg sm:rounded-lg p-5 border {{ $cashierStatus === 'closed' ? 'border-red-400 dark:border-red-600' : 'border-indigo-400 dark:border-indigo-600' }}">
+                    class="bg-gray-50 dark:bg-gray-700/50 overflow-hidden shadow-lg sm:rounded-lg p-5 border border-red-400 dark:border-red-600">
+                    <div class="flex flex-col sm:flex-row items-center justify-between">
+                        <div
+                            class="text-sm sm:text-base font-bold text-red-700 dark:text-red-300 mb-3 sm:mb-0 flex items-center">
+                            <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L12 12M6 6l12 12">
+                                </path>
+                            </svg>
+                            CAIXA FECHADO! Alterações bloqueadas para o dia
+                            {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}.
+                        </div>
 
-                    {{-- Aviso de Filtro (Só aparece se estiver aberto e com arena) --}}
-                    @if ($cashierStatus !== 'closed' && request('arena_id'))
+                        <button id="openCashBtn" onclick="openCash('{{ $selectedDate }}')"
+                            class="w-full sm:w-auto px-6 py-2 bg-red-600 text-white font-bold rounded-lg shadow-md hover:bg-red-700 transition duration-150 flex items-center justify-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Reabrir Caixa (Permitir Alterações)
+                        </button>
+                    </div>
+                </div>
+            @else
+                {{-- Bloco para fechar o caixa --}}
+                <div
+                    class="bg-gray-50 dark:bg-gray-700/50 overflow-hidden shadow-lg sm:rounded-lg p-5 border border-indigo-400 dark:border-indigo-600">
+                    {{-- AVISO DE FILTRO ATIVO --}}
+                    @if (request('arena_id'))
                         <div
                             class="mb-3 p-2 bg-amber-100 text-amber-800 text-xs rounded-lg border border-amber-200 flex items-center">
                             <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -148,75 +148,38 @@
                                     d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
                                     clip-rule="evenodd"></path>
                             </svg>
-                            <span>Nota: O fechamento considera apenas os valores da arena selecionada.</span>
+                            Nota: Você está com um filtro de arena ativo. O fechamento considera sempre o <strong>total
+                                geral do dia</strong>.
                         </div>
                     @endif
 
                     <div class="flex flex-col sm:flex-row items-center justify-between">
-                        {{-- Lado Esquerdo: Texto de Status --}}
                         <div
                             class="text-sm sm:text-base font-medium text-gray-700 dark:text-gray-300 mb-3 sm:mb-0 flex items-center">
-                            <svg class="w-6 h-6 mr-2 {{ $cashierStatus === 'closed' ? 'text-red-600' : 'text-indigo-600' }}"
-                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-6 h-6 mr-2 text-indigo-600" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
-
-                            @if ($cashierStatus === 'closed')
-                                <span class="font-bold text-red-700 dark:text-red-300 uppercase">
-                                    Caixa Fechado ({{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }})
-                                </span>
-                            @else
-                                Status:
-                                @if (!request('arena_id'))
-                                    <span class="ml-2 font-bold text-amber-500 italic">Selecione uma unidade...</span>
-                                @elseif($totalPending > 0)
-                                    <span class="ml-2 font-bold text-red-500 animate-pulse">Aguardando Recebimentos (R$
-                                        {{ number_format($totalPending, 2, ',', '.') }})</span>
-                                @else
-                                    <span class="ml-2 font-bold text-green-600">✅ Arena pronta para fechar!</span>
-                                @endif
-                            @endif
+                            Status do Caixa Diário:
+                            <span id="cashStatus" class="ml-2 font-bold text-red-500 italic">Verificando
+                                pendências...</span>
                         </div>
 
-                        {{-- Lado Direito: Botões --}}
-                        <div class="w-full sm:w-auto">
-                            @if ($cashierStatus === 'closed')
-                                <button type="button" onclick="openCash('{{ $selectedDate }}')"
-                                    class="w-full sm:w-auto px-6 py-2 bg-red-600 text-white font-bold rounded-lg shadow-md hover:bg-red-700 transition duration-150 flex items-center justify-center uppercase tracking-wider text-xs">
-                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z">
-                                        </path>
-                                    </svg>
-                                    Reabrir Caixa
-                                </button>
-                            @else
-                                @if (request('arena_id'))
-                                    @if ($totalPending > 0)
-                                        <button type="button" disabled
-                                            class="w-full sm:w-auto px-6 py-2 bg-gray-400 text-white font-bold rounded-lg shadow-md cursor-not-allowed opacity-70 text-xs">
-                                            ⚠️ Pendência: R$ {{ number_format($totalPending, 2, ',', '.') }}
-                                        </button>
-                                    @else
-                                        <button id="openCloseCashModalBtn" onclick="openCloseCashModal()"
-                                            class="w-full sm:w-auto px-6 py-2 bg-green-600 text-white font-bold rounded-lg shadow-md hover:bg-green-700 transition duration-150 transform hover:scale-105 uppercase tracking-wider text-xs">
-                                            Fechar Caixa:
-                                            {{ $faturamentoPorArena->firstWhere('id', request('arena_id'))->name ?? '' }}
-                                        </button>
-                                    @endif
-                                @else
-                                    <button disabled
-                                        class="w-full sm:w-auto px-6 py-2 bg-indigo-300 text-white font-bold rounded-lg cursor-not-allowed text-xs uppercase">
-                                        Selecione uma Arena
-                                    </button>
-                                @endif
-                            @endif
-                        </div>
+                        {{-- DADOS OCULTOS PARA O JS --}}
+                        <input type="hidden" id="js_totalReservas"
+                            value="{{ (int) ($totalReservasGeral ?? $totalReservasDia) }}">
+                        <input type="hidden" id="js_isFiltered" value="{{ request('arena_id') ? '1' : '0' }}">
+                        <input type="hidden" id="js_cashierDate" value="{{ $selectedDate }}">
+                        <input type="hidden" id="js_isActionDisabled" value="{{ $isActionDisabled ? '1' : '0' }}">
+
+                        <button id="openCloseCashModalBtn" onclick="openCloseCashModal()" disabled
+                            class="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-700 transition duration-150">
+                            Fechar Caixa Geral
+                        </button>
                     </div>
                 </div>
-            </div>
+            @endif
 
 
             {{-- 3. LINHA DOS FILTROS (DATA E BUSCA) --}}
@@ -821,7 +784,8 @@
             </div>
 
 
-            {{-- 8. HISTÓRICO DE FECHAMENTOS (AUDITORIA DE DIVERGÊNCIAS POR ARENA) --}}
+
+            {{-- 8. HISTÓRICO DE FECHAMENTOS (AUDITORIA DE DIVERGÊNCIAS) --}}
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg mt-6">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
                     <h3
@@ -832,12 +796,12 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
-                            Histórico de Fechamentos
+                            Histórico de Fechamentos Gerais
                         </div>
                         @if (request('arena_id'))
                             <span
                                 class="text-[10px] bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-400 px-2 py-1 rounded-md font-bold uppercase tracking-tighter">
-                                Filtrado por Unidade
+                                Visão Consolidada (Todas as Quadras)
                             </span>
                         @endif
                     </h3>
@@ -847,22 +811,19 @@
                             <thead class="bg-gray-50 dark:bg-gray-700">
                                 <tr>
                                     <th
-                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                         Data</th>
                                     <th
-                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Arena / Unidade</th>
-                                    <th
-                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                         Responsável</th>
                                     <th
-                                        class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Esperado</th>
+                                        class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Esperado (Sistema)</th>
                                     <th
-                                        class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Informado</th>
+                                        class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Informado (Físico)</th>
                                     <th
-                                        class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                         Diferença</th>
                                 </tr>
                             </thead>
@@ -870,42 +831,53 @@
                                 @forelse ($cashierHistory ?? [] as $caixa)
                                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition duration-150">
                                         <td
-                                            class="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                                            class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-700 dark:text-gray-300">
                                             {{ \Carbon\Carbon::parse($caixa->date)->format('d/m/Y') }}
-                                        </td>
-                                        <td class="px-4 py-4 whitespace-nowrap">
-                                            <span
-                                                class="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 font-bold text-[10px] uppercase border border-indigo-100 dark:border-indigo-800">
-                                                {{ $caixa->arena->name ?? 'Geral' }}
-                                            </span>
                                         </td>
                                         <td
                                             class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                             {{ $caixa->user->name ?? 'Sistema' }}
                                         </td>
-                                        <td class="px-4 py-4 text-right text-sm font-mono">
+                                        <td
+                                            class="px-4 py-4 whitespace-nowrap text-sm text-right text-gray-600 dark:text-gray-400 font-mono">
                                             R$ {{ number_format($caixa->calculated_amount, 2, ',', '.') }}
                                         </td>
-                                        <td class="px-4 py-4 text-right text-sm font-bold font-mono">
+                                        <td
+                                            class="px-4 py-4 whitespace-nowrap text-sm text-right font-semibold text-gray-900 dark:text-white font-mono">
                                             R$ {{ number_format($caixa->actual_amount, 2, ',', '.') }}
                                         </td>
-                                        <td class="px-4 py-4 text-right text-sm font-bold font-mono">
+                                        <td class="px-4 py-4 whitespace-nowrap text-sm text-right font-bold font-mono">
                                             @if ($caixa->difference > 0)
-                                                <span class="text-amber-600">+R$
-                                                    {{ number_format($caixa->difference, 2, ',', '.') }} ⚠️</span>
+                                                <span
+                                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200"
+                                                    title="Sobrou dinheiro físico">
+                                                    <span
+                                                        class="w-2 h-2 mr-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                                    + R$ {{ number_format($caixa->difference, 2, ',', '.') }} ⚠️
+                                                </span>
                                             @elseif($caixa->difference < 0)
-                                                <span class="text-red-600">-R$
-                                                    {{ number_format(abs($caixa->difference), 2, ',', '.') }}
-                                                    🚨</span>
+                                                <span
+                                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border border-red-200"
+                                                    title="Faltou dinheiro físico">
+                                                    <span
+                                                        class="w-2 h-2 mr-1.5 rounded-full bg-red-500 shadow-sm"></span>
+                                                    - R$ {{ number_format(abs($caixa->difference), 2, ',', '.') }} 🚨
+                                                </span>
                                             @else
-                                                <span class="text-green-600">R$ 0,00 ✅</span>
+                                                <span
+                                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border border-green-200">
+                                                    <span class="w-2 h-2 mr-1.5 rounded-full bg-green-500"></span>
+                                                    R$ 0,00 ✅
+                                                </span>
                                             @endif
                                         </td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="6" class="px-4 py-8 text-center text-gray-500 italic">Nenhum
-                                            histórico disponível.</td>
+                                        <td colspan="5"
+                                            class="px-4 py-8 text-center text-gray-500 dark:text-gray-400 italic font-medium">
+                                            Nenhum histórico de fechamento disponível.
+                                        </td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -1225,7 +1197,7 @@
     </div>
 
 
-    {{-- MODAL 3: FECHAR CAIXA (CLOSE CASH) - AJUSTADO PARA ARENA INDIVIDUAL --}}
+    {{-- MODAL 3: FECHAR CAIXA (CLOSE CASH) --}}
     <div id="closeCashModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
         <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"
             onclick="closeCloseCashModal()"></div>
@@ -1234,11 +1206,6 @@
             class="relative bg-white dark:bg-gray-800 rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full border dark:border-gray-700">
             <form id="closeCashForm">
                 @csrf
-                {{-- CAMPOS OCULTOS DE CONTROLE --}}
-                <input type="hidden" id="closeCashDate" name="date">
-                {{-- NOVO: Captura o ID da arena que está sendo filtrada no momento --}}
-                <input type="hidden" name="arena_id" value="{{ request('arena_id') }}">
-
                 <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <div class="sm:flex sm:items-start">
                         <div
@@ -1253,35 +1220,35 @@
                         <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
                             <h3 class="text-lg leading-6 font-black text-gray-900 dark:text-white uppercase tracking-tight"
                                 id="modal-title">
-                                Fechamento de Unidade
+                                Fechamento: <span id="closeCashDateDisplay"
+                                    class="text-indigo-600 dark:text-indigo-400"></span>
                             </h3>
 
-                            {{-- IDENTIFICAÇÃO DA ARENA NO MODAL --}}
-                            <div class="mt-1 flex items-center gap-2">
-                                <span class="text-xs font-bold text-gray-500 uppercase">Arena:</span>
-                                <span class="text-sm font-black text-indigo-600 dark:text-indigo-400 uppercase">
-                                    {{ $faturamentoPorArena->firstWhere('id', request('arena_id'))->name ?? 'Não selecionada' }}
-                                </span>
-                            </div>
-
-                            {{-- DATA --}}
-                            <div class="text-[10px] text-gray-400 font-bold uppercase mt-1">
-                                Período: <span id="closeCashDateDisplay"></span>
-                            </div>
+                            {{-- AVISO DE ESCOPO --}}
+                            @if (request('arena_id'))
+                                <div
+                                    class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                                    <p
+                                        class="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase leading-tight">
+                                        ⚠️ Atenção: O sistema está filtrado por Arena, mas o fechamento é sempre
+                                        relativo ao **TOTAL GERAL** do dia.
+                                    </p>
+                                </div>
+                            @endif
 
                             <div class="mt-4 space-y-4">
                                 {{-- VALOR CALCULADO PELO SISTEMA --}}
                                 <div>
                                     <label
                                         class="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">
-                                        Saldo Esperado (Nesta Arena)
+                                        Total Esperado (Saldo em Sistema)
                                     </label>
                                     <div id="calculatedLiquidAmount"
                                         class="mt-1 block w-full bg-gray-50 dark:bg-gray-900 p-3 rounded-md font-black text-2xl text-indigo-600 dark:text-indigo-400 border border-gray-200 dark:border-gray-700">
                                         R$ 0,00
                                     </div>
-                                    <p class="text-[10px] text-gray-400 mt-1 italic">Soma de entradas, reforços e
-                                        sangrias apenas desta unidade.</p>
+                                    <p class="text-[10px] text-gray-400 mt-1 italic">Soma de todas as entradas
+                                        registradas no sistema.</p>
                                 </div>
 
                                 {{-- VALOR INFORMADO PELO OPERADOR --}}
@@ -1289,13 +1256,14 @@
                                     class="p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border-2 border-indigo-100 dark:border-indigo-800">
                                     <label for="actualCashAmount"
                                         class="block text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest mb-1 text-left">
-                                        Valor Contado Fisicamente
+                                        Valor Total em Caixa Físico (Contado)
                                     </label>
                                     <div class="relative">
                                         <div
                                             class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                             <span class="text-indigo-500 font-bold">R$</span>
                                         </div>
+                                        {{-- CORREÇÃO NO ATRIBUTO NAME ABAIXO: de "actual_cash_amount" para "actual_amount" --}}
                                         <input type="number" step="0.01" id="actualCashAmount"
                                             name="actual_amount" required
                                             class="pl-10 block w-full rounded-md border-indigo-300 dark:border-indigo-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white font-black text-2xl"
@@ -1308,6 +1276,7 @@
                                     class="hidden mt-3 p-3 text-sm font-bold rounded-lg text-center border transition-all duration-300">
                                 </div>
 
+                                <input type="hidden" id="closeCashDate" name="date">
                                 <div id="closecash-error-message"
                                     class="hidden mt-3 p-3 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-bold rounded-lg border border-red-200 dark:border-red-800">
                                 </div>
@@ -1320,7 +1289,7 @@
                     class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2 border-t border-gray-100 dark:border-gray-700 text-left">
                     <button type="submit" id="submitCloseCashBtn"
                         class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-6 py-2.5 bg-indigo-600 text-base font-black text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 sm:w-auto sm:text-sm transition duration-150 uppercase tracking-wider">
-                        <span id="submitCloseCashText">Finalizar Caixa</span>
+                        <span id="submitCloseCashText">Confirmar Fechamento</span>
                         <svg id="submitCloseCashSpinner" class="animate-spin ml-2 h-4 w-4 text-white hidden"
                             fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
@@ -1339,6 +1308,7 @@
         </div>
     </div>
 
+
     {{-- MODAL 4: ABRIR CAIXA (OPEN CASH) - Exige Justificativa para Auditoria --}}
     <div id="openCashModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4"
         aria-labelledby="modal-title" role="dialog" aria-modal="true">
@@ -1349,10 +1319,6 @@
             class="relative bg-white dark:bg-gray-800 rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full border dark:border-gray-700">
             <form id="openCashForm">
                 @csrf
-                {{-- CAMPOS OCULTOS DE CONTROLE --}}
-                <input type="hidden" id="reopenCashDate" name="date">
-                <input type="hidden" id="reopenCashArenaId" name="arena_id">
-
                 <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <div class="sm:flex sm:items-start">
                         <div
@@ -1387,11 +1353,12 @@
                                     class="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 text-left">
                                     Justificativa da Reabertura <span class="text-red-500">*</span>
                                 </label>
+                                {{-- A única mudança necessária é o name="reason" abaixo --}}
                                 <textarea id="reopen_reason" name="reason" rows="3" required
                                     class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-red-500 focus:ring-red-500 dark:bg-gray-700 dark:text-white font-medium text-sm"
                                     placeholder="Descreva o motivo da reabertura (Ex: Erro no lançamento da Reserva #123)"></textarea>
                             </div>
-
+                            <input type="hidden" id="reopenCashDate" name="date">
                             <div id="openCash-error-message"
                                 class="hidden mt-3 p-3 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-bold rounded-lg border border-red-200 dark:border-red-800 text-left">
                             </div>
@@ -1477,7 +1444,6 @@
             class="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl sm:max-w-lg sm:w-full border dark:border-gray-700">
             <form id="transactionForm">
                 @csrf
-                {{-- Garante que a data seja a que está sendo visualizada --}}
                 <input type="hidden" name="date" value="{{ $selectedDate }}">
 
                 <div class="p-6">
@@ -1485,24 +1451,6 @@
                         Avulsa</h3>
 
                     <div class="space-y-4">
-                        {{-- Seleção de Arena: Agora com ID para automação via JS --}}
-                        <div>
-                            <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">
-                                Arena / Unidade
-                            </label>
-                            <select name="arena_id" id="modal_transaction_arena_id" required
-                                class="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:text-white font-bold focus:ring-indigo-500">
-                                <option value="">SELECIONE A ARENA...</option>
-                                @foreach ($faturamentoPorArena as $arena)
-                                    {{-- Pré-seleciona se o filtro de arena estiver ativo na URL --}}
-                                    <option value="{{ $arena->id }}"
-                                        {{ request('arena_id') == $arena->id ? 'selected' : '' }}>
-                                        {{ $arena->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-
                         {{-- Tipo de Movimentação --}}
                         <div>
                             <label
@@ -1531,7 +1479,7 @@
                             <label
                                 class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Forma</label>
                             <select name="payment_method" required
-                                class="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:text-white font-bold">
+                                class="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:text-white">
                                 <option value="money">Dinheiro (Espécie)</option>
                                 <option value="pix">PIX</option>
                                 <option value="other">Outro</option>
@@ -1556,11 +1504,12 @@
                         SALVAR MOVIMENTAÇÃO
                     </button>
                     <button type="button" onclick="closeTransactionModal()"
-                        class="text-gray-700 dark:text-gray-300 font-bold text-sm uppercase">CANCELAR</button>
+                        class="text-gray-700 dark:text-gray-300 font-bold text-sm">CANCELAR</button>
                 </div>
             </form>
         </div>
     </div>
+
 
     {{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA --}}
 
@@ -1657,28 +1606,12 @@
 
         // --- Abertura de Modais ---
 
-        // NOVO: Abrir Modal de Sangria/Reforço com Detecção de Arena
+        // NOVO: Abrir Modal de Sangria/Reforço
         function openTransactionModal() {
-            // 1. Verifica se o caixa geral/arena está fechado
             if (document.getElementById('js_isActionDisabled')?.value === '1') {
                 alert('🚫 Operação bloqueada: O caixa deste dia já está fechado.');
                 return;
             }
-
-            // 2. Captura a arena que está selecionada no filtro da URL
-            const urlParams = new URLSearchParams(window.location.search);
-            const filteredArenaId = urlParams.get('arena_id');
-            const arenaSelect = document.getElementById('modal_transaction_arena_id');
-
-            // 3. Se houver um filtro de arena ativo, pré-seleciona ela no Modal
-            if (filteredArenaId && arenaSelect) {
-                arenaSelect.value = filteredArenaId;
-            } else if (arenaSelect) {
-                // Se não houver filtro, reseta para a opção padrão "Selecione..."
-                arenaSelect.value = "";
-            }
-
-            // 4. Abre o modal trocando as classes do Tailwind
             document.getElementById('transactionModal').classList.replace('hidden', 'flex');
         }
 
@@ -1729,53 +1662,18 @@
         }
 
         function openCloseCashModal() {
-            // 1. Pega os valores dos inputs ocultos (mais seguro que ler texto da tela)
             const date = document.getElementById('js_cashierDate').value;
-            const systemValueRaw = document.getElementById('js_valorLiquidoArenaRaw').value;
-
-            // 2. Formata o valor bruto para exibir no Modal (ex: 140.00 -> R$ 140,00)
-            const systemValueFormatted = parseFloat(systemValueRaw).toLocaleString('pt-br', {
-                style: 'currency',
-                currency: 'BRL'
-            });
-
-            // 3. Alimenta os campos do Modal
+            const systemValue = document.getElementById('valor-liquido-total-real').innerText;
             document.getElementById('closeCashDate').value = date;
             document.getElementById('closeCashDateDisplay').innerText = date.split('-').reverse().join('/');
-
-            // Aqui usamos o valor formatado apenas para exibição visual
-            document.getElementById('calculatedLiquidAmount').innerText = systemValueFormatted;
-
-            // 4. Abre o Modal
+            document.getElementById('calculatedLiquidAmount').innerText = systemValue;
             document.getElementById('closeCashModal').classList.replace('hidden', 'flex');
-
-            // 5. Executa o cálculo da diferença
             calculateDifference();
         }
 
         function openCash(date) {
-            // 1. Busca os elementos necessários
-            const arenaIdInput = document.getElementById('js_arenaId');
-            const modalArenaInput = document.getElementById('reopenCashArenaId');
-            const modalDateInput = document.getElementById('reopenCashDate');
-            const modalDateDisplay = document.getElementById('openCashDateDisplay');
-
-            // 2. Validação: Impede a abertura se não houver arena identificada
-            if (!arenaIdInput || !arenaIdInput.value) {
-                alert('⚠️ Selecione uma arena antes de tentar reabrir o caixa.');
-                return;
-            }
-
-            // 3. Preenche os campos do Modal
-            modalDateInput.value = date;
-            modalArenaInput.value = arenaIdInput.value; // Garante que o ID da arena vá para o form
-            modalDateDisplay.innerText = date.split('-').reverse().join('/');
-
-            // 4. Limpa justificativas anteriores para evitar duplicidade de texto
-            const reasonField = document.getElementById('reopen_reason');
-            if (reasonField) reasonField.value = '';
-
-            // 5. Exibe o modal
+            document.getElementById('reopenCashDate').value = date;
+            document.getElementById('openCashDateDisplay').innerText = date.split('-').reverse().join('/');
             document.getElementById('openCashModal').classList.replace('hidden', 'flex');
         }
 
@@ -1835,48 +1733,25 @@
         function checkCashierStatus() {
             const btn = document.getElementById('openCloseCashModalBtn');
             const statusEl = document.getElementById('cashStatus');
-            const isFiltered = document.getElementById('js_isFiltered')?.value === '1';
-
             if (!btn || !statusEl) return;
-
-            // 1. NOVA TRAVA: Se não houver arena selecionada, bloqueia o fechamento individual
-            if (!isFiltered) {
-                btn.disabled = true;
-                statusEl.innerHTML = "👈 Selecione uma Arena para fechar";
-                statusEl.classList.add('text-amber-500');
+            if (document.getElementById('js_isFiltered').value === '1') {
+                statusEl.innerHTML = "💡 Limpe o filtro para fechar.";
                 return;
             }
-
-            // 2. LÓGICA DE PENDÊNCIAS: Verifica se todos os jogos DAQUELA ARENA foram processados
             const total = parseInt(document.getElementById('js_totalReservas').value || 0);
             let completed = 0;
-
-            // Status que consideramos como "processados" (não impedem o fechamento)
-            const finalStatuses = ['pago', 'falta', 'cancelada', 'rejeitada', 'no_show', 'paid', 'completed', 'atrasado'];
-
-            // Percorre as linhas da tabela visível (que já está filtrada pela arena)
-            document.querySelectorAll('table:first-of-type tbody tr').forEach(row => {
-                // Pega o texto da coluna de Status (3ª coluna)
-                const statusCell = row.querySelector('td:nth-child(3)');
-                if (statusCell) {
-                    const text = statusCell.innerText.trim().toLowerCase();
-                    if (finalStatuses.some(s => text.includes(s))) {
-                        completed++;
-                    }
-                }
+            const finalS = ['pago', 'falta', 'cancelada', 'rejeitada', 'no_show', 'paid', 'completed'];
+            document.querySelectorAll('table tbody tr').forEach(row => {
+                const text = row.querySelector('td:nth-child(3)')?.innerText.trim().toLowerCase();
+                if (finalS.some(s => text?.includes(s))) completed++;
             });
-
-            // 3. DECISÃO: Habilita ou não o botão com base nas pendências da arena
             if (total > 0 && completed < total) {
                 btn.disabled = true;
-                statusEl.innerHTML = `🚨 Pendentes nesta Arena: ${total - completed}`;
-                statusEl.classList.remove('text-green-600');
-                statusEl.classList.add('text-red-500');
+                statusEl.innerHTML = `🚨 Pendentes: ${total - completed}`;
             } else {
                 btn.disabled = false;
-                statusEl.innerHTML = "✅ Arena pronta para fechar!";
-                statusEl.classList.remove('text-red-500', 'text-amber-500');
-                statusEl.classList.add('text-green-600');
+                statusEl.innerHTML = "✅ Pronto para fechar!";
+                statusEl.classList.replace('text-red-500', 'text-green-600');
             }
         }
 
@@ -1922,25 +1797,20 @@
         function setupAjaxForm(formId, btnId, spinnerId, errorId, urlTemplate) {
             const form = document.getElementById(formId);
             if (!form) return;
-
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
-
                 const btn = document.getElementById(btnId);
                 const spinner = document.getElementById(spinnerId);
                 const error = document.getElementById(errorId);
 
-                // Captura o ID dinamicamente (Reserva, No-Show ou Arena para reabertura)
+                // Pega o ID da reserva se existir, senão fica vazio (para rotas sem ID como a movimentação avulsa)
                 const id = document.getElementById('modalReservaId')?.value ||
-                    document.getElementById('noShowReservaId')?.value ||
-                    document.getElementById('reopenCashArenaId')?.value || '';
+                    document.getElementById('noShowReservaId')?.value || '';
 
-                // Feedback visual
                 btn.disabled = true;
                 spinner?.classList.remove('hidden');
                 error?.classList.add('hidden');
 
-                // Envio dos dados via Fetch API
                 fetch(urlTemplate.replace('{id}', id), {
                         method: 'POST',
                         body: new FormData(this),
@@ -1952,11 +1822,8 @@
                     })
                     .then(r => r.json())
                     .then(data => {
-                        if (data.success) {
-                            window.location.reload();
-                        } else {
-                            throw new Error(data.message || 'Erro ao processar');
-                        }
+                        if (data.success) window.location.reload();
+                        else throw new Error(data.message || 'Erro ao processar');
                     })
                     .catch(err => {
                         if (error) {
@@ -1965,35 +1832,23 @@
                         }
                         btn.disabled = false;
                         spinner?.classList.add('hidden');
-                        console.error('Erro na requisição:', err);
                     });
             });
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Inicialização de status e cálculos
-            if (typeof checkCashierStatus === "function") checkCashierStatus();
+            checkCashierStatus();
             document.getElementById('actualCashAmount')?.addEventListener('input', calculateDifference);
 
             // Registro dos formulários AJAX
-
-            // 1. Movimentação Avulsa (Sangria/Reforço)
             setupAjaxForm('transactionForm', 'submitTransactionBtn', null, null,
                 '/admin/pagamentos/movimentacao-avulsa');
-
-            // 2. Finalizar Pagamento de Reserva
             setupAjaxForm('paymentForm', 'submitPaymentBtn', 'submitPaymentSpinner', 'payment-error-message',
                 '/admin/pagamentos/{id}/finalizar');
-
-            // 3. Registrar No-Show (Falta)
             setupAjaxForm('noShowForm', 'submitNoShowBtn', 'submitNoShowSpinner', 'noshow-error-message',
                 '/admin/reservas/{id}/no-show');
-
-            // 4. Fechamento de Caixa
             setupAjaxForm('closeCashForm', 'submitCloseCashBtn', 'submitCloseCashSpinner',
                 'closecash-error-message', '/admin/pagamentos/fechar-caixa');
-
-            // 5. Reabertura de Caixa (Usa o reopenCashArenaId capturado acima)
             setupAjaxForm('openCashForm', 'submitOpenCashBtn', 'submitOpenCashSpinner', 'openCash-error-message',
                 '/admin/pagamentos/abrir-caixa');
         });

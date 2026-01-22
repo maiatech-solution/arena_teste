@@ -117,18 +117,11 @@ class PaymentController extends Controller
         $totalReservasGeralCount = Reserva::whereDate('date', $dateObject)
             ->whereNotNull('user_id')
             ->where('is_fixed', false)
-            ->when($selectedArenaId, function ($q) use ($selectedArenaId) {
-                return $q->where('arena_id', $selectedArenaId);
-            })
             ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, 'completed', 'no_show', 'canceled'])
             ->count();
 
-        // 5. Saldo Líquido Real (Dinheiro em caixa na data selecionada - Ajustado para Arena)
-        $totalRecebidoDiaLiquido = FinancialTransaction::whereDate('paid_at', $dateObject)
-            ->when($selectedArenaId, function ($q) use ($selectedArenaId) {
-                return $q->where('arena_id', $selectedArenaId);
-            })
-            ->sum('amount');
+        // 5. Saldo Líquido Real (Dinheiro em caixa na data selecionada)
+        $totalRecebidoDiaLiquido = FinancialTransaction::whereDate('paid_at', $dateObject)->sum('amount');
 
         // 6. Faturamento por Arena (Baseado na data)
         $arenasAtivas = \App\Models\Arena::all();
@@ -153,22 +146,10 @@ class PaymentController extends Controller
             ->orderBy('paid_at', 'desc')
             ->get();
 
-        // 8. Auditoria (AJUSTADO: Status e Histórico agora filtram por Arena)
-        $cashierRecord = Cashier::where('date', $selectedDateString)
-            ->when($selectedArenaId, function ($q) use ($selectedArenaId) {
-                return $q->where('arena_id', $selectedArenaId);
-            })
-            ->first();
-
+        // 8. Auditoria
+        $cashierRecord = Cashier::where('date', $selectedDateString)->first();
         $cashierStatus = $cashierRecord->status ?? 'open';
-
-        $cashierHistory = Cashier::with(['user', 'arena'])
-            ->when($selectedArenaId, function ($q) use ($selectedArenaId) {
-                return $q->where('arena_id', $selectedArenaId);
-            })
-            ->orderBy('date', 'desc')
-            ->limit(10)
-            ->get();
+        $cashierHistory = Cashier::with('user')->orderBy('date', 'desc')->limit(10)->get();
 
         // 9. KPIs Dinâmicos
         $totalExpected = $reservas->whereNotIn('status', ['canceled', 'rejected'])
@@ -180,7 +161,7 @@ class PaymentController extends Controller
         return view('admin.payment.index', [
             'selectedDate'               => $selectedDateString,
             'reservas'                   => $reservas,
-            'filterDebts'                => $filterDebts,
+            'filterDebts'                => $filterDebts, // Envia para a view saber se o filtro está ativo
             'faturamentoPorArena'        => $faturamentoPorArena,
             'totalRecebidoDiaLiquido'    => $totalRecebidoDiaLiquido,
             'totalAntecipadoReservasDia' => $reservas->sum('total_paid'),
@@ -196,61 +177,61 @@ class PaymentController extends Controller
     }
 
 
+
     /**
-     * 🎯 FECHAR CAIXA: Grava a auditoria no banco com cálculo automático de segurança por arena.
+     * 🎯 FECHAR CAIXA: Grava a auditoria no banco com cálculo automático de segurança
      */
     public function closeCash(Request $request)
     {
-        // 1. Validação rigorosa: arena_id é obrigatório para fechamento individualizado
+        // 1. Validamos apenas a data e o valor físico (contado pelo operador)
+        // Removi o 'calculated_amount' da validação obrigatória para evitar o erro 500
         $validated = $request->validate([
             'date'          => 'required|date',
             'actual_amount' => 'required|numeric',
-            'arena_id'      => 'required|exists:arenas,id', // Garante que o fechamento pertence a uma arena válida
-        ], [
-            'arena_id.required' => 'É necessário selecionar uma arena para realizar o fechamento.',
         ]);
 
         try {
             $date = $validated['date'];
-            $arenaId = $validated['arena_id'];
+            $arenaId = $request->input('arena_id'); // Captura a arena se enviada
 
-            // 2. CÁLCULO DE SEGURANÇA (O servidor recalcula o saldo baseado apenas na arena selecionada)
+            // 2. CÁLCULO DE SEGURANÇA (O servidor pergunta ao banco quanto deve ter em caixa)
             $calculatedSystem = FinancialTransaction::whereDate('paid_at', $date)
-                ->where('arena_id', $arenaId)
+                ->when($arenaId, function ($q) use ($arenaId) {
+                    return $q->where('arena_id', $arenaId);
+                })
                 ->sum('amount');
 
-            // 3. Precisão decimal para evitar erros de ponto flutuante
+            // 3. Precisão decimal
             $calculated = round((float)$calculatedSystem, 2);
             $actual     = round((float)$validated['actual_amount'], 2);
             $difference = round($actual - $calculated, 2);
 
-            // 4. Persistência (Usa transação para garantir que o status e o registro sejam salvos juntos)
-            DB::transaction(function () use ($date, $arenaId, $calculated, $actual, $difference, $request) {
-                Cashier::updateOrCreate(
-                    [
-                        'date'     => $date,
-                        'arena_id' => $arenaId // Chave composta: data + arena
-                    ],
-                    [
-                        'user_id'           => Auth::id(),
-                        'calculated_amount' => $calculated,
-                        'actual_amount'     => $actual,
-                        'difference'        => $difference,
-                        'status'            => 'closed',
-                        'closing_time'      => now(),
-                        'notes'             => $request->input('notes'),
-                    ]
-                );
-            });
+            // 4. Persistência no banco de dados
+            // Usamos updateOrCreate para permitir correções se o caixa for reaberto
+            Cashier::updateOrCreate(
+                [
+                    'date'     => $date,
+                    'arena_id' => $arenaId // Garante o fechamento por unidade
+                ],
+                [
+                    'user_id'           => Auth::id(),
+                    'calculated_amount' => $calculated, // Gravado via servidor, sem risco de erro nulo
+                    'actual_amount'     => $actual,
+                    'difference'        => $difference,
+                    'status'            => 'closed',
+                    'closing_time'      => now(),
+                    'notes'             => $request->input('notes'),
+                ]
+            );
 
             return response()->json([
                 'success'    => true,
-                'message'    => 'Caixa da unidade fechado com sucesso!',
+                'message'    => 'Caixa fechado com sucesso!',
                 'difference' => $difference,
                 'system_sum' => $calculated
             ]);
         } catch (\Exception $e) {
-            \Log::error("Erro crítico ao fechar caixa da arena {$request->input('arena_id')}: " . $e->getMessage());
+            \Log::error("Erro crítico ao fechar caixa: " . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Erro ao processar o fechamento: ' . $e->getMessage()
@@ -258,56 +239,53 @@ class PaymentController extends Controller
         }
     }
 
+
+
     /**
-     * 🎯 REABRIR CAIXA: Registra justificativa e invalida o fechamento anterior.
+
+     * 🎯 REABRIR CAIXA: Registra justificativa
+
      */
+
     public function reopenCash(Request $request)
+
     {
+
         $request->validate([
-            'date'     => 'required|date',
-            'reason'   => 'required|string|min:5',
-            'arena_id' => 'required|exists:arenas,id',
+
+            'date' => 'required|date',
+
+            'reason' => 'required|string|min:5',
+
         ]);
 
+
+
         try {
-            // 1. Log de Auditoria Técnica (Aparece no storage/logs/laravel.log)
-            \Log::info("Tentando reabrir caixa: Data {$request->date} | Arena {$request->arena_id}");
 
-            // 2. Busca o registro. Removi o firstOrFail para tratar o erro amigavelmente
-            $cashier = Cashier::whereDate('date', $request->date) // Usando whereDate para garantir compatibilidade
-                ->where('arena_id', $request->arena_id)
-                ->first();
+            $cashier = Cashier::where('date', $request->date)->firstOrFail();
 
-            if (!$cashier) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Não existe um fechamento registrado para esta arena no dia " . \Carbon\Carbon::parse($request->date)->format('d/m/Y') . ". Verifique se você selecionou a unidade correta no filtro."
-                ], 404);
-            }
-
-            // 3. Atualiza para reabrir
             $cashier->update([
-                'status'            => 'open',
-                'reopen_reason'     => $request->reason,
-                'reopened_at'       => now(),
-                'reopened_by'       => Auth::id(),
-                'actual_amount'     => 0,
-                'difference'        => 0,
-                'closing_time'      => null,
+
+                'status' => 'open',
+
+                'reopen_reason' => $request->reason,
+
+                'reopened_at' => now(),
+
+                'reopened_by' => Auth::id()
+
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Caixa da unidade reaberto. Alterações financeiras liberadas.'
-            ]);
+
+
+            return response()->json(['success' => true, 'message' => 'Caixa reaberto. Alterações permitidas.']);
         } catch (\Exception $e) {
-            \Log::error("Erro fatal ao reabrir caixa da arena {$request->arena_id}: " . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Falha interna ao processar reabertura. Detalhes: ' . $e->getMessage()
-            ], 500);
+
+            return response()->json(['success' => false, 'message' => 'Erro ao reabrir o caixa.'], 500);
         }
     }
+
 
 
     /**
@@ -558,6 +536,10 @@ class PaymentController extends Controller
         }
     }
 
+    /**
+     * 💸 MOVIMENTAÇÃO AVULSA: Sangria (Saída) ou Reforço (Entrada)
+     * Mantém o saldo em sistema sempre batendo com o físico.
+     */
     /**
      * 💸 MOVIMENTAÇÃO AVULSA: Sangria (Saída) ou Reforço (Entrada)
      * Refinado para garantir vínculo obrigatório com uma Arena.

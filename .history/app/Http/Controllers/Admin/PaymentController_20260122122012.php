@@ -258,56 +258,52 @@ class PaymentController extends Controller
         }
     }
 
+
     /**
-     * 🎯 REABRIR CAIXA: Registra justificativa e invalida o fechamento anterior.
+
+     * 🎯 REABRIR CAIXA: Registra justificativa
+
      */
+
     public function reopenCash(Request $request)
+
     {
+
         $request->validate([
-            'date'     => 'required|date',
-            'reason'   => 'required|string|min:5',
-            'arena_id' => 'required|exists:arenas,id',
+
+            'date' => 'required|date',
+
+            'reason' => 'required|string|min:5',
+
         ]);
 
+
+
         try {
-            // 1. Log de Auditoria Técnica (Aparece no storage/logs/laravel.log)
-            \Log::info("Tentando reabrir caixa: Data {$request->date} | Arena {$request->arena_id}");
 
-            // 2. Busca o registro. Removi o firstOrFail para tratar o erro amigavelmente
-            $cashier = Cashier::whereDate('date', $request->date) // Usando whereDate para garantir compatibilidade
-                ->where('arena_id', $request->arena_id)
-                ->first();
+            $cashier = Cashier::where('date', $request->date)->firstOrFail();
 
-            if (!$cashier) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Não existe um fechamento registrado para esta arena no dia " . \Carbon\Carbon::parse($request->date)->format('d/m/Y') . ". Verifique se você selecionou a unidade correta no filtro."
-                ], 404);
-            }
-
-            // 3. Atualiza para reabrir
             $cashier->update([
-                'status'            => 'open',
-                'reopen_reason'     => $request->reason,
-                'reopened_at'       => now(),
-                'reopened_by'       => Auth::id(),
-                'actual_amount'     => 0,
-                'difference'        => 0,
-                'closing_time'      => null,
+
+                'status' => 'open',
+
+                'reopen_reason' => $request->reason,
+
+                'reopened_at' => now(),
+
+                'reopened_by' => Auth::id()
+
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Caixa da unidade reaberto. Alterações financeiras liberadas.'
-            ]);
+
+
+            return response()->json(['success' => true, 'message' => 'Caixa reaberto. Alterações permitidas.']);
         } catch (\Exception $e) {
-            \Log::error("Erro fatal ao reabrir caixa da arena {$request->arena_id}: " . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Falha interna ao processar reabertura. Detalhes: ' . $e->getMessage()
-            ], 500);
+
+            return response()->json(['success' => false, 'message' => 'Erro ao reabrir o caixa.'], 500);
         }
     }
+
 
 
     /**

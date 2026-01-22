@@ -129,9 +129,6 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::post('/abrir-caixa', [PaymentController::class, 'reopenCash'])->name('open_cash');
             Route::post('/{reserva}/finalizar', [PaymentController::class, 'processPayment'])->name('finalize');
 
-            // ⬇️ ADICIONE ESTA LINHA ABAIXO ⬇️
-            Route::post('/movimentacao-avulsa', [PaymentController::class, 'storeAvulsa'])->name('store_avulsa');
-
             // 🕒 ROTA ADICIONADA: Processa o "Pagar Depois"
             Route::post('/{reserva}/pendenciar', [PaymentController::class, 'markAsPendingDebt'])->name('mark_debt');
         });

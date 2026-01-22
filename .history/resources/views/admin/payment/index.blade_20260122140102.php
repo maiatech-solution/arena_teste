@@ -23,7 +23,7 @@
             <div class="space-y-4 mb-6">
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
 
-                    {{-- CARD 1: SALDO LÍQUIDO (O que deve ter na gaveta agora) --}}
+                    {{-- CARD 1: SALDO ATUAL EM CAIXA (O QUE DEVE TER NA GAVETA) --}}
                     <div
                         class="bg-green-600 dark:bg-green-700 overflow-hidden shadow-lg rounded-xl p-4 flex flex-col justify-center border-b-4 border-green-900 transition-all hover:scale-105">
                         <div class="text-[10px] font-bold text-green-50 uppercase tracking-tighter flex items-center">
@@ -32,57 +32,57 @@
                                     d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z">
                                 </path>
                             </svg>
-                            Saldo {{ request('arena_id') ? 'da Arena' : 'Geral' }}
+                            Saldo {{ request('arena_id') ? 'da Arena' : 'Geral Líquido' }}
                         </div>
                         <div id="valor-liquido-total-real" class="mt-1 text-2xl font-black text-white truncate">
                             R$ {{ number_format($totalRecebidoDiaLiquido, 2, ',', '.') }}
                         </div>
                         <div class="text-[9px] text-green-100 mt-1 italic leading-tight font-medium">
-                            Total disponível em mãos {{ request('arena_id') ? '(nesta quadra)' : '(consolidado)' }}.
+                            Dinheiro + Pix {{ request('arena_id') ? '(esta unidade)' : '(todas unidades)' }}
                         </div>
                     </div>
 
-                    {{-- CARD 2: REFORÇOS (Entradas Avulsas) --}}
+                    {{-- CARD 2: ENTRADAS TOTAIS (SEM CONSIDERAR SAÍDAS) --}}
                     <div
-                        class="bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-900 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center">
+                        class="bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-900 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center">
                         <div
-                            class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-tighter flex items-center">
+                            class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-tighter flex items-center">
                             <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
-                                    d="M12 4v16m8-8H4"></path>
+                                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
                             </svg>
-                            Reforços (Avulsos)
+                            Total de Entradas
                         </div>
-                        <div class="mt-1 text-2xl font-black text-emerald-700 dark:text-emerald-500">
+                        <div class="mt-1 text-2xl font-black text-gray-900 dark:text-white">
                             R$
-                            {{ number_format($financialTransactions->where('type', 'reforco')->sum('amount'), 2, ',', '.') }}
+                            {{ number_format($financialTransactions->where('amount', '>', 0)->sum('amount'), 2, ',', '.') }}
                         </div>
                         <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                            Dinheiro inserido manualmente.
+                            Bruto recebido {{ request('arena_id') ? 'nesta arena' : 'no dia' }}.
                         </div>
                     </div>
 
-                    {{-- CARD 3: SANGRIA / SAÍDAS AVULSAS --}}
+                    {{-- CARD 3: SAÍDAS E SANGRIAS --}}
                     <div
                         class="bg-white dark:bg-gray-800 border border-red-200 dark:border-red-900 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center text-left">
                         <div
                             class="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-tighter flex items-center">
                             <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M20 12H4">
-                                </path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
+                                    d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
                             </svg>
-                            Sangrias / Saídas
+                            Saídas / Sangrias
                         </div>
                         <div class="mt-1 text-2xl font-black text-red-600 dark:text-red-500">
                             R$
-                            {{ number_format(abs($financialTransactions->whereIn('type', ['sangria', 'refund', 'no_show_penalty'])->where('amount', '<', 0)->sum('amount')),2,',','.') }}
+                            {{ number_format(abs($financialTransactions->where('amount', '<', 0)->sum('amount')), 2, ',', '.') }}
                         </div>
                         <div class="text-[9px] text-gray-500 mt-1 leading-tight font-medium">
-                            Retiradas e estornos registrados.
+                            Retiradas de caixa e estornos.
                         </div>
                     </div>
 
-                    {{-- CARD 4: VALORES PENDENTES --}}
+                    {{-- CARD 4: VALORES PENDENTES (A RECEBER) --}}
                     <div
                         class="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center text-left">
                         <div
@@ -91,31 +91,32 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
                                     d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
-                            Pendente (A Receber)
+                            Pendente (Dívida)
                         </div>
                         <div class="mt-1 text-2xl font-black text-amber-700 dark:text-amber-400">
                             R$ {{ number_format($totalPending, 2, ',', '.') }}
                         </div>
-                        <div class="text-[9px] text-amber-600 dark:text-amber-500 mt-1 leading-tight font-bold">
-                            Dívidas autorizadas hoje.
+                        <div
+                            class="text-[9px] text-amber-600 dark:text-amber-500 mt-1 leading-tight font-bold animate-pulse">
+                            Aguardando recebimento hoje.
                         </div>
                     </div>
 
-                    {{-- CARD 5: OPERACIONAL (Agendamentos e Faltas) --}}
+                    {{-- CARD 5: AGENDAMENTOS E FALTAS (KPI OPERACIONAL) --}}
                     <div
                         class="bg-gray-50 dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center text-left">
                         <div class="text-[10px] font-bold text-gray-600 dark:text-gray-400 uppercase tracking-tighter">
-                            📊 Jogos / Faltas
+                            📊 Operacional
                         </div>
                         <div class="mt-1 text-xl font-black text-gray-900 dark:text-white flex items-baseline gap-1">
                             <span>{{ $totalReservasDia }}</span>
-                            <span class="text-[10px] font-normal text-gray-500 uppercase">Totais</span>
-                            <span class="mx-1 text-gray-300">|</span>
+                            <span class="text-xs font-normal text-gray-500">jogos</span>
+                            <span class="mx-1">/</span>
                             <span class="text-red-600">{{ $noShowCount }}</span>
-                            <span class="text-[10px] font-normal text-red-500 uppercase">Faltas</span>
+                            <span class="text-xs font-normal text-red-500 italic">faltas</span>
                         </div>
                         <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                            Volume operacional {{ request('arena_id') ? 'da quadra' : 'do dia' }}.
+                            Volume de agendamentos {{ request('arena_id') ? 'nesta arena' : 'total' }}.
                         </div>
                     </div>
 

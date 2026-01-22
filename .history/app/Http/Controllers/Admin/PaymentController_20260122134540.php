@@ -293,7 +293,7 @@ class PaymentController extends Controller
                 'reopened_by'       => Auth::id(),
                 'actual_amount'     => 0,
                 'difference'        => 0,
-                'closing_time'      => null,
+                // 'closing_time'   => null,  <-- REMOVA OU COMENTE ESTA LINHA
             ]);
 
             return response()->json([

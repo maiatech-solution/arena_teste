@@ -285,16 +285,16 @@ class PaymentController extends Controller
                 ], 404);
             }
 
-            // 3. Atualiza para reabrir
-            $cashier->update([
-                'status'            => 'open',
-                'reopen_reason'     => $request->reason,
-                'reopened_at'       => now(),
-                'reopened_by'       => Auth::id(),
-                'actual_amount'     => 0,
-                'difference'        => 0,
-                'closing_time'      => null,
-            ]);
+           // 3. Atualiza para reabrir
+$cashier->update([
+    'status'            => 'open',
+    'reopen_reason'     => $request->reason,
+    'reopened_at'       => now(),
+    'reopened_by'       => Auth::id(),
+    'actual_amount'     => 0,
+    'difference'        => 0,
+    // 'closing_time'   => null,  <-- REMOVA OU COMENTE ESTA LINHA
+]);
 
             return response()->json([
                 'success' => true,

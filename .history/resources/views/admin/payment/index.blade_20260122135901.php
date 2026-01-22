@@ -20,102 +20,88 @@
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
             {{-- 1. ESTRUTURA DE INDICADORES (KPIs) --}}
-            <div class="space-y-4 mb-6">
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
+            <div class="space-y-4">
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-3 lg:gap-4">
 
-                    {{-- CARD 1: SALDO LÍQUIDO (O que deve ter na gaveta agora) --}}
+                    {{-- CARD 1: SALDO EM CAIXA (LÍQUIDO REAL) --}}
                     <div
-                        class="bg-green-600 dark:bg-green-700 overflow-hidden shadow-lg rounded-xl p-4 flex flex-col justify-center border-b-4 border-green-900 transition-all hover:scale-105">
-                        <div class="text-[10px] font-bold text-green-50 uppercase tracking-tighter flex items-center">
-                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
-                                    d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z">
-                                </path>
-                            </svg>
-                            Saldo {{ request('arena_id') ? 'da Arena' : 'Geral' }}
+                        class="bg-green-600 dark:bg-green-700 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center border-b-4 border-green-900">
+                        <div class="text-[10px] font-bold text-green-50 uppercase tracking-tighter truncate">
+                            💰 Saldo {{ request('arena_id') ? 'da Arena' : 'Geral do Caixa' }}
                         </div>
-                        <div id="valor-liquido-total-real" class="mt-1 text-2xl font-black text-white truncate">
+
+                        {{-- AQUI ESTÁ A CORREÇÃO: ADICIONADO O ID PARA O JAVASCRIPT CONSEGUIR LER --}}
+                        <div id="valor-liquido-total-real" class="mt-1 text-2xl font-extrabold text-white truncate"
+                            title="Valor exato: {{ $totalRecebidoDiaLiquido }}">
                             R$ {{ number_format($totalRecebidoDiaLiquido, 2, ',', '.') }}
                         </div>
-                        <div class="text-[9px] text-green-100 mt-1 italic leading-tight font-medium">
-                            Total disponível em mãos {{ request('arena_id') ? '(nesta quadra)' : '(consolidado)' }}.
+
+                        <div class="text-[9px] text-green-100 mt-1 italic leading-tight">
+                            {{ request('arena_id') ? 'Dinheiro/Pix desta quadra.' : 'Total real em dinheiro/pix hoje.' }}
                         </div>
                     </div>
 
-                    {{-- CARD 2: REFORÇOS (Entradas Avulsas) --}}
+                    {{-- CARD 2: FATURAMENTO TOTAL --}}
                     <div
-                        class="bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-900 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center">
+                        class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-300 dark:border-indigo-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
                         <div
-                            class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-tighter flex items-center">
-                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
-                                    d="M12 4v16m8-8H4"></path>
-                            </svg>
-                            Reforços (Avulsos)
+                            class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
+                            🎾 Receita {{ request('arena_id') ? 'da Arena' : 'do Dia' }}
                         </div>
-                        <div class="mt-1 text-2xl font-black text-emerald-700 dark:text-emerald-500">
-                            R$
-                            {{ number_format($financialTransactions->where('type', 'reforco')->sum('amount'), 2, ',', '.') }}
+                        <div
+                            class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-indigo-700 dark:text-indigo-300 truncate">
+                            R$ {{ number_format($totalAntecipadoReservasDia, 2, ',', '.') }}
                         </div>
                         <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                            Dinheiro inserido manualmente.
+                            Faturamento total {{ request('arena_id') ? 'nesta arena.' : 'de hoje.' }}
                         </div>
                     </div>
 
-                    {{-- CARD 3: SANGRIA / SAÍDAS AVULSAS --}}
+                    {{-- CARD 3: VALORES PENDENTES --}}
                     <div
-                        class="bg-white dark:bg-gray-800 border border-red-200 dark:border-red-900 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center text-left">
+                        class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
                         <div
-                            class="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-tighter flex items-center">
-                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M20 12H4">
-                                </path>
-                            </svg>
-                            Sangrias / Saídas
+                            class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
+                            ⏳ Pendente
                         </div>
-                        <div class="mt-1 text-2xl font-black text-red-600 dark:text-red-500">
-                            R$
-                            {{ number_format(abs($financialTransactions->whereIn('type', ['sangria', 'refund', 'no_show_penalty'])->where('amount', '<', 0)->sum('amount')),2,',','.') }}
-                        </div>
-                        <div class="text-[9px] text-gray-500 mt-1 leading-tight font-medium">
-                            Retiradas e estornos registrados.
-                        </div>
-                    </div>
-
-                    {{-- CARD 4: VALORES PENDENTES --}}
-                    <div
-                        class="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center text-left">
                         <div
-                            class="text-[10px] font-bold text-amber-700 dark:text-amber-500 uppercase tracking-tighter flex items-center">
-                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
-                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            Pendente (A Receber)
-                        </div>
-                        <div class="mt-1 text-2xl font-black text-amber-700 dark:text-amber-400">
+                            class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-yellow-700 dark:text-yellow-300 truncate">
                             R$ {{ number_format($totalPending, 2, ',', '.') }}
                         </div>
-                        <div class="text-[9px] text-amber-600 dark:text-amber-500 mt-1 leading-tight font-bold">
-                            Dívidas autorizadas hoje.
+                        <div class="text-[9px] text-gray-500 mt-1 leading-tight">
+                            Valor em aberto {{ request('arena_id') ? 'desta arena.' : 'total.' }}
                         </div>
                     </div>
 
-                    {{-- CARD 5: OPERACIONAL (Agendamentos e Faltas) --}}
+                    {{-- CARD 4: AGENDAMENTOS ATIVOS --}}
                     <div
-                        class="bg-gray-50 dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center text-left">
-                        <div class="text-[10px] font-bold text-gray-600 dark:text-gray-400 uppercase tracking-tighter">
-                            📊 Jogos / Faltas
+                        class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
+                        <div
+                            class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
+                            📅 Ativas
                         </div>
-                        <div class="mt-1 text-xl font-black text-gray-900 dark:text-white flex items-baseline gap-1">
-                            <span>{{ $totalReservasDia }}</span>
-                            <span class="text-[10px] font-normal text-gray-500 uppercase">Totais</span>
-                            <span class="mx-1 text-gray-300">|</span>
-                            <span class="text-red-600">{{ $noShowCount }}</span>
-                            <span class="text-[10px] font-normal text-red-500 uppercase">Faltas</span>
+                        <div
+                            class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-gray-900 dark:text-white truncate">
+                            {{ $totalReservasDia }}
                         </div>
                         <div class="text-[9px] text-gray-500 mt-1 leading-tight">
-                            Volume operacional {{ request('arena_id') ? 'da quadra' : 'do dia' }}.
+                            Agendamentos {{ request('arena_id') ? 'nesta quadra.' : 'hoje.' }}
+                        </div>
+                    </div>
+
+                    {{-- CARD 5: FALTAS REGISTRADAS --}}
+                    <div
+                        class="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 overflow-hidden shadow-md rounded-lg p-4 lg:p-3 xl:p-4 flex flex-col justify-center text-left">
+                        <div
+                            class="text-[10px] font-medium text-gray-700 dark:text-gray-300 uppercase tracking-tighter truncate">
+                            ❌ Faltas
+                        </div>
+                        <div
+                            class="mt-1 text-2xl lg:text-lg xl:text-2xl font-extrabold text-red-700 dark:text-red-300 truncate">
+                            {{ $noShowCount }}
+                        </div>
+                        <div class="text-[9px] text-gray-500 mt-1 leading-tight">
+                            Faltas totais {{ request('arena_id') ? 'nesta quadra.' : 'registradas.' }}
                         </div>
                     </div>
 
@@ -184,8 +170,7 @@
                             @if ($cashierStatus === 'closed')
                                 <button type="button" onclick="openCash('{{ $selectedDate }}')"
                                     class="w-full sm:w-auto px-6 py-2 bg-red-600 text-white font-bold rounded-lg shadow-md hover:bg-red-700 transition duration-150 flex items-center justify-center uppercase tracking-wider text-xs">
-                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z">
                                         </path>

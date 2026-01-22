@@ -65,72 +65,63 @@ class PaymentController extends Controller
 
 
     /**
+
      * Dashboard de Caixa e Histórico
+
      */
+
     public function index(Request $request)
     {
         // 1. Integridade
         $this->checkAndCorrectNoShowPaidAmounts();
 
         // 2. Definição de Data e Filtros
-        $selectedDateString = $request->input('date') ?? Carbon::today()->toDateString();
+        $selectedDateString = $request->input('data_reserva') ?? $request->input('date') ?? Carbon::today()->toDateString();
         $dateObject = Carbon::parse($selectedDateString);
+        $selectedReservaId = $request->input('reserva_id');
         $selectedArenaId = $request->input('arena_id');
         $searchTerm = $request->input('search');
 
-        // 🎯 NOVO: Filtro de Dívidas em Aberto
-        $filterDebts = $request->input('filter') === 'debts';
-
-        // 3. Consulta de Reservas
+        // 3. Consulta de Reservas do Dia (Base para KPIs da View)
         $query = Reserva::with(['user', 'arena']);
 
-        if ($filterDebts) {
-            // Busca apenas o que foi concluído mas não foi totalmente pago (Dívidas acumuladas)
-            $query->where('status', 'completed')
-                ->whereIn('payment_status', ['unpaid', 'partial']);
-        } elseif ($request->input('reserva_id')) {
-            $query->where('id', $request->input('reserva_id'));
+        if ($selectedReservaId) {
+            $query->where('id', $selectedReservaId);
         } else {
             $query->whereDate('date', $dateObject);
-        }
 
-        // Filtros comuns (Arena e Busca)
-        if ($selectedArenaId) {
-            $query->where('arena_id', $selectedArenaId);
-        }
+            if ($selectedArenaId) {
+                $query->where('arena_id', $selectedArenaId);
+            }
 
-        if ($searchTerm) {
-            $searchWildcard = '%' . $searchTerm . '%';
-            $query->where(function ($q) use ($searchWildcard) {
-                $q->where('client_name', 'LIKE', $searchWildcard)
-                    ->orWhere('client_contact', 'LIKE', $searchWildcard);
-            });
+            if ($searchTerm) {
+                $searchWildcard = '%' . $searchTerm . '%';
+                $query->where(function ($q) use ($searchWildcard) {
+                    $q->where('client_name', 'LIKE', $searchWildcard)
+                        ->orWhere('client_contact', 'LIKE', $searchWildcard);
+                });
+            }
         }
 
         $reservas = $query->whereNotNull('user_id')
             ->where('is_fixed', false)
             ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, 'completed', 'no_show', 'canceled'])
-            ->orderBy($filterDebts ? 'date' : 'start_time', $filterDebts ? 'desc' : 'asc')
+            ->orderBy('start_time', 'asc')
             ->get();
 
-        // 4. Lógica de Fechamento (Sempre baseada na data real para o JS)
+        // 4. Lógica de Fechamento (SEMPRE GERAL - Independente de Filtro)
+        // Precisamos saber o total do dia para o JS validar o botão de fechamento
         $totalReservasGeralCount = Reserva::whereDate('date', $dateObject)
             ->whereNotNull('user_id')
             ->where('is_fixed', false)
-            ->when($selectedArenaId, function ($q) use ($selectedArenaId) {
-                return $q->where('arena_id', $selectedArenaId);
-            })
             ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE, 'completed', 'no_show', 'canceled'])
             ->count();
 
-        // 5. Saldo Líquido Real (Dinheiro em caixa na data selecionada - Ajustado para Arena)
-        $totalRecebidoDiaLiquido = FinancialTransaction::whereDate('paid_at', $dateObject)
-            ->when($selectedArenaId, function ($q) use ($selectedArenaId) {
-                return $q->where('arena_id', $selectedArenaId);
-            })
-            ->sum('amount');
+        // 5. Movimentação Financeira (Real vs Contextual)
+        // Saldo real em caixa hoje (Geral)
+        $totalRecebidoDiaLiquido = FinancialTransaction::whereDate('paid_at', $dateObject)->sum('amount');
 
-        // 6. Faturamento por Arena (Baseado na data)
+        // 6. Faturamento Segmentado por Arena
         $arenasAtivas = \App\Models\Arena::all();
         $faturamentoReal = FinancialTransaction::whereDate('paid_at', $dateObject)
             ->select('arena_id', DB::raw('SUM(amount) as total'))
@@ -146,111 +137,103 @@ class PaymentController extends Controller
             ];
         });
 
-        // 7. Transações (Proteção contra nulos aplicada na View, mas garantimos a query aqui)
+        // 7. Histórico de Transações Detalhado (Respeita Filtro)
         $transQuery = FinancialTransaction::whereDate('paid_at', $dateObject);
-        if ($selectedArenaId) $transQuery->where('arena_id', $selectedArenaId);
+        if ($selectedArenaId) {
+            $transQuery->where('arena_id', $selectedArenaId);
+        }
         $financialTransactions = $transQuery->with(['reserva', 'manager', 'payer', 'arena'])
             ->orderBy('paid_at', 'desc')
             ->get();
 
-        // 8. Auditoria (AJUSTADO: Status e Histórico agora filtram por Arena)
-        $cashierRecord = Cashier::where('date', $selectedDateString)
-            ->when($selectedArenaId, function ($q) use ($selectedArenaId) {
-                return $q->where('arena_id', $selectedArenaId);
-            })
-            ->first();
-
+        // 8. Auditoria de Fechamento (Cashier)
+        $cashierRecord = Cashier::where('date', $selectedDateString)->first();
         $cashierStatus = $cashierRecord->status ?? 'open';
+        $cashierHistory = Cashier::with('user')->orderBy('date', 'desc')->limit(10)->get();
 
-        $cashierHistory = Cashier::with(['user', 'arena'])
-            ->when($selectedArenaId, function ($q) use ($selectedArenaId) {
-                return $q->where('arena_id', $selectedArenaId);
-            })
-            ->orderBy('date', 'desc')
-            ->limit(10)
-            ->get();
-
-        // 9. KPIs Dinâmicos
+        // 9. KPIs Dinâmicos (Baseados na lista filtrada de $reservas)
         $totalExpected = $reservas->whereNotIn('status', ['canceled', 'rejected'])
             ->sum(fn($r) => $r->final_price ?? $r->price);
 
-        $totalPending = $reservas->whereNotIn('status', ['canceled', 'rejected'])
+        $totalPending = $reservas->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_PENDENTE])
             ->sum(fn($r) => max(0, ($r->final_price ?? $r->price) - $r->total_paid));
 
+        // 10. Retorno
         return view('admin.payment.index', [
             'selectedDate'               => $selectedDateString,
             'reservas'                   => $reservas,
-            'filterDebts'                => $filterDebts,
             'faturamentoPorArena'        => $faturamentoPorArena,
+            'totalGeralCaixa'            => FinancialTransaction::sum('amount'),
             'totalRecebidoDiaLiquido'    => $totalRecebidoDiaLiquido,
             'totalAntecipadoReservasDia' => $reservas->sum('total_paid'),
-            'totalReservasDia'           => $reservas->count(),
-            'totalReservasGeral'         => $totalReservasGeralCount,
+            'totalReservasDia'           => $reservas->whereIn('status', [Reserva::STATUS_CONFIRMADA, 'completed', 'no_show'])->count(),
+            'totalReservasGeral'         => $totalReservasGeralCount, // 🎯 CRUCIAL para o JS de fechamento
             'totalPending'               => $totalPending,
             'totalExpected'              => $totalExpected,
             'noShowCount'                => $reservas->where('status', 'no_show')->count(),
             'financialTransactions'      => $financialTransactions,
             'cashierStatus'              => $cashierStatus,
             'cashierHistory'             => $cashierHistory,
+            'highlightReservaId'         => $selectedReservaId,
         ]);
     }
 
 
+
     /**
-     * 🎯 FECHAR CAIXA: Grava a auditoria no banco com cálculo automático de segurança por arena.
+     * 🎯 FECHAR CAIXA: Grava a auditoria no banco com cálculo automático de segurança
      */
     public function closeCash(Request $request)
     {
-        // 1. Validação rigorosa: arena_id é obrigatório para fechamento individualizado
+        // 1. Validamos apenas a data e o valor físico (contado pelo operador)
+        // Removi o 'calculated_amount' da validação obrigatória para evitar o erro 500
         $validated = $request->validate([
             'date'          => 'required|date',
             'actual_amount' => 'required|numeric',
-            'arena_id'      => 'required|exists:arenas,id', // Garante que o fechamento pertence a uma arena válida
-        ], [
-            'arena_id.required' => 'É necessário selecionar uma arena para realizar o fechamento.',
         ]);
 
         try {
             $date = $validated['date'];
-            $arenaId = $validated['arena_id'];
+            $arenaId = $request->input('arena_id'); // Captura a arena se enviada
 
-            // 2. CÁLCULO DE SEGURANÇA (O servidor recalcula o saldo baseado apenas na arena selecionada)
+            // 2. CÁLCULO DE SEGURANÇA (O servidor pergunta ao banco quanto deve ter em caixa)
             $calculatedSystem = FinancialTransaction::whereDate('paid_at', $date)
-                ->where('arena_id', $arenaId)
+                ->when($arenaId, function ($q) use ($arenaId) {
+                    return $q->where('arena_id', $arenaId);
+                })
                 ->sum('amount');
 
-            // 3. Precisão decimal para evitar erros de ponto flutuante
+            // 3. Precisão decimal
             $calculated = round((float)$calculatedSystem, 2);
             $actual     = round((float)$validated['actual_amount'], 2);
             $difference = round($actual - $calculated, 2);
 
-            // 4. Persistência (Usa transação para garantir que o status e o registro sejam salvos juntos)
-            DB::transaction(function () use ($date, $arenaId, $calculated, $actual, $difference, $request) {
-                Cashier::updateOrCreate(
-                    [
-                        'date'     => $date,
-                        'arena_id' => $arenaId // Chave composta: data + arena
-                    ],
-                    [
-                        'user_id'           => Auth::id(),
-                        'calculated_amount' => $calculated,
-                        'actual_amount'     => $actual,
-                        'difference'        => $difference,
-                        'status'            => 'closed',
-                        'closing_time'      => now(),
-                        'notes'             => $request->input('notes'),
-                    ]
-                );
-            });
+            // 4. Persistência no banco de dados
+            // Usamos updateOrCreate para permitir correções se o caixa for reaberto
+            Cashier::updateOrCreate(
+                [
+                    'date'     => $date,
+                    'arena_id' => $arenaId // Garante o fechamento por unidade
+                ],
+                [
+                    'user_id'           => Auth::id(),
+                    'calculated_amount' => $calculated, // Gravado via servidor, sem risco de erro nulo
+                    'actual_amount'     => $actual,
+                    'difference'        => $difference,
+                    'status'            => 'closed',
+                    'closing_time'      => now(),
+                    'notes'             => $request->input('notes'),
+                ]
+            );
 
             return response()->json([
                 'success'    => true,
-                'message'    => 'Caixa da unidade fechado com sucesso!',
+                'message'    => 'Caixa fechado com sucesso!',
                 'difference' => $difference,
                 'system_sum' => $calculated
             ]);
         } catch (\Exception $e) {
-            \Log::error("Erro crítico ao fechar caixa da arena {$request->input('arena_id')}: " . $e->getMessage());
+            \Log::error("Erro crítico ao fechar caixa: " . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Erro ao processar o fechamento: ' . $e->getMessage()
@@ -258,56 +241,53 @@ class PaymentController extends Controller
         }
     }
 
+
+
     /**
-     * 🎯 REABRIR CAIXA: Registra justificativa e invalida o fechamento anterior.
+
+     * 🎯 REABRIR CAIXA: Registra justificativa
+
      */
+
     public function reopenCash(Request $request)
+
     {
+
         $request->validate([
-            'date'     => 'required|date',
-            'reason'   => 'required|string|min:5',
-            'arena_id' => 'required|exists:arenas,id',
+
+            'date' => 'required|date',
+
+            'reason' => 'required|string|min:5',
+
         ]);
 
+
+
         try {
-            // 1. Log de Auditoria Técnica (Aparece no storage/logs/laravel.log)
-            \Log::info("Tentando reabrir caixa: Data {$request->date} | Arena {$request->arena_id}");
 
-            // 2. Busca o registro. Removi o firstOrFail para tratar o erro amigavelmente
-            $cashier = Cashier::whereDate('date', $request->date) // Usando whereDate para garantir compatibilidade
-                ->where('arena_id', $request->arena_id)
-                ->first();
+            $cashier = Cashier::where('date', $request->date)->firstOrFail();
 
-            if (!$cashier) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Não existe um fechamento registrado para esta arena no dia " . \Carbon\Carbon::parse($request->date)->format('d/m/Y') . ". Verifique se você selecionou a unidade correta no filtro."
-                ], 404);
-            }
-
-            // 3. Atualiza para reabrir
             $cashier->update([
-                'status'            => 'open',
-                'reopen_reason'     => $request->reason,
-                'reopened_at'       => now(),
-                'reopened_by'       => Auth::id(),
-                'actual_amount'     => 0,
-                'difference'        => 0,
-                'closing_time'      => null,
+
+                'status' => 'open',
+
+                'reopen_reason' => $request->reason,
+
+                'reopened_at' => now(),
+
+                'reopened_by' => Auth::id()
+
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Caixa da unidade reaberto. Alterações financeiras liberadas.'
-            ]);
+
+
+            return response()->json(['success' => true, 'message' => 'Caixa reaberto. Alterações permitidas.']);
         } catch (\Exception $e) {
-            \Log::error("Erro fatal ao reabrir caixa da arena {$request->arena_id}: " . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Falha interna ao processar reabertura. Detalhes: ' . $e->getMessage()
-            ], 500);
+
+            return response()->json(['success' => false, 'message' => 'Erro ao reabrir o caixa.'], 500);
         }
     }
+
 
 
     /**
@@ -404,16 +384,17 @@ class PaymentController extends Controller
 
 
     /**
-     * Registra Falta (No-Show) - Com lógica de proteção de histórico financeiro
+     * Registra Falta (No-Show) - Com lógica de data operacional para virada de dia
      */
     public function registerNoShow(Request $request, $reservaId)
     {
         $reserva = Reserva::with(['arena', 'user'])->findOrFail($reservaId);
 
         // --- AJUSTE DE DATA OPERACIONAL ---
+        // Priorizamos a data enviada pela view (caixa aberto), caso contrário usamos a data da reserva.
         $dataOperacional = $request->input('payment_date') ?? $reserva->date;
 
-        // 🛡️ TRAVA: Verifica se o caixa da data já está encerrado
+        // 🛡️ TRAVA: Verifica se o caixa da data em questão já está encerrado
         if (\App\Http\Controllers\FinanceiroController::isCashClosed($dataOperacional)) {
             return response()->json([
                 'success' => false,
@@ -428,58 +409,54 @@ class PaymentController extends Controller
             $shouldRefund = $request->boolean('should_refund');
             $valorParaEstornar = round((float) $request->input('refund_amount', 0), 2);
 
-            // Guardamos os dados importantes em variáveis antes de deletar a reserva
-            $clienteNome = $reserva->client_name ?? $reserva->user?->name ?? 'Cliente Externo';
             $horario = \Carbon\Carbon::parse($reserva->start_time)->format('H:i');
-            $infoContexto = " | Jogo original: " . \Carbon\Carbon::parse($reserva->date)->format('d/m') . " às {$horario}";
+            $infoContexto = " | Jogo: " . \Carbon\Carbon::parse($reserva->date)->format('d/m') . " às {$horario}";
 
             if ($totalOriginalPago > 0) {
                 if ($shouldRefund && $valorParaEstornar > 0) {
-                    // 💰 REGISTRA A SAÍDA (ESTORNO)
+                    // 💰 REGISTRA A SAÍDA (ESTORNO) NO CAIXA DA DATA OPERACIONAL
                     FinancialTransaction::create([
-                        'reserva_id'     => null, // REFINAMENTO: Desvinculamos para preservar o registro após o delete
+                        'reserva_id'     => $reserva->id,
                         'arena_id'       => $reserva->arena_id,
                         'user_id'        => $reserva->user_id,
                         'manager_id'     => Auth::id(),
                         'amount'         => -$valorParaEstornar,
                         'type'           => 'refund',
                         'payment_method' => 'cash_out',
-                        'description'    => "SAÍDA (Estorno No-Show) Ref. Reserva #{$reserva->id} | Cliente: {$clienteNome}" . $infoContexto,
-                        'paid_at'        => $dataOperacional,
+                        'description'    => "SAÍDA (Estorno No-Show) #{$reserva->id} | Cliente: {$reserva->client_name}" . $infoContexto,
+                        'paid_at'        => $dataOperacional, // <--- DATA CORRIGIDA
                     ]);
 
-                    // Atualizamos as transações antigas para informar que houve estorno
                     FinancialTransaction::where('reserva_id', $reserva->id)
                         ->where('type', '!=', 'refund')
                         ->update([
-                            'reserva_id'  => null, // REFINAMENTO: Protege contra exclusão em cascata
                             'description' => DB::raw("CONCAT(description, ' (No-Show c/ Estorno em " . date('d/m') . ")')")
                         ]);
                 } else {
-                    // 🔒 RETENÇÃO (Multa): Transformamos os pagamentos existentes em multa e desvinculamos da reserva
+                    // 🔒 RETENÇÃO (Multa)
+                    // Atualiza as transações originais para o tipo multa
                     FinancialTransaction::where('reserva_id', $reserva->id)
                         ->update([
-                            'reserva_id'     => null, // REFINAMENTO: Protege contra exclusão em cascata
                             'type'           => 'no_show_penalty',
                             'payment_method' => 'retained_funds',
-                            'description'    => DB::raw("CONCAT(description, ' [RETIDO COMO MULTA EM " . date('d/m') . " - Reserva #{$reserva->id}]')")
+                            'description'    => DB::raw("CONCAT(description, ' [RETIDO COMO MULTA EM " . date('d/m') . "]')")
                         ]);
 
-                    // LOG visual no extrato do dia
+                    // LOG visual que aparece no extrato da data operacional
                     FinancialTransaction::create([
-                        'reserva_id'     => null,
+                        'reserva_id'     => $reserva->id,
                         'arena_id'       => $reserva->arena_id,
                         'manager_id'     => Auth::id(),
                         'amount'         => 0,
                         'type'           => 'no_show_penalty',
                         'payment_method' => 'retained_funds',
-                        'description'    => "LOG: Falta marcada. Valor de R$ {$totalOriginalPago} (Ref #{$reserva->id}) retido como multa.",
-                        'paid_at'        => $dataOperacional,
+                        'description'    => "LOG: Falta marcada. Valor de R$ {$totalOriginalPago} (Reserva #{$reserva->id}) retido como multa.",
+                        'paid_at'        => $dataOperacional, // <--- DATA CORRIGIDA
                     ]);
                 }
             }
 
-            // Lógica de bloqueio de usuário
+            // Lógica de bloqueio de usuário (mantida)
             if ($reserva->user) {
                 $user = $reserva->user;
                 $user->increment('no_show_count');
@@ -488,12 +465,11 @@ class PaymentController extends Controller
                 }
             }
 
-            // Recria o horário se for fixista e deleta a reserva física
             app(\App\Http\Controllers\ReservaController::class)->recreateFixedSlot($reserva);
             $reserva->delete();
 
             DB::commit();
-            return response()->json(['success' => true, 'message' => 'Falta registrada e financeiro preservado.']);
+            return response()->json(['success' => true, 'message' => 'Falta registrada e financeiro processado com sucesso.']);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro no No-Show #{$reservaId}: " . $e->getMessage());
@@ -505,20 +481,11 @@ class PaymentController extends Controller
      * 🎯 LANÇAR COMO PENDÊNCIA (Pagar Depois):
      * Finaliza a reserva para liberar o caixa do dia, mas mantém o status financeiro como 'unpaid'.
      */
-    /**
-     * 🎯 LANÇAR COMO PENDÊNCIA (Pagar Depois):
-     * Finaliza a reserva operacionalmente mas exige um motivo para a dívida.
-     */
     public function markAsPendingDebt(Request $request, $reservaId)
     {
         $reserva = Reserva::findOrFail($reservaId);
 
-        // 1. Validação do Motivo (Obrigatório para auditoria)
-        $validated = $request->validate([
-            'reason' => 'required|string|min:5|max:255',
-        ]);
-
-        // 🛡️ TRAVA: Verifica se o caixa já está encerrado
+        // 🛡️ TRAVA: Verifica se o caixa da data da reserva já está encerrado
         if (\App\Http\Controllers\FinanceiroController::isCashClosed($reserva->date)) {
             return response()->json([
                 'success' => false,
@@ -526,7 +493,7 @@ class PaymentController extends Controller
             ], 403);
         }
 
-        // Se já está paga, impede a ação
+        // Se já está totalmente paga, não faz sentido pendenciar
         $totalDevido = ($reserva->final_price ?? $reserva->price);
         if ($reserva->total_paid >= $totalDevido && $totalDevido > 0) {
             return response()->json([
@@ -536,86 +503,27 @@ class PaymentController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($reserva, $validated) {
-                // Atualizamos status para 'completed' (o jogo aconteceu)
-                // Mantemos o payment_status em aberto (partial ou unpaid)
+            DB::transaction(function () use ($reserva) {
+                // Atualizamos a reserva para 'completed' para que o JS de fechamento
+                // entenda que o compromisso operacional do dia foi resolvido.
                 $reserva->update([
                     'status' => 'completed',
                     'payment_status' => ($reserva->total_paid > 0) ? 'partial' : 'unpaid',
                     'manager_id' => Auth::id(),
-                    // Registramos o MOTIVO real nas notas
-                    'notes' => $reserva->notes . " | [DÍVIDA AUTORIZADA]: " . $validated['reason'] . " (por " . Auth::user()->name . " em " . now()->format('d/m H:i') . ")"
+                    'notes' => $reserva->notes . " | [Dívida Pendente autorizada em " . now()->format('d/m H:i') . "]"
                 ]);
+
+                // 💡 NOTA: Não criamos FinancialTransaction aqui.
+                // A transação só nasce no dia que o dinheiro REALMENTE entrar.
             });
 
             return response()->json([
                 'success' => true,
-                'message' => 'Reserva marcada como pendência de pagamento com sucesso.'
+                'message' => 'Reserva marcada como pendência. O horário foi liberado para fechamento de caixa.'
             ]);
         } catch (\Exception $e) {
             Log::error("Erro ao pendenciar reserva #{$reservaId}: " . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Erro interno ao processar.'], 500);
-        }
-    }
-
-    /**
-     * 💸 MOVIMENTAÇÃO AVULSA: Sangria (Saída) ou Reforço (Entrada)
-     * Refinado para garantir vínculo obrigatório com uma Arena.
-     */
-    public function storeAvulsa(Request $request)
-    {
-        // 1. Validação: arena_id agora é 'required' para evitar transações sem dono
-        $validated = $request->validate([
-            'date'           => 'required|date',
-            'type'           => 'required|in:in,out',
-            'amount'         => 'required|numeric|min:0.01',
-            'payment_method' => 'required|string|max:50',
-            'description'    => 'required|string|max:255',
-            'arena_id'       => 'required|exists:arenas,id', // Ajustado: nullable -> required
-        ], [
-            'arena_id.required' => 'Selecione a Arena para vincular esta movimentação.',
-        ]);
-
-        try {
-            // 2. Trava de segurança: impede movimentação em dia com caixa fechado
-            if (\App\Http\Controllers\FinanceiroController::isCashClosed($validated['date'])) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Ação bloqueada: O caixa de ' . \Carbon\Carbon::parse($validated['date'])->format('d/m/Y') . ' já está encerrado.'
-                ], 403);
-            }
-
-            // 3. Lógica do Valor: Entrada (+) ou Saída (-)
-            $finalAmount = $validated['type'] === 'out'
-                ? -abs($validated['amount'])
-                : abs($validated['amount']);
-
-            // 4. Identificação do tipo para o banco de dados
-            $transactionType = $validated['type'] === 'out' ? 'sangria' : 'reforco';
-            $prefixLabel = $validated['type'] === 'out' ? '🔴 SANGRIA: ' : '🟢 REFORÇO: ';
-
-            // 5. Criação da transação (Garantindo persistência auditável)
-            FinancialTransaction::create([
-                'arena_id'       => $validated['arena_id'], // Usa o ID validado explicitamente
-                'manager_id'     => Auth::id(),
-                'amount'         => $finalAmount,
-                'type'           => $transactionType,
-                'payment_method' => $validated['payment_method'],
-                'description'    => $prefixLabel . $validated['description'],
-                // Registra a data do caixa com o horário real da operação
-                'paid_at'        => $validated['date'] . ' ' . now()->format('H:i:s'),
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => ($validated['type'] === 'out' ? 'Saída' : 'Entrada') . ' registrada com sucesso!'
-            ]);
-        } catch (\Exception $e) {
-            Log::error("Erro na movimentação avulsa: " . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Erro interno ao processar movimentação: ' . $e->getMessage()
-            ], 500);
         }
     }
 }
