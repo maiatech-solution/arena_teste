@@ -55,17 +55,17 @@
                         <div class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] italic">
                             © {{ date('Y') }} • Gestão de Arenas Profissional
                         </div>
-                        
+
                         <div class="flex items-center gap-2">
                             <span class="text-[9px] font-bold text-gray-400 uppercase italic">Desenvolvido por</span>
-                            <a href="https://www.maiatechsolution.com.br/" target="_blank" class="flex items-center gap-1.5 group transition-transform hover:scale-105">
-                                <span class="text-xs font-black text-indigo-600 dark:text-indigo-400 tracking-tighter uppercase group-hover:text-indigo-500">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xs font-black text-indigo-600 dark:text-indigo-400 tracking-tighter uppercase">
                                     Maiatech
                                 </span>
-                                <span class="px-1.5 py-0.5 bg-indigo-600 dark:bg-indigo-500 text-white text-[8px] font-black rounded uppercase italic shadow-sm group-hover:bg-indigo-500 transition-colors">
+                                <span class="px-1.5 py-0.5 bg-indigo-600 dark:bg-indigo-500 text-white text-[8px] font-black rounded uppercase italic shadow-sm">
                                     Solution
                                 </span>
-                            </a>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -16,7 +16,7 @@
         <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
             @include('layouts.navigation')
 
-            <div class="fixed top-5 right-5 z-[100] space-y-3 w-full max-sm:px-4 max-w-sm">
+            <div class="fixed top-5 right-5 z-[100] space-y-3 w-full max-w-sm">
                 @if (session('success'))
                     <div id="toast-success" class="flex items-center p-4 text-gray-800 bg-white dark:bg-gray-800 rounded-[1.5rem] shadow-2xl border-l-4 border-emerald-500 transform transition-all duration-500 translate-x-0" role="alert">
                         <div class="inline-flex items-center justify-center flex-shrink-0 w-8 h-8 text-emerald-500 bg-emerald-100 rounded-full dark:bg-emerald-900 dark:text-emerald-300">
@@ -47,29 +47,6 @@
             <main>
                 {{ $slot }}
             </main>
-
-            {{-- FOOTER MAIATECH SOLUTION --}}
-            <footer class="py-8 mt-auto print:hidden">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div class="flex flex-col md:flex-row justify-between items-center gap-4 opacity-60 hover:opacity-100 transition-opacity duration-500">
-                        <div class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] italic">
-                            © {{ date('Y') }} • Gestão de Arenas Profissional
-                        </div>
-                        
-                        <div class="flex items-center gap-2">
-                            <span class="text-[9px] font-bold text-gray-400 uppercase italic">Desenvolvido por</span>
-                            <a href="https://www.maiatechsolution.com.br/" target="_blank" class="flex items-center gap-1.5 group transition-transform hover:scale-105">
-                                <span class="text-xs font-black text-indigo-600 dark:text-indigo-400 tracking-tighter uppercase group-hover:text-indigo-500">
-                                    Maiatech
-                                </span>
-                                <span class="px-1.5 py-0.5 bg-indigo-600 dark:bg-indigo-500 text-white text-[8px] font-black rounded uppercase italic shadow-sm group-hover:bg-indigo-500 transition-colors">
-                                    Solution
-                                </span>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </footer>
         </div>
 
         @stack('scripts')
@@ -84,7 +61,7 @@
                             el.style.opacity = '0';
                             el.style.transform = 'translateX(100px)';
                             setTimeout(() => el.remove(), 500);
-                        }, 4000);
+                        }, 4000); // 4 segundos
                     }
                 });
             });

@@ -266,7 +266,7 @@
         class="modal-overlay hidden fixed inset-0 items-center justify-center z-[9999] p-4 backdrop-blur-sm bg-black/60 transition-opacity duration-300">
 
         <div id="modal-content"
-            class="bg-white dark:bg-gray-800 p-8 sm:p-10 rounded-[2.5rem] shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-y-auto transform transition-all duration-300 scale-100 border-t-[12px]
+            class="bg-white dark:bg-gray-800 p-8 sm:p-10 rounded-[2.5rem] shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-y-auto transform transition-all duration-300 scale-100 border-t-[12px] 
         @if ($errors->any()) border-red-600 dark:border-red-500 @else border-indigo-600 dark:border-indigo-500 @endif"
             onclick="event.stopPropagation()">
 
@@ -393,32 +393,6 @@
             </form>
         </div>
     </div>
-
-    {{-- FOOTER MAIATECH SOLUTION --}}
-    <footer class="w-full py-8 mt-auto print:hidden">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex flex-col md:flex-row justify-between items-center gap-4 opacity-80 hover:opacity-100 transition-opacity duration-500">
-                <div class="text-[10px] font-black uppercase text-white/70 tracking-[0.2em] italic text-center md:text-left">
-                    © {{ date('Y') }} • {{ $site_info->nome_fantasia ?? 'Elite Soccer' }} • Gestão Profissional
-                </div>
-
-                <div class="flex items-center gap-2">
-                    <span class="text-[9px] font-bold text-white/60 uppercase italic">Desenvolvido por</span>
-                    <a href="https://www.maiatechsolution.com.br/" target="_blank" class="flex items-center gap-1.5 group transition-transform hover:scale-105">
-                        <span class="text-xs font-black text-white tracking-tighter uppercase group-hover:text-yellow-400">
-                            Maiatech
-                        </span>
-                        <span class="px-1.5 py-0.5 bg-white text-blue-900 text-[8px] font-black rounded uppercase italic shadow-sm group-hover:bg-yellow-400 group-hover:text-gray-900 transition-colors">
-                            Solution
-                        </span>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </footer>
-
-</body>
-</html>
 
 
     {{-- FullCalendar, Moment.js e Scripts Customizados --}}
