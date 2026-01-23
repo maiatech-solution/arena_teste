@@ -266,25 +266,29 @@ class FinanceiroController extends Controller
      */
     public function relatorioOcupacao(Request $request)
     {
-        // Usa filled() para verificar se as datas realmente vieram no request
-        $dataInicio = $request->filled('data_inicio')
+        // 1. Definição do Período (Padrão: Últimos 7 dias até hoje)
+        $dataInicio = $request->has('data_inicio')
             ? Carbon::parse($request->data_inicio)
             : now()->subDays(7);
 
-        $dataFim = $request->filled('data_fim')
+        $dataFim = $request->has('data_fim')
             ? Carbon::parse($request->data_fim)
             : now();
 
         $arenaId = $request->arena_id;
 
+        // 2. Consulta de Reservas Confirmadas ou Concluídas no período
         $reservas = Reserva::with(['arena', 'user'])
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, 'completed', 'no_show', Reserva::STATUS_CONCLUIDA])
+            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, 'completed', 'no_show'])
             ->whereBetween('date', [$dataInicio->format('Y-m-d'), $dataFim->format('Y-m-d')])
-            ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
+            ->when($arenaId, function ($q) use ($arenaId) {
+                return $q->where('arena_id', $arenaId);
+            })
             ->orderBy('date', 'desc')
             ->orderBy('start_time', 'asc')
             ->get();
 
+        // 3. Retorno para a View
         return view('admin.financeiro.ocupacao', [
             'reservas' => $reservas,
             'dataInicio' => $dataInicio,

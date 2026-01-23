@@ -318,8 +318,7 @@ class PaymentController extends Controller
         $reserva = Reserva::with('arena')->findOrFail($reservaId);
 
         // 1. Trava de Caixa (Impede alteração em dias encerrados)
-        // Agora ele verifica apenas se o caixa DAQUELA arena específica está fechado
-        if (\App\Http\Controllers\FinanceiroController::isCashClosed($reserva->date, $reserva->arena_id)) {
+        if (\App\Http\Controllers\FinanceiroController::isCashClosed($reserva->date)) {
             return response()->json([
                 'success' => false,
                 'message' => 'O caixa do dia ' . \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') . ' já está encerrado.'

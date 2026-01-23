@@ -1,0 +1,196 @@
+<x-app-layout>
+    <x-slot name="header">
+        <div class="flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <a href="{{ route('admin.financeiro.dashboard', ['arena_id' => request('arena_id')]) }}"
+                    class="flex items-center gap-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-all font-bold text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    Painel
+                </a>
+                <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
+                    💰 Faturamento: {{ request('arena_id') ? {{ request('arena_id') ? \App\Models\Arena::find(request('arena_id'))?->name : 'Todas as Unidades' }}
+                </h2>
+            </div>
+        </div>
+    </x-slot>
+
+    @php
+    $traducaoMetodos = [
+        'pix' => 'PIX',
+        'credit_card' => 'Cartão de Crédito',
+        'debit_card' => 'Cartão de Débito',
+        'cash' => 'Dinheiro',
+        'money' => 'Dinheiro',
+        'transfer' => 'Transferência',
+        'cash_out' => 'Saída de Caixa',
+        'retained_funds' => 'Fundo Retido',
+        'outro' => 'Outros / Ajustes',
+    ];
+
+    $traducaoTipos = [
+        'signal' => 'Sinal',
+        'payment' => 'Pagamento',
+        'full_payment' => 'Total',
+        'payment_settlement' => 'Acerto',
+        'refund' => 'Estorno',
+        'reten_noshow_comp' => 'Multa No-Show',
+        'reten_canc_comp' => 'Taxa Cancelamento',
+    ];
+    @endphp
+
+    <div class="py-12">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+
+            {{-- 🔍 FILTROS COM BUSCA, FLUXO E MULTIQUADRA --}}
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 print:hidden">
+                <form id="fatFilterForm" method="GET" action="{{ route('admin.financeiro.relatorio_faturamento') }}" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+
+                    <div class="md:col-span-1">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Buscar Cliente / ID</label>
+                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Nome ou #ID..."
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-900 dark:text-gray-300 text-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Unidade</label>
+                        <select name="arena_id" onchange="this.form.submit()" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-900 dark:text-gray-300 font-bold text-sm">
+                            <option value="">Todas as Arenas</option>
+                            @foreach(\App\Models\Arena::all() as $arena)
+                            <option value="{{ $arena->id }}" {{ request('arena_id') == $arena->id ? 'selected' : '' }}>{{ $arena->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    {{-- NOVO: FILTRO DE FLUXO --}}
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Fluxo</label>
+                        <select name="fluxo" onchange="this.form.submit()" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-900 dark:text-gray-300 font-bold text-sm">
+                            <option value="">Todos</option>
+                            <option value="entrada" {{ request('fluxo') == 'entrada' ? 'selected' : '' }}>🟢 Entradas</option>
+                            <option value="saida" {{ request('fluxo') == 'saida' ? 'selected' : '' }}>🔴 Saídas</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Início</label>
+                        <input type="date" name="data_inicio" value="{{ $dataInicio->format('Y-m-d') }}" onchange="this.form.submit()" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-900 dark:text-gray-300 text-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Fim</label>
+                        <input type="date" name="data_fim" value="{{ $dataFim->format('Y-m-d') }}" onchange="this.form.submit()" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-900 dark:text-gray-300 text-sm">
+                    </div>
+
+                    <div class="flex space-x-2">
+                        <button type="button" onclick="window.print()" class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-md font-bold hover:bg-gray-200 transition flex-1 text-sm uppercase">
+                            🖨️
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            {{-- 📊 CARDS DE RESUMO --}}
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {{-- Card Faturamento com cor dinâmica para saídas --}}
+                <div class="{{ $faturamentoTotal < 0 ? 'bg-red-600' : 'bg-indigo-600' }} p-6 rounded-xl shadow-lg text-white">
+                    <p class="text-xs opacity-80 font-bold uppercase tracking-widest">
+                        {{ $faturamentoTotal < 0 ? 'Total Saídas' : 'Faturamento Período' }}
+                    </p>
+                    <p class="text-2xl font-black mt-1 italic">R$ {{ number_format($faturamentoTotal, 2, ',', '.') }}</p>
+                </div>
+
+                @foreach($totaisPorMetodo as $metodo => $valor)
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl border-b-4 {{ $valor < 0 ? 'border-red-500' : 'border-emerald-500' }} shadow-sm">
+                    <p class="text-xs text-gray-500 font-bold uppercase">
+                        {{ $traducaoMetodos[strtolower($metodo)] ?? ucfirst($metodo) }}
+                    </p>
+                    <p class="text-2xl font-black text-gray-800 dark:text-white mt-1">R$ {{ number_format($valor, 2, ',', '.') }}</p>
+                </div>
+                @endforeach
+            </div>
+
+            {{-- 📄 TABELA DETALHADA --}}
+            <div class="bg-white dark:bg-gray-800 shadow-sm sm:rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-700/50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase italic">Data/Pagto</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase italic">Unidade</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase italic">Cliente</th>
+                                <th class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase italic">Tipo/Método</th>
+                                <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase italic">Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            @forelse($transacoes as $t)
+                            <tr class="text-sm hover:bg-gray-50 dark:hover:bg-gray-900/50 transition">
+                                <td class="px-6 py-4 dark:text-gray-400 font-mono text-xs whitespace-nowrap italic">
+                                    {{ $t->paid_at->format('d/m/Y H:i') }}
+                                </td>
+                                <td class="px-6 py-4">
+                                    <span class="px-2 py-1 rounded-md text-[10px] font-black uppercase bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                                        {{ $t->arena->name ?? 'Geral' }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="font-bold dark:text-gray-200">
+                                        {{ $t->reserva->client_name ?? ($t->amount < 0 ? 'Saída de Caixa / Ajuste' : 'Reserva Excluída') }}
+                                    </div>
+                                    <div class="text-[10px] text-gray-500 uppercase font-bold tracking-tight italic">Reserva #{{ $t->reserva_id }}</div>
+                                </td>
+                                <td class="px-6 py-4 text-center">
+                                    @php
+                                        $tipoMapeado = [
+                                            'signal' => ['label' => 'Sinal', 'class' => 'bg-blue-100 text-blue-700'],
+                                            'payment' => ['label' => 'Pagamento', 'class' => 'bg-emerald-100 text-emerald-700'],
+                                            'full_payment' => ['label' => 'Total', 'class' => 'bg-emerald-100 text-emerald-700'],
+                                            'payment_settlement' => ['label' => 'Acerto', 'class' => 'bg-emerald-100 text-emerald-700'],
+                                            'refund' => ['label' => 'Estorno', 'class' => 'bg-red-100 text-red-700'],
+                                            'reten_noshow_comp' => ['label' => 'Multa No-Show', 'class' => 'bg-amber-100 text-amber-700'],
+                                            'reten_canc_comp' => ['label' => 'Taxa Cancel.', 'class' => 'bg-amber-100 text-amber-700'],
+                                            'cash_out' => ['label' => 'Saída', 'class' => 'bg-red-100 text-red-700'],
+                                        ];
+
+                                        $chaveTipo = strtolower($t->type);
+                                        $exibicao = $tipoMapeado[$chaveTipo] ?? ['label' => strtoupper($t->type), 'class' => 'bg-gray-100 text-gray-600'];
+
+                                        if($t->amount < 0 && $chaveTipo !='refund' ) {
+                                            $exibicao['class']='bg-red-50 text-red-600 border border-red-100' ;
+                                        }
+                                    @endphp
+
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase {{ $exibicao['class'] }}">
+                                        {{ $exibicao['label'] }}
+                                    </span>
+
+                                    <div class="text-[10px] mt-1 text-gray-400 font-bold uppercase italic tracking-tighter">
+                                        {{ $traducaoMetodos[strtolower($t->payment_method)] ?? str_replace('_', ' ', $t->payment_method) }}
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 text-right font-mono font-bold {{ $t->amount < 0 ? 'text-red-500' : 'text-emerald-600' }}">
+                                    {{ $t->amount < 0 ? '-' : '' }} R$ {{ number_format(abs($t->amount), 2, ',', '.') }}
+                                </td>
+                            </tr>
+                            @empty
+                            <tr>
+                                <td colspan="5" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400 italic text-sm">
+                                    Nenhuma transação encontrada.
+                                </td>
+                            </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+
+                @if($transacoes->hasPages())
+                <div class="px-6 py-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                    {{ $transacoes->appends(request()->query())->links() }}
+                </div>
+                @endif
+            </div>
+        </div>
+    </div>
+</x-app-layout>

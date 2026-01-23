@@ -100,20 +100,9 @@
                         <p class="text-gray-500 text-sm mt-1 uppercase font-bold">
                             {{ \Carbon\Carbon::parse($data)->locale('pt_BR')->isoFormat('dddd, D [de] MMMM [de] YYYY') }}
                         </p>
-                        {{-- Badge Dinâmico da Arena --}}
-                        @if (request('arena_id'))
-                            <p class="text-indigo-600 dark:text-indigo-400 font-black text-xs uppercase mt-1 italic">
-                                📍 Unidade:
-                                {{ \App\Models\Arena::find(request('arena_id'))?->name ?? 'Não encontrada' }}
-                            </p>
-                        @endif
                     </div>
                     <div class="text-right">
-                        @php
-                            $caixaStatus = \App\Models\Cashier::where('date', $data)
-                                ->when(request('arena_id'), fn($q) => $q->where('arena_id', request('arena_id')))
-                                ->first();
-                        @endphp
+                        @php $caixaStatus = \App\Models\Cashier::where('date', $data)->when(request('arena_id'), fn($q) => $q->where('arena_id', request('arena_id')))->first(); @endphp
                         @if ($caixaStatus && $caixaStatus->status == 'closed')
                             <span
                                 class="bg-green-100 text-green-700 px-4 py-1 rounded-full text-[10px] font-black uppercase border border-green-200 italic">✅
@@ -145,8 +134,7 @@
                                         {{ number_format($transacoes->sum('amount'), 2, ',', '.') }}</span>
                                 </div>
                             @empty
-                                <p class="text-gray-400 text-xs italic text-center py-2 font-bold uppercase">Sem
-                                    movimentações registradas.</p>
+                                <p class="text-gray-400 text-xs italic">Sem movimentações para este período.</p>
                             @endforelse
                         </div>
                     </div>
@@ -154,8 +142,8 @@
                     <div
                         class="bg-indigo-600 dark:bg-indigo-900 p-8 rounded-2xl flex flex-col justify-center items-center shadow-inner text-white relative overflow-hidden">
                         <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full"></div>
-                        <span class="text-xs font-bold uppercase opacity-80 tracking-widest text-center italic">Saldo
-                            Líquido Esperado</span>
+                        <span class="text-xs font-bold uppercase opacity-80 tracking-widest text-center">Saldo Líquido
+                            Esperado em Caixa</span>
                         <span class="text-4xl font-black mt-2">R$
                             {{ number_format($movimentacoes->sum('amount'), 2, ',', '.') }}</span>
                     </div>
@@ -164,17 +152,18 @@
                 {{-- HISTÓRICO DE AUDITORIA --}}
                 <div class="mb-10">
                     <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                        <span class="w-2 h-2 bg-fuchsia-500 rounded-full"></span> Auditoria de Fechamento por Unidade
+                        <span class="w-2 h-2 bg-fuchsia-500 rounded-full"></span> Auditoria de Fechamento (Sobra/Falta
+                        de Dinheiro)
                     </h3>
                     <div
                         class="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
                         <table class="w-full text-left text-sm">
                             <thead class="bg-gray-50 dark:bg-gray-800 text-[10px] uppercase text-gray-400">
                                 <tr>
-                                    <th class="py-3 px-4 italic font-bold">Unidade</th>
+                                    <th class="py-3 px-4">Unidade</th>
                                     <th class="py-3 px-2">Operador Responsável</th>
-                                    <th class="py-3 px-2 text-right">Sistema</th>
-                                    <th class="py-3 px-2 text-right">Físico</th>
+                                    <th class="py-3 px-2 text-right">Saldo Sistema</th>
+                                    <th class="py-3 px-2 text-right">Saldo Físico</th>
                                     <th class="py-3 px-4 text-right">Diferença/Quebra</th>
                                 </tr>
                             </thead>
@@ -182,9 +171,8 @@
                                 @forelse($cashierHistory as $hist)
                                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
                                         <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-300 text-xs italic">
-                                            {{ $hist->arena?->name ?? 'Geral' }}
-                                        </td>
-                                        <td class="py-3 px-2 text-gray-500 text-xs font-bold uppercase">
+                                            {{ $hist->arena->name ?? 'Geral' }}</td>
+                                        <td class="py-3 px-2 text-gray-500 text-xs font-bold">
                                             {{ $hist->user->name ?? 'Sistema' }}</td>
                                         <td class="py-3 px-2 text-right text-gray-500 font-mono italic">R$
                                             {{ number_format($hist->calculated_amount, 2, ',', '.') }}</td>
@@ -206,9 +194,8 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="5"
-                                            class="py-8 text-center text-gray-400 italic text-xs uppercase font-bold">
-                                            Nenhum registro de conferência encontrado nesta data.</td>
+                                        <td colspan="5" class="py-8 text-center text-gray-400 italic text-xs">Nenhum
+                                            registro de conferência encontrado.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -219,7 +206,7 @@
                 {{-- CRONOLÓGICO --}}
                 <div class="mb-12 overflow-x-auto">
                     <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                        <span class="w-2 h-2 bg-emerald-500 rounded-full"></span> Detalhamento Cronológico
+                        <span class="w-2 h-2 bg-emerald-500 rounded-full"></span> Histórico Detalhado de Lançamentos
                     </h3>
                     <table class="w-full text-left text-sm">
                         <thead
@@ -236,10 +223,17 @@
                         <tbody class="divide-y divide-gray-50 dark:divide-gray-700">
                             @foreach ($movimentacoes as $m)
                                 <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition duration-150">
+                                    {{-- Horário --}}
                                     <td class="py-3 px-2 text-gray-400 font-mono text-xs text-center italic">
-                                        {{ $m->paid_at->format('H:i') }}</td>
+                                        {{ $m->paid_at->format('H:i') }}
+                                    </td>
+
+                                    {{-- Unidade (Multiarena) --}}
                                     <td class="py-3 px-2 text-[10px] font-bold text-gray-500 uppercase italic">
-                                        {{ $m->arena?->name ?? '---' }}</td>
+                                        {{ $m->arena?->name ?? '---' }}
+                                    </td>
+
+                                    {{-- Identificação / Cliente (Ajustado para Movimentação Avulsa) --}}
                                     <td class="py-3 px-2 pl-4">
                                         <div class="font-bold dark:text-gray-200">
                                             @if ($m->reserva_id)
@@ -253,15 +247,20 @@
                                             {{ $m->reserva->client_name ?? ($m->description ?? 'Lançamento Manual') }}
                                         </div>
                                     </td>
+
+                                    {{-- Badge de Tipo (Com suporte a Sangria e Reforço) --}}
                                     <td class="py-3 px-2 text-center text-[9px] font-black uppercase">
                                         @php
                                             $tipoRaw = strtolower($m->type);
                                             $textoTipo = $traducaoTipos[$tipoRaw] ?? strtoupper($m->type);
+
+                                            // Definição dinâmica de cores
                                             $corTipo = 'bg-gray-100 text-gray-600 border border-gray-200';
 
                                             if ($tipoRaw == 'signal') {
                                                 $corTipo = 'bg-blue-50 text-blue-700 border border-blue-200';
                                             }
+
                                             if (
                                                 in_array($tipoRaw, [
                                                     'full_payment',
@@ -272,21 +271,28 @@
                                             ) {
                                                 $corTipo = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
                                             }
+
                                             if (in_array($tipoRaw, ['refund', 'sangria']) || $m->amount < 0) {
                                                 $corTipo = 'bg-red-50 text-red-700 border border-red-200';
                                             }
+
                                             if (str_contains($tipoRaw, 'reten')) {
                                                 $corTipo = 'bg-amber-50 text-amber-700 border border-amber-200';
                                             }
                                         @endphp
+
                                         <span class="px-2 py-1 rounded {{ $corTipo }}">
                                             {{ $textoTipo }}
                                         </span>
                                     </td>
+
+                                    {{-- Forma de Pagamento --}}
                                     <td
                                         class="py-3 px-2 text-center text-[10px] text-gray-600 dark:text-gray-400 font-bold italic uppercase">
                                         {{ $traducaoMetodos[strtolower($m->payment_method)] ?? $m->payment_method }}
                                     </td>
+
+                                    {{-- Valor --}}
                                     <td
                                         class="py-3 px-2 text-right font-mono font-bold {{ $m->amount < 0 ? 'text-red-500' : 'text-gray-800 dark:text-white' }}">
                                         {{ $m->amount < 0 ? '-' : '' }} R$
@@ -297,7 +303,6 @@
                         </tbody>
                     </table>
                 </div>
-
                 {{-- ASSINATURAS --}}
                 <div class="mt-20 grid grid-cols-2 gap-16 text-center print:mt-10">
                     <div class="space-y-2">

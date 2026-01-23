@@ -143,7 +143,7 @@
                                 <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase italic">Unidade
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase italic">Cliente
-                                    / Descrição</th>
+                                </th>
                                 <th class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase italic">
                                     Tipo/Método</th>
                                 <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase italic">Valor
@@ -153,40 +153,23 @@
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                             @forelse($transacoes as $t)
                                 <tr class="text-sm hover:bg-gray-50 dark:hover:bg-gray-900/50 transition">
-                                    {{-- Data --}}
                                     <td class="px-6 py-4 dark:text-gray-400 font-mono text-xs whitespace-nowrap italic">
                                         {{ $t->paid_at->format('d/m/Y H:i') }}
                                     </td>
-
-                                    {{-- Unidade (Segurança Null Safe para Multiarena) --}}
                                     <td class="px-6 py-4">
                                         <span
                                             class="px-2 py-1 rounded-md text-[10px] font-black uppercase bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
-                                            {{ $t->arena?->name ?? 'Geral' }}
+                                            {{ $t->arena->name ?? 'Geral' }}
                                         </span>
                                     </td>
-
-                                    {{-- Cliente ou Descrição Avulsa --}}
                                     <td class="px-6 py-4">
                                         <div class="font-bold dark:text-gray-200">
-                                            @if ($t->reserva)
-                                                {{ $t->reserva->client_name }}
-                                            @else
-                                                <span class="text-indigo-600 dark:text-indigo-400">
-                                                    {{ $t->description ?? ($t->amount < 0 ? 'Saída de Caixa' : 'Entrada Avulsa') }}
-                                                </span>
-                                            @endif
+                                            {{ $t->reserva->client_name ?? ($t->amount < 0 ? 'Saída de Caixa / Ajuste' : 'Reserva Excluída') }}
                                         </div>
-                                        <div class="text-[10px] uppercase font-bold tracking-tight italic">
-                                            @if ($t->reserva_id)
-                                                <span class="text-gray-500">Reserva #{{ $t->reserva_id }}</span>
-                                            @else
-                                                <span class="text-amber-500">⚡ Movimentação Manual</span>
-                                            @endif
-                                        </div>
+                                        <div
+                                            class="text-[10px] text-gray-500 uppercase font-bold tracking-tight italic">
+                                            Reserva #{{ $t->reserva_id }}</div>
                                     </td>
-
-                                    {{-- Badge de Tipo e Método --}}
                                     <td class="px-6 py-4 text-center">
                                         @php
                                             $tipoMapeado = [
@@ -222,15 +205,6 @@
                                                     'label' => 'Saída',
                                                     'class' => 'bg-red-100 text-red-700',
                                                 ],
-                                                'sangria' => [
-                                                    'label' => 'Sangria',
-                                                    'class' => 'bg-red-50 text-red-600 border border-red-100',
-                                                ],
-                                                'reforco' => [
-                                                    'label' => 'Reforço',
-                                                    'class' =>
-                                                        'bg-emerald-50 text-emerald-600 border border-emerald-100',
-                                                ],
                                             ];
 
                                             $chaveTipo = strtolower($t->type);
@@ -239,7 +213,6 @@
                                                 'class' => 'bg-gray-100 text-gray-600',
                                             ];
 
-                                            // Garante cor vermelha para qualquer valor negativo que não seja estorno
                                             if ($t->amount < 0 && $chaveTipo != 'refund') {
                                                 $exibicao['class'] = 'bg-red-50 text-red-600 border border-red-100';
                                             }
@@ -255,8 +228,6 @@
                                             {{ $traducaoMetodos[strtolower($t->payment_method)] ?? str_replace('_', ' ', $t->payment_method) }}
                                         </div>
                                     </td>
-
-                                    {{-- Valor Dinâmico --}}
                                     <td
                                         class="px-6 py-4 text-right font-mono font-bold {{ $t->amount < 0 ? 'text-red-500' : 'text-emerald-600' }}">
                                         {{ $t->amount < 0 ? '-' : '' }} R$
@@ -267,7 +238,7 @@
                                 <tr>
                                     <td colspan="5"
                                         class="px-6 py-12 text-center text-gray-500 dark:text-gray-400 italic text-sm">
-                                        Nenhuma transação encontrada para os filtros aplicados.
+                                        Nenhuma transação encontrada.
                                     </td>
                                 </tr>
                             @endforelse
@@ -275,7 +246,6 @@
                     </table>
                 </div>
 
-                {{-- Paginação mantendo os filtros --}}
                 @if ($transacoes->hasPages())
                     <div class="px-6 py-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
                         {{ $transacoes->appends(request()->query())->links() }}

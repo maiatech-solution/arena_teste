@@ -264,31 +264,31 @@ class FinanceiroController extends Controller
     /**
      * 📊 Relatório de Ocupação e Histórico de Uso
      */
-    public function relatorioOcupacao(Request $request)
-    {
-        // Usa filled() para verificar se as datas realmente vieram no request
-        $dataInicio = $request->filled('data_inicio')
-            ? Carbon::parse($request->data_inicio)
-            : now()->subDays(7);
+   public function relatorioOcupacao(Request $request)
+{
+    // Usa filled() para verificar se as datas realmente vieram no request
+    $dataInicio = $request->filled('data_inicio')
+        ? Carbon::parse($request->data_inicio)
+        : now()->subDays(7);
 
-        $dataFim = $request->filled('data_fim')
-            ? Carbon::parse($request->data_fim)
-            : now();
+    $dataFim = $request->filled('data_fim')
+        ? Carbon::parse($request->data_fim)
+        : now();
 
-        $arenaId = $request->arena_id;
+    $arenaId = $request->arena_id;
 
-        $reservas = Reserva::with(['arena', 'user'])
-            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, 'completed', 'no_show', Reserva::STATUS_CONCLUIDA])
-            ->whereBetween('date', [$dataInicio->format('Y-m-d'), $dataFim->format('Y-m-d')])
-            ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
-            ->orderBy('date', 'desc')
-            ->orderBy('start_time', 'asc')
-            ->get();
+    $reservas = Reserva::with(['arena', 'user'])
+        ->whereIn('status', [Reserva::STATUS_CONFIRMADA, 'completed', 'no_show', Reserva::STATUS_CONCLUIDA])
+        ->whereBetween('date', [$dataInicio->format('Y-m-d'), $dataFim->format('Y-m-d')])
+        ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
+        ->orderBy('date', 'desc')
+        ->orderBy('start_time', 'asc')
+        ->get();
 
-        return view('admin.financeiro.ocupacao', [
-            'reservas' => $reservas,
-            'dataInicio' => $dataInicio,
-            'dataFim' => $dataFim
-        ]);
-    }
+    return view('admin.financeiro.ocupacao', [
+        'reservas' => $reservas,
+        'dataInicio' => $dataInicio,
+        'dataFim' => $dataFim
+    ]);
+}
 }

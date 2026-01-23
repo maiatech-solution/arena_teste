@@ -1,18 +1,4 @@
 <x-app-layout>
-    <style>
-        @media print {
-            .break-inside-avoid {
-                page-break-inside: avoid;
-            }
-            body {
-                background-color: white !important;
-            }
-            .print\:hidden {
-                display: none !important;
-            }
-        }
-    </style>
-
     <x-slot name="header">
         <div class="flex justify-between items-center">
             <div class="flex items-center gap-4">
@@ -25,8 +11,7 @@
                     Painel
                 </a>
                 <h2 class="font-black text-xl text-gray-800 dark:text-gray-200 uppercase tracking-tighter italic">
-                    {{-- Melhoria: Proteção Null Safe --}}
-                    🗓️ Ocupação: {{ request('arena_id') ? (\App\Models\Arena::find(request('arena_id'))?->name ?? 'Unidade não encontrada') : 'Todas as Unidades' }}
+                    🗓️ Ocupação: {{ \App\Models\Arena::find(request('arena_id'))?->name ?? 'Todas as Unidades' }}
                 </h2>
             </div>
             <button onclick="window.print()" class="print:hidden bg-black text-white px-6 py-2 rounded-full font-bold text-xs uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg">
@@ -80,7 +65,7 @@
                 <div class="relative break-inside-avoid">
 
                     {{-- IDENTIFICADOR DO DIA --}}
-                    <div class="sticky top-0 z-10 flex items-center gap-4 mb-4 py-2 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-md print:bg-white">
+                    <div class="sticky top-0 z-10 flex items-center gap-4 mb-4 py-2 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-md">
                         <div class="bg-white dark:bg-gray-800 px-4 py-2 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 text-center min-w-[70px]">
                             <span class="block text-2xl font-black text-gray-800 dark:text-white leading-none italic">{{ \Carbon\Carbon::parse($data)->format('d') }}</span>
                             <span class="text-[10px] font-black text-indigo-600 uppercase">{{ \Carbon\Carbon::parse($data)->locale('pt_BR')->translatedFormat('M') }}</span>
@@ -101,15 +86,15 @@
                             {{-- INDICADOR DE STATUS FINANCEIRO --}}
                             <div class="absolute top-0 right-0">
                                 @php
-                                    $totalPago = (float) ($r->total_paid ?? 0);
-                                    $precoFinal = (float) ($r->final_price ?? $r->price);
+                                $totalPago = (float) ($r->total_paid ?? 0);
+                                $precoFinal = (float) ($r->final_price ?? $r->price);
                                 @endphp
                                 @if($totalPago >= $precoFinal && $precoFinal > 0)
-                                    <span class="bg-emerald-500 text-white text-[8px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest shadow-sm">Pago</span>
+                                <span class="bg-emerald-500 text-white text-[8px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest shadow-sm">Pago</span>
                                 @elseif($totalPago > 0)
-                                    <span class="bg-blue-500 text-white text-[8px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest shadow-sm">Parcial</span>
+                                <span class="bg-blue-500 text-white text-[8px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest shadow-sm">Parcial</span>
                                 @else
-                                    <span class="bg-amber-500 text-white text-[8px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest shadow-sm">Pendente</span>
+                                <span class="bg-amber-500 text-white text-[8px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest shadow-sm">Pendente</span>
                                 @endif
                             </div>
 
@@ -127,10 +112,7 @@
 
                             <div class="flex items-center justify-between border-t border-gray-50 dark:border-gray-700 pt-3">
                                 <div class="text-[9px] font-black text-gray-400 uppercase tracking-tighter italic">
-                                    {{-- Melhoria: Badge Visual para Arena --}}
-                                    Arena: <span class="text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded-md">
-                                        {{ $r->arena?->name ?? '---' }}
-                                    </span>
+                                    Arena: <span class="text-indigo-500 dark:text-indigo-400">{{ $r->arena->name ?? '---' }}</span>
                                 </div>
                                 <div class="text-[10px] font-mono font-black text-gray-700 dark:text-gray-300 italic">
                                     R$ {{ number_format($precoFinal, 2, ',', '.') }}
