@@ -825,47 +825,32 @@
 
         <script>
             window.closedDatesCache = {};
-            // === CONFIGURAÇÕES E ROTAS (CORRIGIDAS) ===
-            const PENDING_API_URL = '{{ route('
-            api.reservas.pendentes.count ') }}';
-            const CONFIRMED_API_URL = '{{ route('
-            api.reservas.confirmadas ') }}';
-            const AVAILABLE_API_URL = '{{ route('
-            api.horarios.disponiveis ') }}';
-            const SHOW_RESERVA_URL = '{{ route('
-            admin.reservas.show ', ': id ') }}';
+            // === CONFIGURAÇÕES E ROTAS (AJUSTADAS) ===
+            const PENDING_API_URL = `{{ route('api.reservas.pendentes.count') }}`;
+            const CONFIRMED_API_URL = `{{ route('api.reservas.confirmadas') }}`;
+            const AVAILABLE_API_URL = `{{ route('api.horarios.disponiveis') }}`;
+            const SHOW_RESERVA_URL = `{{ route('admin.reservas.show', ':id') }}`;
 
-            const USER_REPUTATION_URL = '{{ route('
-            api.users.reputation ', ': contact ') }}';
+            const USER_REPUTATION_URL = `{{ route('api.users.reputation', ':contact') }}`;
 
-            const PAYMENT_INDEX_URL = '{{ route('
-            admin.payment.index ') }}';
+            const PAYMENT_INDEX_URL = `{{ route('admin.payment.index') }}`;
 
             // ROTAS DE SUBMISSÃO
-            const RECURRENT_STORE_URL = '{{ route('
-            api.reservas.store_recurrent ') }}';
-            const QUICK_STORE_URL = '{{ route('
-            api.reservas.store_quick ') }}';
-            const RENEW_SERIE_URL = '{{ url('
-            admin / reservas ') }}/:masterReserva/renew-serie';
+            const RECURRENT_STORE_URL = `{{ route('api.reservas.store_recurrent') }}`;
+            const QUICK_STORE_URL = `{{ route('api.reservas.store_quick') }}`;
+            const RENEW_SERIE_URL = `{{ url('admin/reservas') }}/:masterReserva/renew-serie`;
 
             // ROTAS DE AÇÕES PENDENTES
-            const CONFIRM_PENDING_URL = '{{ route('
-            admin.reservas.confirmar ', ': id ') }}';
-            const REJECT_PENDING_URL = '{{ route('
-            admin.reservas.rejeitar ', ': id ') }}';
+            const CONFIRM_PENDING_URL = `{{ route('admin.reservas.confirmar', ':id') }}`;
+            const REJECT_PENDING_URL = `{{ route('admin.reservas.rejeitar', ':id') }}`;
 
             // ROTAS DE CANCELAMENTO
-            const CANCEL_PONTUAL_URL = '{{ route('
-            admin.reservas.cancelar_pontual ', ': id ') }}';
-            const CANCEL_SERIE_URL = '{{ route('
-            admin.reservas.cancelar_serie ', ': id ') }}';
-            const CANCEL_PADRAO_URL = '{{ route('
-            admin.reservas.cancelar ', ': id ') }}';
+            const CANCEL_PONTUAL_URL = `{{ route('admin.reservas.cancelar_pontual', ':id') }}`;
+            const CANCEL_SERIE_URL = `{{ route('admin.reservas.cancelar_serie', ':id') }}`;
+            const CANCEL_PADRAO_URL = `{{ route('admin.reservas.cancelar', ':id') }}`;
 
             // 🎯 ROTA PARA MARCAR COMO FALTA
-            const NO_SHOW_URL = '{{ route('
-            admin.reservas.no_show ', ': id ') }}';
+            const NO_SHOW_URL = `{{ route('admin.reservas.no_show', ':id') }}`;
             // ======================================
 
             // TOKEN CSRF
