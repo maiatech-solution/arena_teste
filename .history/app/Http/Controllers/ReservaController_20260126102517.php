@@ -454,7 +454,7 @@ class ReservaController extends Controller
      */
     public function finalizeStatus(Reserva $reserva, string $newStatus, string $reason, bool $shouldRefund, float $amountPaidRef)
     {
-        // 1. Validação de Estado
+        // 1. Validação de Estado (Aceita Confirmada, Concluída ou status mapeados como 'completed')
         $statusAceitaveis = [
             Reserva::STATUS_CONFIRMADA,
             Reserva::STATUS_CONCLUIDA,
@@ -470,16 +470,44 @@ class ReservaController extends Controller
         $messageFinance = "";
         $arenaId = $reserva->arena_id;
 
-        // --- 💰 PASSO 1: GERENCIAMENTO FINANCEIRO (ANTECIPADO POR SEGURANÇA) ---
+        // 2. Atualização dos Dados da Reserva
+        $updateData = [
+            'status' => $newStatus,
+            'manager_id' => Auth::id(),
+        ];
+
+        if ($newStatus === Reserva::STATUS_CANCELADA) {
+            $updateData['cancellation_reason'] = $reason;
+            $updateData['no_show_reason'] = null;
+        } elseif ($newStatus === Reserva::STATUS_NO_SHOW) {
+            $updateData['no_show_reason'] = $reason;
+            $updateData['cancellation_reason'] = null;
+        }
+
+        $reserva->update($updateData);
+
+        // 🚀 NOVO: LÓGICA DE REPUTAÇÃO AUTOMÁTICA (Acionada apenas em No-Show)
+        if ($newStatus === Reserva::STATUS_NO_SHOW) {
+            $user = $reserva->user; // Busca o relacionamento do cliente
+            if ($user) {
+                // Incrementa o contador. O Mutator no Model User cuidará da qualificação e do bloqueio.
+                $user->no_show_count += 1;
+                $user->save();
+                Log::info("Reputação atualizada para Cliente ID: {$user->id} devido a No-Show na Reserva #{$reserva->id}");
+            }
+        }
+
+        // 3. Gerenciamento Financeiro Isenta por Arena 🏟️
         if ($amountPaid > 0) {
             if ($shouldRefund) {
-                // LÓGICA DE ESTORNO
+                // 🛑 LÓGICA DE ESTORNO (DEVOLUÇÃO REAL):
+                // Criamos uma transação NEGATIVA para que o saldo do caixa de hoje diminua.
                 FinancialTransaction::create([
                     'reserva_id'     => $reserva->id,
                     'arena_id'       => $arenaId,
                     'user_id'        => $reserva->user_id,
                     'manager_id'     => Auth::id(),
-                    'amount'         => -$amountPaid,
+                    'amount'         => -$amountPaid, // 📉 Valor negativo
                     'type'           => FinancialTransaction::TYPE_REFUND,
                     'payment_method' => 'outro',
                     'description'    => "ESTORNO/DEVOLUÇÃO: " . $reason . " (Reserva #{$reserva->id})",
@@ -488,7 +516,8 @@ class ReservaController extends Controller
 
                 $messageFinance = " O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi registrado como SAÍDA (Estorno) no caixa.";
             } else {
-                // LÓGICA DE RETENÇÃO: Limpa transações anteriores e cria a compensação
+                // 🛑 LÓGICA DE RETENÇÃO (MANTÉM O DINHEIRO):
+                // Limpa transações anteriores para não duplicar o saldo.
                 FinancialTransaction::where('reserva_id', $reserva->id)
                     ->where('arena_id', $arenaId)
                     ->whereIn('type', [
@@ -517,33 +546,7 @@ class ReservaController extends Controller
             }
         }
 
-        // --- 📝 PASSO 2: ATUALIZAÇÃO DOS DADOS DA RESERVA ---
-        $updateData = [
-            'status' => $newStatus,
-            'manager_id' => Auth::id(),
-        ];
-
-        if ($newStatus === Reserva::STATUS_CANCELADA) {
-            $updateData['cancellation_reason'] = $reason;
-            $updateData['no_show_reason'] = null;
-        } elseif ($newStatus === Reserva::STATUS_NO_SHOW) {
-            $updateData['no_show_reason'] = $reason;
-            $updateData['cancellation_reason'] = null;
-        }
-
-        $reserva->update($updateData);
-
-        // 🚀 REPUTAÇÃO AUTOMÁTICA
-        if ($newStatus === Reserva::STATUS_NO_SHOW) {
-            $user = $reserva->user;
-            if ($user) {
-                $user->no_show_count += 1;
-                $user->save();
-                Log::info("Reputação atualizada para Cliente ID: {$user->id} devido a No-Show na Reserva #{$reserva->id}");
-            }
-        }
-
-        // 🏟️ LIBERAÇÃO DO INVENTÁRIO (Slot Verde)
+        // 4. Liberação do Inventário 🏟️ (Recria o slot verde)
         $this->recreateFixedSlot($reserva);
 
         return ['message_finance' => $messageFinance];

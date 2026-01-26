@@ -1937,7 +1937,6 @@
                 if (isAvailable) {
                     const modal = document.getElementById('quick-booking-modal');
                     if (!modal) return;
-
                     const arenaFilter = document.getElementById('filter_arena');
                     const selectedArenaId = props.arena_id || (arenaFilter ? arenaFilter.value : '');
                     const selectedArenaName = props.arena_name || (arenaFilter ? arenaFilter.options[arenaFilter
@@ -1949,27 +1948,15 @@
                     };
 
                     // --- 🕒 TRATAMENTO RIGOROSO DE HORÁRIOS PARA O BACKEND ---
-                    // 1. Início sempre existe
                     let startTimeFormatted = moment(event.start).format('HH:mm');
-                    let endTimeFormatted = '';
+                    let endTimeFormatted = moment(event.end).format('HH:mm');
 
-                    // 2. Lógica de segurança para o fim (evita o "Invalid date")
-                    if (event.end && moment(event.end).isValid()) {
-                        endTimeFormatted = moment(event.end).format('HH:mm');
-                    } else if (props.end_time) {
-                        // Se o objeto event.end falhar, tentamos o end_time que veio do banco (extendedProps)
-                        endTimeFormatted = props.end_time.substring(0, 5);
-                    } else {
-                        // Fallback final: se não houver dados, assume 1 hora de duração
-                        endTimeFormatted = moment(event.start).add(1, 'hours').format('HH:mm');
-                    }
-
-                    // 3. Normalização de Meia-Noite e Datas Inválidas
-                    if (endTimeFormatted === '24:00' || endTimeFormatted === 'Invalid date') {
+                    // Se o FullCalendar/Moment interpretar a meia-noite como 24:00, convertemos para 00:00
+                    // Isso garante que o Laravel valide corretamente como date_format:H:i
+                    if (endTimeFormatted === '24:00') {
                         endTimeFormatted = '00:00';
                     }
 
-                    // Preenchimento dos campos ocultos e visíveis
                     setVal('quick-schedule-id', props.schedule_id || '');
                     setVal('quick-arena-id', selectedArenaId);
                     setVal('quick-date', eventDate);
@@ -1977,33 +1964,25 @@
                     setVal('quick-end-time', endTimeFormatted);
                     setVal('reserva-id-to-update', event.id || '');
 
-                    // Formatação de Preço
                     const priceRaw = parseFloat(props.price || 0);
                     const priceFormatted = priceRaw.toFixed(2).replace('.', ',');
                     setVal('quick-price', priceFormatted);
 
-                    // Atualização da área de exibição do modal
                     const displayArea = document.getElementById('slot-info-display');
                     if (displayArea) {
-                        displayArea.innerHTML = `
-            <div class="space-y-1 border-l-4 border-green-500 pl-3">
-                <p class="text-xs uppercase text-gray-500 font-bold tracking-wider">Informações da Reserva</p>
-                <p><strong>Quadra:</strong> <span class="text-indigo-600">${selectedArenaName}</span></p>
-                <p><strong>Data:</strong> ${moment(event.start).format('DD/MM/YYYY')}</p>
-                <p><strong>Hora:</strong> ${startTimeFormatted} às ${endTimeFormatted}</p>
-                <p><strong>Preço Sugerido:</strong> <span class="text-green-600 font-bold">R$ ${priceFormatted}</span></p>
-            </div>`;
+                        displayArea.innerHTML =
+                            `<div class="space-y-1 border-l-4 border-green-500 pl-3">
+                    <p class="text-xs uppercase text-gray-500 font-bold tracking-wider">Informações da Reserva</p>
+                    <p><strong>Quadra:</strong> <span class="text-indigo-600">${selectedArenaName}</span></p>
+                    <p><strong>Data:</strong> ${moment(event.start).format('DD/MM/YYYY')}</p>
+                    <p><strong>Hora:</strong> ${startTimeFormatted} às ${endTimeFormatted}</p>
+                    <p><strong>Preço Sugerido:</strong> <span class="text-green-600 font-bold">R$ ${priceFormatted}</span></p>
+                </div>`;
                     }
-
-                    // Limpeza de campos de cliente para novo uso
                     setVal('client_name', '');
                     setVal('client_contact', '');
                     setVal('signal_value_quick', '0,00');
-
-                    const reputationDisplay = document.getElementById('client-reputation-display');
-                    if (reputationDisplay) reputationDisplay.innerHTML = '';
-
-                    // Exibição do Modal
+                    document.getElementById('client-reputation-display').innerHTML = '';
                     modal.classList.remove('hidden');
                     modal.style.setProperty('display', 'flex', 'important');
                     return;
@@ -2051,8 +2030,8 @@
             <div class="grid grid-cols-1 gap-2">
                 ${!isFinalized && status !== 'cancelled' ?
                     `<button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                                                        <span>💰 IR PARA O CAIXA</span>
-                                                    </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+                                                <span>💰 IR PARA O CAIXA</span>
+                                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
                 <div class="grid grid-cols-2 gap-2 mt-1">
                     <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})"
@@ -2067,14 +2046,14 @@
 
                 ${!isFinalized && status !== 'no_show' ?
                     `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')"
-                                                        class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
-                                                        FALTA (NO-SHOW)
-                                                    </button>` : ''}
+                                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
+                                                FALTA (NO-SHOW)
+                                            </button>` : ''}
 
                 ${isRecurrent ?
                     `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition uppercase">
-                                                        CANCELAR SÉRIE
-                                                    </button>` : ''}
+                                                CANCELAR SÉRIE
+                                            </button>` : ''}
 
                 <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold">
                     Fechar

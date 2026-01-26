@@ -35,8 +35,7 @@
                             Valor do Sinal Recebido (R$)
                         </label>
                         <div class="mt-1 relative rounded-md shadow-sm">
-                            <input type="number" step="0.01" min="0" name="signal_value" id="signal_value"
-                                required
+                            <input type="number" step="0.01" min="0" name="signal_value" id="signal_value" required
                                 class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
                                 placeholder="0.00">
                         </div>
@@ -57,22 +56,17 @@
                     </div>
 
                     {{-- Checkbox Recorrência --}}
-                    <div class="space-y-2">
-                        <div id="recurrent-warning-msg"></div>
-
-                        <div class="flex items-start p-2 bg-indigo-50 rounded-md">
-                            <input type="hidden" name="is_recurrent" value="0">
-                            <div class="flex items-center h-5">
-                                <input id="is_recurrent" name="is_recurrent" type="checkbox" value="1"
-                                    class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded">
-                            </div>
-                            <div class="ml-3 text-sm">
-                                <label for="is_recurrent" class="font-medium text-gray-700 cursor-pointer">
-                                    Agendar como Série Recorrente
-                                </label>
-                                <p class="text-gray-500 text-xs">Marque para criar cópias automáticas (Mensalista) nesta
-                                    quadra por 6 meses.</p>
-                            </div>
+                    <div class="flex items-start p-2 bg-indigo-50 rounded-md">
+                        <input type="hidden" name="is_recurrent" value="0">
+                        <div class="flex items-center h-5">
+                            <input id="is_recurrent" name="is_recurrent" type="checkbox" value="1"
+                                class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                        </div>
+                        <div class="ml-3 text-sm">
+                            <label for="is_recurrent" class="font-medium text-gray-700 cursor-pointer">
+                                Agendar como Série Recorrente
+                            </label>
+                            <p class="text-gray-500 text-xs">Marque para criar cópias automáticas (Mensalista) nesta quadra por 6 meses.</p>
                         </div>
                     </div>
                 </div>
@@ -93,72 +87,35 @@
 </div>
 
 <script>
-    async function openConfirmModal(reservaId, clientName, reservationTime, price, arenaId, horaPura) {
-        // 1. Referências dos Elementos
-        const modal = document.getElementById('confirmReservationModal');
-        const checkRecurrent = document.getElementById('is_recurrent');
-        const warningArea = document.getElementById('recurrent-warning-msg');
+    function openConfirmModal(reservaId, clientName, reservationTime, price, arenaName) {
+        // 1. Exibe o Modal
+        document.getElementById('confirmReservationModal').classList.remove('hidden');
 
-        // 2. Exibe o Modal e Reseta o estado do Checkbox e Alertas
-        modal.classList.remove('hidden');
-        if (warningArea) warningArea.innerHTML = '';
-        if (checkRecurrent) {
-            checkRecurrent.disabled = false;
-            checkRecurrent.checked = false;
-        }
-
-        // 3. Preenchimento de IDs e Dados de Texto
+        // 2. Preenche os IDs e Dados de Texto
         document.getElementById('modal_reserva_id').value = reservaId;
         document.getElementById('modal_client_name').textContent = clientName;
         document.getElementById('modal_reservation_time').textContent = reservationTime;
 
-        // 4. Formatação de Preço e Configuração do Formulário
-        document.getElementById('modal_reservation_price').textContent = 'R$ ' + parseFloat(price).toFixed(2)
-            .replace('.', ',');
-        document.getElementById('signal_value').value = parseFloat(price).toFixed(2);
-        document.getElementById('payment_method').value = 'pix';
+        // Identificação da Quadra (Certifique-se de que o ID 'modal_arena_name' existe no HTML do seu modal)
+        const arenaElement = document.getElementById('modal_arena_name');
+        if (arenaElement) {
+            arenaElement.textContent = arenaName;
+        }
 
+        // 3. Formatação de Preço para exibição
+        document.getElementById('modal_reservation_price').textContent = 'R$ ' + parseFloat(price).toFixed(2).replace('.', ',');
+
+        // 4. Configuração do Formulário
         const form = document.getElementById('confirmReservationForm');
         form.action = `/admin/reservas/confirmar/${reservaId}`;
 
-        // --- 🛡️ TRAVA DE SEGURANÇA: VALIDAÇÃO DE CONFLITO FUTURO ---
-        try {
-            // Buscamos os eventos confirmados da arena para checar o futuro
-            const response = await fetch(`/api/reservas/confirmadas?arena_id=${arenaId}`);
-            const eventos = await response.json();
+        // 5. Lógica Financeira e de Recorrência
+        // Sugestão: Manter o price como valor padrão, mas deixar o campo focado para edição
+        document.getElementById('signal_value').value = parseFloat(price).toFixed(2);
+        document.getElementById('is_recurrent').checked = false;
 
-            // Extraímos o dia da semana da data (0-6)
-            const dataParte = reservationTime.split(' às ')[0];
-            const [dia, mes, ano] = dataParte.split('/');
-            const diaSemanaPendente = new Date(ano, mes - 1, dia).getDay();
-
-            // Comparamos o horário (HH:mm)
-            const horaInicioPendente = horaPura.substring(0, 5);
-
-            // Verifica se existe algum mensalista no futuro neste mesmo dia e hora
-            const temConflitoFuturo = eventos.some(event => {
-                const dataEvento = new Date(event.start);
-                return event.extendedProps.is_recurrent === true &&
-                    event.extendedProps.is_fixed === false &&
-                    dataEvento.getDay() === diaSemanaPendente &&
-                    moment(event.start).format('HH:mm') === horaInicioPendente &&
-                    dataEvento > new Date(); // Apenas datas futuras
-            });
-
-            if (temConflitoFuturo && checkRecurrent) {
-                checkRecurrent.disabled = true;
-                if (warningArea) {
-                    warningArea.innerHTML = `
-                    <div class="p-3 mb-3 bg-amber-100 border-l-4 border-amber-500 text-amber-700 text-xs shadow-sm">
-                        <strong>⚠️ BLOQUEIO DE RECORRÊNCIA:</strong><br>
-                        Já existe um mensalista neste horário nas próximas semanas.
-                        Confirmação permitida apenas como <strong>PONTUAL</strong>.
-                    </div>`;
-                }
-            }
-        } catch (error) {
-            console.error("Erro ao validar disponibilidade futura:", error);
-        }
+        // 6. Resetar para Pix por padrão
+        document.getElementById('payment_method').value = 'pix';
     }
 
     function closeConfirmModal() {

@@ -275,8 +275,7 @@
                                             <div class="w-1/4">
                                                 <label
                                                     class="block text-xs font-medium text-gray-500 dark:text-gray-400">Preço
-                                                    (R$)
-                                                </label>
+                                                    (R$)</label>
                                                 <input type="number" step="0.01"
                                                     name="configs[{{ $dayOfWeek }}][{{ $index }}][default_price]"
                                                     value="{{ old("configs.$dayOfWeek.$index.default_price", $slot['default_price']) }}"
@@ -479,54 +478,52 @@
                 const container = document.getElementById(`slots-container-${dayOfWeek}`);
                 const index = nextIndex[dayOfWeek]++; // Incrementa após usar
 
-                // Cópia do HTML de um slot de placeholder - Removido segundos dos atributos data e valores
+                // Cópia do HTML de um slot de placeholder
                 const newSlotHtml = `
-            <div class="slot-item slot-container flex items-center space-x-4 p-3 bg-white dark:bg-gray-600"
-                    data-day="${dayOfWeek}"
-                    data-index="${index}"
-                    data-start-time="08:00"
-                    data-end-time="12:00">
-                <input type="hidden" name="configs[${dayOfWeek}][${index}][day_of_week]" value="${dayOfWeek}">
+                    <div class="slot-item slot-container flex items-center space-x-4 p-3 bg-white dark:bg-gray-600"
+                            data-day="${dayOfWeek}"
+                            data-index="${index}"
+                            data-start-time="08:00:00"
+                            data-end-time="12:00:00">
+                        <input type="hidden" name="configs[${dayOfWeek}][${index}][day_of_week]" value="${dayOfWeek}">
 
-                <div class="flex items-center">
-                    <input type="checkbox" name="configs[${dayOfWeek}][${index}][is_active]"
-                                id="slot-active-${dayOfWeek}-${index}" value="1" checked
-                                class="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500 slot-active-checkbox">
-                    <label for="slot-active-${dayOfWeek}-${index}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Ativo
-                    </label>
-                </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" name="configs[${dayOfWeek}][${index}][is_active]"
+                                        id="slot-active-${dayOfWeek}-${index}" value="1" checked
+                                        class="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500 slot-active-checkbox">
+                            <label for="slot-active-${dayOfWeek}-${index}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Ativo
+                            </label>
+                        </div>
 
-                <div class="w-1/4">
-                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400">Início</label>
-                    <input type="time" name="configs[${dayOfWeek}][${index}][start_time]" value="08:00"
-                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-500 dark:text-white time-input">
-                </div>
+                        <div class="w-1/4">
+                            <label class="block text-xs font-medium text-gray-500 dark:text-gray-400">Início</label>
+                            <input type="time" name="configs[${dayOfWeek}][${index}][start_time]" value="08:00"
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-500 dark:text-white time-input">
+                        </div>
 
-                <div class="w-1/4">
-                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400">Fim</label>
-                    <input type="time" name="configs[${dayOfWeek}][${index}][end_time]" value="12:00"
-                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-500 dark:text-white time-input">
-                </div>
+                        <div class="w-1/4">
+                            <label class="block text-xs font-medium text-gray-500 dark:text-gray-400">Fim</label>
+                            <input type="time" name="configs[${dayOfWeek}][${index}][end_time]" value="12:00"
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-500 dark:text-white time-input">
+                        </div>
 
-                <div class="w-1/4">
-                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400">Preço (R$)</label>
-                    <input type="number" step="0.01" name="configs[${dayOfWeek}][${index}][default_price]" value="120.00"
-                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-500 dark:text-white price-input-config">
-                </div>
+                        <div class="w-1/4">
+                            <label class="block text-xs font-medium text-gray-500 dark:text-gray-400">Preço (R$)</label>
+                            <input type="number" step="0.01" name="configs[${dayOfWeek}][${index}][default_price]" value="120.00"
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-500 dark:text-white price-input-config">
+                        </div>
 
-                <div class="w-1/12 flex items-center justify-end space-x-2">
-                    <button type="button"
-                                onclick="removeSlotFormRow(this)"
-                                class="text-red-600 hover:text-red-900"
-                                title="Remover Faixa de Horário do Formulário">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        `;
+                        <div class="w-1/12 flex items-center justify-end space-x-2">
+                            <button type="button"
+                                        onclick="removeSlotFormRow(this)"
+                                        class="text-red-600 hover:text-red-900"
+                                        title="Remover Faixa de Horário do Formulário">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
 
                 container.insertAdjacentHTML('beforeend', newSlotHtml);
                 updateRemoveButtonState(dayOfWeek);
@@ -541,7 +538,7 @@
                 // Usando alert() aqui temporariamente pois confirm() é desabilitado no ambiente.
                 if (window.confirm(
                         'Tem certeza que deseja remover esta faixa de horário do formulário? (Isto não cancela reservas futuras já criadas)'
-                    )) {
+                        )) {
                     const dayOfWeek = slotItem.dataset.day;
                     slotItem.remove();
                     updateRemoveButtonState(dayOfWeek);
@@ -634,7 +631,7 @@
                     if (response.status === 401 || response.status === 403) {
                         window.alert(
                             '⚠️ ERRO DE SESSÃO/AUTORIZAÇÃO: Você foi desconectado ou não tem permissão. Faça login novamente.'
-                        );
+                            );
                         window.location.reload();
                         return;
                     } else if (!response.ok) {
@@ -659,7 +656,7 @@
 
                     openDeleteConfigModal(message, result.count);
                     document.getElementById('confirm-delete-config-btn').textContent =
-                        'Confirmar Exclusão'; // Altera o texto do botão
+                    'Confirmar Exclusão'; // Altera o texto do botão
 
                 } else if (response.status === 422 && result.errors) {
                     // Erro de validação (ex: Justificativa muito curta ou não enviada)
@@ -687,7 +684,7 @@
                 console.error('Erro de rede ao excluir:', error);
                 window.alert(
                     'ERRO DE CONEXÃO COM O SERVIDOR (Network Error): Falha ao comunicar com o backend. Verifique sua conexão e tente novamente.'
-                );
+                    );
                 closeDeleteConfigModal();
             } finally {
                 confirmBtn.disabled = false;
@@ -710,7 +707,7 @@
 
             if (justification.length < 5) {
                 justificationError.textContent =
-                    'Por favor, insira uma justificativa válida (mínimo 5 caracteres).';
+                'Por favor, insira uma justificativa válida (mínimo 5 caracteres).';
                 justificationError.classList.remove('hidden');
                 justificationInput.focus();
                 return;

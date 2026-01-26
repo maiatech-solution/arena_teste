@@ -142,7 +142,6 @@ class ApiReservaController extends Controller
 
             $available = $slots->filter(function ($slot) use ($occupied, $financeiroController, $arenaId) {
                 $slotDate = $slot->date->format('Y-m-d');
-                // Usamos format('H:i:s') para garantir que o PHP não se perca com milissegundos
                 $sStart = Carbon::parse($slot->start_time)->format('H:i:s');
                 $sEnd = Carbon::parse($slot->end_time)->format('H:i:s');
 
@@ -150,18 +149,17 @@ class ApiReservaController extends Controller
                 if ($financeiroController->isCashClosed($slotDate, $arenaId)) return false;
 
                 // --- 🕒 CORREÇÃO PARA HOJE ÀS 23H ---
-                // Se o fim é meia-noite, tratamos como o último segundo do dia para a comparação isPast
+                // Se o slot termina em 00:00:00, tratamos como 23:59:59 para a comparação 'isPast'
+                // Isso impede que o slot de 23h suma do dashboard no dia atual.
                 $checkEndTime = ($sEnd === '00:00:00') ? '23:59:59' : $sEnd;
-                if (Carbon::parse($slotDate . ' ' . $checkEndTime)->isPast()) {
-                    return false;
-                }
+                if (Carbon::parse($slotDate . ' ' . $checkEndTime)->isPast()) return false;
 
                 // --- ⚔️ CHECAGEM DE CONFLITO ---
                 $hasConflict = $occupied->where('date', $slot->date)->contains(function ($res) use ($sStart, $sEnd) {
                     $resStart = Carbon::parse($res->start_time)->format('H:i:s');
                     $resEnd = Carbon::parse($res->end_time)->format('H:i:s');
 
-                    // Aqui está o segredo: convertemos 00:00 para 24:00 na mente do PHP
+                    // Para o cálculo de conflito, 00:00:00 deve ser entendido como 24:00:00
                     $limitEnd = ($sEnd === '00:00:00') ? '24:00:00' : $sEnd;
                     $limitResEnd = ($resEnd === '00:00:00') ? '24:00:00' : $resEnd;
 
@@ -172,13 +170,11 @@ class ApiReservaController extends Controller
             });
 
             return response()->json($available->map(function ($slot) {
-                $dateStr = $slot->date->format('Y-m-d');
                 return [
                     'id' => $slot->id,
                     'title' => 'Livre',
-                    // Forçamos o formato ISO8601 que o FullCalendar ama
-                    'start' => $dateStr . 'T' . Carbon::parse($slot->start_time)->format('H:i:s'),
-                    'end' => $dateStr . 'T' . Carbon::parse($slot->end_time)->format('H:i:s'),
+                    'start' => $slot->date->format('Y-m-d') . 'T' . Carbon::parse($slot->start_time)->format('H:i:s'),
+                    'end' => $slot->date->format('Y-m-d') . 'T' . Carbon::parse($slot->end_time)->format('H:i:s'),
                     'className' => 'fc-event-available',
                     'extendedProps' => [
                         'price' => (float)$slot->price,

@@ -1179,17 +1179,10 @@
                 const formData = new FormData(form);
                 const data = Object.fromEntries(formData.entries());
 
-                // --- 🕒 GARANTIA DE FORMATO DE HORA (H:i) ---
-                data.start_time = document.getElementById('quick-start-time').value;
-                data.end_time = document.getElementById('quick-end-time').value;
-
-                // --- 💰 PREPARAÇÃO DE VALORES MONETÁRIOS ---
+                // Preparação dos valores monetários
                 const rawPrice = document.getElementById('quick-price').value;
                 const rawSignal = document.getElementById('signal_value_quick').value;
-                const cleanValue = (val) => {
-                    if (!val) return 0;
-                    return parseFloat(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
-                };
+                const cleanValue = (val) => val ? parseFloat(val.toString().replace(/\./g, '').replace(',', '.')) : 0;
 
                 data.fixed_price = cleanValue(rawPrice);
                 data.signal_value = cleanValue(rawSignal);
@@ -1197,13 +1190,7 @@
 
                 const targetUrl = data.is_recurrent ? RECURRENT_STORE_URL : QUICK_STORE_URL;
 
-                // 🔍 DEBUG: O QUE ESTÁ SAINDO DO NAVEGADOR?
-                console.log("--- DEBUG AGENDAMENTO RÁPIDO ---");
-                console.log("URL de destino:", targetUrl);
-                console.log("Payload sendo enviado:", data);
-                console.log("Formato start_time:", data.start_time, "| Tamanho:", data.start_time?.length);
-                console.log("Formato end_time:", data.end_time, "| Tamanho:", data.end_time?.length);
-
+                // Estado de carregamento
                 submitBtn.disabled = true;
                 submitBtn.textContent = 'Processando...';
 
@@ -1220,30 +1207,23 @@
 
                     const result = await response.json();
 
-                    if (!response.ok) {
-                        // 🔍 DEBUG: POR QUE O SERVIDOR REJEITOU?
-                        console.error("--- ERRO NA RESPOSTA DO SERVIDOR ---");
-                        console.error("Status HTTP:", response.status);
-                        console.error("Erros de Validação:", result.errors);
-                        console.error("Mensagem:", result.message);
-                    }
-
+                    // SEMPRE fechamos o modal antes de mostrar qualquer mensagem
                     window.closeQuickBookingModal();
 
                     if (response.ok && result.success) {
+                        // SUCESSO
                         showDashboardMessage(result.message, 'success');
                         if (window.calendar) window.calendar.refetchEvents();
                     } else {
+                        // ERRO (Ex: Caixa Fechado)
+                        // Forçamos o refetch para que o slot verde não suma indevidamente do calendário
                         if (window.calendar) window.calendar.refetchEvents();
 
-                        const errorMsg = result.errors ?
-                            Object.values(result.errors).flat().join(' ') :
-                            result.message;
-
+                        const errorMsg = result.errors ? Object.values(result.errors).flat().join(' ') : result.message;
                         showDashboardMessage(errorMsg || "Erro ao salvar reserva.", 'error');
                     }
                 } catch (error) {
-                    console.error("Erro crítico na requisição:", error);
+                    // ERRO CRÍTICO DE CONEXÃO
                     window.closeQuickBookingModal();
                     if (window.calendar) window.calendar.refetchEvents();
                     showDashboardMessage("Erro de conexão com o servidor.", 'error');
@@ -1906,7 +1886,7 @@
 
                     if (!statusCaixa.isOpen) {
                         if (!window.closedDatesCache) window.closedDatesCache = {};
-                        window.closedDatesCache[cacheKey] = true;
+                        window.closedDatesCache[cacheKey] = true; // Salva com a chave composta
 
                         showDashboardMessage(
                             `Ação Bloqueada: O caixa desta arena para o dia ${moment(eventDate).format('DD/MM')} está fechado.`,
@@ -1937,7 +1917,6 @@
                 if (isAvailable) {
                     const modal = document.getElementById('quick-booking-modal');
                     if (!modal) return;
-
                     const arenaFilter = document.getElementById('filter_arena');
                     const selectedArenaId = props.arena_id || (arenaFilter ? arenaFilter.value : '');
                     const selectedArenaName = props.arena_name || (arenaFilter ? arenaFilter.options[arenaFilter
@@ -1948,62 +1927,32 @@
                         if (el) el.value = val;
                     };
 
-                    // --- 🕒 TRATAMENTO RIGOROSO DE HORÁRIOS PARA O BACKEND ---
-                    // 1. Início sempre existe
-                    let startTimeFormatted = moment(event.start).format('HH:mm');
-                    let endTimeFormatted = '';
-
-                    // 2. Lógica de segurança para o fim (evita o "Invalid date")
-                    if (event.end && moment(event.end).isValid()) {
-                        endTimeFormatted = moment(event.end).format('HH:mm');
-                    } else if (props.end_time) {
-                        // Se o objeto event.end falhar, tentamos o end_time que veio do banco (extendedProps)
-                        endTimeFormatted = props.end_time.substring(0, 5);
-                    } else {
-                        // Fallback final: se não houver dados, assume 1 hora de duração
-                        endTimeFormatted = moment(event.start).add(1, 'hours').format('HH:mm');
-                    }
-
-                    // 3. Normalização de Meia-Noite e Datas Inválidas
-                    if (endTimeFormatted === '24:00' || endTimeFormatted === 'Invalid date') {
-                        endTimeFormatted = '00:00';
-                    }
-
-                    // Preenchimento dos campos ocultos e visíveis
                     setVal('quick-schedule-id', props.schedule_id || '');
                     setVal('quick-arena-id', selectedArenaId);
                     setVal('quick-date', eventDate);
-                    setVal('quick-start-time', startTimeFormatted);
-                    setVal('quick-end-time', endTimeFormatted);
+                    setVal('quick-start-time', moment(event.start).format('HH:mm'));
+                    setVal('quick-end-time', moment(event.end).format('HH:mm'));
                     setVal('reserva-id-to-update', event.id || '');
 
-                    // Formatação de Preço
                     const priceRaw = parseFloat(props.price || 0);
                     const priceFormatted = priceRaw.toFixed(2).replace('.', ',');
                     setVal('quick-price', priceFormatted);
 
-                    // Atualização da área de exibição do modal
                     const displayArea = document.getElementById('slot-info-display');
                     if (displayArea) {
-                        displayArea.innerHTML = `
-            <div class="space-y-1 border-l-4 border-green-500 pl-3">
-                <p class="text-xs uppercase text-gray-500 font-bold tracking-wider">Informações da Reserva</p>
-                <p><strong>Quadra:</strong> <span class="text-indigo-600">${selectedArenaName}</span></p>
-                <p><strong>Data:</strong> ${moment(event.start).format('DD/MM/YYYY')}</p>
-                <p><strong>Hora:</strong> ${startTimeFormatted} às ${endTimeFormatted}</p>
-                <p><strong>Preço Sugerido:</strong> <span class="text-green-600 font-bold">R$ ${priceFormatted}</span></p>
-            </div>`;
+                        displayArea.innerHTML =
+                            `<div class="space-y-1 border-l-4 border-green-500 pl-3">
+                    <p class="text-xs uppercase text-gray-500 font-bold tracking-wider">Informações da Reserva</p>
+                    <p><strong>Quadra:</strong> <span class="text-indigo-600">${selectedArenaName}</span></p>
+                    <p><strong>Data:</strong> ${moment(event.start).format('DD/MM/YYYY')}</p>
+                    <p><strong>Hora:</strong> ${moment(event.start).format('HH:mm')} às ${moment(event.end).format('HH:mm')}</p>
+                    <p><strong>Preço Sugerido:</strong> <span class="text-green-600 font-bold">R$ ${priceFormatted}</span></p>
+                </div>`;
                     }
-
-                    // Limpeza de campos de cliente para novo uso
                     setVal('client_name', '');
                     setVal('client_contact', '');
                     setVal('signal_value_quick', '0,00');
-
-                    const reputationDisplay = document.getElementById('client-reputation-display');
-                    if (reputationDisplay) reputationDisplay.innerHTML = '';
-
-                    // Exibição do Modal
+                    document.getElementById('client-reputation-display').innerHTML = '';
                     modal.classList.remove('hidden');
                     modal.style.setProperty('display', 'flex', 'important');
                     return;
@@ -2051,8 +2000,8 @@
             <div class="grid grid-cols-1 gap-2">
                 ${!isFinalized && status !== 'cancelled' ?
                     `<button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                                                        <span>💰 IR PARA O CAIXA</span>
-                                                    </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+                                                                                <span>💰 IR PARA O CAIXA</span>
+                                                                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
                 <div class="grid grid-cols-2 gap-2 mt-1">
                     <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})"
@@ -2067,14 +2016,14 @@
 
                 ${!isFinalized && status !== 'no_show' ?
                     `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')"
-                                                        class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
-                                                        FALTA (NO-SHOW)
-                                                    </button>` : ''}
+                                                                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
+                                                                                FALTA (NO-SHOW)
+                                                                            </button>` : ''}
 
                 ${isRecurrent ?
                     `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition uppercase">
-                                                        CANCELAR SÉRIE
-                                                    </button>` : ''}
+                                                                                CANCELAR SÉRIE
+                                                                            </button>` : ''}
 
                 <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold">
                     Fechar
@@ -2085,6 +2034,7 @@
                     eventModal.style.display = 'flex';
                 }
             };
+
             // --- FUNÇÕES DE SUPORTE (FORA DA eventClick) ---
             window.closeQuickBookingModal = function() {
                 const modal = document.getElementById('quick-booking-modal');
@@ -2227,7 +2177,7 @@
 
                                     console.log(
                                         `[DEBUG CALENDÁRIO] Buscando slots para Arena: ${arenaId}`
-                                    );
+                                        );
 
                                     fetch(url, {
                                             cache: "no-store"
@@ -2240,7 +2190,7 @@
                                         .then(events => {
                                             console.log(
                                                 `[DEBUG CALENDÁRIO] Servidor retornou ${events.length} slots brutos para Arena ${arenaId}.`
-                                            );
+                                                );
 
                                             const now = moment();
                                             const filtered = events.filter(e => {
@@ -2254,13 +2204,13 @@
                                                 // (Evita que slots "fujam" da tela por pequenos atrasos no relógio)
                                                 const isVisible = eventStart.isAfter(now
                                                     .clone().subtract(30, 'minutes')
-                                                );
+                                                    );
                                                 return isVisible;
                                             });
 
                                             console.log(
                                                 `[DEBUG CALENDÁRIO] Após filtro de 30min: ${filtered.length} slots visíveis.`
-                                            );
+                                                );
                                             successCallback(filtered);
                                         })
                                         .catch(err => {

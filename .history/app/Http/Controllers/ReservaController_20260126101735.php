@@ -454,7 +454,7 @@ class ReservaController extends Controller
      */
     public function finalizeStatus(Reserva $reserva, string $newStatus, string $reason, bool $shouldRefund, float $amountPaidRef)
     {
-        // 1. Validação de Estado
+        // 1. Validação de Estado (Aceita Confirmada, Concluída ou status mapeados como 'completed')
         $statusAceitaveis = [
             Reserva::STATUS_CONFIRMADA,
             Reserva::STATUS_CONCLUIDA,
@@ -470,16 +470,44 @@ class ReservaController extends Controller
         $messageFinance = "";
         $arenaId = $reserva->arena_id;
 
-        // --- 💰 PASSO 1: GERENCIAMENTO FINANCEIRO (ANTECIPADO POR SEGURANÇA) ---
+        // 2. Atualização dos Dados da Reserva
+        $updateData = [
+            'status' => $newStatus,
+            'manager_id' => Auth::id(),
+        ];
+
+        if ($newStatus === Reserva::STATUS_CANCELADA) {
+            $updateData['cancellation_reason'] = $reason;
+            $updateData['no_show_reason'] = null;
+        } elseif ($newStatus === Reserva::STATUS_NO_SHOW) {
+            $updateData['no_show_reason'] = $reason;
+            $updateData['cancellation_reason'] = null;
+        }
+
+        $reserva->update($updateData);
+
+        // 🚀 NOVO: LÓGICA DE REPUTAÇÃO AUTOMÁTICA (Acionada apenas em No-Show)
+        if ($newStatus === Reserva::STATUS_NO_SHOW) {
+            $user = $reserva->user; // Busca o relacionamento do cliente
+            if ($user) {
+                // Incrementa o contador. O Mutator no Model User cuidará da qualificação e do bloqueio.
+                $user->no_show_count += 1;
+                $user->save();
+                Log::info("Reputação atualizada para Cliente ID: {$user->id} devido a No-Show na Reserva #{$reserva->id}");
+            }
+        }
+
+        // 3. Gerenciamento Financeiro Isenta por Arena 🏟️
         if ($amountPaid > 0) {
             if ($shouldRefund) {
-                // LÓGICA DE ESTORNO
+                // 🛑 LÓGICA DE ESTORNO (DEVOLUÇÃO REAL):
+                // Criamos uma transação NEGATIVA para que o saldo do caixa de hoje diminua.
                 FinancialTransaction::create([
                     'reserva_id'     => $reserva->id,
                     'arena_id'       => $arenaId,
                     'user_id'        => $reserva->user_id,
                     'manager_id'     => Auth::id(),
-                    'amount'         => -$amountPaid,
+                    'amount'         => -$amountPaid, // 📉 Valor negativo
                     'type'           => FinancialTransaction::TYPE_REFUND,
                     'payment_method' => 'outro',
                     'description'    => "ESTORNO/DEVOLUÇÃO: " . $reason . " (Reserva #{$reserva->id})",
@@ -488,7 +516,8 @@ class ReservaController extends Controller
 
                 $messageFinance = " O valor de R$ " . number_format($amountPaid, 2, ',', '.') . " foi registrado como SAÍDA (Estorno) no caixa.";
             } else {
-                // LÓGICA DE RETENÇÃO: Limpa transações anteriores e cria a compensação
+                // 🛑 LÓGICA DE RETENÇÃO (MANTÉM O DINHEIRO):
+                // Limpa transações anteriores para não duplicar o saldo.
                 FinancialTransaction::where('reserva_id', $reserva->id)
                     ->where('arena_id', $arenaId)
                     ->whereIn('type', [
@@ -517,33 +546,7 @@ class ReservaController extends Controller
             }
         }
 
-        // --- 📝 PASSO 2: ATUALIZAÇÃO DOS DADOS DA RESERVA ---
-        $updateData = [
-            'status' => $newStatus,
-            'manager_id' => Auth::id(),
-        ];
-
-        if ($newStatus === Reserva::STATUS_CANCELADA) {
-            $updateData['cancellation_reason'] = $reason;
-            $updateData['no_show_reason'] = null;
-        } elseif ($newStatus === Reserva::STATUS_NO_SHOW) {
-            $updateData['no_show_reason'] = $reason;
-            $updateData['cancellation_reason'] = null;
-        }
-
-        $reserva->update($updateData);
-
-        // 🚀 REPUTAÇÃO AUTOMÁTICA
-        if ($newStatus === Reserva::STATUS_NO_SHOW) {
-            $user = $reserva->user;
-            if ($user) {
-                $user->no_show_count += 1;
-                $user->save();
-                Log::info("Reputação atualizada para Cliente ID: {$user->id} devido a No-Show na Reserva #{$reserva->id}");
-            }
-        }
-
-        // 🏟️ LIBERAÇÃO DO INVENTÁRIO (Slot Verde)
+        // 4. Liberação do Inventário 🏟️ (Recria o slot verde)
         $this->recreateFixedSlot($reserva);
 
         return ['message_finance' => $messageFinance];
@@ -589,16 +592,55 @@ class ReservaController extends Controller
             throw new \Exception("Nenhuma reserva ativa ou paga encontrada para a série futura.");
         }
 
-        // --- 💰 PASSO FINANCEIRO ANTECIPADO (CORREÇÃO) ---
-        // Registramos o financeiro ENQUANTO a reserva mestre ainda existe no banco
+        foreach ($seriesReservas as $slot) {
+            // Validação de horário para não cancelar o que já passou hoje
+            $slotStartDateTime = $slot->date->copy();
+            try {
+                $hora = is_object($slot->start_time) ? $slot->start_time->hour : Carbon::parse($slot->start_time)->hour;
+                $min  = is_object($slot->start_time) ? $slot->start_time->minute : Carbon::parse($slot->start_time)->minute;
+                $slotStartDateTime->setTime($hora, $min, 0);
+            } catch (\Exception $e) {
+                $timePart = Carbon::parse($slot->start_time);
+                $slotStartDateTime->setTime($timePart->hour, $timePart->minute, $timePart->second);
+            }
+
+            // Se a reserva for de hoje mas o horário já passou, não cancelamos para não sumir do histórico de hoje
+            if ($slotStartDateTime->isPast() && $slot->date->isToday()) {
+                continue;
+            }
+
+            // 🛡️ PASSO FINANCEIRO: Antes de deletar, zeramos o saldo devedor no banco
+            // Isso evita que relatórios financeiros "leiam" dívidas de reservas excluídas.
+            $pagoJa = (float)($slot->total_paid ?? 0);
+            $slot->update([
+                'final_price' => $pagoJa,
+                'status' => Reserva::STATUS_CANCELADA
+            ]);
+
+            // 🛑 PASSO 1: Recria o slot fixo (Livre/Verde) para liberar a agenda para outros
+            $this->recreateFixedSlot($slot);
+
+            // 🛑 PASSO 2: Limpa transações financeiras individuais deste horário específico
+            FinancialTransaction::where('reserva_id', $slot->id)
+                ->whereIn('type', [FinancialTransaction::TYPE_SIGNAL, FinancialTransaction::TYPE_PAYMENT])
+                ->delete();
+
+            // 🛑 PASSO 3: Deleta a ocupação para o Dashboard mostrar o horário como Disponível
+            $slot->delete();
+
+            $cancelledCount++;
+        }
+
+        // 2. Registro Financeiro de Estorno ou Retenção (Impacta o caixa consolidado de HOJE)
         if ($amountPaidRef > 0) {
             if ($shouldRefund) {
+                // Gera uma SAÍDA no caixa
                 FinancialTransaction::create([
                     'reserva_id'     => $masterId,
                     'arena_id'       => $anchorReserva->arena_id,
                     'user_id'        => $anchorReserva->user_id,
                     'manager_id'     => $managerId,
-                    'amount'         => -$amountPaidRef,
+                    'amount'         => -$amountPaidRef, // Negativo para saída
                     'type'           => FinancialTransaction::TYPE_REFUND,
                     'payment_method' => 'outro',
                     'description'    => "ESTORNO SÉRIE RECORRENTE: " . $reason . " (Master #{$masterId})",
@@ -606,6 +648,7 @@ class ReservaController extends Controller
                 ]);
                 $messageFinance = " O valor de R$ " . number_format($amountPaidRef, 2, ',', '.') . " foi estornado do caixa.";
             } else {
+                // Registra que o valor foi retido pela arena como multa/taxa
                 FinancialTransaction::create([
                     'reserva_id'     => $masterId,
                     'arena_id'       => $anchorReserva->arena_id,
@@ -619,39 +662,6 @@ class ReservaController extends Controller
                 ]);
                 $messageFinance = " O valor foi mantido como retenção pela arena.";
             }
-        }
-
-        // --- 🗓️ AGORA SIM, O LOOP DE EXCLUSÃO ---
-        foreach ($seriesReservas as $slot) {
-            $slotStartDateTime = $slot->date->copy();
-            try {
-                $hora = is_object($slot->start_time) ? $slot->start_time->hour : Carbon::parse($slot->start_time)->hour;
-                $min  = is_object($slot->start_time) ? $slot->start_time->minute : Carbon::parse($slot->start_time)->minute;
-                $slotStartDateTime->setTime($hora, $min, 0);
-            } catch (\Exception $e) {
-                $timePart = Carbon::parse($slot->start_time);
-                $slotStartDateTime->setTime($timePart->hour, $timePart->minute, $timePart->second);
-            }
-
-            if ($slotStartDateTime->isPast() && $slot->date->isToday()) {
-                continue;
-            }
-
-            // Mantendo suas regras originais de limpeza
-            $pagoJa = (float)($slot->total_paid ?? 0);
-            $slot->update([
-                'final_price' => $pagoJa,
-                'status' => Reserva::STATUS_CANCELADA
-            ]);
-
-            $this->recreateFixedSlot($slot);
-
-            FinancialTransaction::where('reserva_id', $slot->id)
-                ->whereIn('type', [FinancialTransaction::TYPE_SIGNAL, FinancialTransaction::TYPE_PAYMENT])
-                ->delete();
-
-            $slot->delete();
-            $cancelledCount++;
         }
 
         return [
@@ -881,24 +891,20 @@ class ReservaController extends Controller
             return response()->json(['success' => false, 'message' => 'Erro interno ao identificar ou criar o cliente.'], 500);
         }
 
-        // 🛡️ TRAVA DE CONFLITO DE MENSALISTA FUTURO (COM DIAGNÓSTICO)
+        // 🛡️ TRAVA DE CONFLITO DE MENSALISTA FUTURO (CORRIGIDA COM DAY_OF_WEEK)
         $futureMensalista = Reserva::where('arena_id', $arenaId)
-            ->where('day_of_week', $dayOfWeek)
+            ->where('day_of_week', $dayOfWeek) // 🎯 Filtra pelo dia da semana (Ex: só Terças)
             ->where('start_time', $startTimeNormalized)
             ->where('is_recurrent', true)
             ->where('is_fixed', false)
             ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA])
             ->where('date', '>', $initialDate->toDateString())
-            ->orderBy('date', 'asc') // Pega o primeiro conflito que encontrar
             ->first();
 
         if ($futureMensalista) {
-            // Convertemos a data para o formato brasileiro para o erro ficar claro
-            $dataConflito = \Carbon\Carbon::parse($futureMensalista->date)->format('d/m/Y');
-
             return response()->json([
                 'success' => false,
-                'message' => "⚠️ BLOQUEIO: O cliente '{$futureMensalista->client_name}' já é mensalista deste horário a partir do dia {$dataConflito}. Verifique se não há uma reserva recorrente antiga que precisa ser cancelada primeiro."
+                'message' => "⚠️ BLOQUEIO DE RECORRÊNCIA: Já existe um mensalista ('{$futureMensalista->client_name}') para este horário nas próximas semanas neste mesmo dia da semana."
             ], 422);
         }
 

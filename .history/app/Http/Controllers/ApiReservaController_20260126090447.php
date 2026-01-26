@@ -142,7 +142,6 @@ class ApiReservaController extends Controller
 
             $available = $slots->filter(function ($slot) use ($occupied, $financeiroController, $arenaId) {
                 $slotDate = $slot->date->format('Y-m-d');
-                // Usamos format('H:i:s') para garantir que o PHP não se perca com milissegundos
                 $sStart = Carbon::parse($slot->start_time)->format('H:i:s');
                 $sEnd = Carbon::parse($slot->end_time)->format('H:i:s');
 
@@ -150,18 +149,17 @@ class ApiReservaController extends Controller
                 if ($financeiroController->isCashClosed($slotDate, $arenaId)) return false;
 
                 // --- 🕒 CORREÇÃO PARA HOJE ÀS 23H ---
-                // Se o fim é meia-noite, tratamos como o último segundo do dia para a comparação isPast
+                // Se o slot termina em 00:00:00, tratamos como 23:59:59 para a comparação 'isPast'
+                // Isso impede que o slot de 23h suma do dashboard no dia atual.
                 $checkEndTime = ($sEnd === '00:00:00') ? '23:59:59' : $sEnd;
-                if (Carbon::parse($slotDate . ' ' . $checkEndTime)->isPast()) {
-                    return false;
-                }
+                if (Carbon::parse($slotDate . ' ' . $checkEndTime)->isPast()) return false;
 
                 // --- ⚔️ CHECAGEM DE CONFLITO ---
                 $hasConflict = $occupied->where('date', $slot->date)->contains(function ($res) use ($sStart, $sEnd) {
                     $resStart = Carbon::parse($res->start_time)->format('H:i:s');
                     $resEnd = Carbon::parse($res->end_time)->format('H:i:s');
 
-                    // Aqui está o segredo: convertemos 00:00 para 24:00 na mente do PHP
+                    // Para o cálculo de conflito, 00:00:00 deve ser entendido como 24:00:00
                     $limitEnd = ($sEnd === '00:00:00') ? '24:00:00' : $sEnd;
                     $limitResEnd = ($resEnd === '00:00:00') ? '24:00:00' : $resEnd;
 
@@ -172,13 +170,11 @@ class ApiReservaController extends Controller
             });
 
             return response()->json($available->map(function ($slot) {
-                $dateStr = $slot->date->format('Y-m-d');
                 return [
                     'id' => $slot->id,
                     'title' => 'Livre',
-                    // Forçamos o formato ISO8601 que o FullCalendar ama
-                    'start' => $dateStr . 'T' . Carbon::parse($slot->start_time)->format('H:i:s'),
-                    'end' => $dateStr . 'T' . Carbon::parse($slot->end_time)->format('H:i:s'),
+                    'start' => $slot->date->format('Y-m-d') . 'T' . Carbon::parse($slot->start_time)->format('H:i:s'),
+                    'end' => $slot->date->format('Y-m-d') . 'T' . Carbon::parse($slot->end_time)->format('H:i:s'),
                     'className' => 'fc-event-available',
                     'extendedProps' => [
                         'price' => (float)$slot->price,
@@ -202,10 +198,7 @@ class ApiReservaController extends Controller
         $arenaId = $request->arena_id;
         $now = Carbon::now();
 
-        $slots = Reserva::where('arena_id', $arenaId)
-            ->where('is_fixed', true)
-            ->whereDate('date', $date)
-            ->get();
+        $slots = Reserva::where('arena_id', $arenaId)->where('is_fixed', true)->whereDate('date', $date)->get();
 
         $occupied = Reserva::where('arena_id', $arenaId)
             ->where('is_fixed', false)
@@ -214,7 +207,7 @@ class ApiReservaController extends Controller
                 Reserva::STATUS_CONFIRMADA,
                 Reserva::STATUS_PENDENTE,
                 Reserva::STATUS_CONCLUIDA,
-                'maintenance'
+                'maintenance' // 👈 ADICIONADO
             ])->get();
 
         $times = [];
@@ -222,23 +215,12 @@ class ApiReservaController extends Controller
             $sStart = Carbon::parse($slot->start_time)->format('H:i');
             $sEnd = Carbon::parse($slot->end_time)->format('H:i');
 
-            // --- 🛡️ CORREÇÃO 1: VISIBILIDADE NO DIA ATUAL ---
-            // Se o fim é 00:00, usamos 23:59:59 para comparar se o slot de hoje já passou.
-            $checkEnd = ($sEnd === '00:00') ? '23:59:59' : $sEnd;
-            if (Carbon::parse($date . ' ' . $checkEnd)->lt($now)) {
-                continue;
-            }
+            if (Carbon::parse($date . ' ' . $sEnd)->lt($now)) continue;
 
-            // --- 🛡️ CORREÇÃO 2: LÓGICA DE CONFLITO (SOBREPOSIÇÃO) ---
             $isOccupied = $occupied->contains(function ($res) use ($sStart, $sEnd) {
                 $resStart = Carbon::parse($res->start_time)->format('H:i');
                 $resEnd = Carbon::parse($res->end_time)->format('H:i');
-
-                // Tratamos 00:00 como 24:00 para a matemática de comparação funcionar
-                $vEnd = ($sEnd === '00:00') ? '24:00' : $sEnd;
-                $vResEnd = ($resEnd === '00:00') ? '24:00' : $resEnd;
-
-                return $resStart < $vEnd && $vResEnd > $sStart;
+                return $resStart < $sEnd && $resEnd > $sStart;
             });
 
             if (!$isOccupied) {
@@ -248,7 +230,7 @@ class ApiReservaController extends Controller
                     'price' => number_format($slot->price, 2, ',', '.'),
                     'raw_price' => $slot->price,
                     'start_time' => $sStart,
-                    'end_time' => $sEnd, // Envia 00:00 para o front
+                    'end_time' => $sEnd,
                 ];
             }
         }
