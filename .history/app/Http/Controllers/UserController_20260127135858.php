@@ -21,11 +21,17 @@ class UserController extends Controller
     {
         $search = $request->input('search');
         $roleFilter = $request->input('role_filter');
+        // Adicionado: captura o filtro de blacklist
+        $blacklistFilter = $request->input('blacklist');
 
         $users = User::query()
             ->with('arena')
             ->when($roleFilter, function ($q) use ($roleFilter) {
                 return $q->where('role', $roleFilter);
+            })
+            // Adicionado: filtra por blacklist se o parâmetro estiver presente
+            ->when($blacklistFilter, function ($q) {
+                return $q->where('is_blacklisted', true);
             })
             ->when($search, function ($q) use ($search) {
                 return $q->where(function ($sub) use ($search) {
@@ -37,7 +43,8 @@ class UserController extends Controller
             ->orderBy('name')
             ->paginate(15);
 
-        $pageTitle = "Gerenciamento de Usuários";
+        // Adicionado: Título dinâmico para saber qual lista está ativa
+        $pageTitle = $blacklistFilter ? "Lista Negra (Blacklist)" : "Gerenciamento de Usuários";
 
         return view('admin.users.index', compact('users', 'search', 'roleFilter', 'pageTitle'));
     }
@@ -99,12 +106,11 @@ class UserController extends Controller
             'name' => $validated['name'],
             'email' => $validated['email'],
             'whatsapp_contact' => $validated['whatsapp_contact'],
+            // Removida is_admin, pois sua tabela usa 'role'
             'password' => $isGestor ? Hash::make($validated['password']) : Hash::make(Str::random(16)),
             'role' => $validated['role'],
             'arena_id' => $validated['arena_id'] ?? null,
             'is_vip' => $request->has('is_vip') ? 1 : 0,
-            // 🚀 CORREÇÃO: Usando o campo real is_blocked em vez de customer_qualification
-            'is_blocked' => $request->has('is_blacklisted') ? 1 : 0,
         ]);
 
         return redirect()->route('admin.users.index')->with('success', 'Usuário criado com sucesso!');
@@ -131,26 +137,15 @@ class UserController extends Controller
             $user->password = Hash::make($request->password);
         }
 
-        // 2. Mapeamento manual dos campos
+        // 2. Mapeamento manual dos campos (Limpando referências a is_admin)
         $user->name = $validated['name'];
         $user->email = $validated['email'];
         $user->whatsapp_contact = $validated['whatsapp_contact'];
         $user->role = $validated['role'];
         $user->arena_id = $validated['arena_id'] ?? null;
 
-        // 3. Status VIP
+        // 3. Status VIP (Garante 1 ou 0 para o TinyInt)
         $user->is_vip = $request->has('is_vip') ? 1 : 0;
-
-        // 4. LÓGICA DA BLACKLIST (Ajustada conforme o Debug Real)
-        if ($request->has('is_blacklisted')) {
-            // Se marcar o checkbox, ativamos o bloqueio
-            $user->is_blocked = 1;
-        } else {
-            // Se desmarcar, removemos o bloqueio e ZERAMOS as faltas
-            // Isso garante que o status 🚫 BLACKLIST suma da sua index
-            $user->is_blocked = 0;
-            $user->no_show_count = 0;
-        }
 
         $user->save();
 

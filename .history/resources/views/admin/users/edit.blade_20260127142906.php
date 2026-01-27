@@ -5,6 +5,19 @@
         </h2>
     </x-slot>
 
+    <div class="max-w-4xl mx-auto mt-6 sm:px-6 lg:px-8">
+        <div style="background: #111827; color: #10b981; padding: 20px; font-family: 'Courier New', monospace; border-radius: 10px; border: 2px solid #ef4444; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+            <h3 style="color: #fff; margin-bottom: 10px; border-bottom: 1px solid #374151; padding-bottom: 5px;">🔎 DADOS BRUTOS DO BANCO</h3>
+            <p><strong>Nome:</strong> {{ $user->name }}</p>
+            <p><strong>Valor exato em 'customer_qualification':</strong> <span style="background: #ef4444; color: white; padding: 2px 5px;">"{{ $user->customer_qualification }}"</span></p>
+            <p><strong>O que o sistema gera para Tag:</strong> <code>{{ htmlspecialchars($user->status_tag) }}</code></p>
+            <hr style="border: 0; border-top: 1px solid #374151; margin: 10px 0;">
+            <p><strong>Lista de todos os campos:</strong></p>
+            <pre style="font-size: 12px; color: #a7f3d0; overflow-x: auto;">{{ print_r($user->getAttributes(), true) }}</pre>
+        </div>
+    </div>
+
+
     <div class="py-12">
         <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg p-6">
@@ -101,20 +114,20 @@
                     </div>
 
 
-                    {{-- 🚫 Container Blacklist (Corrigido para usar a coluna is_blocked) --}}
+                    {{-- 🚫 Container Blacklist (Versão Reforçada com str_contains) --}}
                     <div id="blacklist-container" class="mb-6 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-800 {{ old('role', $user->role) !== 'cliente' ? 'hidden' : '' }}">
                         <div class="flex items-center">
-                            {{--
-                                AJUSTE FINAL:
-                                O debug mostrou que o Aroudo tem 'is_blocked' => 1.
-                                Agora o checkbox lê esse valor corretamente.
-                            --}}
+                            @php
+                                // Detecta se a palavra "blacklist" está presente na qualificação (independente de maiúsculas)
+                                $currentStatus = strtolower($user->customer_qualification ?? '');
+                                $hasBlacklistStatus = str_contains($currentStatus, 'blacklist');
+                            @endphp
                             <input type="checkbox" name="is_blacklisted" id="is_blacklisted" value="1"
-                                {{ old('is_blacklisted', $user->is_blocked) == 1 ? 'checked' : '' }}
+                                {{ (old('is_blacklisted') || $hasBlacklistStatus) ? 'checked' : '' }}
                                 class="h-5 w-5 text-red-600 border-gray-300 rounded focus:ring-red-500">
                             <label for="is_blacklisted" class="ml-3">
                                 <span class="block text-sm font-bold text-red-900 dark:text-red-300 uppercase tracking-wider">🚫 Lista Negra (Blacklist)</span>
-                                <span class="block text-xs text-red-600 dark:text-red-400">Marque para restringir ou desmarque para remover este cliente da Blacklist (isso também zerará as faltas dele).</span>
+                                <span class="block text-xs text-red-600 dark:text-red-400">Marque para restringir ou desmarque para remover este cliente da Blacklist.</span>
                             </label>
                         </div>
                     </div>

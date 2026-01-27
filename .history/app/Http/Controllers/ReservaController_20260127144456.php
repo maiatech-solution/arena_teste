@@ -886,14 +886,6 @@ class ReservaController extends Controller
             return response()->json(['success' => false, 'message' => 'Erro interno ao identificar ou criar o cliente.'], 500);
         }
 
-        // 🚀 3.1 TRAVA DE SEGURANÇA: BLACKLIST (is_blocked)
-        if ($clientUser->is_blocked) {
-            return response()->json([
-                'success' => false,
-                'message' => '🚫 Bloqueio de Blacklist: Este cliente possui restrições para novos agendamentos mensais.'
-            ], 403);
-        }
-
         // 🛡️ TRAVA DE CONFLITO DE MENSALISTA FUTURO (COM DIAGNÓSTICO)
         $futureMensalista = Reserva::where('arena_id', $arenaId)
             ->where('day_of_week', $dayOfWeek)

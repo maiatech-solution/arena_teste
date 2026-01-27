@@ -763,19 +763,13 @@ class ReservaController extends Controller
             return response()->json(['success' => false, 'message' => 'Erro ao processar dados do cliente.'], 500);
         }
 
-        // 🚀 5.1 TRAVA DE BLACKLIST (is_blocked): Adicionado para respeitar a punição de faltas
-        if ($clientUser->is_blocked) {
-            return response()->json([
-                'success' => false,
-                'message' => '🚫 Bloqueio de Blacklist: Este cliente está impedido de realizar novos agendamentos.'
-            ], 403);
-        }
-
         $validated['price'] = $validated['fixed_price'];
 
         DB::beginTransaction();
         try {
             // 6. DELEGA A LÓGICA DE CRIAÇÃO
+            // IMPORTANTE: Se o erro persistir, o método 'createConfirmedReserva' também
+            // deve ser verificado se ele não chama isCashClosed() sem o arena_id lá dentro.
             $newReserva = $this->createConfirmedReserva($validated, $clientUser, $reservaIdToUpdate);
 
             // 🏟️ GARANTIA: Força a Arena correta
@@ -793,6 +787,7 @@ class ReservaController extends Controller
             DB::rollBack();
             Log::error("Erro no Agendamento Rápido: " . $e->getMessage());
 
+            // Se o erro capturado for o do caixa vindo de dentro do createConfirmedReserva
             if (str_contains($e->getMessage(), 'caixa')) {
                 return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
             }
@@ -884,14 +879,6 @@ class ReservaController extends Controller
 
         if (!$clientUser) {
             return response()->json(['success' => false, 'message' => 'Erro interno ao identificar ou criar o cliente.'], 500);
-        }
-
-        // 🚀 3.1 TRAVA DE SEGURANÇA: BLACKLIST (is_blocked)
-        if ($clientUser->is_blocked) {
-            return response()->json([
-                'success' => false,
-                'message' => '🚫 Bloqueio de Blacklist: Este cliente possui restrições para novos agendamentos mensais.'
-            ], 403);
         }
 
         // 🛡️ TRAVA DE CONFLITO DE MENSALISTA FUTURO (COM DIAGNÓSTICO)
@@ -2139,11 +2126,13 @@ class ReservaController extends Controller
 
         $validated = $validator->validated();
         $date = $validated['data_reserva'];
-        $arenaId = $validated['arena_id'];
+        $arenaId = $validated['arena_id']; // 🏟️ Captura a arena selecionada
 
         // 2. 🎯 VALIDAÇÃO DE SEGURANÇA AJUSTADA: CAIXA FECHADO POR ARENA
         $financeiroController = app(FinanceiroController::class);
 
+        // ✅ CORREÇÃO: Passamos o arena_id vindo do formulário público.
+        // Isso permite que o cliente agende no Vôlei se apenas o caixa do Futebol estiver fechado.
         if ($financeiroController->isCashClosed($date, $arenaId)) {
             return redirect()->back()
                 ->withInput()
@@ -2168,16 +2157,7 @@ class ReservaController extends Controller
                 'whatsapp_contact' => $validated['contato_cliente'],
             ]);
 
-            // 🚀 2.1 TRAVA DE SEGURANÇA: BLACKLIST (DESCOBERTA VIA DEBUG)
-            // Se o cliente for encontrado e o campo is_blocked for 1, impedimos o avanço.
-            if ($clientUser && $clientUser->is_blocked) {
-                DB::rollBack();
-                return redirect()->back()
-                    ->withInput()
-                    ->with('error', '🚫 Seu acesso está temporariamente restrito para novos agendamentos devido ao histórico de faltas. Por favor, entre em contato com a arena.');
-            }
-
-            // 3. Bloqueio de duplicidade para o mesmo cliente
+            // 3. Bloqueio de duplicidade para o mesmo cliente (Já com arena_id)
             $existing = \App\Models\Reserva::where('user_id', $clientUser->id)
                 ->where('arena_id', $arenaId)
                 ->where('date', $date)
@@ -2190,7 +2170,7 @@ class ReservaController extends Controller
                 return redirect()->back()->withInput()->with('error', "Você já tem uma solicitação enviada para este horário nesta quadra.");
             }
 
-            // 4. Trava de Segurança: Só bloqueia se houver alguém CONFIRMADO
+            // 4. Trava de Segurança: Só bloqueia se houver alguém CONFIRMADO (Já com arena_id)
             if ($this->checkOverlap($date, $startTimeRaw, $endTimeRaw, $arenaId, true)) {
                 DB::rollBack();
                 return redirect()->back()->withInput()->with('error', 'Este horário acabou de ser fechado com outro cliente.');

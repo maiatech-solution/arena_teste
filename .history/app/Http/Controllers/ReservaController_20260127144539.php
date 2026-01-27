@@ -763,19 +763,13 @@ class ReservaController extends Controller
             return response()->json(['success' => false, 'message' => 'Erro ao processar dados do cliente.'], 500);
         }
 
-        // 🚀 5.1 TRAVA DE BLACKLIST (is_blocked): Adicionado para respeitar a punição de faltas
-        if ($clientUser->is_blocked) {
-            return response()->json([
-                'success' => false,
-                'message' => '🚫 Bloqueio de Blacklist: Este cliente está impedido de realizar novos agendamentos.'
-            ], 403);
-        }
-
         $validated['price'] = $validated['fixed_price'];
 
         DB::beginTransaction();
         try {
             // 6. DELEGA A LÓGICA DE CRIAÇÃO
+            // IMPORTANTE: Se o erro persistir, o método 'createConfirmedReserva' também
+            // deve ser verificado se ele não chama isCashClosed() sem o arena_id lá dentro.
             $newReserva = $this->createConfirmedReserva($validated, $clientUser, $reservaIdToUpdate);
 
             // 🏟️ GARANTIA: Força a Arena correta
@@ -793,6 +787,7 @@ class ReservaController extends Controller
             DB::rollBack();
             Log::error("Erro no Agendamento Rápido: " . $e->getMessage());
 
+            // Se o erro capturado for o do caixa vindo de dentro do createConfirmedReserva
             if (str_contains($e->getMessage(), 'caixa')) {
                 return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
             }
@@ -884,14 +879,6 @@ class ReservaController extends Controller
 
         if (!$clientUser) {
             return response()->json(['success' => false, 'message' => 'Erro interno ao identificar ou criar o cliente.'], 500);
-        }
-
-        // 🚀 3.1 TRAVA DE SEGURANÇA: BLACKLIST (is_blocked)
-        if ($clientUser->is_blocked) {
-            return response()->json([
-                'success' => false,
-                'message' => '🚫 Bloqueio de Blacklist: Este cliente possui restrições para novos agendamentos mensais.'
-            ], 403);
         }
 
         // 🛡️ TRAVA DE CONFLITO DE MENSALISTA FUTURO (COM DIAGNÓSTICO)

@@ -103,8 +103,8 @@ class UserController extends Controller
             'role' => $validated['role'],
             'arena_id' => $validated['arena_id'] ?? null,
             'is_vip' => $request->has('is_vip') ? 1 : 0,
-            // 🚀 CORREÇÃO: Usando o campo real is_blocked em vez de customer_qualification
-            'is_blocked' => $request->has('is_blacklisted') ? 1 : 0,
+            // 🚀 LÓGICA DA BLACKLIST: Grava 'blacklist' ou 'normal' na coluna que já existe
+            'customer_qualification' => $request->has('is_blacklisted') ? 'blacklist' : 'normal',
         ]);
 
         return redirect()->route('admin.users.index')->with('success', 'Usuário criado com sucesso!');

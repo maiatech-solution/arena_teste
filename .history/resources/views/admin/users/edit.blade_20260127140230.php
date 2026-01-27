@@ -10,7 +10,6 @@
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg p-6">
 
                 <div class="mb-6">
-                    {{-- Usa a função atual do usuário para voltar ao filtro correto --}}
                     <a href="{{ route('admin.users.index', ['role_filter' => $user->role]) }}" class="inline-flex items-center px-4 py-2 bg-gray-200 border border-transparent rounded-md font-semibold text-xs text-gray-800 uppercase tracking-widest hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition ease-in-out duration-150">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
@@ -19,22 +18,19 @@
                     </a>
                 </div>
 
-
                 <form method="POST" action="{{ route('admin.users.update', $user) }}">
                     @csrf
-                    @method('PUT') {{-- Usamos PUT para atualizações RESTful --}}
+                    @method('PUT')
 
                     <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6 border-b pb-3">
                         Dados Pessoais
                     </h3>
-
 
                     @if (session('error'))
                     <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded-lg shadow-md" role="alert">
                         {{ session('error') }}
                     </div>
                     @endif
-
 
                     <div class="mb-4">
                         <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome Completo</label>
@@ -45,7 +41,6 @@
                         @enderror
                     </div>
 
-
                     <div class="mb-4">
                         <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email (Login)</label>
                         <input type="email" name="email" id="email" value="{{ old('email', $user->email) }}" required
@@ -54,7 +49,6 @@
                         <p class="text-red-500 text-xs italic mt-1">{{ $message }}</p>
                         @enderror
                     </div>
-
 
                     <div class="mb-6">
                         <label for="whatsapp_contact" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Contato WhatsApp (Opcional)</label>
@@ -66,11 +60,9 @@
                         @enderror
                     </div>
 
-
                     <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6 border-b pb-3">
                         Função e Senha
                     </h3>
-
 
                     <div class="mb-6">
                         <label for="role" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Função/Permissão</label>
@@ -86,9 +78,8 @@
                         </select>
                     </div>
 
-
                     {{-- 🌟 Container VIP --}}
-                    <div id="vip-container" class="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100 dark:border-indigo-800 {{ old('role', $user->role) !== 'cliente' ? 'hidden' : '' }}">
+                    <div id="vip-container" class="mb-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100 dark:border-indigo-800 {{ old('role', $user->role) !== 'cliente' ? 'hidden' : '' }}">
                         <div class="flex items-center">
                             <input type="checkbox" name="is_vip" id="is_vip" value="1"
                                 {{ old('is_vip', $user->is_vip) ? 'checked' : '' }}
@@ -100,35 +91,26 @@
                         </div>
                     </div>
 
-
-                    {{-- 🚫 Container Blacklist (Corrigido para usar a coluna is_blocked) --}}
+                    {{-- 🚫 Container Blacklist (ADICIONADO) --}}
                     <div id="blacklist-container" class="mb-6 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-800 {{ old('role', $user->role) !== 'cliente' ? 'hidden' : '' }}">
                         <div class="flex items-center">
-                            {{--
-                                AJUSTE FINAL:
-                                O debug mostrou que o Aroudo tem 'is_blocked' => 1.
-                                Agora o checkbox lê esse valor corretamente.
-                            --}}
+                            {{-- Verificamos se a qualificação atual já é 'blacklist' para mostrar o checkbox marcado --}}
                             <input type="checkbox" name="is_blacklisted" id="is_blacklisted" value="1"
-                                {{ old('is_blacklisted', $user->is_blocked) == 1 ? 'checked' : '' }}
+                                {{ (old('customer_qualification', $user->customer_qualification) === 'blacklist') ? 'checked' : '' }}
                                 class="h-5 w-5 text-red-600 border-gray-300 rounded focus:ring-red-500">
                             <label for="is_blacklisted" class="ml-3">
                                 <span class="block text-sm font-bold text-red-900 dark:text-red-300 uppercase tracking-wider">🚫 Lista Negra (Blacklist)</span>
-                                <span class="block text-xs text-red-600 dark:text-red-400">Marque para restringir ou desmarque para remover este cliente da Blacklist (isso também zerará as faltas dele).</span>
+                                <span class="block text-xs text-red-600 dark:text-red-400">Marque para restringir ou desmarque para remover este cliente da Blacklist.</span>
                             </label>
                         </div>
                     </div>
-
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-gray-200 dark:border-gray-700 pt-6">
                         <div class="mb-4">
                             <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Nova Senha (Opcional)</label>
                             <input type="password" name="password" id="password" autocomplete="new-password"
                                 placeholder="Preencha apenas para alterar"
-                                class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 @error('password') border-red-500 @enderror">
-                            @error('password')
-                            <p class="text-red-500 text-xs italic mt-1">{{ $message }}</p>
-                            @enderror
+                                class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
                         </div>
 
                         <div class="mb-4">
@@ -137,7 +119,6 @@
                                 class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
                         </div>
                     </div>
-
 
                     <div class="flex justify-end mt-6">
                         <button type="submit"
@@ -155,7 +136,6 @@
         </div>
     </div>
 
-
     <script>
         document.getElementById('role').addEventListener('change', function() {
             const vipContainer = document.getElementById('vip-container');
@@ -167,6 +147,8 @@
             } else {
                 vipContainer.classList.add('hidden');
                 blacklistContainer.classList.add('hidden');
+
+                // Limpa os checkboxes caso mude de cliente para outro cargo
                 document.getElementById('is_vip').checked = false;
                 document.getElementById('is_blacklisted').checked = false;
             }

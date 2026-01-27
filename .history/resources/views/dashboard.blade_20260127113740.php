@@ -132,30 +132,25 @@
         }
 
         /* 5. AUTOCOMPLETE (AJUSTADO PARA DINÂMICO) */
-
-        /* NOVA REGRA: Classe para aplicar na div pai do input de nome para empurrar o WhatsApp */
-        .autocomplete-active {
-            margin-bottom: 210px !important;
-            /* Altura aproximada da lista + respiro */
-            transition: margin-bottom 0.2s ease;
-        }
-
         #client-autocomplete-results {
             position: absolute;
+            /* Obrigatório para o cálculo JS funcionar */
             max-height: 200px;
             overflow-y: auto;
             border-radius: 8px;
+            /* Arredondado em todos os cantos fica mais moderno */
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
             z-index: 3000;
+            /* Acima de tudo no modal */
             background-color: white;
             width: 100%;
             left: 0;
-            top: 100%;
-            /* Garante que comece logo abaixo do input */
         }
 
+        /* Item da lista de busca */
         #client-autocomplete-results div {
             padding: 12px 15px;
+            /* Maior área de toque */
             border-bottom: 1px solid #f1f5f9;
             cursor: pointer;
         }
@@ -186,10 +181,6 @@
                 width: 100% !important;
                 margin: 0 !important;
                 max-height: 98vh;
-            }
-
-            .autocomplete-active {
-                margin-bottom: 180px !important;
             }
         }
 
@@ -739,118 +730,98 @@
         </div>
 
 
-        {{-- Modal de Agendamento Rápido (Responsivo & Autocomplete Nativo) --}}
-        <div id="quick-booking-modal" class="modal-overlay hidden" onclick="closeQuickBookingModal()">
-            <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[95vh] flex flex-col transition-all duration-300 transform scale-100 mx-4 sm:mx-0"
-                onclick="event.stopPropagation()">
+      {{-- Modal de Agendamento Rápido (Responsivo & Autocomplete Nativo) --}}
+<div id="quick-booking-modal" class="modal-overlay hidden" onclick="closeQuickBookingModal()">
+    <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[95vh] flex flex-col transition-all duration-300 transform scale-100 mx-4 sm:mx-0"
+        onclick="event.stopPropagation()">
 
-                <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
-                    <h3 class="text-lg font-bold text-green-700">Agendamento Rápido</h3>
-                    <button onclick="closeQuickBookingModal()" class="text-gray-400 hover:text-gray-600">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
-                    </button>
-                </div>
-
-                <div class="p-4 overflow-y-auto custom-scrollbar">
-                    <form id="quick-booking-form">
-                        @csrf
-
-                        {{-- Informações do Horário --}}
-                        <div id="slot-info-display"
-                            class="mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-xs sm:text-sm text-gray-700">
-                        </div>
-
-                        {{-- Hidden Inputs (Mantidos intactos) --}}
-                        <input type="hidden" name="schedule_id" id="quick-schedule-id">
-                        <input type="hidden" name="date" id="quick-date">
-                        <input type="hidden" name="start_time" id="quick-start-time">
-                        <input type="hidden" name="end_time" id="quick-end-time">
-                        <input type="hidden" name="price" id="quick-price">
-                        <input type="hidden" name="reserva_id_to_update" id="reserva-id-to-update">
-                        <input type="hidden" name="arena_id" id="quick-arena-id">
-
-                        <div class="space-y-4">
-                            {{-- Campo Nome com Dropdown Acoplado e Lógica de Empurrar --}}
-                            <div class="relative transition-all duration-300" id="name-field-wrapper">
-                                <label for="client_name" class="block text-xs font-bold text-gray-500 uppercase">
-                                    Nome do Cliente *
-                                </label>
-                                <input type="text" name="client_name" id="client_name" required
-                                    autocomplete="off"
-                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm h-10">
-
-                                {{-- LISTA DE RESULTADOS --}}
-                                <div id="client-autocomplete-results"
-                                    class="absolute z-[3000] w-full bg-white border border-gray-200 rounded-b-md shadow-xl hidden max-h-48 overflow-y-auto top-full left-0">
-                                </div>
-                            </div>
-
-                            {{-- Campo WhatsApp: Este será empurrado para baixo quando o autocomplete estiver ativo --}}
-                            <div>
-                                <label for="client_contact"
-                                    class="block text-xs font-bold text-gray-500 uppercase">WhatsApp (11 dígitos)
-                                    *</label>
-                                <input type="tel" name="client_contact" id="client_contact" required
-                                    maxlength="11" placeholder="Ex: 91999999999"
-                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm h-10">
-                                <p id="whatsapp-error-message"
-                                    class="text-[10px] text-red-600 mt-1 hidden font-semibold">⚠️ Insira 11 dígitos.
-                                </p>
-                                <div id="client-reputation-display" class="mt-1"></div>
-                            </div>
-
-                            {{-- Financeiro --}}
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label for="signal_value_quick"
-                                        class="block text-xs font-bold text-gray-500 uppercase">Sinal (R$)</label>
-                                    <input type="text" name="signal_value" id="signal_value_quick" value="0,00"
-                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 text-sm h-10 input-money-quick text-right">
-                                </div>
-                                <div>
-                                    <label for="payment_method_quick"
-                                        class="block text-xs font-bold text-gray-500 uppercase">Método</label>
-                                    <select name="payment_method" id="payment_method_quick" required
-                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 text-sm h-10">
-                                        <option value="">Selecione</option>
-                                        <option value="pix">PIX</option>
-                                        <option value="cartao">Cartão</option>
-                                        <option value="dinheiro">Dinheiro</option>
-                                        <option value="outro">Sem Sinal</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            {{-- Recorrência --}}
-                            <div class="p-3 border border-indigo-100 rounded-lg bg-indigo-50/50 flex items-center">
-                                <input type="checkbox" name="is_recurrent" id="is-recurrent" value="1"
-                                    class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
-                                <label for="is-recurrent"
-                                    class="ml-3 text-sm font-bold text-indigo-700 uppercase tracking-tighter">Reserva
-                                    Recorrente (6 meses)</label>
-                            </div>
-
-                            <div>
-                                <label for="notes"
-                                    class="block text-xs font-bold text-gray-500 uppercase">Observações</label>
-                                <textarea name="notes" id="notes" rows="2"
-                                    class="mt-1 block w-full border-gray-300 rounded-md text-sm shadow-sm"></textarea>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-
-                <div class="p-4 border-t bg-gray-50 rounded-b-xl grid grid-cols-2 gap-3">
-                    <button type="button" onclick="closeQuickBookingModal()"
-                        class="px-4 py-2 bg-gray-200 text-gray-700 font-bold rounded-lg text-sm">Cancelar</button>
-                    <button type="submit" form="quick-booking-form" id="submit-quick-booking"
-                        class="px-4 py-2 bg-green-600 text-white font-bold rounded-lg shadow-md text-sm">Confirmar</button>
-                </div>
-            </div>
+        <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <h3 class="text-lg font-bold text-green-700">Agendamento Rápido</h3>
+            <button onclick="closeQuickBookingModal()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
         </div>
+
+        <div class="p-4 overflow-y-auto custom-scrollbar">
+            <form id="quick-booking-form">
+                @csrf
+
+                {{-- Informações do Horário --}}
+                <div id="slot-info-display" class="mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-xs sm:text-sm text-gray-700"></div>
+
+                {{-- Hidden Inputs --}}
+                <input type="hidden" name="schedule_id" id="quick-schedule-id">
+                <input type="hidden" name="date" id="quick-date">
+                <input type="hidden" name="start_time" id="quick-start-time">
+                <input type="hidden" name="end_time" id="quick-end-time">
+                <input type="hidden" name="price" id="quick-price">
+                <input type="hidden" name="reserva_id_to_update" id="reserva-id-to-update">
+                <input type="hidden" name="arena_id" id="quick-arena-id">
+
+                <div class="space-y-4">
+                    {{-- Campo Nome com Dropdown Acoplado --}}
+                    <div class="relative">
+                        <label for="client_name" class="block text-xs font-bold text-gray-500 uppercase">Nome do Cliente *</label>
+                        <input type="text" name="client_name" id="client_name" required autocomplete="off"
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm h-10">
+
+                        {{-- LISTA DE RESULTADOS: Agora posicionada de forma relativa ao campo de nome --}}
+                        <div id="client-autocomplete-results"
+                            class="absolute z-[3000] w-full bg-white border border-gray-200 rounded-b-md shadow-xl hidden max-h-48 overflow-y-auto top-full left-0">
+                        </div>
+                    </div>
+
+                    {{-- Campo WhatsApp --}}
+                    <div>
+                        <label for="client_contact" class="block text-xs font-bold text-gray-500 uppercase">WhatsApp (11 dígitos) *</label>
+                        <input type="tel" name="client_contact" id="client_contact" required maxlength="11" placeholder="Ex: 91999999999"
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm h-10">
+                        <p id="whatsapp-error-message" class="text-[10px] text-red-600 mt-1 hidden font-semibold">⚠️ Insira 11 dígitos.</p>
+                        <div id="client-reputation-display" class="mt-1"></div>
+                    </div>
+
+                    {{-- Financeiro --}}
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="signal_value_quick" class="block text-xs font-bold text-gray-500 uppercase">Sinal (R$)</label>
+                            <input type="text" name="signal_value" id="signal_value_quick" value="0,00"
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 text-sm h-10 input-money-quick text-right">
+                        </div>
+                        <div>
+                            <label for="payment_method_quick" class="block text-xs font-bold text-gray-500 uppercase">Método</label>
+                            <select name="payment_method" id="payment_method_quick" required
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 text-sm h-10">
+                                <option value="">Selecione</option>
+                                <option value="pix">PIX</option>
+                                <option value="cartao">Cartão</option>
+                                <option value="dinheiro">Dinheiro</option>
+                                <option value="outro">Sem Sinal</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {{-- Recorrência --}}
+                    <div class="p-3 border border-indigo-100 rounded-lg bg-indigo-50/50 flex items-center">
+                        <input type="checkbox" name="is_recurrent" id="is-recurrent" value="1" class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                        <label for="is-recurrent" class="ml-3 text-sm font-bold text-indigo-700 uppercase tracking-tighter">Reserva Recorrente (6 meses)</label>
+                    </div>
+
+                    <div>
+                        <label for="notes" class="block text-xs font-bold text-gray-500 uppercase">Observações</label>
+                        <textarea name="notes" id="notes" rows="2" class="mt-1 block w-full border-gray-300 rounded-md text-sm shadow-sm"></textarea>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="p-4 border-t bg-gray-50 rounded-b-xl grid grid-cols-2 gap-3">
+            <button type="button" onclick="closeQuickBookingModal()" class="px-4 py-2 bg-gray-200 text-gray-700 font-bold rounded-lg text-sm">Cancelar</button>
+            <button type="submit" form="quick-booking-form" id="submit-quick-booking" class="px-4 py-2 bg-green-600 text-white font-bold rounded-lg shadow-md text-sm">Confirmar</button>
+        </div>
+    </div>
+</div>
 
 
         <script>
@@ -2081,8 +2052,8 @@
             <div class="grid grid-cols-1 gap-2">
                 ${!isFinalized && status !== 'cancelled' ?
                     `<button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                                                                                                                                                                                <span>💰 IR PARA O CAIXA</span>
-                                                                                                                                                                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+                                                                                                                                        <span>💰 IR PARA O CAIXA</span>
+                                                                                                                                    </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
                 <div class="grid grid-cols-2 gap-2 mt-1">
                     <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})"
@@ -2097,14 +2068,14 @@
 
                 ${!isFinalized && status !== 'no_show' ?
                     `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')"
-                                                                                                                                                                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
-                                                                                                                                                                                FALTA (NO-SHOW)
-                                                                                                                                                                            </button>` : ''}
+                                                                                                                                        class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
+                                                                                                                                        FALTA (NO-SHOW)
+                                                                                                                                    </button>` : ''}
 
                 ${isRecurrent ?
                     `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition uppercase">
-                                                                                                                                                                                CANCELAR SÉRIE
-                                                                                                                                                                            </button>` : ''}
+                                                                                                                                        CANCELAR SÉRIE
+                                                                                                                                    </button>` : ''}
 
                 <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold">
                     Fechar
@@ -2545,30 +2516,14 @@
 
 
             // =========================================================
-            // LÓGICA DE AUTOCOMPLETE COM MOVIMENTAÇÃO DE LAYOUT (FULL)
+            // LÓGICA DE AUTOCOMPLETE DUPLO (NOME E WHATSAPP) - COMPLETO
             // =========================================================
             const autocompleteResults = document.getElementById('client-autocomplete-results');
-            const nameFieldWrapper = document.getElementById('name-field-wrapper');
-            const contactInputEl = document.getElementById('client_contact');
-            const nameInputEl = document.getElementById('client_name');
             let debounceTimer;
 
             /**
-             * Função auxiliar para esconder a lista e resetar a posição do layout
-             */
-            const resetAutocompleteLayout = () => {
-                if (autocompleteResults) {
-                    autocompleteResults.classList.add('hidden');
-                    autocompleteResults.innerHTML = '';
-                }
-                if (nameFieldWrapper) {
-                    nameFieldWrapper.classList.remove('autocomplete-active');
-                }
-            };
-
-            /**
-             * Função unificada para busca de clientes
-             * @param {HTMLElement} inputElement - O campo que disparou a busca
+             * Função unificada para busca de clientes com posicionamento dinâmico
+             * @param {HTMLElement} inputElement - O campo (Nome ou WhatsApp) que disparou a busca
              */
             const performClientSearch = (inputElement) => {
                 const query = inputElement.value;
@@ -2576,32 +2531,42 @@
 
                 clearTimeout(debounceTimer);
 
-                // REGRA 1: Se o campo tiver menos de 2 letras, limpa e esconde na hora
+                // Regra: Se o campo tiver menos de 2 caracteres, esconde a lista imediatamente
                 if (query.length < 2) {
-                    resetAutocompleteLayout();
+                    if (autocompleteResults) {
+                        autocompleteResults.classList.add('hidden');
+                        autocompleteResults.innerHTML = '';
+                    }
                     return;
                 }
 
                 debounceTimer = setTimeout(() => {
+                    // Busca na API (suporta nome ou telefone no parâmetro query)
                     fetch(`/api/clientes/search?query=${encodeURIComponent(query)}&arena_id=${arenaId}`)
                         .then(response => response.json())
                         .then(data => {
                             if (!autocompleteResults) return;
 
-                            // Limpa o conteúdo anterior
+                            // Limpa resultados anteriores antes de processar
                             autocompleteResults.innerHTML = '';
 
-                            // REGRA 2: Se não houver resultados, esconde a lista e o layout volta ao normal
+                            // CORREÇÃO: Se não houver resultados (ex: Adriano G não existe), esconde a lista
                             if (!data || data.length === 0) {
-                                resetAutocompleteLayout();
+                                autocompleteResults.classList.add('hidden');
                                 return;
                             }
 
-                            // Popula a lista se houver dados
+                            // --- POSICIONAMENTO DINÂMICO ---
+                            // Calcula a posição para a lista aparecer exatamente abaixo do input usado
+                            const topPos = inputElement.offsetTop + inputElement.offsetHeight;
+                            autocompleteResults.style.top = `${topPos}px`;
+
+                            // Monta os itens da lista
                             data.forEach(client => {
                                 const div = document.createElement('div');
                                 div.className =
                                     'p-3 hover:bg-indigo-50 cursor-pointer border-b border-gray-100 transition-colors';
+
                                 const phone = client.whatsapp_contact || '';
 
                                 div.innerHTML = `
@@ -2609,61 +2574,58 @@
                         <div class="text-xs text-gray-500">${phone}</div>
                     `;
 
-                                // Lógica de seleção ao clicar no nome
+                                // Ao clicar em um cliente da lista
                                 div.onclick = () => {
-                                    if (nameInputEl) nameInputEl.value = client.name;
+                                    // Preenche Nome
+                                    if (clientNameInput()) {
+                                        clientNameInput().value = client.name;
+                                    }
 
-                                    if (phone && contactInputEl) {
+                                    // Preenche WhatsApp e valida Status/VIP
+                                    if (phone && clientContactInput()) {
                                         const cleanPhone = phone.replace(/\D/g, '');
-                                        contactInputEl.value = cleanPhone;
+                                        clientContactInput().value = cleanPhone;
 
-                                        // Dispara a busca de reputação/VIP vinculada ao número
-                                        if (typeof validateClientContact === 'function') {
+                                        // Dispara busca de reputação e ajuste de sinal para VIP
+                                        if (typeof validateClientContact === "function") {
                                             validateClientContact(cleanPhone);
                                         }
                                     }
-                                    // Selecionou? Esconde tudo.
-                                    resetAutocompleteLayout();
+
+                                    autocompleteResults.classList.add('hidden');
                                 };
                                 autocompleteResults.appendChild(div);
                             });
 
-                            // REGRA 3: Mostra a lista e EMPURRA o WhatsApp para baixo
+                            // Mostra a lista apenas se tiver resultados
                             autocompleteResults.classList.remove('hidden');
-                            if (nameFieldWrapper) {
-                                nameFieldWrapper.classList.add('autocomplete-active');
-                            }
                         })
                         .catch(err => {
                             console.error("Erro no autocomplete:", err);
-                            resetAutocompleteLayout();
+                            if (autocompleteResults) autocompleteResults.classList.add('hidden');
                         });
-                }, 300); // Delay para fluidez
+                }, 350); // Delay de 350ms para evitar excesso de requisições
             };
 
             // --- Registro dos Eventos ---
 
-            // 1. Escuta a digitação no campo de Nome
-            if (nameInputEl) {
-                nameInputEl.addEventListener('input', function() {
-                    performClientSearch(this);
-                });
-            }
+            // 1. Escuta tanto o campo de Nome quanto o de Contato
+            [clientNameInput(), clientContactInput()].forEach(input => {
+                if (input) {
+                    input.addEventListener('input', function() {
+                        performClientSearch(this);
+                    });
+                }
+            });
 
-            // 2. REGRA DE OURO: Fecha a lista ao focar no campo de WhatsApp
-            if (contactInputEl) {
-                contactInputEl.addEventListener('focus', function() {
-                    resetAutocompleteLayout();
-                });
-            }
-
-            // 3. Fecha a lista ao clicar em qualquer lugar fora do componente
+            // 2. Fecha a lista ao clicar fora (no modal ou no documento)
             document.addEventListener('click', function(e) {
                 if (autocompleteResults &&
                     !autocompleteResults.contains(e.target) &&
-                    e.target !== nameInputEl) {
+                    e.target !== clientNameInput() &&
+                    e.target !== clientContactInput()) {
 
-                    resetAutocompleteLayout();
+                    autocompleteResults.classList.add('hidden');
                 }
             });
         </script>

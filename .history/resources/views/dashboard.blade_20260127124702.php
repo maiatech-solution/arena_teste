@@ -763,7 +763,7 @@
                             class="mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-xs sm:text-sm text-gray-700">
                         </div>
 
-                        {{-- Hidden Inputs (Mantidos intactos) --}}
+                        {{-- Hidden Inputs --}}
                         <input type="hidden" name="schedule_id" id="quick-schedule-id">
                         <input type="hidden" name="date" id="quick-date">
                         <input type="hidden" name="start_time" id="quick-start-time">
@@ -773,22 +773,21 @@
                         <input type="hidden" name="arena_id" id="quick-arena-id">
 
                         <div class="space-y-4">
-                            {{-- Campo Nome com Dropdown Acoplado e Lógica de Empurrar --}}
-                            <div class="relative transition-all duration-300" id="name-field-wrapper">
-                                <label for="client_name" class="block text-xs font-bold text-gray-500 uppercase">
-                                    Nome do Cliente *
-                                </label>
+                            {{-- Campo Nome com Dropdown Acoplado --}}
+                            <div class="relative">
+                                <label for="client_name" class="block text-xs font-bold text-gray-500 uppercase">Nome
+                                    do Cliente *</label>
                                 <input type="text" name="client_name" id="client_name" required
                                     autocomplete="off"
                                     class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm h-10">
 
-                                {{-- LISTA DE RESULTADOS --}}
+                                {{-- LISTA DE RESULTADOS: Agora posicionada de forma relativa ao campo de nome --}}
                                 <div id="client-autocomplete-results"
                                     class="absolute z-[3000] w-full bg-white border border-gray-200 rounded-b-md shadow-xl hidden max-h-48 overflow-y-auto top-full left-0">
                                 </div>
                             </div>
 
-                            {{-- Campo WhatsApp: Este será empurrado para baixo quando o autocomplete estiver ativo --}}
+                            {{-- Campo WhatsApp --}}
                             <div>
                                 <label for="client_contact"
                                     class="block text-xs font-bold text-gray-500 uppercase">WhatsApp (11 dígitos)
@@ -2081,8 +2080,8 @@
             <div class="grid grid-cols-1 gap-2">
                 ${!isFinalized && status !== 'cancelled' ?
                     `<button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                                                                                                                                                                                <span>💰 IR PARA O CAIXA</span>
-                                                                                                                                                                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+                                                                                                                                                                <span>💰 IR PARA O CAIXA</span>
+                                                                                                                                                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
                 <div class="grid grid-cols-2 gap-2 mt-1">
                     <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})"
@@ -2097,14 +2096,14 @@
 
                 ${!isFinalized && status !== 'no_show' ?
                     `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')"
-                                                                                                                                                                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
-                                                                                                                                                                                FALTA (NO-SHOW)
-                                                                                                                                                                            </button>` : ''}
+                                                                                                                                                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
+                                                                                                                                                                FALTA (NO-SHOW)
+                                                                                                                                                            </button>` : ''}
 
                 ${isRecurrent ?
                     `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition uppercase">
-                                                                                                                                                                                CANCELAR SÉRIE
-                                                                                                                                                                            </button>` : ''}
+                                                                                                                                                                CANCELAR SÉRIE
+                                                                                                                                                            </button>` : ''}
 
                 <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold">
                     Fechar
@@ -2545,26 +2544,10 @@
 
 
             // =========================================================
-            // LÓGICA DE AUTOCOMPLETE COM MOVIMENTAÇÃO DE LAYOUT (FULL)
+            // LÓGICA DE AUTOCOMPLETE COM SUMIÇO AUTOMÁTICO (FIXED)
             // =========================================================
             const autocompleteResults = document.getElementById('client-autocomplete-results');
-            const nameFieldWrapper = document.getElementById('name-field-wrapper');
-            const contactInputEl = document.getElementById('client_contact');
-            const nameInputEl = document.getElementById('client_name');
             let debounceTimer;
-
-            /**
-             * Função auxiliar para esconder a lista e resetar a posição do layout
-             */
-            const resetAutocompleteLayout = () => {
-                if (autocompleteResults) {
-                    autocompleteResults.classList.add('hidden');
-                    autocompleteResults.innerHTML = '';
-                }
-                if (nameFieldWrapper) {
-                    nameFieldWrapper.classList.remove('autocomplete-active');
-                }
-            };
 
             /**
              * Função unificada para busca de clientes
@@ -2578,7 +2561,10 @@
 
                 // REGRA 1: Se o campo tiver menos de 2 letras, limpa e esconde na hora
                 if (query.length < 2) {
-                    resetAutocompleteLayout();
+                    if (autocompleteResults) {
+                        autocompleteResults.classList.add('hidden');
+                        autocompleteResults.innerHTML = '';
+                    }
                     return;
                 }
 
@@ -2588,16 +2574,17 @@
                         .then(data => {
                             if (!autocompleteResults) return;
 
-                            // Limpa o conteúdo anterior
+                            // Limpa o conteúdo anterior para preparar a nova renderização
                             autocompleteResults.innerHTML = '';
 
-                            // REGRA 2: Se não houver resultados, esconde a lista e o layout volta ao normal
+                            // REGRA 2: Se não houver resultados (ex: digitou "Adriano G" e não existe)
+                            // a lista deve ser escondida IMEDIATAMENTE.
                             if (!data || data.length === 0) {
-                                resetAutocompleteLayout();
+                                autocompleteResults.classList.add('hidden');
                                 return;
                             }
 
-                            // Popula a lista se houver dados
+                            // Popula a lista se houver dados correspondentes
                             data.forEach(client => {
                                 const div = document.createElement('div');
                                 div.className =
@@ -2609,61 +2596,55 @@
                         <div class="text-xs text-gray-500">${phone}</div>
                     `;
 
-                                // Lógica de seleção ao clicar no nome
+                                // Lógica de seleção
                                 div.onclick = () => {
-                                    if (nameInputEl) nameInputEl.value = client.name;
+                                    const nameInput = document.getElementById('client_name');
+                                    const contactInput = document.getElementById('client_contact');
 
-                                    if (phone && contactInputEl) {
+                                    if (nameInput) nameInput.value = client.name;
+
+                                    if (phone && contactInput) {
                                         const cleanPhone = phone.replace(/\D/g, '');
-                                        contactInputEl.value = cleanPhone;
+                                        contactInput.value = cleanPhone;
 
                                         // Dispara a busca de reputação/VIP vinculada ao número
                                         if (typeof validateClientContact === 'function') {
                                             validateClientContact(cleanPhone);
                                         }
                                     }
-                                    // Selecionou? Esconde tudo.
-                                    resetAutocompleteLayout();
+                                    autocompleteResults.classList.add('hidden');
                                 };
                                 autocompleteResults.appendChild(div);
                             });
 
-                            // REGRA 3: Mostra a lista e EMPURRA o WhatsApp para baixo
+                            // REGRA 3: Mostra a lista apenas se ela foi populada
                             autocompleteResults.classList.remove('hidden');
-                            if (nameFieldWrapper) {
-                                nameFieldWrapper.classList.add('autocomplete-active');
-                            }
                         })
                         .catch(err => {
                             console.error("Erro no autocomplete:", err);
-                            resetAutocompleteLayout();
+                            if (autocompleteResults) autocompleteResults.classList.add('hidden');
                         });
-                }, 300); // Delay para fluidez
+                }, 300); // Delay ideal para fluidez no mobile
             };
 
             // --- Registro dos Eventos ---
 
-            // 1. Escuta a digitação no campo de Nome
+            // 1. Escuta a digitação no campo de Nome (ID: client_name)
+            const nameInputEl = document.getElementById('client_name');
             if (nameInputEl) {
                 nameInputEl.addEventListener('input', function() {
                     performClientSearch(this);
                 });
             }
 
-            // 2. REGRA DE OURO: Fecha a lista ao focar no campo de WhatsApp
-            if (contactInputEl) {
-                contactInputEl.addEventListener('focus', function() {
-                    resetAutocompleteLayout();
-                });
-            }
-
-            // 3. Fecha a lista ao clicar em qualquer lugar fora do componente
+            // 2. Fecha a lista ao clicar em qualquer lugar fora dela ou do campo de input
             document.addEventListener('click', function(e) {
+                const nameInput = document.getElementById('client_name');
                 if (autocompleteResults &&
                     !autocompleteResults.contains(e.target) &&
-                    e.target !== nameInputEl) {
+                    e.target !== nameInput) {
 
-                    resetAutocompleteLayout();
+                    autocompleteResults.classList.add('hidden');
                 }
             });
         </script>

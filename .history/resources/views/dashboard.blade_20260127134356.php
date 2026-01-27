@@ -2545,26 +2545,11 @@
 
 
             // =========================================================
-            // LÓGICA DE AUTOCOMPLETE COM MOVIMENTAÇÃO DE LAYOUT (FULL)
+            // LÓGICA DE AUTOCOMPLETE COM MOVIMENTAÇÃO DE LAYOUT (FIXED)
             // =========================================================
             const autocompleteResults = document.getElementById('client-autocomplete-results');
-            const nameFieldWrapper = document.getElementById('name-field-wrapper');
-            const contactInputEl = document.getElementById('client_contact');
-            const nameInputEl = document.getElementById('client_name');
+            const nameFieldWrapper = document.getElementById('name-field-wrapper'); // Container que ganha o "empurrão"
             let debounceTimer;
-
-            /**
-             * Função auxiliar para esconder a lista e resetar a posição do layout
-             */
-            const resetAutocompleteLayout = () => {
-                if (autocompleteResults) {
-                    autocompleteResults.classList.add('hidden');
-                    autocompleteResults.innerHTML = '';
-                }
-                if (nameFieldWrapper) {
-                    nameFieldWrapper.classList.remove('autocomplete-active');
-                }
-            };
 
             /**
              * Função unificada para busca de clientes
@@ -2576,9 +2561,15 @@
 
                 clearTimeout(debounceTimer);
 
-                // REGRA 1: Se o campo tiver menos de 2 letras, limpa e esconde na hora
+                // REGRA 1: Se o campo tiver menos de 2 letras, limpa, esconde e reseta layout
                 if (query.length < 2) {
-                    resetAutocompleteLayout();
+                    if (autocompleteResults) {
+                        autocompleteResults.classList.add('hidden');
+                        autocompleteResults.innerHTML = '';
+                    }
+                    if (nameFieldWrapper) {
+                        nameFieldWrapper.classList.remove('autocomplete-active');
+                    }
                     return;
                 }
 
@@ -2591,13 +2582,16 @@
                             // Limpa o conteúdo anterior
                             autocompleteResults.innerHTML = '';
 
-                            // REGRA 2: Se não houver resultados, esconde a lista e o layout volta ao normal
+                            // REGRA 2: Se não houver resultados, esconde a lista e reseta layout
                             if (!data || data.length === 0) {
-                                resetAutocompleteLayout();
+                                autocompleteResults.classList.add('hidden');
+                                if (nameFieldWrapper) {
+                                    nameFieldWrapper.classList.remove('autocomplete-active');
+                                }
                                 return;
                             }
 
-                            // Popula a lista se houver dados
+                            // Popula a lista
                             data.forEach(client => {
                                 const div = document.createElement('div');
                                 div.className =
@@ -2609,21 +2603,27 @@
                         <div class="text-xs text-gray-500">${phone}</div>
                     `;
 
-                                // Lógica de seleção ao clicar no nome
+                                // Lógica de seleção
                                 div.onclick = () => {
-                                    if (nameInputEl) nameInputEl.value = client.name;
+                                    const nameInput = document.getElementById('client_name');
+                                    const contactInput = document.getElementById('client_contact');
 
-                                    if (phone && contactInputEl) {
+                                    if (nameInput) nameInput.value = client.name;
+
+                                    if (phone && contactInput) {
                                         const cleanPhone = phone.replace(/\D/g, '');
-                                        contactInputEl.value = cleanPhone;
+                                        contactInput.value = cleanPhone;
 
-                                        // Dispara a busca de reputação/VIP vinculada ao número
                                         if (typeof validateClientContact === 'function') {
                                             validateClientContact(cleanPhone);
                                         }
                                     }
-                                    // Selecionou? Esconde tudo.
-                                    resetAutocompleteLayout();
+
+                                    // Fecha a lista e volta o layout ao normal
+                                    autocompleteResults.classList.add('hidden');
+                                    if (nameFieldWrapper) {
+                                        nameFieldWrapper.classList.remove('autocomplete-active');
+                                    }
                                 };
                                 autocompleteResults.appendChild(div);
                             });
@@ -2636,34 +2636,33 @@
                         })
                         .catch(err => {
                             console.error("Erro no autocomplete:", err);
-                            resetAutocompleteLayout();
+                            if (autocompleteResults) autocompleteResults.classList.add('hidden');
+                            if (nameFieldWrapper) nameFieldWrapper.classList.remove('autocomplete-active');
                         });
-                }, 300); // Delay para fluidez
+                }, 300);
             };
 
             // --- Registro dos Eventos ---
 
             // 1. Escuta a digitação no campo de Nome
+            const nameInputEl = document.getElementById('client_name');
             if (nameInputEl) {
                 nameInputEl.addEventListener('input', function() {
                     performClientSearch(this);
                 });
             }
 
-            // 2. REGRA DE OURO: Fecha a lista ao focar no campo de WhatsApp
-            if (contactInputEl) {
-                contactInputEl.addEventListener('focus', function() {
-                    resetAutocompleteLayout();
-                });
-            }
-
-            // 3. Fecha a lista ao clicar em qualquer lugar fora do componente
+            // 2. Fecha a lista e reseta layout ao clicar fora
             document.addEventListener('click', function(e) {
+                const nameInput = document.getElementById('client_name');
                 if (autocompleteResults &&
                     !autocompleteResults.contains(e.target) &&
-                    e.target !== nameInputEl) {
+                    e.target !== nameInput) {
 
-                    resetAutocompleteLayout();
+                    autocompleteResults.classList.add('hidden');
+                    if (nameFieldWrapper) {
+                        nameFieldWrapper.classList.remove('autocomplete-active');
+                    }
                 }
             });
         </script>

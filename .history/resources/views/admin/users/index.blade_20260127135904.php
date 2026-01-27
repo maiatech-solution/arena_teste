@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            {{ $pageTitle }} <!-- Agora o título é dinâmico -->
+            {{ $pageTitle }}
         </h2>
     </x-slot>
 
@@ -9,6 +9,7 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg p-6">
 
+                {{-- Alertas de Feedback --}}
                 @if (session('success'))
                 <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4 rounded-lg shadow-md" role="alert">
                     {{ session('success') }}
@@ -24,10 +25,11 @@
                 $filterBaseClasses = 'px-5 py-2 rounded-lg text-sm font-medium transition duration-150 ease-in-out shadow-md border-2 border-transparent';
                 @endphp
 
+                {{-- Filtros Superiores --}}
                 <div class="flex flex-col sm:flex-row justify-between items-center mb-6 space-y-3 sm:space-y-0">
                     <div class="flex space-x-3 flex-wrap gap-3 sm:gap-x-3">
                         <a href="{{ route('admin.users.index', ['search' => $search ?? null]) }}"
-                            class="{{ $filterBaseClasses }} {{ is_null($roleFilter) ? 'bg-gray-600 text-white ring-4 ring-gray-300' : 'bg-gray-500 text-white hover:bg-gray-600' }}">
+                            class="{{ $filterBaseClasses }} {{ (is_null($roleFilter) && !request('blacklist')) ? 'bg-gray-600 text-white ring-4 ring-gray-300' : 'bg-gray-500 text-white hover:bg-gray-600' }}">
                             Todos
                         </a>
 
@@ -37,8 +39,14 @@
                         </a>
 
                         <a href="{{ route('admin.users.index', ['role_filter' => 'cliente', 'search' => $search ?? null]) }}"
-                            class="{{ $filterBaseClasses }} {{ $roleFilter == 'cliente' ? 'bg-green-700 text-white ring-4 ring-green-300' : 'bg-green-600 text-white hover:bg-green-700' }}">
+                            class="{{ $filterBaseClasses }} {{ ($roleFilter == 'cliente' && !request('blacklist')) ? 'bg-green-700 text-white ring-4 ring-green-300' : 'bg-green-600 text-white hover:bg-green-700' }}">
                             Clientes
+                        </a>
+
+                        {{-- NOVO FILTRO: Lista Negra --}}
+                        <a href="{{ route('admin.users.index', ['blacklist' => 1, 'search' => $search ?? null]) }}"
+                            class="{{ $filterBaseClasses }} {{ request('blacklist') == 1 ? 'bg-red-700 text-white ring-4 ring-red-300' : 'bg-red-600 text-white hover:bg-red-700' }}">
+                            🚫 Lista Negra
                         </a>
                     </div>
 
@@ -55,9 +63,11 @@
                     </div>
                 </div>
 
+                {{-- Busca --}}
                 <div class="mb-6">
                     <form method="GET" action="{{ route('admin.users.index') }}" class="flex items-center space-x-2">
                         <input type="hidden" name="role_filter" value="{{ $roleFilter ?? '' }}">
+                        <input type="hidden" name="blacklist" value="{{ request('blacklist') }}">
                         <input type="text" name="search" placeholder="Buscar por nome, email ou contato..."
                             value="{{ $search ?? '' }}"
                             class="flex-grow p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
@@ -66,20 +76,20 @@
                             Buscar
                         </button>
 
-                        @if (!empty($search))
+                        @if (!empty($search) || request('blacklist'))
                         <a href="{{ route('admin.users.index', ['role_filter' => $roleFilter ?? null]) }}"
                             class="px-3 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-300 transition duration-200"
-                            title="Limpar busca">X</a>
+                            title="Limpar busca e filtros">X</a>
                         @endif
                     </form>
                 </div>
 
+                {{-- Tabela de Usuários --}}
                 <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-700">
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Usuário (Nome/Email)</th>
-                                {{-- Mantemos a arena apenas para Staff (Gestores/Admins) que possuem unidade fixa --}}
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Vínculo / Unidade</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Reputação / Status</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">WhatsApp</th>
@@ -88,7 +98,8 @@
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                             @forelse ($users as $user)
-                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition duration-150">
+                            {{-- AJUSTE: Linha ganha fundo avermelhado se estiver na blacklist --}}
+                            <tr class="{{ $user->is_blacklisted ? 'bg-red-50 dark:bg-red-900/10' : '' }} hover:bg-gray-50 dark:hover:bg-gray-700/50 transition duration-150">
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm font-bold text-gray-900 dark:text-white">{{ $user->name }}</div>
                                     <div class="text-xs text-gray-500">{{ $user->email }}</div>
@@ -105,12 +116,10 @@
 
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
                                     @if($user->role !== 'cliente')
-                                    {{-- Se for gestor/admin, mostra a arena onde ele trabalha --}}
                                     <span class="font-medium text-indigo-600 dark:text-indigo-400">
                                         {{ $user->arena->name ?? 'Acesso Global' }}
                                     </span>
                                     @else
-                                    {{-- Se for cliente, indica que ele joga em diversas unidades --}}
                                     <span class="text-gray-400 italic text-xs">Multiarenas</span>
                                     @endif
                                 </td>
@@ -125,7 +134,6 @@
 
                                 <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                     <div class="flex justify-center space-x-3 items-center">
-                                        {{-- Botão de Histórico (Essencial para rastreabilidade do cliente) --}}
                                         @if ($user->role === 'cliente')
                                         <a href="{{ route('admin.users.reservas', $user) }}"
                                             class="text-green-600 hover:bg-green-100 p-2 rounded-full transition flex items-center border border-green-200"
@@ -175,167 +183,82 @@
         </div>
     </div>
 
-    <!-- INÍCIO DO MODAL DE CONFIRMAÇÃO PERSONALIZADO (ADICIONADO PARA O DELETE) -->
+    {{-- MODAL DE CONFIRMAÇÃO (MANTIDO) --}}
     <div id="confirmation-modal"
         class="fixed inset-0 bg-gray-900/75 backdrop-blur-sm z-[100] hidden transition-opacity duration-300 ease-out"
         aria-labelledby="modal-title"
         role="dialog"
         aria-modal="true">
-
         <div class="flex items-center justify-center min-h-screen p-4">
             <div id="modal-content"
                 class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 max-w-sm w-full transform transition-all duration-300 scale-95 opacity-0 border border-gray-200 dark:border-gray-700">
-
                 <div class="flex flex-col items-center">
                     <div class="flex items-center justify-center h-14 w-14 rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
-                        <svg class="h-8 w-8 text-red-600 dark:text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg class="h-8 w-8 text-red-600 dark:text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.398 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
                     </div>
-
-                    <h3 class="text-xl leading-6 font-bold text-gray-900 dark:text-white" id="modal-title">
-                        Confirmar Exclusão
-                    </h3>
-
-                    <div class="mt-3">
-                        <p class="text-sm text-gray-600 dark:text-gray-400 text-center">
-                            Você tem certeza que deseja excluir o usuário <br>
-                            <span id="username-placeholder" class="font-black text-gray-900 dark:text-white uppercase"></span>?
-                        </p>
-
-                        {{-- Nota de Rastreabilidade --}}
-                        <p class="mt-4 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-100 dark:border-yellow-800 rounded text-xs text-yellow-700 dark:text-yellow-500 text-center italic">
-                            Atenção: Reservas vinculadas a este ID (ID: <span id="userid-placeholder"></span>) podem perder a referência direta.
-                        </p>
-
-                        <p class="mt-3 text-sm font-bold text-red-600 dark:text-red-400 text-center uppercase tracking-widest">
-                            Ação Irreversível
-                        </p>
+                    <h3 class="text-xl leading-6 font-bold text-gray-900 dark:text-white" id="modal-title">Confirmar Exclusão</h3>
+                    <div class="mt-3 text-center">
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Você tem certeza que deseja excluir o usuário <br><span id="username-placeholder" class="font-black text-gray-900 dark:text-white uppercase"></span>?</p>
+                        <p class="mt-4 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-100 dark:border-yellow-800 rounded text-xs text-yellow-700 dark:text-yellow-500 italic">Atenção: Reservas vinculadas ao ID <span id="userid-placeholder"></span> perderão a referência.</p>
+                        <p class="mt-3 text-sm font-bold text-red-600 dark:text-red-400 uppercase tracking-widest">Ação Irreversível</p>
                     </div>
                 </div>
-
                 <div class="mt-6 flex flex-col sm:flex-row-reverse gap-3">
-                    <button type="button"
-                        id="confirm-delete-btn"
-                        class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2.5 bg-red-600 text-base font-bold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:w-auto sm:text-sm transition-all duration-200">
-                        Sim, Excluir Agora
-                    </button>
-
-                    <button type="button"
-                        onclick="closeCustomConfirmation()"
-                        class="w-full inline-flex justify-center rounded-lg border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2.5 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none sm:w-auto sm:text-sm transition-all duration-200">
-                        Cancelar
-                    </button>
+                    <button type="button" id="confirm-delete-btn" class="w-full inline-flex justify-center rounded-lg shadow-sm px-4 py-2.5 bg-red-600 text-base font-bold text-white hover:bg-red-700 transition-all duration-200 sm:w-auto sm:text-sm">Sim, Excluir Agora</button>
+                    <button type="button" onclick="closeCustomConfirmation()" class="w-full inline-flex justify-center rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 transition-all duration-200 sm:w-auto">Cancelar</button>
                 </div>
             </div>
         </div>
     </div>
-    <!-- FIM DO MODAL DE CONFIRMAÇÃO PERSONALIZADO -->
 
-
-
-    <!-- INÍCIO DO SCRIPT DE CONTROLE DO MODAL (ADICIONADO) -->
-    <!-- ========================================================================= -->
+    {{-- SCRIPT DE CONTROLE (MANTIDO) --}}
     <script>
-        let formToSubmit = null; // Variável para armazenar o formulário que será enviado
-        let issubmitting = false; // Trava para evitar cliques duplos
+        let formToSubmit = null;
+        let issubmitting = false;
 
-        /**
-         * Abre o modal de confirmação e configura os dados do usuário.
-         * @param {HTMLElement} button - O botão clicado (dentro do formulário).
-         */
         function showCustomConfirmation(button) {
-            // 1. Encontra o formulário pai do botão
             formToSubmit = button.closest('form');
-            if (!formToSubmit) {
-                console.error('Erro: Formulário de exclusão não encontrado.');
-                return;
-            }
+            if (!formToSubmit) return;
 
-            // 2. Extrai os dados do usuário a partir dos atributos data-* do botão
-            const userName = button.getAttribute('data-username') || 'Usuário';
-            const userId = button.getAttribute('data-userid') || 'N/A';
+            document.getElementById('username-placeholder').textContent = button.getAttribute('data-username') || 'Usuário';
+            document.getElementById('userid-placeholder').textContent = button.getAttribute('data-userid') || 'N/A';
 
-            // 3. Atualiza o conteúdo do modal (com verificação de existência)
-            const namePlaceholder = document.getElementById('username-placeholder');
-            const idPlaceholder = document.getElementById('userid-placeholder');
-
-            if (namePlaceholder) namePlaceholder.textContent = userName;
-            if (idPlaceholder) idPlaceholder.textContent = userId;
-
-            // 4. Exibe o modal
             const modal = document.getElementById('confirmation-modal');
             const modalContent = document.getElementById('modal-content');
 
-            if (modal && modalContent) {
-                modal.classList.remove('hidden');
-                // Pequeno atraso para triggerar a transição CSS de opacidade/escala
-                setTimeout(() => {
-                    modal.style.opacity = '1';
-                    modalContent.classList.remove('scale-95', 'opacity-0');
-                    modalContent.classList.add('scale-100', 'opacity-100');
-                }, 10);
-            }
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.style.opacity = '1';
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
         }
 
-        /**
-         * Fecha o modal de confirmação.
-         */
         function closeCustomConfirmation() {
             const modal = document.getElementById('confirmation-modal');
             const modalContent = document.getElementById('modal-content');
-
-            if (modal && modalContent) {
-                modalContent.classList.remove('scale-100', 'opacity-100');
-                modalContent.classList.add('scale-95', 'opacity-0');
-                modal.style.opacity = '0';
-
-                // Esconde o modal após o tempo da transição (300ms)
-                setTimeout(() => {
-                    modal.classList.add('hidden');
-                    formToSubmit = null;
-                    issubmitting = false; // Libera a trava caso o usuário cancele
-                }, 300);
-            }
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            modal.style.opacity = '0';
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                formToSubmit = null;
+                issubmitting = false;
+            }, 300);
         }
 
-        /**
-         * Inicializa os listeners quando o documento estiver pronto.
-         */
         document.addEventListener('DOMContentLoaded', function() {
-            const confirmBtn = document.getElementById('confirm-delete-btn');
-
-            if (confirmBtn) {
-                confirmBtn.addEventListener('click', function() {
-                    // Prevenção de envio duplo e verificação de formulário
-                    if (formToSubmit && !issubmitting) {
-                        issubmitting = true; // Ativa a trava
-                        confirmBtn.disabled = true; // Desativa o botão visualmente
-                        confirmBtn.innerText = 'Excluindo...';
-
-                        // Opcional: Adicionar um efeito de fade out antes de enviar
-                        closeCustomConfirmation();
-
-                        // Submete o formulário via DELETE do Laravel
-                        setTimeout(() => {
-                            formToSubmit.submit();
-                        }, 200);
-                    }
-                });
-            }
-
-            // Fechar o modal ao clicar fora da caixa branca (no fundo escuro)
-            const modal = document.getElementById('confirmation-modal');
-            if (modal) {
-                modal.addEventListener('click', function(e) {
-                    if (e.target === modal) {
-                        closeCustomConfirmation();
-                    }
-                });
-            }
+            document.getElementById('confirm-delete-btn').addEventListener('click', function() {
+                if (formToSubmit && !issubmitting) {
+                    issubmitting = true;
+                    this.disabled = true;
+                    this.innerText = 'Excluindo...';
+                    closeCustomConfirmation();
+                    setTimeout(() => { formToSubmit.submit(); }, 200);
+                }
+            });
         });
     </script>
-    <!-- ========================================================================= -->
-    <!-- FIM DO SCRIPT DE CONTROLE DO MODAL -->
-
 </x-app-layout>

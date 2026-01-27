@@ -57,6 +57,13 @@
             padding: 10px;
         }
 
+        /* REFORÇO DE VISIBILIDADE: Garante que o hidden funcione mesmo com conflitos de biblioteca */
+        .hidden {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+        }
+
         .modal-overlay.hidden {
             display: none !important;
         }
@@ -131,33 +138,40 @@
             background-size: 15px 15px !important;
         }
 
-        /* 5. AUTOCOMPLETE (AJUSTADO PARA DINÂMICO) */
+        /* 5. AUTOCOMPLETE (CONSOLIDADO E BLINDADO) */
 
-        /* NOVA REGRA: Classe para aplicar na div pai do input de nome para empurrar o WhatsApp */
-        .autocomplete-active {
-            margin-bottom: 210px !important;
-            /* Altura aproximada da lista + respiro */
-            transition: margin-bottom 0.2s ease;
+        /* O pai do input DEVE ser relative para o dropdown se ancorar nele */
+        .relative {
+            position: relative !important;
         }
 
         #client-autocomplete-results {
             position: absolute;
+            top: 100%;
+            /* Inicia exatamente onde o input termina */
+            left: 0;
+            width: 100%;
             max-height: 200px;
             overflow-y: auto;
-            border-radius: 8px;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
-            z-index: 3000;
-            background-color: white;
-            width: 100%;
-            left: 0;
-            top: 100%;
-            /* Garante que comece logo abaixo do input */
+            background-color: white !important;
+            border: 1px solid #e2e8f0;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+            z-index: 9999 !important;
+            /* Valor alto para flutuar sobre campos de WhatsApp/Financeiro */
         }
 
         #client-autocomplete-results div {
             padding: 12px 15px;
             border-bottom: 1px solid #f1f5f9;
             cursor: pointer;
+            background-color: white;
+            transition: background 0.2s ease;
+        }
+
+        #client-autocomplete-results div:hover {
+            background-color: #f8fafc;
         }
 
         #client-autocomplete-results div:last-child {
@@ -186,10 +200,6 @@
                 width: 100% !important;
                 margin: 0 !important;
                 max-height: 98vh;
-            }
-
-            .autocomplete-active {
-                margin-bottom: 180px !important;
             }
         }
 
@@ -763,7 +773,7 @@
                             class="mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-xs sm:text-sm text-gray-700">
                         </div>
 
-                        {{-- Hidden Inputs (Mantidos intactos) --}}
+                        {{-- Hidden Inputs --}}
                         <input type="hidden" name="schedule_id" id="quick-schedule-id">
                         <input type="hidden" name="date" id="quick-date">
                         <input type="hidden" name="start_time" id="quick-start-time">
@@ -773,22 +783,21 @@
                         <input type="hidden" name="arena_id" id="quick-arena-id">
 
                         <div class="space-y-4">
-                            {{-- Campo Nome com Dropdown Acoplado e Lógica de Empurrar --}}
-                            <div class="relative transition-all duration-300" id="name-field-wrapper">
-                                <label for="client_name" class="block text-xs font-bold text-gray-500 uppercase">
-                                    Nome do Cliente *
-                                </label>
+                            {{-- Campo Nome com Dropdown Acoplado --}}
+                            <div class="relative">
+                                <label for="client_name" class="block text-xs font-bold text-gray-500 uppercase">Nome
+                                    do Cliente *</label>
                                 <input type="text" name="client_name" id="client_name" required
                                     autocomplete="off"
                                     class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm h-10">
 
-                                {{-- LISTA DE RESULTADOS --}}
+                                {{-- LISTA DE RESULTADOS: Agora posicionada de forma relativa ao campo de nome --}}
                                 <div id="client-autocomplete-results"
                                     class="absolute z-[3000] w-full bg-white border border-gray-200 rounded-b-md shadow-xl hidden max-h-48 overflow-y-auto top-full left-0">
                                 </div>
                             </div>
 
-                            {{-- Campo WhatsApp: Este será empurrado para baixo quando o autocomplete estiver ativo --}}
+                            {{-- Campo WhatsApp --}}
                             <div>
                                 <label for="client_contact"
                                     class="block text-xs font-bold text-gray-500 uppercase">WhatsApp (11 dígitos)
@@ -2545,125 +2554,124 @@
 
 
             // =========================================================
-            // LÓGICA DE AUTOCOMPLETE COM MOVIMENTAÇÃO DE LAYOUT (FULL)
+            // LÓGICA DE AUTOCOMPLETE COM SUMIÇO AUTOMÁTICO (FIXED)
             // =========================================================
             const autocompleteResults = document.getElementById('client-autocomplete-results');
-            const nameFieldWrapper = document.getElementById('name-field-wrapper');
-            const contactInputEl = document.getElementById('client_contact');
-            const nameInputEl = document.getElementById('client_name');
             let debounceTimer;
 
             /**
-             * Função auxiliar para esconder a lista e resetar a posição do layout
-             */
-            const resetAutocompleteLayout = () => {
-                if (autocompleteResults) {
-                    autocompleteResults.classList.add('hidden');
-                    autocompleteResults.innerHTML = '';
-                }
-                if (nameFieldWrapper) {
-                    nameFieldWrapper.classList.remove('autocomplete-active');
-                }
-            };
-
-            /**
              * Função unificada para busca de clientes
-             * @param {HTMLElement} inputElement - O campo que disparou a busca
+             * @param {HTMLElement} inputElement - O campo que disparou a busca (client_name)
              */
             const performClientSearch = (inputElement) => {
                 const query = inputElement.value;
                 const arenaId = document.getElementById('quick-arena-id')?.value || '';
 
+                // Limpa o timer anterior para evitar requisições atropeladas
                 clearTimeout(debounceTimer);
 
-                // REGRA 1: Se o campo tiver menos de 2 letras, limpa e esconde na hora
+                // REGRA 1: Se o campo tiver menos de 2 letras ou estiver vazio, mata a lista na hora
                 if (query.length < 2) {
-                    resetAutocompleteLayout();
+                    if (autocompleteResults) {
+                        autocompleteResults.classList.add('hidden');
+                        autocompleteResults.innerHTML = '';
+                    }
                     return;
                 }
 
                 debounceTimer = setTimeout(() => {
+                    // Realiza a chamada para a API
                     fetch(`/api/clientes/search?query=${encodeURIComponent(query)}&arena_id=${arenaId}`)
                         .then(response => response.json())
                         .then(data => {
                             if (!autocompleteResults) return;
 
-                            // Limpa o conteúdo anterior
+                            // Sempre limpa o HTML antes de processar novos resultados
                             autocompleteResults.innerHTML = '';
 
-                            // REGRA 2: Se não houver resultados, esconde a lista e o layout volta ao normal
+                            // REGRA 2: Se a API retornar vazio (ex: "Adriano G"), esconde a lista IMEDIATAMENTE
                             if (!data || data.length === 0) {
-                                resetAutocompleteLayout();
+                                autocompleteResults.classList.add('hidden');
                                 return;
                             }
 
-                            // Popula a lista se houver dados
+                            // Popula a lista com os dados recebidos
                             data.forEach(client => {
                                 const div = document.createElement('div');
                                 div.className =
                                     'p-3 hover:bg-indigo-50 cursor-pointer border-b border-gray-100 transition-colors';
+
                                 const phone = client.whatsapp_contact || '';
 
+                                // Template de exibição na lista
                                 div.innerHTML = `
                         <div class="font-bold text-gray-800 text-sm">${client.name}</div>
                         <div class="text-xs text-gray-500">${phone}</div>
                     `;
 
-                                // Lógica de seleção ao clicar no nome
+                                // Lógica ao clicar em um cliente da lista
                                 div.onclick = () => {
-                                    if (nameInputEl) nameInputEl.value = client.name;
+                                    const nameInput = document.getElementById('client_name');
+                                    const contactInput = document.getElementById('client_contact');
 
-                                    if (phone && contactInputEl) {
+                                    if (nameInput) nameInput.value = client.name;
+
+                                    if (phone && contactInput) {
+                                        // Limpa caracteres não numéricos para o campo de WhatsApp
                                         const cleanPhone = phone.replace(/\D/g, '');
-                                        contactInputEl.value = cleanPhone;
+                                        contactInput.value = cleanPhone;
 
-                                        // Dispara a busca de reputação/VIP vinculada ao número
+                                        // Dispara a busca de reputação/VIP se a função existir
                                         if (typeof validateClientContact === 'function') {
                                             validateClientContact(cleanPhone);
                                         }
                                     }
-                                    // Selecionou? Esconde tudo.
-                                    resetAutocompleteLayout();
+
+                                    // Fecha a lista após a seleção
+                                    autocompleteResults.classList.add('hidden');
                                 };
+
                                 autocompleteResults.appendChild(div);
                             });
 
-                            // REGRA 3: Mostra a lista e EMPURRA o WhatsApp para baixo
+                            // REGRA 3: Só remove o 'hidden' se chegamos até aqui com dados
                             autocompleteResults.classList.remove('hidden');
-                            if (nameFieldWrapper) {
-                                nameFieldWrapper.classList.add('autocomplete-active');
-                            }
                         })
                         .catch(err => {
                             console.error("Erro no autocomplete:", err);
-                            resetAutocompleteLayout();
+                            if (autocompleteResults) autocompleteResults.classList.add('hidden');
                         });
-                }, 300); // Delay para fluidez
+                }, 300); // 300ms é o "sweet spot" para não sobrecarregar o servidor
             };
 
             // --- Registro dos Eventos ---
 
-            // 1. Escuta a digitação no campo de Nome
+            // 1. Escuta a digitação no campo de Nome (client_name)
+            const nameInputEl = document.getElementById('client_name');
             if (nameInputEl) {
+                // Usamos 'input' para capturar qualquer mudança (digitar, colar, apagar)
                 nameInputEl.addEventListener('input', function() {
                     performClientSearch(this);
                 });
             }
 
-            // 2. REGRA DE OURO: Fecha a lista ao focar no campo de WhatsApp
-            if (contactInputEl) {
-                contactInputEl.addEventListener('focus', function() {
-                    resetAutocompleteLayout();
-                });
-            }
-
-            // 3. Fecha a lista ao clicar em qualquer lugar fora do componente
+            // 2. Fecha a lista ao clicar fora (UX Improvement)
             document.addEventListener('click', function(e) {
+                const nameInput = document.getElementById('client_name');
+
+                // Se o clique não foi na lista e nem no campo de nome, esconde a lista
                 if (autocompleteResults &&
                     !autocompleteResults.contains(e.target) &&
-                    e.target !== nameInputEl) {
+                    e.target !== nameInput) {
 
-                    resetAutocompleteLayout();
+                    autocompleteResults.classList.add('hidden');
+                }
+            });
+
+            // 3. Suporte a tecla ESC para fechar a lista rapidamente
+            document.addEventListener('keydown', function(e) {
+                if (e.key === "Escape" && autocompleteResults) {
+                    autocompleteResults.classList.add('hidden');
                 }
             });
         </script>

@@ -99,12 +99,11 @@ class UserController extends Controller
             'name' => $validated['name'],
             'email' => $validated['email'],
             'whatsapp_contact' => $validated['whatsapp_contact'],
+            // Removida is_admin, pois sua tabela usa 'role'
             'password' => $isGestor ? Hash::make($validated['password']) : Hash::make(Str::random(16)),
             'role' => $validated['role'],
             'arena_id' => $validated['arena_id'] ?? null,
             'is_vip' => $request->has('is_vip') ? 1 : 0,
-            // 🚀 CORREÇÃO: Usando o campo real is_blocked em vez de customer_qualification
-            'is_blocked' => $request->has('is_blacklisted') ? 1 : 0,
         ]);
 
         return redirect()->route('admin.users.index')->with('success', 'Usuário criado com sucesso!');
@@ -131,26 +130,15 @@ class UserController extends Controller
             $user->password = Hash::make($request->password);
         }
 
-        // 2. Mapeamento manual dos campos
+        // 2. Mapeamento manual dos campos (Limpando referências a is_admin)
         $user->name = $validated['name'];
         $user->email = $validated['email'];
         $user->whatsapp_contact = $validated['whatsapp_contact'];
         $user->role = $validated['role'];
         $user->arena_id = $validated['arena_id'] ?? null;
 
-        // 3. Status VIP
+        // 3. Status VIP (Garante 1 ou 0 para o TinyInt)
         $user->is_vip = $request->has('is_vip') ? 1 : 0;
-
-        // 4. LÓGICA DA BLACKLIST (Ajustada conforme o Debug Real)
-        if ($request->has('is_blacklisted')) {
-            // Se marcar o checkbox, ativamos o bloqueio
-            $user->is_blocked = 1;
-        } else {
-            // Se desmarcar, removemos o bloqueio e ZERAMOS as faltas
-            // Isso garante que o status 🚫 BLACKLIST suma da sua index
-            $user->is_blocked = 0;
-            $user->no_show_count = 0;
-        }
 
         $user->save();
 
@@ -177,46 +165,47 @@ class UserController extends Controller
     // ⚡ PARTE 3: API (DASHBOARD)
     // =========================================================================
 
-    public function searchClients(Request $request)
-    {
-        // 🎯 Captura 'term' ou 'query' para evitar erro de comunicação com o JS
-        $term = $request->input('term') ?? $request->input('query');
+  public function searchClients(Request $request)
+{
+    // 🎯 Captura 'term' ou 'query' para evitar erro de comunicação com o JS
+    $term = $request->input('term') ?? $request->input('query');
 
-        if (empty($term) || strlen($term) < 2) {
-            return response()->json([]);
-        }
-
-        // 1. Gera uma versão limpa (apenas números) para busca de WhatsApp
-        $cleanTerm = preg_replace('/\D/', '', $term);
-
-        // 2. Divide em palavras para busca por nome (ex: "João Silva")
-        $keywords = explode(' ', $term);
-
-        $clients = User::where('role', 'cliente') // Opcional: Garante que só busca clientes
-            ->where(function ($q) use ($keywords, $cleanTerm, $term) {
-
-                // Busca por Nome ou Email usando as keywords
-                foreach ($keywords as $keyword) {
-                    if (strlen($keyword) > 1) {
-                        $q->orWhere('name', 'like', '%' . $keyword . '%')
-                            ->orWhere('email', 'like', '%' . $keyword . '%');
-                    }
-                }
-
-                // 📱 Busca por WhatsApp (A mágica está aqui)
-                // Se o termo digitado tiver números, buscamos removendo a formatação do banco
-                if (!empty($cleanTerm)) {
-                    $q->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_contact, '(', ''), ')', ''), ' ', ''), '-', '') LIKE ?", ["%{$cleanTerm}%"]);
-                }
-
-                // Busca secundária pelo termo original no campo de contato
-                $q->orWhere('whatsapp_contact', 'like', '%' . $term . '%');
-            })
-            ->limit(10)
-            ->get(['id', 'name', 'email', 'whatsapp_contact']);
-
-        return response()->json($clients);
+    if (empty($term) || strlen($term) < 2) {
+        return response()->json([]);
     }
+
+    // 1. Gera uma versão limpa (apenas números) para busca de WhatsApp
+    $cleanTerm = preg_replace('/\D/', '', $term);
+
+    // 2. Divide em palavras para busca por nome (ex: "João Silva")
+    $keywords = explode(' ', $term);
+
+    $clients = User::where('role', 'cliente') // Opcional: Garante que só busca clientes
+        ->where(function ($q) use ($keywords, $cleanTerm, $term) {
+
+            // Busca por Nome ou Email usando as keywords
+            foreach ($keywords as $keyword) {
+                if (strlen($keyword) > 1) {
+                    $q->orWhere('name', 'like', '%' . $keyword . '%')
+                      ->orWhere('email', 'like', '%' . $keyword . '%');
+                }
+            }
+
+            // 📱 Busca por WhatsApp (A mágica está aqui)
+            // Se o termo digitado tiver números, buscamos removendo a formatação do banco
+            if (!empty($cleanTerm)) {
+                $q->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_contact, '(', ''), ')', ''), ' ', ''), '-', '') LIKE ?", ["%{$cleanTerm}%"]);
+            }
+
+            // Busca secundária pelo termo original no campo de contato
+            $q->orWhere('whatsapp_contact', 'like', '%' . $term . '%');
+
+        })
+        ->limit(10)
+        ->get(['id', 'name', 'email', 'whatsapp_contact']);
+
+    return response()->json($clients);
+}
 
     public function getReputation(string $contact)
     {
