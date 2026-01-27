@@ -167,39 +167,27 @@ class UserController extends Controller
 
     public function searchClients(Request $request)
     {
-        // 🎯 Captura 'term' ou 'query' para evitar erro de comunicação com o JS
-        $term = $request->input('term') ?? $request->input('query');
+        $query = $request->input('query');
+        if (empty($query) || strlen($query) < 2) return response()->json([]);
 
-        if (empty($term) || strlen($term) < 2) {
-            return response()->json([]);
-        }
+        // 1. Limpa a busca para caso o usuário pesquise por telefone formatado
+        $cleanQuery = preg_replace('/\D/', '', $query);
 
-        // 1. Gera uma versão limpa (apenas números) para busca de WhatsApp
-        $cleanTerm = preg_replace('/\D/', '', $term);
+        $keywords = explode(' ', $query);
 
-        // 2. Divide em palavras para busca por nome (ex: "João Silva")
-        $keywords = explode(' ', $term);
+        $clients = User::where(function ($q) use ($keywords, $cleanQuery) {
+            foreach ($keywords as $keyword) {
+                $q->orWhere('name', 'like', '%' . $keyword . '%')
+                    ->orWhere('email', 'like', '%' . $keyword . '%');
 
-        $clients = User::where('role', 'cliente') // Opcional: Garante que só busca clientes
-            ->where(function ($q) use ($keywords, $cleanTerm, $term) {
-
-                // Busca por Nome ou Email usando as keywords
-                foreach ($keywords as $keyword) {
-                    if (strlen($keyword) > 1) {
-                        $q->orWhere('name', 'like', '%' . $keyword . '%')
-                            ->orWhere('email', 'like', '%' . $keyword . '%');
-                    }
+                // 2. Se a keyword for numérica, busca ignorando a formatação do banco
+                if (!empty($cleanQuery)) {
+                    $q->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_contact, '(', ''), ')', ''), ' ', ''), '-', '') LIKE ?", ["%{$cleanQuery}%"]);
+                } else {
+                    $q->orWhere('whatsapp_contact', 'like', '%' . $keyword . '%');
                 }
-
-                // 📱 Busca por WhatsApp (A mágica está aqui)
-                // Se o termo digitado tiver números, buscamos removendo a formatação do banco
-                if (!empty($cleanTerm)) {
-                    $q->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(whatsapp_contact, '(', ''), ')', ''), ' ', ''), '-', '') LIKE ?", ["%{$cleanTerm}%"]);
-                }
-
-                // Busca secundária pelo termo original no campo de contato
-                $q->orWhere('whatsapp_contact', 'like', '%' . $term . '%');
-            })
+            }
+        })
             ->limit(10)
             ->get(['id', 'name', 'email', 'whatsapp_contact']);
 

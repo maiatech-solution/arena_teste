@@ -714,7 +714,8 @@
             <div class="bg-white p-6 rounded-xl shadow-2xl max-w-lg w-full transition-all duration-300 transform scale-100"
                 onclick="event.stopPropagation()">
 
-                <h3 class="text-xl font-bold text-green-700 mb-4 border-b pb-2">Agendamento Rápido de Horários</h3>
+                <h3 class="text-xl font-bold text-green-700 mb-4 border-b pb-2 tracking-tight">Agendamento Rápido de
+                    Horários</h3>
 
                 <form id="quick-booking-form">
                     @csrf
@@ -734,30 +735,28 @@
                     <input type="hidden" name="reserva_id_to_update" id="reserva-id-to-update">
                     <input type="hidden" name="arena_id" id="quick-arena-id">
 
-                    {{-- Dados do Cliente --}}
+                    {{-- Dados do Cliente com Busca Preditiva --}}
                     <div id="client_fields">
-                        {{-- CAMPO NOME COM AUTOCOMPLETE --}}
-                        <div class="mb-4 relative"> {{-- Adicionado 'relative' para posicionar a lista --}}
+                        <div class="mb-4 relative"> {{-- 'relative' é crucial aqui para o posicionamento da lista --}}
                             <label for="client_name"
                                 class="block text-sm font-medium text-gray-700 uppercase tracking-wide">Nome Completo
                                 do Cliente *</label>
                             <input type="text" name="client_name" id="client_name" required autocomplete="off"
+                                placeholder="Digite o nome para buscar..."
                                 class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
 
-                            {{-- Container de Resultados (Aparece para Nome e WhatsApp) --}}
+                            {{-- 🔍 CONTAINER DO AUTOCOMPLETE --}}
                             <div id="client-autocomplete-results"
-                                class="absolute z-[2000] w-full bg-white border border-gray-300 rounded-b-md shadow-2xl hidden max-h-56 overflow-y-auto">
+                                class="absolute z-[120] w-full bg-white border border-gray-300 rounded-b-md shadow-2xl hidden max-h-56 overflow-y-auto mt-0.5">
                             </div>
                         </div>
 
-                        {{-- CAMPO WHATSAPP --}}
                         <div class="mb-4">
                             <label for="client_contact"
-                                class="block text-sm font-medium text-gray-700 uppercase tracking-wide">WhatsApp
-                                (Apenas 11 dígitos)*</label>
+                                class="block text-sm font-medium text-gray-700 uppercase tracking-wide">WhatsApp (11
+                                dígitos)*</label>
                             <input type="tel" name="client_contact" id="client_contact" required maxlength="11"
-                                autocomplete="off" pattern="\d{11}"
-                                title="O WhatsApp deve conter apenas 11 dígitos (DDD + Número)."
+                                pattern="\d{11}" title="O WhatsApp deve conter apenas 11 dígitos (DDD + Número)."
                                 placeholder="Ex: 91999999999"
                                 class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
 
@@ -766,7 +765,7 @@
                             </p>
 
                             {{-- Exibição de Reputação/VIP --}}
-                            <div id="client-reputation-display" class="mt-2 text-sm"></div>
+                            <div id="client-reputation-display" class="mt-2 text-sm min-h-[20px]"></div>
                         </div>
                     </div>
 
@@ -785,7 +784,7 @@
                             class="block text-sm font-medium text-gray-700 uppercase tracking-wide">Método de
                             Pagamento</label>
                         <select name="payment_method" id="payment_method_quick" required
-                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500">
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 h-10">
                             <option value="">Selecione o Método</option>
                             <option value="pix">PIX</option>
                             <option value="cartao">Cartão</option>
@@ -799,7 +798,8 @@
                         <div class="flex items-center">
                             <input type="checkbox" name="is_recurrent" id="is-recurrent" value="1"
                                 class="h-5 w-5 text-indigo-600 border-indigo-300 rounded focus:ring-indigo-500">
-                            <label for="is-recurrent" class="ml-3 text-base font-semibold text-indigo-700">
+                            <label for="is-recurrent"
+                                class="ml-3 text-base font-semibold text-indigo-700 cursor-pointer">
                                 Reserva Recorrente (6 Meses)
                             </label>
                         </div>
@@ -817,15 +817,17 @@
                     </div>
 
                     {{-- Botões de Ação --}}
-                    <button type="submit" id="submit-quick-booking"
-                        class="mt-4 w-full px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-md">
-                        Confirmar Agendamento
-                    </button>
+                    <div class="flex flex-col gap-2">
+                        <button type="submit" id="submit-quick-booking"
+                            class="w-full px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-md">
+                            Confirmar Agendamento
+                        </button>
 
-                    <button type="button" onclick="closeQuickBookingModal()"
-                        class="mt-2 w-full px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition duration-150">
-                        Cancelar
-                    </button>
+                        <button type="button" onclick="closeQuickBookingModal()"
+                            class="w-full px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition duration-150">
+                            Cancelar
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -2059,8 +2061,8 @@
             <div class="grid grid-cols-1 gap-2">
                 ${!isFinalized && status !== 'cancelled' ?
                     `<button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                                                                                        <span>💰 IR PARA O CAIXA</span>
-                                                                                    </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+                                                                <span>💰 IR PARA O CAIXA</span>
+                                                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
                 <div class="grid grid-cols-2 gap-2 mt-1">
                     <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})"
@@ -2075,14 +2077,14 @@
 
                 ${!isFinalized && status !== 'no_show' ?
                     `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')"
-                                                                                        class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
-                                                                                        FALTA (NO-SHOW)
-                                                                                    </button>` : ''}
+                                                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
+                                                                FALTA (NO-SHOW)
+                                                            </button>` : ''}
 
                 ${isRecurrent ?
                     `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition uppercase">
-                                                                                        CANCELAR SÉRIE
-                                                                                    </button>` : ''}
+                                                                CANCELAR SÉRIE
+                                                            </button>` : ''}
 
                 <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold">
                     Fechar
@@ -2520,79 +2522,5 @@
 
             // ✅ ADICIONE ESTA LINHA AQUI:
             window.acionarManutencao = acionarManutencao;
-
-            // =========================================================
-            // LÓGICA DE AUTOCOMPLETE DE CLIETES (VERSÃO FINAL)
-            // =========================================================
-            const autocompleteResults = document.getElementById('client-autocomplete-results');
-            let debounceTimer;
-
-            if (clientNameInput()) {
-                clientNameInput().addEventListener('input', function() {
-                    const query = this.value;
-                    const arenaId = document.getElementById('quick-arena-id')?.value || '';
-
-                    clearTimeout(debounceTimer);
-
-                    if (query.length < 2) {
-                        autocompleteResults.classList.add('hidden');
-                        return;
-                    }
-
-                    debounceTimer = setTimeout(() => {
-                        // ✅ CORREÇÃO 1: Mudei 'q=' para 'query=' para bater com seu UserController
-                        fetch(`/api/clientes/search?query=${encodeURIComponent(query)}&arena_id=${arenaId}`)
-                            .then(response => response.json())
-                            .then(data => {
-                                autocompleteResults.innerHTML = '';
-
-                                if (data && data.length > 0) {
-                                    data.forEach(client => {
-                                        const div = document.createElement('div');
-                                        div.className =
-                                            'p-3 hover:bg-indigo-50 cursor-pointer border-b border-gray-100 transition-colors';
-
-                                        // ✅ CORREÇÃO 2: Mudei 'client.contact' para 'client.whatsapp_contact'
-                                        // (É o nome da coluna no seu banco e no retorno da sua API)
-                                        const phone = client.whatsapp_contact || '';
-
-                                        div.innerHTML = `
-                                <div class="font-bold text-gray-800">${client.name}</div>
-                                <div class="text-xs text-gray-500">${phone}</div>
-                            `;
-
-                                        div.onclick = () => {
-                                            // Preenche o nome
-                                            clientNameInput().value = client.name;
-
-                                            // ✅ CORREÇÃO 3: Preenche o contato usando a chave correta
-                                            if (phone) {
-                                                const cleanPhone = phone.replace(/\D/g, '');
-                                                clientContactInput().value = cleanPhone;
-
-                                                // Dispara a busca de reputação/VIP que já existe no seu script
-                                                validateClientContact(cleanPhone);
-                                            }
-
-                                            autocompleteResults.classList.add('hidden');
-                                        };
-                                        autocompleteResults.appendChild(div);
-                                    });
-                                    autocompleteResults.classList.remove('hidden');
-                                } else {
-                                    autocompleteResults.classList.add('hidden');
-                                }
-                            })
-                            .catch(err => console.error("Erro no autocomplete:", err));
-                    }, 300);
-                });
-            }
-
-            // Fecha a lista de sugestões se clicar fora do campo
-            document.addEventListener('click', function(e) {
-                if (autocompleteResults && !autocompleteResults.contains(e.target) && e.target !== clientNameInput()) {
-                    autocompleteResults.classList.add('hidden');
-                }
-            });
         </script>
 </x-app-layout>

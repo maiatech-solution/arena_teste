@@ -1,10 +1,10 @@
 <x-app-layout>
 
     @php
-        // Garantindo que as variáveis existam, se não forem passadas
-        $pendingReservationsCount = $pendingReservationsCount ?? 0;
-        $expiringSeriesCount = $expiringSeriesCount ?? 0;
-        $expiringSeries = $expiringSeries ?? [];
+    // Garantindo que as variáveis existam, se não forem passadas
+    $pendingReservationsCount = $pendingReservationsCount ?? 0;
+    $expiringSeriesCount = $expiringSeriesCount ?? 0;
+    $expiringSeries = $expiringSeries ?? [];
     @endphp
 
     <x-slot name="header">
@@ -206,54 +206,54 @@
 
                 {{-- 🚀 ALERTA DE CONFIGURAÇÃO DA ELITE SOCCER (DINÂMICO) --}}
                 @php
-                    $site_info = \App\Models\CompanyInfo::first();
-                    $configPendente =
-                        !$site_info || empty($site_info->nome_fantasia) || empty($site_info->whatsapp_suporte);
+                $site_info = \App\Models\CompanyInfo::first();
+                $configPendente =
+                !$site_info || empty($site_info->nome_fantasia) || empty($site_info->whatsapp_suporte);
                 @endphp
 
                 @if ($configPendente)
-                    <div class="mb-6 animate-bounce-slow">
-                        <div
-                            class="bg-amber-50 border-l-8 border-amber-500 p-5 rounded-2xl shadow-xl flex items-center justify-between">
-                            <div class="flex items-center">
-                                <div class="p-3 bg-amber-500 rounded-full mr-4 shadow-lg">
-                                    <svg class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24"
-                                        stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <h3 class="text-lg font-black text-amber-900 uppercase tracking-tighter">
-                                        Configuração Incompleta!</h3>
-                                    <p class="text-amber-700 font-medium">Os dados da arena (Nome e WhatsApp) não foram
-                                        preenchidos. O sistema de reservas não funcionará corretamente.</p>
-                                </div>
+                <div class="mb-6 animate-bounce-slow">
+                    <div
+                        class="bg-amber-50 border-l-8 border-amber-500 p-5 rounded-2xl shadow-xl flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="p-3 bg-amber-500 rounded-full mr-4 shadow-lg">
+                                <svg class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
                             </div>
-                            <a href="{{ route('admin.company.edit') }}"
-                                class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-xl transition duration-300 shadow-md uppercase text-sm tracking-widest">
-                                Configurar Agora
-                            </a>
+                            <div>
+                                <h3 class="text-lg font-black text-amber-900 uppercase tracking-tighter">
+                                    Configuração Incompleta!</h3>
+                                <p class="text-amber-700 font-medium">Os dados da arena (Nome e WhatsApp) não foram
+                                    preenchidos. O sistema de reservas não funcionará corretamente.</p>
+                            </div>
                         </div>
+                        <a href="{{ route('admin.company.edit') }}"
+                            class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-xl transition duration-300 shadow-md uppercase text-sm tracking-widest">
+                            Configurar Agora
+                        </a>
                     </div>
+                </div>
 
-                    <style>
-                        @keyframes bounce-slow {
+                <style>
+                    @keyframes bounce-slow {
 
-                            0%,
-                            100% {
-                                transform: translateY(0);
-                            }
-
-                            50% {
-                                transform: translateY(-5px);
-                            }
+                        0%,
+                        100% {
+                            transform: translateY(0);
                         }
 
-                        .animate-bounce-slow {
-                            animation: bounce-slow 3s infinite ease-in-out;
+                        50% {
+                            transform: translateY(-5px);
                         }
-                    </style>
+                    }
+
+                    .animate-bounce-slow {
+                        animation: bounce-slow 3s infinite ease-in-out;
+                    }
+                </style>
                 @endif
 
                 {{-- Contêiner para Mensagens Dinâmicas (Já existente no seu código) --}}
@@ -263,108 +263,108 @@
                     <div id="dashboard-message-container">
                         {{-- Mensagens de sessão (mantidas para a primeira carga do Blade) --}}
                         @if (session('success'))
-                            <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4 rounded"
-                                role="alert">
-                                <p>{{ session('success') }}</p>
-                            </div>
+                        <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4 rounded"
+                            role="alert">
+                            <p>{{ session('success') }}</p>
+                        </div>
                         @endif
 
                         @if (session('warning'))
-                            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded"
-                                role="alert">
-                                <p>{{ session('warning') }}</p>
-                            </div>
+                        <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded"
+                            role="alert">
+                            <p>{{ session('warning') }}</p>
+                        </div>
                         @endif
 
                         @if (session('error'))
-                            <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded"
-                                role="alert">
-                                <p>{{ session('error') }}</p>
-                            </div>
+                        <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded"
+                            role="alert">
+                            <p>{{ session('error') }}</p>
+                        </div>
                         @endif
                     </div>
 
                     {{-- ALERTA DE PENDÊNCIA RENDERIZADO PELO SERVIDOR (COM VERIFICAÇÃO DE SEGURANÇA) --}}
                     <div id="pending-alert-container">
                         @if ($pendingReservationsCount > 0)
-                            <div class="bg-orange-100 border-l-4 border-orange-500 text-orange-700 p-4 mb-6 rounded-lg shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between transition-all duration-300 transform hover:scale-[1.005]"
-                                role="alert">
-                                <div class="flex items-start">
-                                    <svg class="h-6 w-6 flex-shrink-0 mt-0.5 sm:mt-0 mr-3 text-orange-500"
-                                        fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                    </svg>
-                                    <div>
-                                        <p class="font-bold text-lg">Atenção: Pendências!</p>
-                                        <p class="mt-1 text-sm">Você tem <span
-                                                class="font-extrabold text-orange-900">{{ $pendingReservationsCount }}</span>
-                                            pré-reserva(s) aguardando sua ação.</p>
-                                    </div>
-                                </div>
-                                <div class="mt-4 sm:mt-0 sm:ml-6">
-                                    <a href="{{ route('admin.reservas.pendentes') }}"
-                                        class="inline-block bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white font-bold py-2 px-6 rounded-lg text-sm transition duration-150 ease-in-out shadow-lg">
-                                        Revisar Pendências
-                                    </a>
+                        <div class="bg-orange-100 border-l-4 border-orange-500 text-orange-700 p-4 mb-6 rounded-lg shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between transition-all duration-300 transform hover:scale-[1.005]"
+                            role="alert">
+                            <div class="flex items-start">
+                                <svg class="h-6 w-6 flex-shrink-0 mt-0.5 sm:mt-0 mr-3 text-orange-500"
+                                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <div>
+                                    <p class="font-bold text-lg">Atenção: Pendências!</p>
+                                    <p class="mt-1 text-sm">Você tem <span
+                                            class="font-extrabold text-orange-900">{{ $pendingReservationsCount }}</span>
+                                        pré-reserva(s) aguardando sua ação.</p>
                                 </div>
                             </div>
+                            <div class="mt-4 sm:mt-0 sm:ml-6">
+                                <a href="{{ route('admin.reservas.pendentes') }}"
+                                    class="inline-block bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white font-bold py-2 px-6 rounded-lg text-sm transition duration-150 ease-in-out shadow-lg">
+                                    Revisar Pendências
+                                </a>
+                            </div>
+                        </div>
                         @endif
                     </div>
 
 
                     {{-- ALERTA E BOTÃO PARA RENOVAÇÃO RECORRENTE (COM VERIFICAÇÃO DE SEGURANÇA) --}}
                     @if ($expiringSeriesCount > 0)
-                        <div id="renewal-alert-container" data-series='@json($expiringSeries)'
-                            data-count="{{ $expiringSeriesCount }}"
-                            class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-lg shadow-md flex flex-col items-start transition-all duration-300 transform hover:scale-[1.005]"
-                            role="alert">
+                    <div id="renewal-alert-container" data-series='@json($expiringSeries)'
+                        data-count="{{ $expiringSeriesCount }}"
+                        class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-lg shadow-md flex flex-col items-start transition-all duration-300 transform hover:scale-[1.005]"
+                        role="alert">
 
-                            <div class="flex items-start w-full">
-                                <svg class="h-6 w-6 flex-shrink-0 mt-0.5 mr-3 text-yellow-500" fill="none"
-                                    viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                </svg>
-                                <div class="w-full">
-                                    <p class="font-bold text-lg">ALERTA DE RENOVAÇÃO ({{ $expiringSeriesCount }}
-                                        Série{{ $expiringSeriesCount > 1 ? 's' : '' }}
-                                        Expira{{ $expiringSeriesCount > 1 ? 'm' : '' }} em Breve)</p>
-                                    <p id="renewal-message" class="mt-1 text-sm mb-3">
-                                        <span class="font-extrabold text-yellow-900">{{ $expiringSeriesCount }}</span>
-                                        série(s) de agendamento recorrente de clientes está(ão) prestes a expirar nos
-                                        próximos 30 dias.
-                                    </p>
+                        <div class="flex items-start w-full">
+                            <svg class="h-6 w-6 flex-shrink-0 mt-0.5 mr-3 text-yellow-500" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <div class="w-full">
+                                <p class="font-bold text-lg">ALERTA DE RENOVAÇÃO ({{ $expiringSeriesCount }}
+                                    Série{{ $expiringSeriesCount > 1 ? 's' : '' }}
+                                    Expira{{ $expiringSeriesCount > 1 ? 'm' : '' }} em Breve)</p>
+                                <p id="renewal-message" class="mt-1 text-sm mb-3">
+                                    <span class="font-extrabold text-yellow-900">{{ $expiringSeriesCount }}</span>
+                                    série(s) de agendamento recorrente de clientes está(ão) prestes a expirar nos
+                                    próximos 30 dias.
+                                </p>
 
-                                    {{-- NOVO: DETALHES DE EXPIRAÇÃO NO ALERTA (6 MESES) --}}
-                                    <div class="space-y-2 p-3 bg-yellow-50 rounded border border-yellow-200">
-                                        <p class="font-semibold text-sm text-yellow-800">Detalhes para Renovação
-                                            (Sugestão:
-                                            +6 meses):</p>
-                                        @foreach ($expiringSeries as $seriesItem)
-                                            @php
-                                                $lastDate = \Carbon\Carbon::parse($seriesItem['last_date']);
-                                                $suggestedNewDate = $lastDate->copy()->addMonths(6); // ✅ MUDANÇA AQUI: +6 meses
-                                            @endphp
-                                            <div class="text-xs text-gray-700">
-                                                <strong>{{ $seriesItem['client_name'] }}</strong>
-                                                ({{ $seriesItem['slot_time'] }})
-                                                expira em
-                                                {{ $lastDate->format('d/m/Y') }}.
-                                                <span class="font-bold text-green-600">Renovação sugerida até
-                                                    {{ $suggestedNewDate->format('d/m/Y') }}.</span>
-                                            </div>
-                                        @endforeach
+                                {{-- NOVO: DETALHES DE EXPIRAÇÃO NO ALERTA (6 MESES) --}}
+                                <div class="space-y-2 p-3 bg-yellow-50 rounded border border-yellow-200">
+                                    <p class="font-semibold text-sm text-yellow-800">Detalhes para Renovação
+                                        (Sugestão:
+                                        +6 meses):</p>
+                                    @foreach ($expiringSeries as $seriesItem)
+                                    @php
+                                    $lastDate = \Carbon\Carbon::parse($seriesItem['last_date']);
+                                    $suggestedNewDate = $lastDate->copy()->addMonths(6); // ✅ MUDANÇA AQUI: +6 meses
+                                    @endphp
+                                    <div class="text-xs text-gray-700">
+                                        <strong>{{ $seriesItem['client_name'] }}</strong>
+                                        ({{ $seriesItem['slot_time'] }})
+                                        expira em
+                                        {{ $lastDate->format('d/m/Y') }}.
+                                        <span class="font-bold text-green-600">Renovação sugerida até
+                                            {{ $suggestedNewDate->format('d/m/Y') }}.</span>
                                     </div>
-                                    {{-- FIM NOVO DETALHE --}}
+                                    @endforeach
                                 </div>
+                                {{-- FIM NOVO DETALHE --}}
                             </div>
-
-                            <button onclick="openRenewalModal()"
-                                class="mt-4 bg-yellow-600 hover:bg-yellow-700 active:bg-yellow-800 text-white font-bold py-2 px-6 rounded-lg text-sm transition duration-150 ease-in-out shadow-lg">
-                                Revisar Renovações
-                            </button>
                         </div>
+
+                        <button onclick="openRenewalModal()"
+                            class="mt-4 bg-yellow-600 hover:bg-yellow-700 active:bg-yellow-800 text-white font-bold py-2 px-6 rounded-lg text-sm transition duration-150 ease-in-out shadow-lg">
+                            Revisar Renovações
+                        </button>
+                    </div>
                     @endif
 
                     {{-- 🏟️ NOVO: SELETOR DE ARENAS NO DASHBOARD --}}
@@ -391,7 +391,7 @@
                             class="block w-full sm:w-72 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 font-bold text-gray-700 h-12">
 
                             @foreach (\App\Models\Arena::all() as $arena)
-                                <option value="{{ $arena->id }}">{{ $arena->name }}</option>
+                            <option value="{{ $arena->id }}">{{ $arena->name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -709,7 +709,7 @@
         </div>
 
 
-        {{-- Modal de Agendamento Rápido (SLOTS DISPONÍVEIS) - COM AUTOCOMPLETE --}}
+        {{-- Modal de Agendamento Rápido (SLOTS DISPONÍVEIS) - SIMPLIFICADO --}}
         <div id="quick-booking-modal" class="modal-overlay hidden" onclick="closeQuickBookingModal()">
             <div class="bg-white p-6 rounded-xl shadow-2xl max-w-lg w-full transition-all duration-300 transform scale-100"
                 onclick="event.stopPropagation()">
@@ -736,28 +736,20 @@
 
                     {{-- Dados do Cliente --}}
                     <div id="client_fields">
-                        {{-- CAMPO NOME COM AUTOCOMPLETE --}}
-                        <div class="mb-4 relative"> {{-- Adicionado 'relative' para posicionar a lista --}}
+                        <div class="mb-4">
                             <label for="client_name"
                                 class="block text-sm font-medium text-gray-700 uppercase tracking-wide">Nome Completo
                                 do Cliente *</label>
-                            <input type="text" name="client_name" id="client_name" required autocomplete="off"
+                            <input type="text" name="client_name" id="client_name" required
                                 class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-
-                            {{-- Container de Resultados (Aparece para Nome e WhatsApp) --}}
-                            <div id="client-autocomplete-results"
-                                class="absolute z-[2000] w-full bg-white border border-gray-300 rounded-b-md shadow-2xl hidden max-h-56 overflow-y-auto">
-                            </div>
                         </div>
 
-                        {{-- CAMPO WHATSAPP --}}
                         <div class="mb-4">
                             <label for="client_contact"
                                 class="block text-sm font-medium text-gray-700 uppercase tracking-wide">WhatsApp
                                 (Apenas 11 dígitos)*</label>
                             <input type="tel" name="client_contact" id="client_contact" required maxlength="11"
-                                autocomplete="off" pattern="\d{11}"
-                                title="O WhatsApp deve conter apenas 11 dígitos (DDD + Número)."
+                                pattern="\d{11}" title="O WhatsApp deve conter apenas 11 dígitos (DDD + Número)."
                                 placeholder="Ex: 91999999999"
                                 class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
 
@@ -2059,8 +2051,8 @@
             <div class="grid grid-cols-1 gap-2">
                 ${!isFinalized && status !== 'cancelled' ?
                     `<button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                                                                                        <span>💰 IR PARA O CAIXA</span>
-                                                                                    </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+                                                        <span>💰 IR PARA O CAIXA</span>
+                                                    </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
                 <div class="grid grid-cols-2 gap-2 mt-1">
                     <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})"
@@ -2075,14 +2067,14 @@
 
                 ${!isFinalized && status !== 'no_show' ?
                     `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')"
-                                                                                        class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
-                                                                                        FALTA (NO-SHOW)
-                                                                                    </button>` : ''}
+                                                        class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
+                                                        FALTA (NO-SHOW)
+                                                    </button>` : ''}
 
                 ${isRecurrent ?
                     `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition uppercase">
-                                                                                        CANCELAR SÉRIE
-                                                                                    </button>` : ''}
+                                                        CANCELAR SÉRIE
+                                                    </button>` : ''}
 
                 <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold">
                     Fechar
@@ -2520,79 +2512,5 @@
 
             // ✅ ADICIONE ESTA LINHA AQUI:
             window.acionarManutencao = acionarManutencao;
-
-            // =========================================================
-            // LÓGICA DE AUTOCOMPLETE DE CLIETES (VERSÃO FINAL)
-            // =========================================================
-            const autocompleteResults = document.getElementById('client-autocomplete-results');
-            let debounceTimer;
-
-            if (clientNameInput()) {
-                clientNameInput().addEventListener('input', function() {
-                    const query = this.value;
-                    const arenaId = document.getElementById('quick-arena-id')?.value || '';
-
-                    clearTimeout(debounceTimer);
-
-                    if (query.length < 2) {
-                        autocompleteResults.classList.add('hidden');
-                        return;
-                    }
-
-                    debounceTimer = setTimeout(() => {
-                        // ✅ CORREÇÃO 1: Mudei 'q=' para 'query=' para bater com seu UserController
-                        fetch(`/api/clientes/search?query=${encodeURIComponent(query)}&arena_id=${arenaId}`)
-                            .then(response => response.json())
-                            .then(data => {
-                                autocompleteResults.innerHTML = '';
-
-                                if (data && data.length > 0) {
-                                    data.forEach(client => {
-                                        const div = document.createElement('div');
-                                        div.className =
-                                            'p-3 hover:bg-indigo-50 cursor-pointer border-b border-gray-100 transition-colors';
-
-                                        // ✅ CORREÇÃO 2: Mudei 'client.contact' para 'client.whatsapp_contact'
-                                        // (É o nome da coluna no seu banco e no retorno da sua API)
-                                        const phone = client.whatsapp_contact || '';
-
-                                        div.innerHTML = `
-                                <div class="font-bold text-gray-800">${client.name}</div>
-                                <div class="text-xs text-gray-500">${phone}</div>
-                            `;
-
-                                        div.onclick = () => {
-                                            // Preenche o nome
-                                            clientNameInput().value = client.name;
-
-                                            // ✅ CORREÇÃO 3: Preenche o contato usando a chave correta
-                                            if (phone) {
-                                                const cleanPhone = phone.replace(/\D/g, '');
-                                                clientContactInput().value = cleanPhone;
-
-                                                // Dispara a busca de reputação/VIP que já existe no seu script
-                                                validateClientContact(cleanPhone);
-                                            }
-
-                                            autocompleteResults.classList.add('hidden');
-                                        };
-                                        autocompleteResults.appendChild(div);
-                                    });
-                                    autocompleteResults.classList.remove('hidden');
-                                } else {
-                                    autocompleteResults.classList.add('hidden');
-                                }
-                            })
-                            .catch(err => console.error("Erro no autocomplete:", err));
-                    }, 300);
-                });
-            }
-
-            // Fecha a lista de sugestões se clicar fora do campo
-            document.addEventListener('click', function(e) {
-                if (autocompleteResults && !autocompleteResults.contains(e.target) && e.target !== clientNameInput()) {
-                    autocompleteResults.classList.add('hidden');
-                }
-            });
         </script>
 </x-app-layout>
