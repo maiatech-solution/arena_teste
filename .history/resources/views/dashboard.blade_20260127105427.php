@@ -25,25 +25,20 @@
         /* 1. CONTAINER E ESTRUTURA GERAL */
         .calendar-container {
             max-width: 1000px;
-            margin: 20px auto;
-            /* Reduzido de 40px para mobile */
-            padding: 10px;
-            /* Reduzido de 20px para mobile */
+            margin: 40px auto;
+            padding: 20px;
             background-color: #ffffff;
             border-radius: 12px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
         }
 
         .fc {
             font-family: 'Inter', sans-serif;
             color: #333;
-            font-size: 0.85rem;
-            /* Ajuste para o calendário não quebrar em telas médias */
         }
 
         .fc-toolbar-title {
-            font-size: 1.1rem !important;
-            /* Título menor para evitar quebra no topo */
+            font-size: 1.5rem !important;
         }
 
         /* 2. MODAIS E OVERLAYS */
@@ -58,8 +53,6 @@
             justify-content: center;
             align-items: center;
             z-index: 1000;
-            padding: 10px;
-            /* Margem de segurança para o modal não encostar na borda da tela */
         }
 
         .modal-overlay.hidden {
@@ -67,6 +60,8 @@
         }
 
         /* 3. ESTILIZAÇÃO DE EVENTOS (CORES) */
+
+        /* ✅ DISPONÍVEL (Verde) */
         .fc-event-available {
             background-color: #10B981 !important;
             border-color: #059669 !important;
@@ -75,52 +70,81 @@
             padding: 2px 5px;
             border-radius: 4px;
             opacity: 0.8;
+            transition: opacity 0.2s;
         }
 
+        /* ✅ RECORRENTES (Fúcsia) */
         .fc-event-recurrent {
             background-color: #C026D3 !important;
             border-color: #A21CAF !important;
+            padding: 2px 5px;
+            border-radius: 4px;
             font-weight: 700 !important;
+            color: #ffffff !important;
         }
 
+        /* ✅ AVULSOS / RÁPIDOS (Indigo) */
         .fc-event-quick {
             background-color: #4f46e5 !important;
             border-color: #4338ca !important;
+            color: white !important;
+            padding: 2px 5px;
+            border-radius: 4px;
         }
 
+        /* ✅ PENDENTES (Laranja) */
         .fc-event-pending {
             background-color: #ff9800 !important;
             border-color: #f97316 !important;
+            color: white !important;
+            padding: 2px 5px;
+            border-radius: 4px;
             font-style: italic;
         }
 
+        /* ✅ FALTA / NO-SHOW / ATRASADOS (Vermelho) */
         .fc-event-no-show {
             background-color: #E53E3E !important;
             border-color: #C53030 !important;
+            color: white !important;
+            padding: 2px 5px;
+            border-radius: 4px;
             font-weight: 700 !important;
         }
 
+        /* ✅ NOVO: MANUTENÇÃO (Rosa Choque) */
         .fc-event-maintenance {
             background-color: #DB2777 !important;
+            /* Pink 600 */
             border-color: #BE185D !important;
+            /* Pink 700 */
+            color: white !important;
+            padding: 2px 5px;
+            border-radius: 4px;
             font-weight: bold !important;
             text-transform: uppercase;
         }
 
+        /* ✅ RESOLVIDOS / PAGOS (Cinza com Riscado) */
         .fc-event-paid {
             background-color: #9CA3AF !important;
             border-color: #6B7280 !important;
+            color: #4B5563 !important;
             opacity: 0.5 !important;
             filter: grayscale(100%);
+            font-weight: normal !important;
             text-decoration: line-through;
         }
 
-        /* 4. REGRAS DE VISIBILIDADE */
+        /* 4. REGRAS DE VISIBILIDADE E COMPORTAMENTO */
+
+        /* Esconde cancelados/rejeitados para o verde aparecer */
         .fc-event-cancelled,
         .fc-event-rejected {
             display: none !important;
         }
 
+        /* Garante texto branco em status ativos */
         .fc-event-recurrent,
         .fc-event-quick,
         .fc-event-no-show,
@@ -133,72 +157,36 @@
             opacity: 0.6 !important;
             filter: grayscale(100%) !important;
             pointer-events: none !important;
-            background-image: linear-gradient(45deg, rgba(0, 0, 0, 0.05) 25%, transparent 25%, transparent 50%, rgba(0, 0, 0, 0.05) 50%, rgba(0, 0, 0, 0.05) 75%, transparent 75%, transparent) !important;
+            cursor: not-allowed !important;
+            user-select: none !important;
+            background-image: linear-gradient(45deg, rgba(0, 0, 0, 0.1) 25%, transparent 25%, transparent 50%, rgba(0, 0, 0, 0.1) 50%, rgba(0, 0, 0, 0.1) 75%, transparent 75%, transparent) !important;
             background-size: 15px 15px !important;
+            border: 1px dashed #666 !important;
         }
 
-        /* 5. AUTOCOMPLETE (AJUSTE FINO) */
-        #client-autocomplete-results {
-            max-height: 200px;
-            overflow-y: auto;
-            border-bottom-left-radius: 8px;
-            border-bottom-right-radius: 8px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+        /* 5. FORMATAÇÃO DE INPUTS */
+        .input-money-quick {
+            text-align: right;
         }
 
-        /* 6. RESPONSIVIDADE (MEDIA QUERIES) */
-        @media (max-width: 640px) {
-            .calendar-container {
-                margin: 10px auto;
-                padding: 5px;
-                border-radius: 0;
-                /* Remove arredondamento em telas muito pequenas para ganhar espaço */
-            }
-
-            /* Ajusta o tamanho da fonte dos eventos no mobile */
-            .fc-event-title {
-                font-size: 10px !important;
-                font-weight: 600;
-            }
-
-            .fc-toolbar {
-                flex-direction: column;
-                gap: 10px;
-            }
-
-            /* Faz o modal ocupar mais espaço no celular */
-            .modal-overlay>div {
-                width: 100% !important;
-                margin: 0 !important;
-                max-height: 98vh;
-            }
+        #confirmation-value {
+            text-align: right;
         }
 
-        /* 7. SCROLLBAR CUSTOMIZADA (PARA O MODAL) */
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 6px;
+        #signal_value_quick.bg-indigo-50 {
+            background-color: #eef2ff !important;
         }
 
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #4f46e5;
-            /* Cor indigo igual aos botões */
-            border-radius: 10px;
-        }
-
-        /* 8. ANIMAÇÕES */
+        /* 6. ANIMAÇÕES */
         @keyframes pulse-red {
             0% {
                 transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(229, 62, 62, 0.4);
+                box-shadow: 0 0 0 0 rgba(229, 62, 62, 0.7);
             }
 
             70% {
                 transform: scale(1.02);
-                box-shadow: 0 0 0 8px rgba(229, 62, 62, 0);
+                box-shadow: 0 0 0 10px rgba(229, 62, 62, 0);
             }
 
             100% {
@@ -721,121 +709,124 @@
         </div>
 
 
-        {{-- Modal de Agendamento Rápido (Responsivo & Otimizado) --}}
+        {{-- Modal de Agendamento Rápido (SLOTS DISPONÍVEIS) - COM AUTOCOMPLETE --}}
         <div id="quick-booking-modal" class="modal-overlay hidden" onclick="closeQuickBookingModal()">
-            <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[95vh] flex flex-col transition-all duration-300 transform scale-100 mx-4 sm:mx-0"
+            <div class="bg-white p-6 rounded-xl shadow-2xl max-w-lg w-full transition-all duration-300 transform scale-100"
                 onclick="event.stopPropagation()">
 
-                <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
-                    <h3 class="text-lg font-bold text-green-700">Agendamento Rápido</h3>
-                    <button onclick="closeQuickBookingModal()" class="text-gray-400 hover:text-gray-600">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
-                    </button>
-                </div>
+                <h3 class="text-xl font-bold text-green-700 mb-4 border-b pb-2">Agendamento Rápido de Horários</h3>
 
-                <div class="p-4 overflow-y-auto custom-scrollbar">
-                    <form id="quick-booking-form">
-                        @csrf
+                <form id="quick-booking-form">
+                    @csrf
 
-                        {{-- Área de Informações do Horário --}}
-                        <div id="slot-info-display"
-                            class="mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-xs sm:text-sm text-gray-700">
-                        </div>
+                    {{-- Área de Informações do Horário (Injetado via JS) --}}
+                    <div id="slot-info-display"
+                        class="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700">
+                        {{-- Informações do slot (Data/Hora/Preço) injetadas pelo JS --}}
+                    </div>
 
-                        {{-- Hidden Inputs --}}
-                        <input type="hidden" name="schedule_id" id="quick-schedule-id">
-                        <input type="hidden" name="date" id="quick-date">
-                        <input type="hidden" name="start_time" id="quick-start-time">
-                        <input type="hidden" name="end_time" id="quick-end-time">
-                        <input type="hidden" name="price" id="quick-price">
-                        <input type="hidden" name="reserva_id_to_update" id="reserva-id-to-update">
-                        <input type="hidden" name="arena_id" id="quick-arena-id">
+                    {{-- Campos Ocultos para o Backend --}}
+                    <input type="hidden" name="schedule_id" id="quick-schedule-id">
+                    <input type="hidden" name="date" id="quick-date">
+                    <input type="hidden" name="start_time" id="quick-start-time">
+                    <input type="hidden" name="end_time" id="quick-end-time">
+                    <input type="hidden" name="price" id="quick-price">
+                    <input type="hidden" name="reserva_id_to_update" id="reserva-id-to-update">
+                    <input type="hidden" name="arena_id" id="quick-arena-id">
 
-                        {{-- Grid de Dados do Cliente --}}
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                            <div class="relative sm:col-span-2">
-                                <label for="client_name" class="block text-xs font-bold text-gray-500 uppercase">Nome
-                                    do Cliente *</label>
-                                <input type="text" name="client_name" id="client_name" required
-                                    autocomplete="off"
-                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                    {{-- Dados do Cliente --}}
+                    <div id="client_fields">
+                        {{-- CAMPO NOME COM AUTOCOMPLETE --}}
+                        <div class="mb-4 relative"> {{-- Adicionado 'relative' para posicionar a lista --}}
+                            <label for="client_name"
+                                class="block text-sm font-medium text-gray-700 uppercase tracking-wide">Nome Completo
+                                do Cliente *</label>
+                            <input type="text" name="client_name" id="client_name" required autocomplete="off"
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
 
-                                {{-- Resultados Autocomplete --}}
-                                <div id="client-autocomplete-results"
-                                    class="absolute z-[2000] w-full bg-white border border-gray-300 rounded-b-md shadow-2xl hidden max-h-48 overflow-y-auto">
-                                </div>
-                            </div>
-
-                            <div class="sm:col-span-2">
-                                <label for="client_contact"
-                                    class="block text-xs font-bold text-gray-500 uppercase">WhatsApp (11 dígitos)
-                                    *</label>
-                                <input type="tel" name="client_contact" id="client_contact" required
-                                    maxlength="11" placeholder="Ex: 91999999999"
-                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
-                                <p id="whatsapp-error-message"
-                                    class="text-[10px] text-red-600 mt-1 hidden font-semibold">⚠️ Insira 11 dígitos.
-                                </p>
-                                <div id="client-reputation-display" class="mt-1"></div>
+                            {{-- Container de Resultados (Aparece para Nome e WhatsApp) --}}
+                            <div id="client-autocomplete-results"
+                                class="absolute z-[2000] w-full bg-white border border-gray-300 rounded-b-md shadow-2xl hidden max-h-56 overflow-y-auto">
                             </div>
                         </div>
 
-                        {{-- Grid Financeiro --}}
-                        <div class="grid grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label for="signal_value_quick"
-                                    class="block text-xs font-bold text-gray-500 uppercase">Sinal (R$)</label>
-                                <input type="text" name="signal_value" id="signal_value_quick" value="0,00"
-                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 text-sm input-money-quick">
-                            </div>
+                        {{-- CAMPO WHATSAPP --}}
+                        <div class="mb-4">
+                            <label for="client_contact"
+                                class="block text-sm font-medium text-gray-700 uppercase tracking-wide">WhatsApp
+                                (Apenas 11 dígitos)*</label>
+                            <input type="tel" name="client_contact" id="client_contact" required maxlength="11"
+                                autocomplete="off" pattern="\d{11}"
+                                title="O WhatsApp deve conter apenas 11 dígitos (DDD + Número)."
+                                placeholder="Ex: 91999999999"
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
 
-                            <div>
-                                <label for="payment_method_quick"
-                                    class="block text-xs font-bold text-gray-500 uppercase">Método</label>
-                                <select name="payment_method" id="payment_method_quick" required
-                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 text-sm">
-                                    <option value="">Selecione</option>
-                                    <option value="pix">PIX</option>
-                                    <option value="cartao">Cartão</option>
-                                    <option value="dinheiro">Dinheiro</option>
-                                    <option value="outro">Sem Sinal</option>
-                                </select>
-                            </div>
+                            <p id="whatsapp-error-message" class="text-xs text-red-600 mt-1 hidden font-semibold">
+                                ⚠️ Por favor, insira exatamente 11 dígitos (Ex: 91999999999).
+                            </p>
+
+                            {{-- Exibição de Reputação/VIP --}}
+                            <div id="client-reputation-display" class="mt-2 text-sm"></div>
                         </div>
+                    </div>
 
-                        {{-- Checkbox Recorrência --}}
-                        <div class="mb-4 p-3 border border-indigo-100 rounded-lg bg-indigo-50/50 flex items-start">
+                    {{-- Financeiro --}}
+                    <div class="mb-4">
+                        <label for="signal_value_quick"
+                            class="block text-sm font-medium text-gray-700 uppercase tracking-wide">Valor do
+                            Sinal/Entrada (R$)</label>
+                        <input type="text" name="signal_value" id="signal_value_quick" value="0,00"
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 transition duration-150 input-money-quick">
+                        <p class="text-xs text-gray-500 mt-1">Opcional. Valor pago para confirmar a reserva.</p>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="payment_method_quick"
+                            class="block text-sm font-medium text-gray-700 uppercase tracking-wide">Método de
+                            Pagamento</label>
+                        <select name="payment_method" id="payment_method_quick" required
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500">
+                            <option value="">Selecione o Método</option>
+                            <option value="pix">PIX</option>
+                            <option value="cartao">Cartão</option>
+                            <option value="dinheiro">Dinheiro</option>
+                            <option value="outro">Outro/Sem Sinal</option>
+                        </select>
+                    </div>
+
+                    {{-- Recorrência --}}
+                    <div class="mb-4 p-3 border border-indigo-200 rounded-lg bg-indigo-50">
+                        <div class="flex items-center">
                             <input type="checkbox" name="is_recurrent" id="is-recurrent" value="1"
-                                class="mt-1 h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
-                            <div class="ml-3">
-                                <label for="is-recurrent" class="text-sm font-bold text-indigo-700">Reserva Recorrente
-                                    (6 meses)</label>
-                                <p class="text-[10px] text-indigo-500">Repete este horário semanalmente.</p>
-                            </div>
+                                class="h-5 w-5 text-indigo-600 border-indigo-300 rounded focus:ring-indigo-500">
+                            <label for="is-recurrent" class="ml-3 text-base font-semibold text-indigo-700">
+                                Reserva Recorrente (6 Meses)
+                            </label>
                         </div>
+                        <p class="text-xs text-indigo-600 mt-1 pl-8">
+                            Cria reservas automáticas para este horário em todas as semanas.
+                        </p>
+                    </div>
 
-                        <div class="mb-2">
-                            <label for="notes"
-                                class="block text-xs font-bold text-gray-500 uppercase">Observações</label>
-                            <textarea name="notes" id="notes" rows="2"
-                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm"></textarea>
-                        </div>
-                    </form>
-                </div>
+                    <div class="mb-4">
+                        <label for="notes"
+                            class="block text-sm font-medium text-gray-700 uppercase tracking-wide">Observações
+                            (Opcional)</label>
+                        <textarea name="notes" id="notes" rows="2"
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                    </div>
 
-                <div class="p-4 border-t bg-gray-50 rounded-b-xl grid grid-cols-2 gap-3">
+                    {{-- Botões de Ação --}}
+                    <button type="submit" id="submit-quick-booking"
+                        class="mt-4 w-full px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150 shadow-md">
+                        Confirmar Agendamento
+                    </button>
+
                     <button type="button" onclick="closeQuickBookingModal()"
-                        class="px-4 py-2 bg-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-300 transition text-sm">
+                        class="mt-2 w-full px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition duration-150">
                         Cancelar
                     </button>
-                    <button type="submit" form="quick-booking-form" id="submit-quick-booking"
-                        class="px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition shadow-md text-sm">
-                        Confirmar
-                    </button>
-                </div>
+                </form>
             </div>
         </div>
 
@@ -2068,8 +2059,8 @@
             <div class="grid grid-cols-1 gap-2">
                 ${!isFinalized && status !== 'cancelled' ?
                     `<button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                                                                                                                <span>💰 IR PARA O CAIXA</span>
-                                                                                                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+                                                                                        <span>💰 IR PARA O CAIXA</span>
+                                                                                    </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
                 <div class="grid grid-cols-2 gap-2 mt-1">
                     <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})"
@@ -2084,14 +2075,14 @@
 
                 ${!isFinalized && status !== 'no_show' ?
                     `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')"
-                                                                                                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
-                                                                                                                FALTA (NO-SHOW)
-                                                                                                            </button>` : ''}
+                                                                                        class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
+                                                                                        FALTA (NO-SHOW)
+                                                                                    </button>` : ''}
 
                 ${isRecurrent ?
                     `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition uppercase">
-                                                                                                                CANCELAR SÉRIE
-                                                                                                            </button>` : ''}
+                                                                                        CANCELAR SÉRIE
+                                                                                    </button>` : ''}
 
                 <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold">
                     Fechar
@@ -2533,109 +2524,70 @@
             // =========================================================
             // LÓGICA DE AUTOCOMPLETE DE CLIETES (VERSÃO FINAL)
             // =========================================================
-            // =========================================================
-            // LÓGICA DE AUTOCOMPLETE DUPLO (NOME E WHATSAPP)
-            // =========================================================
             const autocompleteResults = document.getElementById('client-autocomplete-results');
             let debounceTimer;
 
-            /**
-             * Função unificada para busca de clientes
-             * @param {HTMLElement} inputElement - O campo que disparou a busca
-             */
-            const performClientSearch = (inputElement) => {
-                const query = inputElement.value;
-                const arenaId = document.getElementById('quick-arena-id')?.value || '';
-
-                clearTimeout(debounceTimer);
-
-                // Só pesquisa a partir de 2 caracteres
-                if (query.length < 2) {
-                    if (autocompleteResults) autocompleteResults.classList.add('hidden');
-                    return;
-                }
-
-                debounceTimer = setTimeout(() => {
-                    // A API usa o parâmetro 'query' que aceita tanto Nome quanto Telefone
-                    fetch(`/api/clientes/search?query=${encodeURIComponent(query)}&arena_id=${arenaId}`)
-                        .then(response => response.json())
-                        .then(data => {
-                            if (!autocompleteResults) return;
-
-                            autocompleteResults.innerHTML = '';
-
-                            if (data && data.length > 0) {
-                                data.forEach(client => {
-                                    const div = document.createElement('div');
-                                    div.className =
-                                        'p-3 hover:bg-indigo-50 cursor-pointer border-b border-gray-100 transition-colors';
-
-                                    // Captura o contato correto do objeto da API
-                                    const phone = client.whatsapp_contact || '';
-
-                                    div.innerHTML = `
-                            <div class="font-bold text-gray-800">${client.name}</div>
-                            <div class="text-xs text-gray-500">${phone}</div>
-                        `;
-
-                                    // Ao clicar em um resultado
-                                    div.onclick = () => {
-                                        // 1. Preenche o Nome
-                                        if (clientNameInput()) {
-                                            clientNameInput().value = client.name;
-                                        }
-
-                                        // 2. Preenche o WhatsApp
-                                        if (phone && clientContactInput()) {
-                                            const cleanPhone = phone.replace(/\D/g, '');
-                                            clientContactInput().value = cleanPhone;
-
-                                            // 3. Dispara validação visual e busca de reputação/VIP
-                                            // (Isso já ativa o sinal R$ 0,00 se o cliente for VIP)
-                                            validateClientContact(cleanPhone);
-                                        }
-
-                                        autocompleteResults.classList.add('hidden');
-                                    };
-                                    autocompleteResults.appendChild(div);
-                                });
-
-                                autocompleteResults.classList.remove('hidden');
-                            } else {
-                                autocompleteResults.classList.add('hidden');
-                            }
-                        })
-                        .catch(err => {
-                            console.error("Erro no autocomplete:", err);
-                            if (autocompleteResults) autocompleteResults.classList.add('hidden');
-                        });
-                }, 300); // Aguarda 300ms de pausa na digitação
-            };
-
-            // --- Registro dos Eventos ---
-
-            // 1. Monitora o campo de Nome
             if (clientNameInput()) {
                 clientNameInput().addEventListener('input', function() {
-                    performClientSearch(this);
+                    const query = this.value;
+                    const arenaId = document.getElementById('quick-arena-id')?.value || '';
+
+                    clearTimeout(debounceTimer);
+
+                    if (query.length < 2) {
+                        autocompleteResults.classList.add('hidden');
+                        return;
+                    }
+
+                    debounceTimer = setTimeout(() => {
+                        // ✅ CORREÇÃO 1: Mudei 'q=' para 'query=' para bater com seu UserController
+                        fetch(`/api/clientes/search?query=${encodeURIComponent(query)}&arena_id=${arenaId}`)
+                            .then(response => response.json())
+                            .then(data => {
+                                autocompleteResults.innerHTML = '';
+
+                                if (data && data.length > 0) {
+                                    data.forEach(client => {
+                                        const div = document.createElement('div');
+                                        div.className =
+                                            'p-3 hover:bg-indigo-50 cursor-pointer border-b border-gray-100 transition-colors';
+
+                                        // ✅ CORREÇÃO 2: Mudei 'client.contact' para 'client.whatsapp_contact'
+                                        // (É o nome da coluna no seu banco e no retorno da sua API)
+                                        const phone = client.whatsapp_contact || '';
+
+                                        div.innerHTML = `
+                                <div class="font-bold text-gray-800">${client.name}</div>
+                                <div class="text-xs text-gray-500">${phone}</div>
+                            `;
+
+                                        div.onclick = () => {
+                                            // Preenche o nome
+                                            clientNameInput().value = client.name;
+
+                                            // ✅ CORREÇÃO 3: Preenche o contato usando a chave correta
+                                            if (phone) {
+                                                const cleanPhone = phone.replace(/\D/g, '');
+                                                clientContactInput().value = cleanPhone;
+
+                                                // Dispara a busca de reputação/VIP que já existe no seu script
+                                                validateClientContact(cleanPhone);
+                                            }
+
+                                            autocompleteResults.classList.add('hidden');
+                                        };
+                                        autocompleteResults.appendChild(div);
+                                    });
+                                    autocompleteResults.classList.remove('hidden');
+                                } else {
+                                    autocompleteResults.classList.add('hidden');
+                                }
+                            })
+                            .catch(err => console.error("Erro no autocomplete:", err));
+                    }, 300);
                 });
             }
 
-            // 2. Monitora o campo de WhatsApp
-            if (clientContactInput()) {
-                clientContactInput().addEventListener('input', function() {
-                    // Se o usuário estiver digitando o número, também tentamos o autocomplete
-                    performClientSearch(this);
-                });
-            }
-
-            // 3. Fecha os resultados ao clicar fora deles
-            document.addEventListener('click', function(e) {
-                if (autocompleteResults && !autocompleteResults.contains(e.target) &&
-                    e.target !== clientNameInput() && e.target !== clientContactInput()) {
-                    autocompleteResults.classList.add('hidden');
-                }
-            });
             // Fecha a lista de sugestões se clicar fora do campo
             document.addEventListener('click', function(e) {
                 if (autocompleteResults && !autocompleteResults.contains(e.target) && e.target !== clientNameInput()) {

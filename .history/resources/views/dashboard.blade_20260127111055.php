@@ -25,25 +25,20 @@
         /* 1. CONTAINER E ESTRUTURA GERAL */
         .calendar-container {
             max-width: 1000px;
-            margin: 20px auto;
-            /* Reduzido de 40px para mobile */
-            padding: 10px;
-            /* Reduzido de 20px para mobile */
+            margin: 40px auto;
+            padding: 20px;
             background-color: #ffffff;
             border-radius: 12px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
         }
 
         .fc {
             font-family: 'Inter', sans-serif;
             color: #333;
-            font-size: 0.85rem;
-            /* Ajuste para o calendário não quebrar em telas médias */
         }
 
         .fc-toolbar-title {
-            font-size: 1.1rem !important;
-            /* Título menor para evitar quebra no topo */
+            font-size: 1.5rem !important;
         }
 
         /* 2. MODAIS E OVERLAYS */
@@ -58,8 +53,6 @@
             justify-content: center;
             align-items: center;
             z-index: 1000;
-            padding: 10px;
-            /* Margem de segurança para o modal não encostar na borda da tela */
         }
 
         .modal-overlay.hidden {
@@ -67,6 +60,8 @@
         }
 
         /* 3. ESTILIZAÇÃO DE EVENTOS (CORES) */
+
+        /* ✅ DISPONÍVEL (Verde) */
         .fc-event-available {
             background-color: #10B981 !important;
             border-color: #059669 !important;
@@ -75,52 +70,81 @@
             padding: 2px 5px;
             border-radius: 4px;
             opacity: 0.8;
+            transition: opacity 0.2s;
         }
 
+        /* ✅ RECORRENTES (Fúcsia) */
         .fc-event-recurrent {
             background-color: #C026D3 !important;
             border-color: #A21CAF !important;
+            padding: 2px 5px;
+            border-radius: 4px;
             font-weight: 700 !important;
+            color: #ffffff !important;
         }
 
+        /* ✅ AVULSOS / RÁPIDOS (Indigo) */
         .fc-event-quick {
             background-color: #4f46e5 !important;
             border-color: #4338ca !important;
+            color: white !important;
+            padding: 2px 5px;
+            border-radius: 4px;
         }
 
+        /* ✅ PENDENTES (Laranja) */
         .fc-event-pending {
             background-color: #ff9800 !important;
             border-color: #f97316 !important;
+            color: white !important;
+            padding: 2px 5px;
+            border-radius: 4px;
             font-style: italic;
         }
 
+        /* ✅ FALTA / NO-SHOW / ATRASADOS (Vermelho) */
         .fc-event-no-show {
             background-color: #E53E3E !important;
             border-color: #C53030 !important;
+            color: white !important;
+            padding: 2px 5px;
+            border-radius: 4px;
             font-weight: 700 !important;
         }
 
+        /* ✅ NOVO: MANUTENÇÃO (Rosa Choque) */
         .fc-event-maintenance {
             background-color: #DB2777 !important;
+            /* Pink 600 */
             border-color: #BE185D !important;
+            /* Pink 700 */
+            color: white !important;
+            padding: 2px 5px;
+            border-radius: 4px;
             font-weight: bold !important;
             text-transform: uppercase;
         }
 
+        /* ✅ RESOLVIDOS / PAGOS (Cinza com Riscado) */
         .fc-event-paid {
             background-color: #9CA3AF !important;
             border-color: #6B7280 !important;
+            color: #4B5563 !important;
             opacity: 0.5 !important;
             filter: grayscale(100%);
+            font-weight: normal !important;
             text-decoration: line-through;
         }
 
-        /* 4. REGRAS DE VISIBILIDADE */
+        /* 4. REGRAS DE VISIBILIDADE E COMPORTAMENTO */
+
+        /* Esconde cancelados/rejeitados para o verde aparecer */
         .fc-event-cancelled,
         .fc-event-rejected {
             display: none !important;
         }
 
+        /* Garante texto branco em status ativos */
         .fc-event-recurrent,
         .fc-event-quick,
         .fc-event-no-show,
@@ -133,72 +157,36 @@
             opacity: 0.6 !important;
             filter: grayscale(100%) !important;
             pointer-events: none !important;
-            background-image: linear-gradient(45deg, rgba(0, 0, 0, 0.05) 25%, transparent 25%, transparent 50%, rgba(0, 0, 0, 0.05) 50%, rgba(0, 0, 0, 0.05) 75%, transparent 75%, transparent) !important;
+            cursor: not-allowed !important;
+            user-select: none !important;
+            background-image: linear-gradient(45deg, rgba(0, 0, 0, 0.1) 25%, transparent 25%, transparent 50%, rgba(0, 0, 0, 0.1) 50%, rgba(0, 0, 0, 0.1) 75%, transparent 75%, transparent) !important;
             background-size: 15px 15px !important;
+            border: 1px dashed #666 !important;
         }
 
-        /* 5. AUTOCOMPLETE (AJUSTE FINO) */
-        #client-autocomplete-results {
-            max-height: 200px;
-            overflow-y: auto;
-            border-bottom-left-radius: 8px;
-            border-bottom-right-radius: 8px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+        /* 5. FORMATAÇÃO DE INPUTS */
+        .input-money-quick {
+            text-align: right;
         }
 
-        /* 6. RESPONSIVIDADE (MEDIA QUERIES) */
-        @media (max-width: 640px) {
-            .calendar-container {
-                margin: 10px auto;
-                padding: 5px;
-                border-radius: 0;
-                /* Remove arredondamento em telas muito pequenas para ganhar espaço */
-            }
-
-            /* Ajusta o tamanho da fonte dos eventos no mobile */
-            .fc-event-title {
-                font-size: 10px !important;
-                font-weight: 600;
-            }
-
-            .fc-toolbar {
-                flex-direction: column;
-                gap: 10px;
-            }
-
-            /* Faz o modal ocupar mais espaço no celular */
-            .modal-overlay>div {
-                width: 100% !important;
-                margin: 0 !important;
-                max-height: 98vh;
-            }
+        #confirmation-value {
+            text-align: right;
         }
 
-        /* 7. SCROLLBAR CUSTOMIZADA (PARA O MODAL) */
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 6px;
+        #signal_value_quick.bg-indigo-50 {
+            background-color: #eef2ff !important;
         }
 
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #4f46e5;
-            /* Cor indigo igual aos botões */
-            border-radius: 10px;
-        }
-
-        /* 8. ANIMAÇÕES */
+        /* 6. ANIMAÇÕES */
         @keyframes pulse-red {
             0% {
                 transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(229, 62, 62, 0.4);
+                box-shadow: 0 0 0 0 rgba(229, 62, 62, 0.7);
             }
 
             70% {
                 transform: scale(1.02);
-                box-shadow: 0 0 0 8px rgba(229, 62, 62, 0);
+                box-shadow: 0 0 0 10px rgba(229, 62, 62, 0);
             }
 
             100% {
@@ -2068,8 +2056,8 @@
             <div class="grid grid-cols-1 gap-2">
                 ${!isFinalized && status !== 'cancelled' ?
                     `<button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                                                                                                                <span>💰 IR PARA O CAIXA</span>
-                                                                                                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+                                                                                                        <span>💰 IR PARA O CAIXA</span>
+                                                                                                    </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
                 <div class="grid grid-cols-2 gap-2 mt-1">
                     <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})"
@@ -2084,14 +2072,14 @@
 
                 ${!isFinalized && status !== 'no_show' ?
                     `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')"
-                                                                                                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
-                                                                                                                FALTA (NO-SHOW)
-                                                                                                            </button>` : ''}
+                                                                                                        class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
+                                                                                                        FALTA (NO-SHOW)
+                                                                                                    </button>` : ''}
 
                 ${isRecurrent ?
                     `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition uppercase">
-                                                                                                                CANCELAR SÉRIE
-                                                                                                            </button>` : ''}
+                                                                                                        CANCELAR SÉRIE
+                                                                                                    </button>` : ''}
 
                 <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold">
                     Fechar
