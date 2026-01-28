@@ -179,8 +179,8 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
     Route::get('/dashboard', [App\Http\Controllers\Bar\BarDashboardController::class, 'index'])->name('dashboard');
 
     // 2. PDV (Venda Rápida / Balcão)
-    // Alterado para 'pdv' para resolver o erro RouteNotFound no Dashboard
-    Route::get('/pdv', [App\Http\Controllers\Bar\BarPosController::class, 'index'])->name('pdv');
+    // Usaremos o BarPosController para gerenciar a venda direta e baixa de estoque
+    Route::get('/pdv', [App\Http\Controllers\Bar\BarPosController::class, 'index'])->name('pos.index');
     Route::post('/pdv/venda', [App\Http\Controllers\Bar\BarPosController::class, 'store'])->name('pos.store');
 
     // 3. Estoque (Produtos, Categorias e Movimentações)
@@ -219,7 +219,7 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
 
     // 5. Caixa e Relatórios de Venda
     Route::get('/caixa', [App\Http\Controllers\Bar\BarCashController::class, 'index'])->name('cash.index');
-    // Rota para ver os detalhes de uma venda realizada no PDV
+    // Adicionei uma rota para ver os detalhes de uma venda realizada no PDV
     Route::get('/vendas/{sale}', [App\Http\Controllers\Bar\BarPosController::class, 'show'])->name('sales.show');
 });
 

@@ -179,13 +179,11 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
     Route::get('/dashboard', [App\Http\Controllers\Bar\BarDashboardController::class, 'index'])->name('dashboard');
 
     // 2. PDV (Venda Rápida / Balcão)
-    // Alterado para 'pdv' para resolver o erro RouteNotFound no Dashboard
-    Route::get('/pdv', [App\Http\Controllers\Bar\BarPosController::class, 'index'])->name('pdv');
-    Route::post('/pdv/venda', [App\Http\Controllers\Bar\BarPosController::class, 'store'])->name('pos.store');
+    Route::get('/pdv', [App\Http\Controllers\Bar\BarOrderController::class, 'pdv'])->name('pdv');
 
     // 3. Estoque (Produtos, Categorias e Movimentações)
 
-    // Cadastro rápido de categorias
+    // Cadastro rápido de categorias (usado pelo botão + no formulário)
     Route::post('categorias/salvar-rapido', [App\Http\Controllers\Bar\BarProductController::class, 'storeCategory'])->name('categories.store_ajax');
 
     // Movimentação de Estoque: Entrada (Abastecimento)
@@ -195,7 +193,7 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
     // 📜 Histórico de Movimentações (Logs de auditoria)
     Route::get('estoque/historico', [App\Http\Controllers\Bar\BarProductController::class, 'stockHistory'])->name('products.history');
 
-    // 📉 Registro de Perdas
+    // 📉 NOVIDADE: Registro de Perdas (Quebras, Vencimentos, etc)
     Route::post('estoque/registrar-perda', [App\Http\Controllers\Bar\BarProductController::class, 'recordLoss'])->name('products.record_loss');
 
     // Resource Principal de Estoque (CRUD)
@@ -210,17 +208,15 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
         'estoque' => 'product'
     ]);
 
-    // Rota para ajuste individual
+    // Rota para ajuste/adição rápida individual (PATCH)
     Route::patch('estoque/{product}/add-stock', [App\Http\Controllers\Bar\BarProductController::class, 'addStock'])->name('products.add_stock');
 
     // 4. Mesas (Mapa de mesas e configuração)
     Route::get('/mesas', [App\Http\Controllers\Bar\BarTableController::class, 'index'])->name('tables.index');
     Route::post('/mesas/configurar', [App\Http\Controllers\Bar\BarTableController::class, 'configure'])->name('tables.config');
 
-    // 5. Caixa e Relatórios de Venda
+    // 5. Caixa Exclusivo do Bar
     Route::get('/caixa', [App\Http\Controllers\Bar\BarCashController::class, 'index'])->name('cash.index');
-    // Rota para ver os detalhes de uma venda realizada no PDV
-    Route::get('/vendas/{sale}', [App\Http\Controllers\Bar\BarPosController::class, 'show'])->name('sales.show');
 });
 
 require __DIR__ . '/auth.php';
