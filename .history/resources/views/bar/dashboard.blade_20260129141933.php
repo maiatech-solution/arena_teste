@@ -1,6 +1,7 @@
 <nav x-data="{ open: false }" class="bg-gray-900 border-b border-orange-600/30 shadow-2xl">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between h-20">
+
             <div class="flex">
                 <div class="shrink-0 flex items-center">
                     <a href="{{ route('bar.dashboard') }}" class="flex items-center gap-3 group">
@@ -24,7 +25,6 @@
                                 'bar.products.index' => 'Estoque',
                                 'bar.tables.index' => 'Mesas',
                                 'bar.cash.index' => 'Caixa',
-                                'admin.users.index' => 'Usuários', // ✅ Adicionado aqui
                             ];
                         @endphp
 
@@ -43,13 +43,13 @@
             </div>
 
             <div class="flex items-center space-x-4">
-                <div class="hidden sm:flex sm:items-center sm:ms-6">
+                <div class="hidden sm:flex sm:items-center">
                     <x-dropdown align="right" width="48">
                         <x-slot name="trigger">
-                            <button class="flex items-center gap-3 px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-xl hover:bg-gray-800 hover:border-orange-500/50 transition-all duration-200 shadow-lg focus:outline-none">
+                            <button class="flex items-center gap-3 px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-xl hover:bg-gray-800 hover:border-orange-500/50 transition-all duration-200 shadow-lg">
                                 <div class="flex flex-col text-right">
-                                    <span class="text-[10px] font-black uppercase text-orange-500 leading-none mb-1">Acesso Gestor</span>
-                                    <span class="text-sm font-bold text-white leading-tight">{{ Auth::user()->name }}</span>
+                                    <span class="text-[10px] font-black uppercase text-orange-500 leading-none mb-1">Gestor</span>
+                                    <span class="text-sm font-bold text-white">{{ Auth::user()->name }}</span>
                                 </div>
                                 <svg class="h-4 w-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -58,39 +58,32 @@
                         </x-slot>
 
                         <x-slot name="content">
-                            @if (isset($site_info) && $site_info->modules_active == 3)
-                                <div class="block px-4 py-2 text-[10px] text-gray-400 font-black uppercase tracking-widest border-b border-gray-100 italic">Mudar Ambiente</div>
-                                <x-dropdown-link :href="route('modules.switch', 'arena')" class="bg-indigo-50 text-indigo-700 font-bold">
-                                    🏟️ Painel Arena
-                                </x-dropdown-link>
+                            @if ($site_info->modules_active == 3)
+                                <div class="block px-4 py-2 text-[10px] text-gray-400 font-black uppercase italic">Mudar Ambiente</div>
+                                <x-dropdown-link :href="route('modules.switch', 'arena')">🏟️ Painel Arena</x-dropdown-link>
                                 <div class="border-t border-gray-100"></div>
                             @endif
 
                             <x-dropdown-link :href="route('profile.edit')">Meu Perfil</x-dropdown-link>
 
                             @if (Auth::user()->has_admin_access)
-                                <x-dropdown-link :href="route('admin.company.edit')">Dados do estabelecimento</x-dropdown-link>
-                                <x-dropdown-link :href="route('admin.users.index')">Gerenciar Usuários</x-dropdown-link> {{-- ✅ Adicionado no Dropdown --}}
+                                <x-dropdown-link :href="route('admin.company.edit')">Dados da empresa</x-dropdown-link>
                             @endif
 
                             @if (Auth::user()->is_admin)
-                                <x-dropdown-link :href="route('admin.plans')" class="text-orange-600 font-black border-t border-gray-100 bg-orange-50">
-                                    ⚙️ Gerenciar Plano
-                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.plans')" class="text-orange-600 font-black bg-orange-50">⚙️ Gerenciar Plano</x-dropdown-link>
                             @endif
 
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf
-                                <x-dropdown-link :href="route('logout')" onclick="event.preventDefault(); this.closest('form').submit();" class="text-red-600 font-bold border-t border-gray-100">
-                                    Sair
-                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('logout')" onclick="event.preventDefault(); this.closest('form').submit();" class="text-red-600 font-bold">Sair</x-dropdown-link>
                             </form>
                         </x-slot>
                     </x-dropdown>
                 </div>
 
-                <div class="-me-2 flex items-center sm:hidden">
-                    <button @click="open = ! open" class="inline-flex items-center justify-center p-2 rounded-md text-orange-500 hover:text-orange-400 hover:bg-gray-800 focus:outline-none transition duration-150 ease-in-out">
+                <div class="flex items-center sm:hidden">
+                    <button @click="open = ! open" class="p-2 rounded-xl bg-gray-800 text-orange-500 border border-gray-700">
                         <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
                             <path :class="{'hidden': open, 'inline-flex': ! open }" class="inline-flex" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                             <path :class="{'hidden': ! open, 'inline-flex': open }" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -101,40 +94,19 @@
         </div>
     </div>
 
-    <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden border-t border-gray-800 bg-gray-900">
+    <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden bg-gray-900 border-t border-gray-800">
         <div class="pt-2 pb-3 space-y-1">
             @if (!request()->routeIs('bar.dashboard'))
-                <x-responsive-nav-link :href="route('bar.pdv')" :active="request()->routeIs('bar.pdv')" class="text-gray-300">PDV</x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('bar.products.index')" :active="request()->routeIs('bar.products.*')" class="text-gray-300">Estoque</x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('bar.tables.index')" :active="request()->routeIs('bar.tables.*')" class="text-gray-300">Mesas</x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('bar.cash.index')" :active="request()->routeIs('bar.cash.*')" class="text-gray-300">Caixa</x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.users.index')" :active="request()->routeIs('admin.users.*')" class="text-gray-300">Usuários</x-responsive-nav-link> {{-- ✅ Adicionado no Mobile --}}
+                <x-responsive-nav-link :href="route('bar.pdv')" :active="request()->routeIs('bar.pdv')">PDV</x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('bar.products.index')" :active="request()->routeIs('bar.products.*')">Estoque</x-responsive-nav-link>
+                <hr class="border-gray-800 my-2">
             @endif
 
-            @if (isset($site_info) && $site_info->modules_active == 3)
-                <x-responsive-nav-link :href="route('modules.switch', 'arena')" class="bg-indigo-900/40 text-indigo-400 font-bold border-l-4 border-indigo-500">
-                    🏟️ Mudar para Arena
-                </x-responsive-nav-link>
-            @endif
-
-            <hr class="border-gray-800 my-2">
-            <x-responsive-nav-link :href="route('profile.edit')" class="text-gray-300">Meu Perfil</x-responsive-nav-link>
-
-            @if (Auth::user()->has_admin_access)
-                <x-responsive-nav-link :href="route('admin.company.edit')" class="text-gray-300">Dados do estabelecimento</x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.users.index')" class="text-gray-300">Gerenciar Usuários</x-responsive-nav-link> {{-- ✅ Adicionado no Mobile --}}
-            @endif
+            <x-responsive-nav-link :href="route('admin.company.edit')">Dados da Empresa</x-responsive-nav-link>
 
             @if(Auth::user()->is_admin)
                 <x-responsive-nav-link :href="route('admin.plans')" class="text-orange-500 font-black">⚙️ Gerenciar Plano</x-responsive-nav-link>
             @endif
-
-            <form method="POST" action="{{ route('logout') }}">
-                @csrf
-                <x-responsive-nav-link :href="route('logout')" onclick="event.preventDefault(); this.closest('form').submit();" class="text-red-500">
-                    Sair
-                </x-responsive-nav-link>
-            </form>
         </div>
     </div>
 </nav>

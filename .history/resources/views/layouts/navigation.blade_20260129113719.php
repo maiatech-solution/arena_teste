@@ -107,9 +107,9 @@
                                 {{ __('Dados do estabelecimento') }}
                             </x-dropdown-link>
 
-                            {{-- 🛡️ EXCLUSIVO ADMIN (Maia e Marcos): ROTA TÉCNICA AJUSTADA --}}
+                            {{-- 🛡️ EXCLUSIVO ADMIN (Maia e Marcos): Atalho Master --}}
                             @if(Auth::user()->is_admin)
-                                <x-dropdown-link :href="route('admin.plans')" class="text-indigo-600 font-black border-t border-gray-100 bg-gray-50">
+                                <x-dropdown-link :href="route('modules.selection')" class="text-indigo-600 font-black border-t border-gray-100 bg-gray-50">
                                     ⚙️ Gerenciar Plano/Módulos
                                 </x-dropdown-link>
                             @endif
@@ -176,8 +176,7 @@
                 </x-responsive-nav-link>
 
                 @if(Auth::user()->is_admin)
-                    {{-- AJUSTADO PARA A ROTA DE PLANOS --}}
-                    <x-responsive-nav-link :href="route('admin.plans')" class="text-indigo-600 font-bold">
+                    <x-responsive-nav-link :href="route('modules.selection')" class="text-indigo-600 font-bold">
                         ⚙️ Alterar Plano/Módulos
                     </x-responsive-nav-link>
                 @endif

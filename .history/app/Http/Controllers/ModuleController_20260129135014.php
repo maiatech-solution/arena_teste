@@ -48,8 +48,8 @@ class ModuleController extends Controller
     }
 
     /**
-     * 🚪 INDEX: Tela de NAVEGAÇÃO (Cards de Arena/Bar)
-     * Esta função decide se mostra os cards ou se pula direto para o sistema.
+     * PASSO 2 / LOGIN: Decisão de destino
+     * Diferencia entre "Gerenciar Plano" (Admin) e "Navegar" (Combo).
      */
     public function index()
     {
@@ -61,51 +61,48 @@ class ModuleController extends Controller
         }
 
         /**
-         * 🎯 REGRA DE NAVEGAÇÃO
-         * Se for ADMIN ou se o plano for COMBO (3), mostra a tela de escolha (Cards).
+         * 🎯 REGRA DE ACESSO PÓS-LOGIN
+         * Se o usuário for ADMIN MASTER, ele vai para a tela de GESTÃO (select_modules)
+         * para poder fazer upgrade/downgrade de qualquer cliente.
          */
-        if (Auth::user()->is_admin || $company->modules_active == 3) {
-            return view('admin.choose_module', compact('company'));
+        if (Auth::user()->is_admin) {
+            return view('admin.select_modules', compact('company'));
         }
 
         /**
-         * Se NÃO for admin e NÃO for combo, redirecionamos baseado no plano ativo.
+         * Se NÃO for admin, redirecionamos baseado no plano ativo.
          */
+
+        // Se o módulo for 1 (Arena) redireciona direto
         if ($company->modules_active == 1) {
             return redirect()->route('dashboard');
         }
 
+        // Se o módulo for 2 (Bar) redireciona direto
         if ($company->modules_active == 2) {
             return redirect()->route('bar.dashboard');
         }
 
-        return view('admin.choose_module', compact('company'));
-    }
-
-    /**
-     * ⚙️ GESTÃO TÉCNICA: Tela de Upgrade/Downgrade (Rádios)
-     * Apenas o Admin Master acessa para mudar o plano do cliente.
-     */
-    public function managePlans()
-    {
-        if (!Auth::user()->is_admin) {
-            return redirect()->route('modules.selection');
+        // Se for Módulo 3 (Combo), abre a tela de NAVEGAÇÃO limpa (choose_module)
+        // para ele apenas escolher em qual entrar, sem mexer em planos.
+        if ($company->modules_active == 3) {
+            return view('admin.choose_module', compact('company'));
         }
 
-        $company = CompanyInfo::first();
-        // ESTA CARREGA A VIEW DE ESCOLHER PLANO (Upgrade)
         return view('admin.select_modules', compact('company'));
     }
 
 
     /**
      * SALVAR PASSO 2: Ativa ou Altera o Módulo (Utilizado na configuração de plano)
+     * Ajustado para permitir Downgrade APENAS por Admins Master (Maia/Marcos).
      */
     public function store(Request $request)
     {
         $company = CompanyInfo::first();
         $user = Auth::user();
 
+        // 🛡️ SEGURANÇA: Se já houver módulo, apenas ADMINS (Maia/Marcos) podem trocar o plano raiz.
         if ($company && $company->modules_active > 0 && !$user->is_admin) {
             return redirect()->back()->with('error', 'Apenas administradores podem alterar o plano de módulos.');
         }
@@ -116,15 +113,23 @@ class ModuleController extends Controller
 
         $newModule = (int) $request->module;
 
+        /**
+         * 🛡️ REGRA DE INTEGRIDADE E PROTEÇÃO:
+         */
         if (!$user->is_admin && $company) {
+            // Impede trocar Arena direto para PDV (Downgrade/Perda de dados visual)
             if ($company->modules_active == 1 && $newModule == 2) {
                 return redirect()->back()->with('error', 'Para adicionar o Bar mantendo sua Arena, escolha o Combo Full.');
             }
+
+            // Impede trocar PDV direto para Arena (Downgrade/Perda de dados visual)
             if ($company->modules_active == 2 && $newModule == 1) {
                 return redirect()->back()->with('error', 'Para adicionar a Arena mantendo seu Bar, escolha o Combo Full.');
             }
+
+            // Impede que o Gestor reduza o Combo para um módulo simples sozinho
             if ($company->modules_active == 3 && $newModule < 3) {
-                return redirect()->back()->with('error', 'Downgrade de plano deve ser solicitado ao suporte.');
+                return redirect()->back()->with('error', 'Downgrade deve ser solicitado ao suporte.');
             }
         }
 
@@ -139,8 +144,16 @@ class ModuleController extends Controller
 
         $msg = 'Configuração de módulos atualizada com sucesso!';
 
-        // Após salvar o plano, volta para a tela de gestão técnica (Rádios)
-        return redirect()->route('admin.plans')->with('success', $msg);
+        // Redirecionamento inteligente baseado na nova escolha
+        if ($newModule == 2) {
+            return redirect()->route('bar.dashboard')->with('success', $msg);
+        }
+
+        if ($newModule == 3) {
+            return redirect()->route('modules.selection')->with('success', $msg);
+        }
+
+        return redirect()->route('dashboard')->with('success', $msg);
     }
 
     /**
@@ -151,14 +164,17 @@ class ModuleController extends Controller
         $company = CompanyInfo::first();
         $user = Auth::user();
 
+        // Permite a troca se for Combo (3) ou se for o Admin Master
         if (!$user->is_admin && (!$company || $company->modules_active != 3)) {
             return redirect()->back()->with('error', 'Troca de ambiente disponível apenas no plano Combo.');
         }
 
+        // Redireciona para o Bar
         if ($target === 'bar' || $target === 'pdv') {
             return redirect()->route('bar.dashboard');
         }
 
+        // Redireciona para a Arena (Padrão)
         return redirect()->route('dashboard');
     }
 }

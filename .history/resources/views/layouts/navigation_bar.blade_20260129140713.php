@@ -1,0 +1,99 @@
+<nav x-data="{ open: false }" class="bg-gray-900 border-b border-orange-600/30 shadow-2xl">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-20">
+
+            <div class="flex">
+                <div class="shrink-0 flex items-center">
+                    <a href="{{ route('bar.dashboard') }}" class="flex items-center gap-3 group">
+                        <span class="text-3xl group-hover:scale-110 transition-transform">🍺</span>
+                        <div class="flex flex-col border-l border-gray-700 pl-3">
+                            <span class="text-xl font-black text-white leading-none uppercase tracking-tighter italic">
+                                {{ $site_info->nome_fantasia ?? 'Bar System' }}
+                            </span>
+                            <span
+                                class="text-[10px] font-black text-orange-500 uppercase tracking-widest leading-tight mt-1">
+                                MaiaTech Solution
+                            </span>
+                        </div>
+                    </a>
+                </div>
+
+                @if (request()->path() !== 'bar/dashboard')
+                    <div class="hidden md:flex items-center space-x-2 sm:ms-10">
+                        @php
+                            $links = [
+                                'bar.pdv' => 'PDV',
+                                'bar.products.index' => 'Estoque',
+                                'bar.tables.index' => 'Mesas',
+                                'bar.cash.index' => 'Caixa',
+                                'bar.relatorios.index' => 'Relatórios',
+                            ];
+                        @endphp
+
+                        @foreach ($links as $route => $label)
+                            @php $active = request()->routeIs($route); @endphp
+                            <a href="{{ Route::has($route) ? route($route) : '#' }}"
+                                class="px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all duration-300
+                               {{ $active
+                                   ? 'text-white bg-orange-600 rounded-xl shadow-[0_0_15px_rgba(234,88,12,0.6)] border-b-2 border-white'
+                                   : 'text-gray-400 hover:text-orange-500 hover:bg-gray-800 rounded-xl' }}">
+                                {{ $label }}
+                            </a>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+
+            <div class="flex items-center">
+                <x-dropdown align="right" width="48">
+                    <x-slot name="trigger">
+                        <button
+                            class="flex items-center gap-3 px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-xl hover:bg-gray-800 hover:border-orange-500/50 transition-all duration-200 shadow-lg">
+                            <div class="flex flex-col text-right">
+                                <span class="text-[10px] font-black uppercase text-orange-500 leading-none mb-1">Acesso
+                                    Gestor</span>
+                                <span class="text-sm font-bold text-white leading-tight">{{ Auth::user()->name }}</span>
+                            </div>
+                            <svg class="h-4 w-4 text-orange-500" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                    </x-slot>
+
+                    <x-slot name="content">
+                        @if ($site_info->modules_active == 3)
+                            <div
+                                class="block px-4 py-2 text-[10px] text-gray-400 font-black uppercase tracking-widest border-b border-gray-100 italic">
+                                Mudar Ambiente</div>
+                            <x-dropdown-link :href="route('modules.switch', 'arena')" class="bg-indigo-50 text-indigo-700 font-bold">
+                                🏟️ Painel Arena
+                            </x-dropdown-link>
+                            <div class="border-t border-gray-100"></div>
+                        @endif
+
+                        <x-dropdown-link :href="route('profile.edit')">Meu Perfil</x-dropdown-link>
+
+                        @if (Auth::user()->is_admin)
+                            <x-dropdown-link :href="route('admin.plans')"
+                                class="text-orange-600 font-black border-t border-gray-100 bg-orange-50">
+                                ⚙️ Gerenciar Plano
+                            </x-dropdown-link>
+                        @endif
+
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <x-dropdown-link :href="route('logout')"
+                                onclick="event.preventDefault(); this.closest('form').submit();"
+                                class="text-red-600 font-bold border-t border-gray-100">
+                                Sair
+                            </x-dropdown-link>
+                        </form>
+                    </x-slot>
+                </x-dropdown>
+            </div>
+
+        </div>
+    </div>
+</nav>

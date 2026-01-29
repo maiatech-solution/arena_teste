@@ -22,25 +22,17 @@ Route::get('/', function () {
 })->name('home');
 
 // -----------------------------------------------------------------------------------
-// 🛡️ CONFIGURAÇÃO E NAVEGAÇÃO DE MÓDULOS (ORGANIZADO)
+// 🛡️ NOVO: CONFIGURAÇÃO INICIAL (LAYOUT NEUTRO)
 // -----------------------------------------------------------------------------------
 Route::middleware(['auth'])->group(function () {
-    // 1. Cadastro Inicial da Unidade (Onboarding)
+    // 1. Cadastro Inicial da Unidade (Tela Neutra)
     Route::get('/setup-unidade', [ModuleController::class, 'setupUnidade'])->name('onboarding.setup');
     Route::post('/setup-unidade', [ModuleController::class, 'setupStore'])->name('onboarding.store');
 
-    // 2. NAVEGAÇÃO APÓS LOGIN (A tela de CARDS para entrar nos sistemas)
-    // É para cá que o login te manda. Abre a view: choose_module.blade.php
+    // 2. Seleção de Módulos (Cards)
     Route::get('/select-modules', [ModuleController::class, 'index'])->name('modules.selection');
-
-    // 3. GESTÃO DE PLANOS (A tela de RÁDIOS para você Admin mudar o plano no banco)
-    // Abre a view: select_modules.blade.php
-    Route::get('/admin/planos', [ModuleController::class, 'managePlans'])->name('admin.plans');
-
-    // O POST agora aponta para a rota de planos, onde está o formulário
-    Route::post('/admin/planos', [ModuleController::class, 'store'])->name('modules.store');
-
-    // Rota para os botões dos Cards (Arena ou Bar)
+    Route::post('/select-modules', [ModuleController::class, 'store'])->name('modules.store');
+    // Rota para alternar visualização (Apenas para Módulo 3 - Combo)
     Route::get('/switch-module/{target}', [ModuleController::class, 'switch'])->name('modules.switch');
 });
 

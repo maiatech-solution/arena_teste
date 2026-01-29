@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Providers\RouteServiceProvider;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -28,12 +29,9 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        // 🎯 AJUSTE: Redireciona para a tela de SELEÇÃO DE MÓDULOS.
-        // O ModuleController@index cuidará de decidir se o usuário:
-        // 1. Vai para o Onboarding (se for novo)
-        // 2. Vai para a Seleção (se for Combo ou Admin)
-        // 3. Vai direto para o Bar ou Arena (se for módulo único)
-        return redirect()->intended(route('modules.selection'));
+        // 🎯 CORREÇÃO: Força o redirecionamento para a rota 'dashboard',
+        // ignorando o RouteServiceProvider::HOME que está apontando para o lugar errado.
+        return redirect()->intended(route('dashboard'));
     }
 
     /**

@@ -24,7 +24,6 @@
                                 'bar.products.index' => 'Estoque',
                                 'bar.tables.index' => 'Mesas',
                                 'bar.cash.index' => 'Caixa',
-                                'admin.users.index' => 'Usuários', // ✅ Adicionado aqui
                             ];
                         @endphp
 
@@ -70,7 +69,6 @@
 
                             @if (Auth::user()->has_admin_access)
                                 <x-dropdown-link :href="route('admin.company.edit')">Dados do estabelecimento</x-dropdown-link>
-                                <x-dropdown-link :href="route('admin.users.index')">Gerenciar Usuários</x-dropdown-link> {{-- ✅ Adicionado no Dropdown --}}
                             @endif
 
                             @if (Auth::user()->is_admin)
@@ -108,7 +106,6 @@
                 <x-responsive-nav-link :href="route('bar.products.index')" :active="request()->routeIs('bar.products.*')" class="text-gray-300">Estoque</x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('bar.tables.index')" :active="request()->routeIs('bar.tables.*')" class="text-gray-300">Mesas</x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('bar.cash.index')" :active="request()->routeIs('bar.cash.*')" class="text-gray-300">Caixa</x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.users.index')" :active="request()->routeIs('admin.users.*')" class="text-gray-300">Usuários</x-responsive-nav-link> {{-- ✅ Adicionado no Mobile --}}
             @endif
 
             @if (isset($site_info) && $site_info->modules_active == 3)
@@ -122,7 +119,6 @@
 
             @if (Auth::user()->has_admin_access)
                 <x-responsive-nav-link :href="route('admin.company.edit')" class="text-gray-300">Dados do estabelecimento</x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.users.index')" class="text-gray-300">Gerenciar Usuários</x-responsive-nav-link> {{-- ✅ Adicionado no Mobile --}}
             @endif
 
             @if(Auth::user()->is_admin)

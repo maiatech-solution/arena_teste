@@ -10,7 +10,6 @@ class ModuleController extends Controller
 {
     /**
      * PASSO 1: Tela de Setup da Unidade (Layout Neutro)
-     * Usado em cadastros novos que ainda não preencheram o nome fantasia.
      */
     public function setupUnidade()
     {
@@ -48,65 +47,45 @@ class ModuleController extends Controller
     }
 
     /**
-     * 🚪 INDEX: Tela de NAVEGAÇÃO (Cards de Arena/Bar)
-     * Esta função decide se mostra os cards ou se pula direto para o sistema.
+     * PASSO 2: Tela de Seleção de Módulos (Cards)
      */
     public function index()
     {
         $company = CompanyInfo::first();
 
-        // 1. VERIFICAÇÃO DE CADASTRO NOVO
+        // Se não houver empresa ou nome fantasia, volta para o setup inicial
         if (!$company || empty($company->nome_fantasia)) {
             return redirect()->route('onboarding.setup');
         }
 
         /**
-         * 🎯 REGRA DE NAVEGAÇÃO
-         * Se for ADMIN ou se o plano for COMBO (3), mostra a tela de escolha (Cards).
+         * REGRA DE ACESSO:
+         * A tela de seleção só abre se:
+         * 1. O módulo ainda for zero (novo cliente).
+         * 2. O usuário logado for ADMIN (Maia/Marcos).
+         * Caso contrário, manda direto para o dashboard ativo.
          */
-        if (Auth::user()->is_admin || $company->modules_active == 3) {
-            return view('admin.choose_module', compact('company'));
+        if ($company->modules_active > 0 && !Auth::user()->is_admin) {
+            return $company->modules_active == 2
+                ? redirect()->route('bar.dashboard')
+                : redirect()->route('dashboard');
         }
 
-        /**
-         * Se NÃO for admin e NÃO for combo, redirecionamos baseado no plano ativo.
-         */
-        if ($company->modules_active == 1) {
-            return redirect()->route('dashboard');
-        }
-
-        if ($company->modules_active == 2) {
-            return redirect()->route('bar.dashboard');
-        }
-
-        return view('admin.choose_module', compact('company'));
-    }
-
-    /**
-     * ⚙️ GESTÃO TÉCNICA: Tela de Upgrade/Downgrade (Rádios)
-     * Apenas o Admin Master acessa para mudar o plano do cliente.
-     */
-    public function managePlans()
-    {
-        if (!Auth::user()->is_admin) {
-            return redirect()->route('modules.selection');
-        }
-
-        $company = CompanyInfo::first();
-        // ESTA CARREGA A VIEW DE ESCOLHER PLANO (Upgrade)
         return view('admin.select_modules', compact('company'));
     }
 
 
     /**
-     * SALVAR PASSO 2: Ativa ou Altera o Módulo (Utilizado na configuração de plano)
+     * SALVAR PASSO 2: Ativa ou Altera o Módulo
+     * Ajustado para permitir Downgrade APENAS por Admins Master (Maia/Marcos).
      */
     public function store(Request $request)
     {
         $company = CompanyInfo::first();
         $user = Auth::user();
 
-        if ($company && $company->modules_active > 0 && !$user->is_admin) {
+        // 🛡️ SEGURANÇA: Se já houver módulo, apenas ADMINS (Maia/Marcos) podem trocar.
+        if ($company->modules_active > 0 && !$user->is_admin) {
             return redirect()->back()->with('error', 'Apenas administradores podem alterar o plano de módulos.');
         }
 
@@ -116,18 +95,29 @@ class ModuleController extends Controller
 
         $newModule = (int) $request->module;
 
-        if (!$user->is_admin && $company) {
+        /**
+         * 🛡️ REGRA DE INTEGRIDADE E PROTEÇÃO:
+         * Se NÃO for Admin Master (Maia/Marcos), aplicamos as travas de troca cruzada.
+         * Se FOR Admin Master, ele ignora isso e pode reduzir o plano se desejar.
+         */
+        if (!$user->is_admin) {
+            // Impede trocar Arena direto para PDV (Downgrade/Perda de dados visual)
             if ($company->modules_active == 1 && $newModule == 2) {
                 return redirect()->back()->with('error', 'Para adicionar o Bar mantendo sua Arena, escolha o Combo Full.');
             }
+
+            // Impede trocar PDV direto para Arena (Downgrade/Perda de dados visual)
             if ($company->modules_active == 2 && $newModule == 1) {
                 return redirect()->back()->with('error', 'Para adicionar a Arena mantendo seu Bar, escolha o Combo Full.');
             }
+
+            // Impede que o Gestor reduza o Combo para um módulo simples sozinho
             if ($company->modules_active == 3 && $newModule < 3) {
-                return redirect()->back()->with('error', 'Downgrade de plano deve ser solicitado ao suporte.');
+                return redirect()->back()->with('error', 'Redução de plano (Downgrade) deve ser solicitada ao suporte MaiaTech.');
             }
         }
 
+        // Se a empresa ainda não existir (Setup inicial)
         if (!$company) {
             $company = new CompanyInfo();
             $company->id = 1;
@@ -139,23 +129,26 @@ class ModuleController extends Controller
 
         $msg = 'Configuração de módulos atualizada com sucesso!';
 
-        // Após salvar o plano, volta para a tela de gestão técnica (Rádios)
-        return redirect()->route('admin.plans')->with('success', $msg);
+        // Redirecionamento inteligente baseado na nova escolha
+        if ($newModule == 2) {
+            return redirect()->route('bar.dashboard')->with('success', $msg);
+        }
+
+        return redirect()->route('dashboard')->with('success', $msg);
     }
 
     /**
-     * EXTRA: Alterna a visualização rápida entre Arena e Bar
+     * EXTRA: Alterna a visualização entre Arena e PDV (Somente para Módulo 3)
      */
     public function switch($target)
     {
         $company = CompanyInfo::first();
-        $user = Auth::user();
 
-        if (!$user->is_admin && (!$company || $company->modules_active != 3)) {
-            return redirect()->back()->with('error', 'Troca de ambiente disponível apenas no plano Combo.');
+        if (!$company || $company->modules_active != 3) {
+            return redirect()->back()->with('error', 'Troca de módulo disponível apenas no plano Combo Full.');
         }
 
-        if ($target === 'bar' || $target === 'pdv') {
+        if ($target === 'pdv') {
             return redirect()->route('bar.dashboard');
         }
 

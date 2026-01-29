@@ -1,6 +1,7 @@
 <nav x-data="{ open: false }" class="bg-gray-900 border-b border-orange-600/30 shadow-2xl">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between h-20">
+
             <div class="flex">
                 <div class="shrink-0 flex items-center">
                     <a href="{{ route('bar.dashboard') }}" class="flex items-center gap-3 group">
@@ -16,37 +17,35 @@
                     </a>
                 </div>
 
-                @if (!request()->routeIs('bar.dashboard'))
-                    <div class="hidden md:flex items-center space-x-2 sm:ms-10">
-                        @php
-                            $links = [
-                                'bar.pdv' => 'PDV',
-                                'bar.products.index' => 'Estoque',
-                                'bar.tables.index' => 'Mesas',
-                                'bar.cash.index' => 'Caixa',
-                                'admin.users.index' => 'Usuários', // ✅ Adicionado aqui
-                            ];
-                        @endphp
+                <div class="hidden md:flex items-center space-x-2 sm:ms-10">
+                    @php
+                        $links = [
+                            'bar.pdv' => 'PDV',
+                            'bar.products.index' => 'Estoque',
+                            'bar.tables.index' => 'Mesas',
+                            'bar.cash.index' => 'Caixa',
+                            'bar.relatorios.index' => 'Relatórios',
+                        ];
+                    @endphp
 
-                        @foreach ($links as $route => $label)
-                            @php $active = request()->routeIs($route); @endphp
-                            <a href="{{ route($route) }}"
-                                class="px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all duration-300
-                               {{ $active
-                                   ? 'text-white bg-orange-600 rounded-xl shadow-[0_0_15px_rgba(234,88,12,0.6)] border-b-2 border-white'
-                                   : 'text-gray-400 hover:text-orange-500 hover:bg-gray-800 rounded-xl' }}">
-                                {{ $label }}
-                            </a>
-                        @endforeach
-                    </div>
-                @endif
+                    @foreach ($links as $route => $label)
+                        @php $active = request()->routeIs($route); @endphp
+                        <a href="{{ Route::has($route) ? route($route) : '#' }}"
+                            class="px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all duration-300
+                           {{ $active
+                               ? 'text-white bg-orange-600 rounded-xl shadow-[0_0_15px_rgba(234,88,12,0.6)] border-b-2 border-white'
+                               : 'text-gray-400 hover:text-orange-500 hover:bg-gray-800 rounded-xl' }}">
+                            {{ $label }}
+                        </a>
+                    @endforeach
+                </div>
             </div>
 
-            <div class="flex items-center space-x-4">
+            <div class="flex items-center">
                 <div class="hidden sm:flex sm:items-center sm:ms-6">
                     <x-dropdown align="right" width="48">
                         <x-slot name="trigger">
-                            <button class="flex items-center gap-3 px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-xl hover:bg-gray-800 hover:border-orange-500/50 transition-all duration-200 shadow-lg focus:outline-none">
+                            <button class="flex items-center gap-3 px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-xl hover:bg-gray-800 hover:border-orange-500/50 transition-all duration-200 shadow-lg">
                                 <div class="flex flex-col text-right">
                                     <span class="text-[10px] font-black uppercase text-orange-500 leading-none mb-1">Acesso Gestor</span>
                                     <span class="text-sm font-bold text-white leading-tight">{{ Auth::user()->name }}</span>
@@ -58,7 +57,7 @@
                         </x-slot>
 
                         <x-slot name="content">
-                            @if (isset($site_info) && $site_info->modules_active == 3)
+                            @if ($site_info->modules_active == 3)
                                 <div class="block px-4 py-2 text-[10px] text-gray-400 font-black uppercase tracking-widest border-b border-gray-100 italic">Mudar Ambiente</div>
                                 <x-dropdown-link :href="route('modules.switch', 'arena')" class="bg-indigo-50 text-indigo-700 font-bold">
                                     🏟️ Painel Arena
@@ -68,9 +67,11 @@
 
                             <x-dropdown-link :href="route('profile.edit')">Meu Perfil</x-dropdown-link>
 
+                            {{-- ADICIONADO: Dados do Estabelecimento --}}
                             @if (Auth::user()->has_admin_access)
-                                <x-dropdown-link :href="route('admin.company.edit')">Dados do estabelecimento</x-dropdown-link>
-                                <x-dropdown-link :href="route('admin.users.index')">Gerenciar Usuários</x-dropdown-link> {{-- ✅ Adicionado no Dropdown --}}
+                                <x-dropdown-link :href="route('admin.company.edit')">
+                                    Dados do estabelecimento
+                                </x-dropdown-link>
                             @endif
 
                             @if (Auth::user()->is_admin)
@@ -103,26 +104,23 @@
 
     <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden border-t border-gray-800 bg-gray-900">
         <div class="pt-2 pb-3 space-y-1">
-            @if (!request()->routeIs('bar.dashboard'))
-                <x-responsive-nav-link :href="route('bar.pdv')" :active="request()->routeIs('bar.pdv')" class="text-gray-300">PDV</x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('bar.products.index')" :active="request()->routeIs('bar.products.*')" class="text-gray-300">Estoque</x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('bar.tables.index')" :active="request()->routeIs('bar.tables.*')" class="text-gray-300">Mesas</x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('bar.cash.index')" :active="request()->routeIs('bar.cash.*')" class="text-gray-300">Caixa</x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.users.index')" :active="request()->routeIs('admin.users.*')" class="text-gray-300">Usuários</x-responsive-nav-link> {{-- ✅ Adicionado no Mobile --}}
-            @endif
-
-            @if (isset($site_info) && $site_info->modules_active == 3)
-                <x-responsive-nav-link :href="route('modules.switch', 'arena')" class="bg-indigo-900/40 text-indigo-400 font-bold border-l-4 border-indigo-500">
+            @if($site_info->modules_active == 3)
+                <x-responsive-nav-link :href="route('modules.switch', 'arena')" class="bg-indigo-900/20 text-indigo-400 font-bold border-l-4 border-indigo-500">
                     🏟️ Mudar para Arena
                 </x-responsive-nav-link>
             @endif
 
+            <x-responsive-nav-link :href="route('bar.pdv')" :active="request()->routeIs('bar.pdv')" class="text-gray-300">PDV</x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('bar.products.index')" :active="request()->routeIs('bar.products.*')" class="text-gray-300">Estoque</x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('bar.tables.index')" :active="request()->routeIs('bar.tables.*')" class="text-gray-300">Mesas</x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('bar.cash.index')" :active="request()->routeIs('bar.cash.*')" class="text-gray-300">Caixa</x-responsive-nav-link>
+
             <hr class="border-gray-800 my-2">
+
             <x-responsive-nav-link :href="route('profile.edit')" class="text-gray-300">Meu Perfil</x-responsive-nav-link>
 
             @if (Auth::user()->has_admin_access)
                 <x-responsive-nav-link :href="route('admin.company.edit')" class="text-gray-300">Dados do estabelecimento</x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.users.index')" class="text-gray-300">Gerenciar Usuários</x-responsive-nav-link> {{-- ✅ Adicionado no Mobile --}}
             @endif
 
             @if(Auth::user()->is_admin)
