@@ -11,7 +11,7 @@
                             </span>
                             <span
                                 class="text-[10px] font-black text-orange-500 uppercase tracking-widest leading-tight mt-1">
-                                Gestão Online
+                                MaiaTech Solution
                             </span>
                         </div>
                     </a>

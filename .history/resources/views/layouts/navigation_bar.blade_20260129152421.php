@@ -10,7 +10,7 @@
                                 {{ $site_info->nome_fantasia ?? 'Bar System' }}
                             </span>
                             <span
-                                class="text-[10px] font-black text-orange-500 uppercase tracking-widest leading-tight mt-1">
+                                class="text-[8px] font-black text-blue-500 uppercase tracking-widest leading-tight mt-1">
                                 Gestão Online
                             </span>
                         </div>

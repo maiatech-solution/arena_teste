@@ -11,7 +11,7 @@
                             </span>
                             <span
                                 class="text-[10px] font-black text-orange-500 uppercase tracking-widest leading-tight mt-1">
-                                Gestão Online
+                                MaiaTech Solution
                             </span>
                         </div>
                     </a>
@@ -68,34 +68,19 @@
                             @if (isset($site_info) && $site_info->modules_active == 3)
                                 <div
                                     class="block px-4 py-2 text-[10px] text-gray-400 font-black uppercase tracking-widest border-b border-gray-100 italic">
-                                    Mudar Ambiente
-                                </div>
-
-                                {{-- Lógica para alternar o botão de switch --}}
-                                @if (request()->is('bar*'))
-                                    <x-dropdown-link :href="route('modules.switch', 'arena')" class="bg-indigo-50 text-indigo-700 font-bold">
-                                        🏟️ Painel Arena
-                                    </x-dropdown-link>
-                                @else
-                                    <x-dropdown-link :href="route('modules.switch', 'bar')" class="bg-orange-50 text-orange-700 font-bold">
-                                        🍺 Painel Bar
-                                    </x-dropdown-link>
-                                @endif
+                                    Mudar Ambiente</div>
+                                <x-dropdown-link :href="route('modules.switch', 'arena')" class="bg-indigo-50 text-indigo-700 font-bold">
+                                    🏟️ Painel Arena
+                                </x-dropdown-link>
                                 <div class="border-t border-gray-100"></div>
                             @endif
 
                             <x-dropdown-link :href="route('profile.edit')">Meu Perfil</x-dropdown-link>
 
                             @if (Auth::user()->has_admin_access)
-                                @if (request()->is('bar*'))
-                                    {{-- 🍺 Links Dinâmicos para o BAR --}}
-                                    <x-dropdown-link :href="route('bar.company.edit')">Dados do estabelecimento</x-dropdown-link>
-                                    <x-dropdown-link :href="route('bar.users.index')">Gerenciar Equipe</x-dropdown-link>
-                                @else
-                                    {{-- 🏟️ Links Originais para a ARENA --}}
-                                    <x-dropdown-link :href="route('admin.company.edit')">Dados do estabelecimento</x-dropdown-link>
-                                    <x-dropdown-link :href="route('admin.users.index')">Gerenciar Usuários</x-dropdown-link>
-                                @endif
+                                <x-dropdown-link :href="route('admin.company.edit')">Dados do estabelecimento</x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.users.index')">Gerenciar Usuários</x-dropdown-link>
+                                {{-- ✅ Adicionado no Dropdown --}}
                             @endif
 
                             @if (Auth::user()->is_admin)

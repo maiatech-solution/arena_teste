@@ -3,7 +3,7 @@
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
-// ➡️ IMPORTAÇÕES GERAIS
+// ➡️ IMPORTAÇÕES
 use App\Http\Controllers\ReservaController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ConfigurationController;
@@ -14,16 +14,7 @@ use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\FinanceiroController;
 use App\Http\Controllers\Admin\ArenaController;
 use App\Http\Controllers\Admin\CompanyInfoController;
-use App\Http\Controllers\ModuleController;
-
-// ➡️ IMPORTAÇÕES ESPECÍFICAS DO BAR
-use App\Http\Controllers\Bar\BarDashboardController;
-use App\Http\Controllers\Bar\BarPosController;
-use App\Http\Controllers\Bar\BarProductController;
-use App\Http\Controllers\Bar\BarTableController;
-use App\Http\Controllers\Bar\BarCashController;
-use App\Http\Controllers\Bar\BarUserController;
-use App\Http\Controllers\Bar\BarCompanyController;
+use App\Http\Controllers\ModuleController; // NOVA IMPORTAÇÃO
 
 // 🏠 ROTA RAIZ
 Route::get('/', function () {
@@ -31,20 +22,29 @@ Route::get('/', function () {
 })->name('home');
 
 // -----------------------------------------------------------------------------------
-// 🛡️ CONFIGURAÇÃO E NAVEGAÇÃO DE MÓDULOS (GLOBAL)
+// 🛡️ CONFIGURAÇÃO E NAVEGAÇÃO DE MÓDULOS (ORGANIZADO)
 // -----------------------------------------------------------------------------------
 Route::middleware(['auth'])->group(function () {
+    // 1. Cadastro Inicial da Unidade (Onboarding)
     Route::get('/setup-unidade', [ModuleController::class, 'setupUnidade'])->name('onboarding.setup');
     Route::post('/setup-unidade', [ModuleController::class, 'setupStore'])->name('onboarding.store');
+
+    // 2. NAVEGAÇÃO APÓS LOGIN (A tela de CARDS para entrar nos sistemas)
+    // É para cá que o login te manda. Abre a view: choose_module.blade.php
     Route::get('/select-modules', [ModuleController::class, 'index'])->name('modules.selection');
+
+    // 3. GESTÃO DE PLANOS (A tela de RÁDIOS para você Admin mudar o plano no banco)
+    // Abre a view: select_modules.blade.php
     Route::get('/admin/planos', [ModuleController::class, 'managePlans'])->name('admin.plans');
+
+    // O POST agora aponta para a rota de planos, onde está o formulário
     Route::post('/admin/planos', [ModuleController::class, 'store'])->name('modules.store');
 
-    // Rota de troca movida para o topo para evitar RouteNotFound
+    // Rota para os botões dos Cards (Arena ou Bar)
     Route::get('/switch-module/{target}', [ModuleController::class, 'switch'])->name('modules.switch');
 });
 
-// 🌎 ROTAS PÚBLICAS (AGENDAMENTO EXTERNO)
+// 🌎 ROTAS PÚBLICAS
 Route::get('/agendamento', [ReservaController::class, 'index'])->name('reserva.index');
 Route::post('/agendamento', [ReservaController::class, 'storePublic'])->name('reserva.store');
 
@@ -67,9 +67,7 @@ Route::name('customer.')->group(function () {
     });
 });
 
-// -----------------------------------------------------------------------------------
-// 🛡️ ÁREA ADMINISTRATIVA (ARENA / GESTOR)
-// -----------------------------------------------------------------------------------
+// 🛡️ ÁREA ADMINISTRATIVA (GESTOR)
 Route::middleware(['auth', 'gestor'])->group(function () {
 
     // DASHBOARD E APIs DE STATUS
@@ -91,6 +89,8 @@ Route::middleware(['auth', 'gestor'])->group(function () {
 
         // ⚙️ 2. CONFIGURAÇÃO DE FUNCIONAMENTO E HORÁRIOS
         Route::get('/funcionamento-portal', [ConfigurationController::class, 'funcionamento'])->name('config.funcionamento');
+
+        // Unificado: Parâmetro opcional {arena_id?} resolve ambos os casos
         Route::get('/config/{arena_id?}', [ConfigurationController::class, 'index'])->name('config.index');
         Route::post('/config', [ConfigurationController::class, 'store'])->name('config.store');
         Route::get('/config/generate', [ConfigurationController::class, 'generateFixedReservas'])->name('config.generate');
@@ -103,6 +103,7 @@ Route::middleware(['auth', 'gestor'])->group(function () {
 
         // 📅 3. GESTÃO DE RESERVAS
         Route::prefix('reservas')->name('reservas.')->group(function () {
+            // Listagens e Visualização
             Route::get('/dashboard/{arena_id?}', [AdminController::class, 'indexReservasDashboard'])->name('index');
             Route::get('/pendentes', [AdminController::class, 'indexReservas'])->name('pendentes');
             Route::get('/confirmadas', [AdminController::class, 'confirmed_index'])->name('confirmadas');
@@ -110,16 +111,22 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::get('/rejeitadas', [AdminController::class, 'indexReservasRejeitadas'])->name('rejeitadas');
             Route::get('/{reserva}/show', [AdminController::class, 'showReserva'])->name('show');
 
+            // 🔄 ROTA DE SINCRONIZAÇÃO (ADICIONADA AQUI)
             Route::post('/{id}/sincronizar', [AdminController::class, 'sincronizarDadosUsuario'])->name('sincronizar');
+
+            // Ações de Confirmação e Rejeição
             Route::patch('/confirmar/{reserva}', [ReservaController::class, 'confirmar'])->name('confirmar');
             Route::patch('/rejeitar/{reserva}', [ReservaController::class, 'rejeitar'])->name('rejeitar');
 
+            // Edição e Reativação (Clientes)
             Route::patch('/{reserva}/update-price', [AdminController::class, 'updatePrice'])->name('update_price');
             Route::patch('/{reserva}/reativar', [AdminController::class, 'reativar'])->name('reativar');
 
+            // 🛠️ LÓGICA DE MANUTENÇÃO (Novas Rotas)
             Route::patch('/{reserva}/mover-manutencao', [AdminController::class, 'moverManutencao'])->name('mover_manutencao');
             Route::patch('/{reserva}/reativar-manutencao', [AdminController::class, 'reativarManutencao'])->name('reativar_manutencao');
 
+            // Cancelamentos e No-Show
             Route::patch('/{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('cancelar');
             Route::patch('/{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('cancelar_pontual');
             Route::delete('/{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('cancelar_serie');
@@ -127,7 +134,7 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::post('/{reserva}/no-show', [PaymentController::class, 'registerNoShow'])->name('no_show');
         });
 
-        // 👥 4. GESTÃO DE USUÁRIOS (ARENA)
+        // 👥 4. GESTÃO DE USUÁRIOS
         Route::prefix('users')->name('users.')->group(function () {
             Route::get('/', [UserController::class, 'index'])->name('index');
             Route::get('/create', [UserController::class, 'create'])->name('create');
@@ -145,7 +152,11 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::post('/fechar-caixa', [PaymentController::class, 'closeCash'])->name('close_cash');
             Route::post('/abrir-caixa', [PaymentController::class, 'reopenCash'])->name('open_cash');
             Route::post('/{reserva}/finalizar', [PaymentController::class, 'processPayment'])->name('finalize');
+
+            // ⬇️ ADICIONE ESTA LINHA ABAIXO ⬇️
             Route::post('/movimentacao-avulsa', [PaymentController::class, 'storeAvulsa'])->name('store_avulsa');
+
+            // 🕒 ROTA ADICIONADA: Processa o "Pagar Depois"
             Route::post('/{reserva}/pendenciar', [PaymentController::class, 'markAsPendingDebt'])->name('mark_debt');
         });
 
@@ -157,10 +168,12 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::get('/cancelamentos', [FinanceiroController::class, 'relatorioCancelamentos'])->name('relatorio_cancelamentos');
             Route::get('/ocupacao', [FinanceiroController::class, 'relatorioOcupacao'])->name('relatorio_ocupacao');
             Route::get('/ranking', [FinanceiroController::class, 'relatorioRanking'])->name('relatorio_ranking');
+
+            // 🚀 NOVA ROTA DE DÍVIDAS PENDENTES (Passo 3)
             Route::get('/dividas', [FinanceiroController::class, 'relatorioDividas'])->name('relatorio_dividas');
         });
 
-        // 🏢 7. DADOS DA EMPRESA (ARENA)
+        // 🏢 7. DADOS DA EMPRESA (Elite Soccer - Local Único)
         Route::prefix('dados-empresa')->name('company.')->group(function () {
             Route::get('/', [CompanyInfoController::class, 'edit'])->name('edit');
             Route::put('/', [CompanyInfoController::class, 'update'])->name('update');
@@ -173,62 +186,54 @@ Route::middleware(['auth', 'gestor'])->group(function () {
 });
 
 // -----------------------------------------------------------------------------------
-// 🍺 MÓDULO BAR (TOTALMENTE ISOLADO - LAYOUT DARK)
+// PERFIL DO USUÁRIO (BREEZE)
+// -----------------------------------------------------------------------------------
+Route::middleware('auth')->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+
+// -----------------------------------------------------------------------------------
+// 🍺 MÓDULO BAR (TOTALMENTE ISOLADO - APENAS PARA GESTORES)
 // -----------------------------------------------------------------------------------
 Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(function () {
 
-    Route::get('/dashboard', [BarDashboardController::class, 'index'])->name('dashboard');
-    Route::get('/pdv', [BarPosController::class, 'index'])->name('pdv');
-    Route::post('/pdv/venda', [BarPosController::class, 'store'])->name('pos.store');
+    // 1. Central de Comando (Dashboard)
+    Route::get('/dashboard', [App\Http\Controllers\Bar\BarDashboardController::class, 'index'])->name('dashboard');
 
-    // Estoque
-    Route::post('categorias/salvar-rapido', [BarProductController::class, 'storeCategory'])->name('categories.store_ajax');
-    Route::get('estoque/entrada', [BarProductController::class, 'stockEntry'])->name('products.stock_entry');
-    Route::post('estoque/entrada', [BarProductController::class, 'processStockEntry'])->name('products.process_entry');
-    Route::get('estoque/historico', [BarProductController::class, 'stockHistory'])->name('products.history');
-    Route::post('estoque/registrar-perda', [BarProductController::class, 'recordLoss'])->name('products.record_loss');
+    // 2. PDV (Venda Rápida / Balcão)
+    Route::get('/pdv', [App\Http\Controllers\Bar\BarPosController::class, 'index'])->name('pdv');
+    Route::post('/pdv/venda', [App\Http\Controllers\Bar\BarPosController::class, 'store'])->name('pos.store');
 
-    Route::resource('estoque', BarProductController::class)->names([
+    // 3. Estoque (Produtos, Categorias e Movimentações)
+    Route::post('categorias/salvar-rapido', [App\Http\Controllers\Bar\BarProductController::class, 'storeCategory'])->name('categories.store_ajax');
+    Route::get('estoque/entrada', [App\Http\Controllers\Bar\BarProductController::class, 'stockEntry'])->name('products.stock_entry');
+    Route::post('estoque/entrada', [App\Http\Controllers\Bar\BarProductController::class, 'processStockEntry'])->name('products.process_entry');
+    Route::get('estoque/historico', [App\Http\Controllers\Bar\BarProductController::class, 'stockHistory'])->name('products.history');
+    Route::post('estoque/registrar-perda', [App\Http\Controllers\Bar\BarProductController::class, 'recordLoss'])->name('products.record_loss');
+
+    // Resource Principal de Estoque (CRUD)
+    Route::resource('estoque', App\Http\Controllers\Bar\BarProductController::class)->names([
         'index'   => 'products.index',
         'create'  => 'products.create',
         'store'   => 'products.store',
         'edit'    => 'products.edit',
         'update'  => 'products.update',
         'destroy' => 'products.destroy',
-    ])->parameters(['estoque' => 'product']);
+    ])->parameters([
+        'estoque' => 'product'
+    ]);
 
-    Route::patch('estoque/{product}/add-stock', [BarProductController::class, 'addStock'])->name('products.add_stock');
+    Route::patch('estoque/{product}/add-stock', [App\Http\Controllers\Bar\BarProductController::class, 'addStock'])->name('products.add_stock');
 
-    // Mesas e Caixa
-    Route::get('/mesas', [BarTableController::class, 'index'])->name('tables.index');
-    Route::post('/mesas/configurar', [BarTableController::class, 'configure'])->name('tables.config');
-    Route::get('/caixa', [BarCashController::class, 'index'])->name('cash.index');
-    Route::get('/vendas/{sale}', [BarPosController::class, 'show'])->name('sales.show');
+    // 4. Mesas (Mapa de mesas e configuração)
+    Route::get('/mesas', [App\Http\Controllers\Bar\BarTableController::class, 'index'])->name('tables.index');
+    Route::post('/mesas/configurar', [App\Http\Controllers\Bar\BarTableController::class, 'configure'])->name('tables.config');
 
-    // 👥 GESTÃO DE USUÁRIOS (PRÓPRIA DO BAR)
-    Route::prefix('usuarios')->name('users.')->group(function () {
-        Route::get('/', [BarUserController::class, 'index'])->name('index');
-        Route::get('/create', [BarUserController::class, 'create'])->name('create');
-        Route::post('/', [BarUserController::class, 'store'])->name('store');
-        Route::get('/{user}/edit', [BarUserController::class, 'edit'])->name('edit');
-        Route::put('/{user}', [BarUserController::class, 'update'])->name('update');
-        Route::delete('/{user}', [BarUserController::class, 'destroy'])->name('destroy');
-    });
-
-    // 🏢 DADOS DA EMPRESA (PRÓPRIA DO BAR)
-    Route::prefix('configuracoes')->name('company.')->group(function () {
-        Route::get('/empresa', [BarCompanyController::class, 'edit'])->name('edit');
-        Route::put('/empresa', [BarCompanyController::class, 'update'])->name('update');
-    });
-});
-
-// -----------------------------------------------------------------------------------
-// PERFIL E AUTH
-// -----------------------------------------------------------------------------------
-Route::middleware('auth')->group(function () {
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    // 5. Caixa e Relatórios de Venda
+    Route::get('/caixa', [App\Http\Controllers\Bar\BarCashController::class, 'index'])->name('cash.index');
+    Route::get('/vendas/{sale}', [App\Http\Controllers\Bar\BarPosController::class, 'show'])->name('sales.show');
 });
 
 require __DIR__ . '/auth.php';

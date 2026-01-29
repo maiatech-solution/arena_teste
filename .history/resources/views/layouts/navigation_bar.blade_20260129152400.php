@@ -9,10 +9,6 @@
                             <span class="text-xl font-black text-white leading-none uppercase tracking-tighter italic">
                                 {{ $site_info->nome_fantasia ?? 'Bar System' }}
                             </span>
-                            <span
-                                class="text-[10px] font-black text-orange-500 uppercase tracking-widest leading-tight mt-1">
-                                Gestão Online
-                            </span>
                         </div>
                     </a>
                 </div>
