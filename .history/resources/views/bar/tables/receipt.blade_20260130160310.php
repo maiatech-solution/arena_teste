@@ -216,17 +216,17 @@
     function enviarZapComPergunta() {
         // Pega o fone que veio do banco como sugestão
         let fone = prompt("Confirme o WhatsApp do cliente:", "{{ $sugestaoFone }}");
-
+        
         if (fone) {
             // Remove tudo que não é número
             let foneLimpo = fone.replace(/\D/g, '');
-
+            
             // Usamos encodeURIComponent para garantir que quebras de linha e emojis funcionem na URL
             // O uso das crases ( ` ) no JS permite strings com múltiplas linhas sem erro
             let textoMensagem = encodeURIComponent(`{!! $msgBase !!}`);
-
+            
             let urlZap = "https://api.whatsapp.com/send?phone=55" + foneLimpo + "&text=" + textoMensagem;
-
+            
             window.open(urlZap, '_blank');
         }
     }

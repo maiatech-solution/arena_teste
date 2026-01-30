@@ -200,9 +200,9 @@
                     <input type="hidden" name="print_coupon" id="inputPrintCoupon" value="0">
                     <input type="hidden" name="send_whatsapp" id="inputSendWhatsApp" value="0">
 
-                    <button type="submit" form="formFecharMesa" id="btnFinalizarGeral"
-                        class="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] uppercase tracking-[0.3em] text-sm shadow-2xl transition-all">
-                        🏁 Finalizar e Salvar no Banco
+                    <button type="button" onclick="abrirOpcoesFinais()" id="btnFinalizarGeral" disabled
+                        class="w-full py-6 bg-green-600 opacity-30 cursor-not-allowed text-white font-black rounded-[2rem] uppercase tracking-[0.3em] text-sm shadow-2xl transition-all">
+                        🏁 Finalizar Venda
                     </button>
                 </form>
             </div>

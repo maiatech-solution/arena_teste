@@ -111,8 +111,7 @@
 
         <div style="font-size: 11px;">
             <p style="margin: 2px 0;"><b>MESA:</b> {{ str_pad($order->table->identifier, 2, '0', STR_PAD_LEFT) }} |
-                <b>PEDIDO:</b> #{{ $order->id }}
-            </p>
+                <b>PEDIDO:</b> #{{ $order->id }}</p>
             <p style="margin: 2px 0;"><b>DATA:</b> {{ \Carbon\Carbon::parse($order->closed_at)->format('d/m/Y H:i') }}
             </p>
         </div>
@@ -187,67 +186,18 @@
         </a>
     </div>
 
-    <div id="modalSucesso"
-        class="hidden fixed inset-0 bg-black/90 backdrop-blur-sm z-[500] flex items-center justify-center p-4 no-print">
-        <div
-            class="bg-gray-900 border border-gray-800 p-8 rounded-[3rem] max-w-sm w-full text-center shadow-2xl border-t-green-500/50 animate-in fade-in zoom-in duration-300">
-            <div class="text-6xl mb-4">🎉</div>
-            <h2 class="text-2xl font-black text-white uppercase italic mb-2">Venda Concluída!</h2>
-            <p class="text-gray-400 text-[10px] uppercase tracking-widest mb-8 font-bold">O estoque foi atualizado e a
-                mesa está livre.</p>
-
-            <div class="space-y-3">
-                <button onclick="fecharModalSucesso()"
-                    class="w-full py-4 bg-white text-black font-black rounded-2xl uppercase text-[10px] tracking-widest hover:bg-orange-500 hover:text-white transition-all">
-                    👁️ Visualizar Recibo
-                </button>
-                <a href="{{ route('bar.tables.index') }}"
-                    class="block w-full py-4 bg-gray-800 text-gray-400 font-black rounded-2xl uppercase text-[10px] tracking-widest hover:bg-gray-700 hover:text-white transition-all">
-                    🏠 Voltar ao Mapa
-                </a>
-            </div>
-        </div>
-    </div>
-
-   <script>
-    /**
-     * Função para enviar o resumo via WhatsApp
-     */
-    function enviarZapComPergunta() {
-        // Pega o fone que veio do banco como sugestão
-        let fone = prompt("Confirme o WhatsApp do cliente:", "{{ $sugestaoFone }}");
-
-        if (fone) {
-            // Remove tudo que não é número
-            let foneLimpo = fone.replace(/\D/g, '');
-
-            // Usamos encodeURIComponent para garantir que quebras de linha e emojis funcionem na URL
-            // O uso das crases ( ` ) no JS permite strings com múltiplas linhas sem erro
-            let textoMensagem = encodeURIComponent(`{!! $msgBase !!}`);
-
-            let urlZap = "https://api.whatsapp.com/send?phone=55" + foneLimpo + "&text=" + textoMensagem;
-
-            window.open(urlZap, '_blank');
-        }
-    }
-
-    /**
-     * Controle do Modal de Sucesso
-     */
-    document.addEventListener('DOMContentLoaded', function() {
-        @if (session('show_success_modal'))
-            const modal = document.getElementById('modalSucesso');
-            if (modal) {
-                modal.classList.remove('hidden');
+    <script>
+        function enviarZapComPergunta() {
+            let fone = prompt("Confirme o WhatsApp do cliente:", "{{ $sugestaoFone }}");
+            if (fone) {
+                let foneLimpo = fone.replace(/\D/g, '');
+                let urlZap = "https://api.whatsapp.com/send?phone=55" + foneLimpo + "&text=" + encodeURIComponent(
+                    {!! json_encode($msgBase) !!});
+                window.open(urlZap, '_blank');
+                setTimeout(() => {
+                    window.location.href = '{{ route('bar.tables.index') }}';
+                }, 1000);
             }
-        @endif
-    });
-
-    function fecharModalSucesso() {
-        const modal = document.getElementById('modalSucesso');
-        if (modal) {
-            modal.classList.add('hidden');
         }
-    }
-</script>
+    </script>
 </x-bar-layout>

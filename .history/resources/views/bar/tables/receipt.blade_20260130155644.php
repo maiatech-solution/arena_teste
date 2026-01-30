@@ -209,45 +209,30 @@
         </div>
     </div>
 
-   <script>
-    /**
-     * Função para enviar o resumo via WhatsApp
-     */
-    function enviarZapComPergunta() {
-        // Pega o fone que veio do banco como sugestão
-        let fone = prompt("Confirme o WhatsApp do cliente:", "{{ $sugestaoFone }}");
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            /**
+             * Verificamos se o Controller enviou o sinal 'show_success_modal'.
+             * Se sim, removemos a classe 'hidden' do modal para ele aparecer.
+             */
+            @if (session('show_success_modal'))
+                const modal = document.getElementById('modalSucesso');
+                if (modal) {
+                    modal.classList.remove('hidden');
+                }
+            @endif
+        });
 
-        if (fone) {
-            // Remove tudo que não é número
-            let foneLimpo = fone.replace(/\D/g, '');
-
-            // Usamos encodeURIComponent para garantir que quebras de linha e emojis funcionem na URL
-            // O uso das crases ( ` ) no JS permite strings com múltiplas linhas sem erro
-            let textoMensagem = encodeURIComponent(`{!! $msgBase !!}`);
-
-            let urlZap = "https://api.whatsapp.com/send?phone=55" + foneLimpo + "&text=" + textoMensagem;
-
-            window.open(urlZap, '_blank');
-        }
-    }
-
-    /**
-     * Controle do Modal de Sucesso
-     */
-    document.addEventListener('DOMContentLoaded', function() {
-        @if (session('show_success_modal'))
+        /**
+         * Função para fechar o modal.
+         * Ela apenas esconde a janela de sucesso para que o
+         * garçom possa ver o recibo que está por baixo.
+         */
+        function fecharModalSucesso() {
             const modal = document.getElementById('modalSucesso');
             if (modal) {
-                modal.classList.remove('hidden');
+                modal.classList.add('hidden');
             }
-        @endif
-    });
-
-    function fecharModalSucesso() {
-        const modal = document.getElementById('modalSucesso');
-        if (modal) {
-            modal.classList.add('hidden');
         }
-    }
-</script>
+    </script>
 </x-bar-layout>

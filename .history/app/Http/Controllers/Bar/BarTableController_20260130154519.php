@@ -224,45 +224,39 @@ class BarTableController extends Controller
      */
     public function closeOrder(Request $request, $id)
     {
-        // Usamos uma transação para garantir que a mesa só libere se o pedido for salvo
-        return \DB::transaction(function () use ($request, $id) {
+        return DB::transaction(function () use ($request, $id) {
             $table = BarTable::findOrFail($id);
 
-            // 🔍 Busca a comanda ativa usando o status 'open' (conforme seu banco)
+            // 🔍 BUSCA MELHORADA:
+            // Procuramos a comanda mais recente que NÃO esteja paga
             $order = $table->orders()
-                ->where('status', 'open')
+                ->whereIn('status', ['aberto', 'open', 'pending']) // Adicionamos variações comuns
                 ->latest()
                 ->first();
 
             if (!$order) {
-                // Caso a mesa esteja "presa" como ocupada mas sem comanda
+                // Se ainda assim não achar, vamos ver se a mesa está como 'occupied' por erro
                 if ($table->status == 'occupied') {
                     $table->update(['status' => 'available']);
-                    return redirect()->route('bar.tables.index')
-                        ->with('success', 'Mesa liberada, mas nenhuma comanda ativa foi encontrada.');
+                    return redirect()->route('bar.tables.index')->with('success', 'Mesa liberada (não havia comanda ativa).');
                 }
 
-                return redirect()->route('bar.tables.index')
-                    ->with('error', '⚠️ Nenhuma comanda ativa encontrada para esta mesa.');
+                return redirect()->route('bar.tables.index')->with('error', '⚠️ Nenhuma comanda ativa encontrada para esta mesa.');
             }
 
-            // ✅ Atualiza a comanda com os dados do formulário
-            // Mudamos para 'paid' para evitar o erro de "Data truncated"
+            // ... resto do seu código de fechar (update order, update table) ...
             $order->update([
-                'status'         => 'paid',
+                'status'         => 'pago',
                 'customer_name'  => $request->customer_name,
                 'customer_phone' => $request->customer_phone,
-                'payment_method' => $request->pagamentos, // Salva o JSON dos pagamentos
+                'payment_method' => $request->pagamentos,
                 'closed_at'      => now(),
             ]);
 
-            // ✅ Libera a mesa para o próximo cliente
             $table->update(['status' => 'available']);
 
-            // 🚀 Redireciona para o recibo com o sinal para abrir o modal de sucesso
             return redirect()->route('bar.tables.receipt', $order->id)
-                ->with('show_success_modal', true)
-                ->with('success', 'Venda finalizada com sucesso!');
+                ->with('show_success_modal', true);
         });
     }
 

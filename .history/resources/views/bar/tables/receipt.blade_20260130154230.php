@@ -209,45 +209,29 @@
         </div>
     </div>
 
-   <script>
-    /**
-     * Função para enviar o resumo via WhatsApp
-     */
-    function enviarZapComPergunta() {
-        // Pega o fone que veio do banco como sugestão
-        let fone = prompt("Confirme o WhatsApp do cliente:", "{{ $sugestaoFone }}");
-
-        if (fone) {
-            // Remove tudo que não é número
-            let foneLimpo = fone.replace(/\D/g, '');
-
-            // Usamos encodeURIComponent para garantir que quebras de linha e emojis funcionem na URL
-            // O uso das crases ( ` ) no JS permite strings com múltiplas linhas sem erro
-            let textoMensagem = encodeURIComponent(`{!! $msgBase !!}`);
-
-            let urlZap = "https://api.whatsapp.com/send?phone=55" + foneLimpo + "&text=" + textoMensagem;
-
-            window.open(urlZap, '_blank');
-        }
-    }
-
-    /**
-     * Controle do Modal de Sucesso
-     */
-    document.addEventListener('DOMContentLoaded', function() {
-        @if (session('show_success_modal'))
-            const modal = document.getElementById('modalSucesso');
-            if (modal) {
-                modal.classList.remove('hidden');
+    <script>
+        function enviarZapComPergunta() {
+            let fone = prompt("Confirme o WhatsApp do cliente:", "{{ $sugestaoFone }}");
+            if (fone) {
+                let foneLimpo = fone.replace(/\D/g, '');
+                let urlZap = "https://api.whatsapp.com/send?phone=55" + foneLimpo + "&text=" + encodeURIComponent(
+                    {!! json_encode($msgBase) !!});
+                window.open(urlZap, '_blank');
+                setTimeout(() => {
+                    window.location.href = '{{ route('bar.tables.index') }}';
+                }, 1000);
             }
-        @endif
-    });
-
-    function fecharModalSucesso() {
-        const modal = document.getElementById('modalSucesso');
-        if (modal) {
-            modal.classList.add('hidden');
         }
-    }
-</script>
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Mostra o modal apenas se vier do fechamento de mesa
+            @if (session('show_success_modal'))
+                document.getElementById('modalSucesso').classList.remove('hidden');
+            @endif
+        });
+
+        function fecharModalSucesso() {
+            document.getElementById('modalSucesso').classList.add('hidden');
+        }
+    </script>
 </x-bar-layout>
