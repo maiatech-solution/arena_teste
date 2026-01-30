@@ -171,7 +171,6 @@ Route::middleware(['auth', 'gestor'])->group(function () {
     Route::get('/api/financeiro/resumo', [FinanceiroController::class, 'getResumo'])->name('api.financeiro.resumo');
     Route::get('/api/financeiro/pagamentos-pendentes', [FinanceiroController::class, 'getPagamentosPendentes'])->name('api.financeiro.pagamentos-pendentes');
 });
-
 // -----------------------------------------------------------------------------------
 // 🍺 MÓDULO BAR (TOTALMENTE ISOLADO - LAYOUT DARK)
 // -----------------------------------------------------------------------------------

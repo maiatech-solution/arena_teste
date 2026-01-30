@@ -14,7 +14,7 @@ class BarOrderItem extends Model
         'bar_product_id',
         'quantity',
         'unit_price',
-        'subtotal' // 🚀 Adicione aqui!
+        'subtotal'
     ];
 
     public function product()

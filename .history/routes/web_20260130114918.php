@@ -219,9 +219,6 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
         Route::post('/order/{orderId}/add-item', [BarTableController::class, 'addItem'])->name('add_item'); // Lançar produto
         Route::delete('/item/{itemId}/remove', [BarTableController::class, 'removeItem'])->name('remove_item'); // Estornar item
         Route::post('/{id}/fechar', [BarTableController::class, 'closeOrder'])->name('close'); // Finalizar e Liberar mesa
-
-        // 🖨️ Rota de Impressão (Nova!)
-        Route::get('/recibo/{orderId}', [BarTableController::class, 'printReceipt'])->name('receipt');
     });
 
     // 💰 Gestão Financeira (Caixa)

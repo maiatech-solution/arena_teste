@@ -16,7 +16,7 @@ use App\Http\Controllers\Admin\ArenaController;
 use App\Http\Controllers\Admin\CompanyInfoController;
 use App\Http\Controllers\ModuleController;
 
-// ➡️ IMPORTAÇÕES ESPECÍFICAS DO BAR (Não esqueça de nenhuma!)
+// ➡️ IMPORTAÇÕES ESPECÍFICAS DO BAR
 use App\Http\Controllers\Bar\BarDashboardController;
 use App\Http\Controllers\Bar\BarPosController;
 use App\Http\Controllers\Bar\BarProductController;
@@ -24,6 +24,7 @@ use App\Http\Controllers\Bar\BarTableController;
 use App\Http\Controllers\Bar\BarCashController;
 use App\Http\Controllers\Bar\BarUserController;
 use App\Http\Controllers\Bar\BarCompanyController;
+
 
 // 🏠 ROTA RAIZ
 Route::get('/', function () {
@@ -176,20 +177,17 @@ Route::middleware(['auth', 'gestor'])->group(function () {
 // 🍺 MÓDULO BAR (TOTALMENTE ISOLADO - LAYOUT DARK)
 // -----------------------------------------------------------------------------------
 Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(function () {
-
     // 🏢 DADOS DA EMPRESA
     Route::get('/configuracoes/empresa', [BarCompanyController::class, 'edit'])->name('company.edit');
     Route::put('/configuracoes/empresa', [BarCompanyController::class, 'update'])->name('company.update');
 
-    // 🚀 Dashboard Principal
+    // Dashboard e PDV Principal
     Route::get('/dashboard', [BarDashboardController::class, 'index'])->name('dashboard');
-
-    // 🛒 PDV - Venda Direta (Balcão)
     Route::get('/pdv', [BarPosController::class, 'index'])->name('pdv');
     Route::post('/pdv/venda', [BarPosController::class, 'store'])->name('pos.store');
     Route::get('/vendas/{sale}', [BarPosController::class, 'show'])->name('sales.show');
 
-    // 📦 Gestão de Estoque e Produtos
+    // 📦 Gestão de Estoque
     Route::post('categorias/salvar-rapido', [BarProductController::class, 'storeCategory'])->name('categories.store_ajax');
     Route::get('estoque/entrada', [BarProductController::class, 'stockEntry'])->name('products.stock_entry');
     Route::post('estoque/entrada', [BarProductController::class, 'processStockEntry'])->name('products.process_entry');
@@ -207,27 +205,12 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
         'destroy' => 'products.destroy',
     ])->parameters(['estoque' => 'product']);
 
-    // 🍽️ Gestão de Mesas e Comandas (Sistema Integrado)
-    Route::prefix('mesas')->name('tables.')->group(function () {
-        Route::get('/', [BarTableController::class, 'index'])->name('index');
-        Route::post('/sync', [BarTableController::class, 'sync'])->name('sync'); // Ajustar qtde de mesas
-        Route::post('/{id}/toggle', [BarTableController::class, 'toggleStatus'])->name('toggle'); // Ativar/Desativar mesa
-
-        // Operações de Comanda
-        Route::post('/{id}/abrir', [BarTableController::class, 'open'])->name('open'); // Abrir Mesa
-        Route::get('/{id}/comanda', [BarTableController::class, 'showOrder'])->name('show'); // Ver conta da mesa
-        Route::post('/order/{orderId}/add-item', [BarTableController::class, 'addItem'])->name('add_item'); // Lançar produto
-        Route::delete('/item/{itemId}/remove', [BarTableController::class, 'removeItem'])->name('remove_item'); // Estornar item
-        Route::post('/{id}/fechar', [BarTableController::class, 'closeOrder'])->name('close'); // Finalizar e Liberar mesa
-
-        // 🖨️ Rota de Impressão (Nova!)
-        Route::get('/recibo/{orderId}', [BarTableController::class, 'printReceipt'])->name('receipt');
-    });
-
-    // 💰 Gestão Financeira (Caixa)
+    // 🍽️ Mesas e 💰 Caixa
+    Route::get('/mesas', [BarTableController::class, 'index'])->name('tables.index');
+    Route::post('/mesas/configurar', [BarTableController::class, 'configure'])->name('tables.config');
     Route::get('/caixa', [BarCashController::class, 'index'])->name('cash.index');
 
-    // 👥 Gestão de Equipe (Usuários do Bar)
+    // 👥 GESTÃO DE USUÁRIOS (EQUIPE DO BAR)
     Route::prefix('usuarios')->name('users.')->group(function () {
         Route::get('/', [BarUserController::class, 'index'])->name('index');
         Route::get('/create', [BarUserController::class, 'create'])->name('create');
