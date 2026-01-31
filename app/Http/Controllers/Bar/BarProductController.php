@@ -16,15 +16,13 @@ class BarProductController extends Controller
      */
     public function index(Request $request)
     {
-        // 1. Captura todos os filtros da URL
         $search = $request->query('search');
         $categoryId = $request->query('bar_category_id');
         $filterStatus = $request->query('filter_status', 'all');
 
-        // 2. Inicia a Query
+        // 🛡️ Query limpa: sem dependência de arena_id
         $query = BarProduct::with('category');
 
-        // 🔍 Filtro por Nome ou Código de Barras
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
@@ -32,12 +30,10 @@ class BarProductController extends Controller
             });
         }
 
-        // 📂 Filtro por Categoria
         if ($categoryId) {
             $query->where('bar_category_id', $categoryId);
         }
 
-        // 🚀 Filtro por Status (Ajustado para incluir a Reposição Urgente)
         if ($filterStatus === 'active') {
             $query->where('is_active', true);
         } elseif ($filterStatus === 'inactive') {
@@ -47,26 +43,22 @@ class BarProductController extends Controller
                 ->where('manage_stock', true)
                 ->whereColumn('stock_quantity', '<=', 'min_stock');
         } elseif ($filterStatus === 'out_of_stock') {
-            // 🔥 NOVO FILTRO: Apenas produtos com saldo negativo
             $query->where('stock_quantity', '<', 0);
         }
 
-        // 3. Executa a paginação mantendo os filtros na URL
         $products = $query->orderBy('name', 'asc')
             ->paginate(15)
             ->withQueryString();
 
-        // 4. Dados para os cards e filtros da View
         $categories = BarCategory::orderBy('name', 'asc')->get();
 
-        // ⚠️ Produtos críticos (Abaixo do mínimo, mas positivos)
+        // ⚠️ Produtos críticos (Resumo do Painel)
         $lowStockProducts = BarProduct::where('is_active', true)
             ->where('manage_stock', true)
-            ->where('stock_quantity', '>=', 0) // Garante que não mistura com os negativos
+            ->where('stock_quantity', '>=', 0)
             ->whereColumn('stock_quantity', '<=', 'min_stock')
             ->get();
 
-        // 🛒 Reposição Urgente (Saldo Negativo)
         $outOfStockCount = BarProduct::where('stock_quantity', '<', 0)->count();
 
         $totalPatrimonio = BarProduct::where('is_active', true)
@@ -78,7 +70,7 @@ class BarProductController extends Controller
             'categories',
             'lowStockProducts',
             'totalPatrimonio',
-            'outOfStockCount' // 🚀 Enviando a nova contagem para a View
+            'outOfStockCount'
         ));
     }
 
@@ -93,14 +85,14 @@ class BarProductController extends Controller
         $validated = $request->validate([
             'name'             => 'required|string|max:255',
             'bar_category_id'  => 'required|exists:bar_categories,id',
-            'barcode'          => 'nullable|string|max:13|unique:bar_products,barcode',
+            'barcode'          => 'nullable|string|max:13',
             'purchase_price'   => 'required|numeric|min:0',
             'sale_price'       => 'required|numeric|min:0',
-            'stock_quantity'   => 'required|integer', // Removido min:0 para aceitar saldo negativo
+            'stock_quantity'   => 'required|integer',
             'min_stock'        => 'required|integer|min:0',
             'unit_type'        => 'required|string|in:UN,FD,CX,KG',
             'content_quantity' => 'required|integer|min:1',
-            'manage_stock'     => 'required|boolean', // 🛡️ Novo campo de controle
+            'manage_stock'     => 'required|boolean',
         ]);
 
         BarProduct::create($validated);
@@ -111,16 +103,25 @@ class BarProductController extends Controller
 
     public function edit(BarProduct $product)
     {
+        // 🛡️ Trava de Segurança: Apenas controle por ROLE (Cargo)
+        if (auth()->user()->role === 'colaborador') {
+            return redirect()->route('bar.products.index')->with('error', 'Acesso negado.');
+        }
+
         $categories = BarCategory::orderBy('name', 'asc')->get();
         return view('bar.products.edit', compact('product', 'categories'));
     }
 
     public function update(Request $request, BarProduct $product)
     {
+        if (auth()->user()->role === 'colaborador') {
+            abort(403);
+        }
+
         $validated = $request->validate([
             'name'             => 'required|string|max:255',
             'bar_category_id'  => 'required|exists:bar_categories,id',
-            'barcode'          => 'nullable|string|max:13|unique:bar_products,barcode,' . $product->id,
+            'barcode'          => 'nullable|string|max:13',
             'purchase_price'   => 'required|numeric|min:0',
             'sale_price'       => 'required|numeric|min:0',
             'stock_quantity'   => 'required|integer',
@@ -128,7 +129,7 @@ class BarProductController extends Controller
             'is_active'        => 'required|boolean',
             'unit_type'        => 'required|string|in:UN,FD,CX,KG',
             'content_quantity' => 'required|integer|min:1',
-            'manage_stock'     => 'required|boolean', // 🛡️ Novo campo de controle
+            'manage_stock'     => 'required|boolean',
         ]);
 
         $product->update($validated);
@@ -139,12 +140,14 @@ class BarProductController extends Controller
 
     public function destroy(Request $request, BarProduct $product)
     {
+        if (auth()->user()->role === 'colaborador') {
+            return redirect()->back()->with('error', 'Ação não permitida.');
+        }
+
         $reason = $request->input('status_reason') ?? ($product->is_active ? 'Desativação manual' : 'Reativação manual');
 
         DB::transaction(function () use ($product, $reason) {
-            $product->update([
-                'is_active' => !$product->is_active
-            ]);
+            $product->update(['is_active' => !$product->is_active]);
 
             BarStockMovement::create([
                 'bar_product_id' => $product->id,
@@ -155,13 +158,12 @@ class BarProductController extends Controller
             ]);
         });
 
-        $mensagem = $product->is_active ? "Produto reativado!" : "Produto desativado!";
-        return redirect()->route('bar.products.index')->with('success', $mensagem);
+        return redirect()->route('bar.products.index')->with('success', $product->is_active ? "Produto reativado!" : "Produto desativado!");
     }
 
     public function storeCategory(Request $request)
     {
-        $request->validate(['name' => 'required|string|max:255|unique:bar_categories,name']);
+        $request->validate(['name' => 'required|string|max:255']);
         $category = BarCategory::create(['name' => $request->name]);
         return response()->json($category);
     }
@@ -202,8 +204,7 @@ class BarProductController extends Controller
             ]);
         });
 
-        return redirect()->route('bar.products.index')
-            ->with('success', "Estoque atualizado com sucesso!");
+        return redirect()->route('bar.products.index')->with('success', "Estoque atualizado!");
     }
 
     public function stockHistory(Request $request)
@@ -215,24 +216,12 @@ class BarProductController extends Controller
         }
 
         if ($request->filled('start_date') && $request->filled('end_date')) {
-            $query->whereBetween('created_at', [
-                $request->start_date . ' 00:00:00',
-                $request->end_date . ' 23:59:59'
-            ]);
+            $query->whereBetween('created_at', [$request->start_date . ' 00:00:00', $request->end_date . ' 23:59:59']);
         }
 
-        $movements = $query->orderBy('created_at', 'desc')
-            ->paginate(30)
-            ->appends($request->all());
+        $movements = $query->orderBy('created_at', 'desc')->paginate(30)->appends($request->all());
 
         return view('bar.products.history', compact('movements'));
-    }
-
-    public function addStock(Request $request, BarProduct $product)
-    {
-        $validated = $request->validate(['quantity' => 'required|integer|min:1']);
-        $product->increment('stock_quantity', $validated['quantity']);
-        return redirect()->back()->with('success', 'Estoque atualizado!');
     }
 
     public function recordLoss(Request $request)
@@ -245,6 +234,7 @@ class BarProductController extends Controller
 
         DB::transaction(function () use ($validated) {
             $product = BarProduct::findOrFail($validated['product_id']);
+
             $product->decrement('stock_quantity', $validated['quantity']);
 
             BarStockMovement::create([
@@ -256,6 +246,6 @@ class BarProductController extends Controller
             ]);
         });
 
-        return redirect()->back()->with('success', 'Perda registrada e estoque atualizado.');
+        return redirect()->back()->with('success', 'Perda registrada.');
     }
 }

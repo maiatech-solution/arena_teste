@@ -10,18 +10,18 @@
                 </a>
                 <h2 class="text-3xl font-black text-white uppercase tracking-tighter">📜 Histórico de <span
                         class="text-orange-500">Movimentações</span></h2>
-                <p class="text-gray-500 text-sm font-medium">Registro cronológico de entradas, saídas e ajustes do
-                    inventário.</p>
+                <p class="text-gray-500 text-sm font-medium">Registro cronológico de entradas, saídas e ajustes do inventário.</p>
             </div>
 
+            {{-- 🔒 Somente Gestores e Admins vêem o contador total de auditoria --}}
+            @if(in_array(auth()->user()->role, ['admin', 'gestor']))
             <div class="bg-gray-900 border border-gray-800 px-6 py-4 rounded-2xl shadow-xl">
-                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1">Total de
-                    Registros</span>
+                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1">Total de Registros</span>
                 <span class="text-2xl font-black text-white italic">{{ $movements->total() }}</span>
             </div>
+            @endif
         </div>
 
-        {{-- BARRA DE FILTROS --}}
         {{-- BARRA DE FILTROS EVOLUÍDA: PERÍODO PERSONALIZADO --}}
         <div class="bg-gray-900/80 backdrop-blur-xl border border-gray-800 p-6 rounded-[2rem] mb-8 shadow-2xl">
             <form action="{{ route('bar.products.history') }}" method="GET"
@@ -78,57 +78,57 @@
                 </thead>
                 <tbody class="divide-y divide-gray-800 text-sm">
                     @forelse($movements as $mov)
-                        <tr class="hover:bg-gray-950/50 transition">
-                            <td class="p-4 text-gray-500 font-mono text-xs">
-                                <span class="text-gray-300 font-bold">{{ $mov->created_at->format('d/m/Y') }}</span><br>
-                                <span class="text-[10px] opacity-70">{{ $mov->created_at->format('H:i:s') }}</span>
-                            </td>
+                    <tr class="hover:bg-gray-950/50 transition">
+                        <td class="p-4 text-gray-500 font-mono text-xs">
+                            <span class="text-gray-300 font-bold">{{ $mov->created_at->format('d/m/Y') }}</span><br>
+                            <span class="text-[10px] opacity-70">{{ $mov->created_at->format('H:i:s') }}</span>
+                        </td>
 
-                            <td class="p-4">
-                                <div class="flex flex-col">
-                                    <span
-                                        class="text-white font-black uppercase tracking-tight text-sm">{{ $mov->product->name }}</span>
-                                    <span class="text-[10px] text-gray-500 italic font-medium leading-tight mt-1">
-                                        💬 {{ $mov->description ?? 'Sem observações registradas' }}
-                                    </span>
-                                </div>
-                            </td>
-
-                            <td class="p-4 text-center">
+                        <td class="p-4">
+                            <div class="flex flex-col">
                                 <span
-                                    class="px-3 py-1 rounded-lg text-[10px] font-black uppercase
+                                    class="text-white font-black uppercase tracking-tight text-sm">{{ $mov->product->name }}</span>
+                                <span class="text-[10px] text-gray-500 italic font-medium leading-tight mt-1">
+                                    💬 {{ $mov->description ?? 'Sem observações registradas' }}
+                                </span>
+                            </div>
+                        </td>
+
+                        <td class="p-4 text-center">
+                            <span
+                                class="px-3 py-1 rounded-lg text-[10px] font-black uppercase
                                 {{ $mov->quantity > 0 ? 'bg-green-950 text-green-500 border border-green-500/20' : '' }}
                                 {{ $mov->quantity <= 0 ? 'bg-red-950 text-red-500 border border-red-500/20' : '' }}">
-                                    {{ $mov->quantity > 0 ? 'ENTRADA' : 'SAÍDA' }}
-                                </span>
-                            </td>
+                                {{ $mov->quantity > 0 ? 'ENTRADA' : 'SAÍDA' }}
+                            </span>
+                        </td>
 
-                            <td class="p-4 text-center">
+                        <td class="p-4 text-center">
+                            <span
+                                class="font-black text-lg {{ $mov->quantity > 0 ? 'text-green-500' : 'text-red-500' }}">
+                                {{ $mov->quantity > 0 ? '+' : '' }}{{ $mov->quantity }}
+                            </span>
+                        </td>
+
+                        <td class="p-4 text-right">
+                            <div class="flex flex-col items-end">
                                 <span
-                                    class="font-black text-lg {{ $mov->quantity > 0 ? 'text-green-500' : 'text-red-500' }}">
-                                    {{ $mov->quantity > 0 ? '+' : '' }}{{ $mov->quantity }}
-                                </span>
-                            </td>
-
-                            <td class="p-4 text-right">
-                                <div class="flex flex-col items-end">
-                                    <span
-                                        class="text-white font-bold uppercase text-[11px]">{{ $mov->user->name }}</span>
-                                    <span
-                                        class="text-[9px] text-gray-500 uppercase tracking-tighter italic">Responsável</span>
-                                </div>
-                            </td>
-                        </tr>
+                                    class="text-white font-bold uppercase text-[11px]">{{ $mov->user->name }}</span>
+                                <span
+                                    class="text-[9px] text-gray-500 uppercase tracking-tighter italic">Responsável</span>
+                            </div>
+                        </td>
+                    </tr>
                     @empty
-                        <tr>
-                            <td colspan="5" class="p-20 text-center">
-                                <div class="flex flex-col items-center text-gray-600">
-                                    <span class="text-5xl mb-4 opacity-20">🔎</span>
-                                    <p class="italic font-bold uppercase text-xs tracking-widest">Nenhuma movimentação
-                                        encontrada para os filtros aplicados.</p>
-                                </div>
-                            </td>
-                        </tr>
+                    <tr>
+                        <td colspan="5" class="p-20 text-center">
+                            <div class="flex flex-col items-center text-gray-600">
+                                <span class="text-5xl mb-4 opacity-20">🔎</span>
+                                <p class="italic font-bold uppercase text-xs tracking-widest">Nenhuma movimentação
+                                    encontrada para os filtros aplicados.</p>
+                            </div>
+                        </td>
+                    </tr>
                     @endforelse
                 </tbody>
             </table>

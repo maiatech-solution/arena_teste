@@ -5,10 +5,10 @@
             <div class="flex items-center justify-between mb-8 px-4 sm:px-0">
                 <div class="flex items-center gap-4">
                     <a href="{{ route('bar.users.index') }}"
-                       class="bg-gray-800 hover:bg-gray-700 text-orange-500 p-3 rounded-2xl transition-all border border-gray-700 shadow-lg group"
-                       title="Voltar para a lista">
+                        class="bg-gray-800 hover:bg-gray-700 text-orange-500 p-3 rounded-2xl transition-all border border-gray-700 shadow-lg group"
+                        title="Voltar para a lista">
                         <svg class="w-6 h-6 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                         </svg>
                     </a>
                     <div>
@@ -69,18 +69,31 @@
 
                                 @php $currentUserRole = strtolower(trim(Auth::user()->role)); @endphp
 
-                                @if($currentUserRole === 'admin')
-                                    <select name="role" required
-                                        class="w-full bg-gray-800 border-none rounded-2xl p-4 text-white focus:ring-2 focus:ring-orange-500 shadow-inner font-bold appearance-none cursor-pointer">
-                                        <option value="gestor" {{ old('role', $user->role) == 'gestor' ? 'selected' : '' }}>Gestor de Bar (Staff)</option>
-                                        <option value="admin" {{ old('role', $user->role) == 'admin' ? 'selected' : '' }}>Administrador (Total)</option>
-                                    </select>
+                                {{-- ✅ Se for ADMIN ou GESTOR, liberamos o select (com filtros de segurança) --}}
+                                @if($currentUserRole === 'admin' || $currentUserRole === 'gestor')
+                                <select name="role" required
+                                    class="w-full bg-gray-800 border-none rounded-2xl p-4 text-white focus:ring-2 focus:ring-orange-500 shadow-inner font-bold appearance-none cursor-pointer">
+
+                                    {{-- 1. Colaborador: Sempre visível para Admin e Gestor --}}
+                                    <option value="colaborador" {{ old('role', $user->role) == 'colaborador' ? 'selected' : '' }}>Colaborador (Operacional - Restrito)</option>
+
+                                    {{-- 2. Gestor: Visível para Admin e Gestor --}}
+                                    <option value="gestor" {{ old('role', $user->role) == 'gestor' ? 'selected' : '' }}>Gestor de Bar (Staff)</option>
+
+                                    {{-- 3. Admin: SOMENTE Admin Master pode ver/atribuir este nível --}}
+                                    @if($currentUserRole === 'admin')
+                                    <option value="admin" {{ old('role', $user->role) == 'admin' ? 'selected' : '' }}>Administrador (Total)</option>
+                                    @endif
+                                </select>
                                 @else
-                                    <div class="w-full bg-gray-800/50 border border-gray-700 rounded-2xl p-4 text-gray-400 font-bold flex justify-between items-center shadow-inner">
-                                        <span class="uppercase text-xs tracking-widest">{{ $user->role === 'admin' ? 'Administrador' : 'Gestor de Bar' }}</span>
-                                        <span class="text-[9px] bg-gray-700 px-2 py-1 rounded">SOMENTE LEITURA</span>
-                                    </div>
-                                    <input type="hidden" name="role" value="{{ $user->role }}">
+                                {{-- 🔒 Se for um Colaborador tentando editar, ele não muda cargo de ninguém --}}
+                                <div class="w-full bg-gray-800/50 border border-gray-700 rounded-2xl p-4 text-gray-400 font-bold flex justify-between items-center shadow-inner">
+                                    <span class="uppercase text-xs tracking-widest">
+                                        @if($user->role === 'admin') Administrador @elseif($user->role === 'gestor') Gestor @else Colaborador @endif
+                                    </span>
+                                    <span class="text-[9px] bg-gray-700 px-2 py-1 rounded">SOMENTE LEITURA</span>
+                                </div>
+                                <input type="hidden" name="role" value="{{ $user->role }}">
                                 @endif
                             </div>
 
@@ -102,7 +115,9 @@
                     <div class="flex flex-col md:flex-row gap-4 pt-8">
                         <button type="submit"
                             class="flex-grow bg-orange-600 hover:bg-orange-500 text-white font-black py-4 rounded-2xl transition-all uppercase text-xs tracking-widest shadow-lg shadow-orange-600/20 active:scale-95 flex items-center justify-center gap-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                            </svg>
                             Salvar Alterações
                         </button>
                         <a href="{{ route('bar.users.index') }}"

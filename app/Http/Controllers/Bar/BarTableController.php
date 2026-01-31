@@ -8,6 +8,7 @@ use App\Models\Bar\BarOrder;
 use App\Models\Bar\BarOrderItem;
 use App\Models\Bar\BarProduct;
 use App\Models\Bar\BarCategory;
+use App\Models\Bar\BarStockMovement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -61,6 +62,7 @@ class BarTableController extends Controller
 
         return back()->with('success', 'Layout do salão atualizado!');
     }
+
     /**
      * Ativa/Desativa Mesa (Usa 'reserved' como bloqueio)
      */
@@ -167,7 +169,7 @@ class BarTableController extends Controller
                 $product->decrement('stock_quantity', $qty);
 
                 // 📜 REGISTRO NO HISTÓRICO (Igual ao PDV)
-                \App\Models\Bar\BarStockMovement::create([
+                BarStockMovement::create([
                     'bar_product_id' => $product->id,
                     'user_id'        => auth()->id(),
                     'quantity'       => -$qty,
@@ -199,7 +201,7 @@ class BarTableController extends Controller
                     $product->increment('stock_quantity', $quantidadeEstornada);
 
                     // 📜 Registra a ENTRADA por estorno no histórico
-                    \App\Models\Bar\BarStockMovement::create([
+                    BarStockMovement::create([
                         'bar_product_id' => $product->id,
                         'user_id'        => auth()->id(),
                         'quantity'       => $quantidadeEstornada, // Positivo pois está entrando de volta
@@ -210,7 +212,7 @@ class BarTableController extends Controller
 
                 // 2. Remove o item e atualiza o total da mesa
                 $item->delete();
-                $order->update(['total_value' => $order->items()->sum('subtotal')]);
+                $order->update(['total_value' => $order->items()->sum('subtotal') ?? 0]);
 
                 return back()->with('success', 'Item removido e estoque estornado!');
             });
@@ -225,7 +227,7 @@ class BarTableController extends Controller
     public function closeOrder(Request $request, $id)
     {
         // Usamos uma transação para garantir que a mesa só libere se o pedido for salvo
-        return \DB::transaction(function () use ($request, $id) {
+        return DB::transaction(function () use ($request, $id) {
             $table = BarTable::findOrFail($id);
 
             // 🔍 Busca a comanda ativa usando o status 'open' (conforme seu banco)
@@ -259,9 +261,14 @@ class BarTableController extends Controller
             // ✅ Libera a mesa para o próximo cliente
             $table->update(['status' => 'available']);
 
-            // 🚀 Redireciona para o recibo com o sinal para abrir o modal de sucesso
-            return redirect()->route('bar.tables.receipt', $order->id)
-                ->with('show_success_modal', true)
+            // 🚀 Redireciona para o recibo ou para o index conforme o desejo do usuário
+            if ($request->print_coupon == "1") {
+                return redirect()->route('bar.tables.receipt', $order->id)
+                    ->with('show_success_modal', true)
+                    ->with('success', 'Venda finalizada com sucesso!');
+            }
+
+            return redirect()->route('bar.tables.index')
                 ->with('success', 'Venda finalizada com sucesso!');
         });
     }

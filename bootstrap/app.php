@@ -19,8 +19,10 @@ return Application::configure(basePath: dirname(__DIR__))
             users: '/select-modules'
         );
 
+        // 🛡️ REGISTRO DE ALIASES DE MIDDLEWARE
         $middleware->alias([
             'gestor' => \App\Http\Middleware\IsGestor::class,
+            'role'   => \App\Http\Middleware\CheckRole::class, // ✅ Adicionado para resolver o erro 500
         ]);
 
     })

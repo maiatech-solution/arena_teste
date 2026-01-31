@@ -33,7 +33,7 @@
                                 class="w-full bg-gray-950 border-gray-800 rounded-2xl text-white p-4 focus:border-orange-500 outline-none uppercase font-black text-xs tracking-widest cursor-pointer">
                                 <option value="all">📁 TODAS CATEGORIAS</option>
                                 @foreach ($categories as $cat)
-                                    <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+                                <option value="{{ $cat->id }}">{{ $cat->name }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -43,31 +43,31 @@
                 <div class="flex-1 overflow-y-auto p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 no-scrollbar"
                     id="productsGrid">
                     @foreach ($products as $product)
-                        <button
-                            onclick="addToCart({{ $product->id }}, '{{ $product->name }}', {{ $product->sale_price }}, {{ $product->stock_quantity }}, {{ $product->manage_stock }})"
-                            data-category="{{ $product->bar_category_id }}" data-name="{{ strtolower($product->name) }}"
-                            data-barcode="{{ $product->barcode }}"
-                            class="product-card group relative p-3 bg-gray-800 hover:bg-orange-600 rounded-2xl border border-gray-700 hover:border-orange-500 transition-all flex flex-col items-center justify-center text-center active:scale-95 shadow-md h-28">
+                    <button
+                        onclick="addToCart({{ $product->id }}, '{{ $product->name }}', {{ $product->sale_price }}, {{ $product->stock_quantity }}, {{ $product->manage_stock }})"
+                        data-category="{{ $product->bar_category_id }}" data-name="{{ strtolower($product->name) }}"
+                        data-barcode="{{ $product->barcode }}"
+                        class="product-card group relative p-3 bg-gray-800 hover:bg-orange-600 rounded-2xl border border-gray-700 hover:border-orange-500 transition-all flex flex-col items-center justify-center text-center active:scale-95 shadow-md h-28">
 
-                            <div class="absolute top-1.5 right-1.5">
-                                <span
-                                    class="text-[7px] font-black px-1.5 py-0.5 rounded bg-gray-950/60 {{ $product->manage_stock && $product->stock_quantity <= $product->min_stock ? 'text-red-500 animate-pulse' : 'text-gray-400' }}">
-                                    {{ $product->stock_quantity }}
-                                </span>
-                            </div>
+                        <div class="absolute top-1.5 right-1.5">
+                            <span
+                                class="text-[7px] font-black px-1.5 py-0.5 rounded bg-gray-950/60 {{ $product->manage_stock && $product->stock_quantity <= $product->min_stock ? 'text-red-500 animate-pulse' : 'text-gray-400' }}">
+                                {{ $product->stock_quantity }}
+                            </span>
+                        </div>
 
-                            <div class="text-xl mb-1 group-hover:scale-110 transition-transform">📦</div>
+                        <div class="text-xl mb-1 group-hover:scale-110 transition-transform">📦</div>
 
-                            <div class="w-full">
-                                <h3
-                                    class="text-[9px] font-black text-white uppercase leading-tight line-clamp-2 mb-1 group-hover:text-white px-1">
-                                    {{ $product->name }}
-                                </h3>
-                                <span class="text-orange-500 font-black text-xs group-hover:text-white">
-                                    R$ {{ number_format($product->sale_price, 2, ',', '.') }}
-                                </span>
-                            </div>
-                        </button>
+                        <div class="w-full">
+                            <h3
+                                class="text-[9px] font-black text-white uppercase leading-tight line-clamp-2 mb-1 group-hover:text-white px-1">
+                                {{ $product->name }}
+                            </h3>
+                            <span class="text-orange-500 font-black text-xs group-hover:text-white">
+                                R$ {{ number_format($product->sale_price, 2, ',', '.') }}
+                            </span>
+                        </div>
+                    </button>
                     @endforeach
                 </div>
             </div>
@@ -135,20 +135,20 @@
                     {{-- Métodos de Pagamento --}}
                     <div class="grid grid-cols-2 gap-2">
                         @php
-                            $metodos = [
-                                'dinheiro' => ['label' => 'Dinheiro', 'icon' => '💵'],
-                                'pix' => ['label' => 'PIX', 'icon' => '📱'],
-                                'debito' => ['label' => 'Débito', 'icon' => '💳'],
-                                'credito' => ['label' => 'Crédito', 'icon' => '💳'],
-                            ];
+                        $metodos = [
+                        'dinheiro' => ['label' => 'Dinheiro', 'icon' => '💵'],
+                        'pix' => ['label' => 'PIX', 'icon' => '📱'],
+                        'debito' => ['label' => 'Débito', 'icon' => '💳'],
+                        'credito' => ['label' => 'Crédito', 'icon' => '💳'],
+                        ];
                         @endphp
                         @foreach ($metodos as $key => $info)
-                            <button onclick="setPaymentMethod('{{ $key }}')"
-                                class="pay-btn flex items-center gap-2 p-3 rounded-2xl border border-gray-800 bg-gray-900 text-gray-500 transition-all font-black text-[10px] uppercase hover:border-orange-500/50"
-                                id="btn-{{ $key }}">
-                                <span>{{ $info['icon'] }}</span>
-                                {{ $info['label'] }}
-                            </button>
+                        <button onclick="setPaymentMethod('{{ $key }}')"
+                            class="pay-btn flex items-center gap-2 p-3 rounded-2xl border border-gray-800 bg-gray-900 text-gray-500 transition-all font-black text-[10px] uppercase hover:border-orange-500/50"
+                            id="btn-{{ $key }}">
+                            <span>{{ $info['icon'] }}</span>
+                            {{ $info['label'] }}
+                        </button>
                         @endforeach
                     </div>
 
@@ -266,14 +266,18 @@
         }
 
         function removeFromCart(index) {
-            cart.splice(index, 1);
-            renderCart();
+            // 🛡️ Antes de tirar o item do carrinho, o supervisor precisa autorizar
+            requisitarAutorizacao(() => {
+                cart.splice(index, 1);
+                renderCart();
+            });
         }
 
         function clearCart() {
-            if (confirm('Limpar todo o carrinho?')) {
+            // 🛡️ Substituímos o confirm pela senha do supervisor
+            requisitarAutorizacao(() => {
                 resetSale();
-            }
+            });
         }
 
         // 🔄 RENDERIZAR CARRINHO
@@ -474,19 +478,20 @@
             }
 
             try {
-                const response = await fetch('{{ route('bar.pos.store') }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json', // Importante para o Laravel entender
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    },
-                    body: JSON.stringify({
-                        items: cart,
-                        payments: finalPayments, // Enviamos a lista completa de pagamentos
-                        total_value: currentCartTotal
-                    })
-                });
+                const response = await fetch('{{ route('
+                    bar.pos.store ') }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json', // Importante para o Laravel entender
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        },
+                        body: JSON.stringify({
+                            items: cart,
+                            payments: finalPayments, // Enviamos a lista completa de pagamentos
+                            total_value: currentCartTotal
+                        })
+                    });
 
                 const data = await response.json();
                 if (data.success) {

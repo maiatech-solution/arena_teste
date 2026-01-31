@@ -5,8 +5,8 @@
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <div class="flex items-center gap-4">
                 <a href="{{ route('bar.dashboard') }}"
-                   class="p-3 bg-gray-800 hover:bg-gray-700 text-white rounded-2xl transition border border-gray-700 shadow-lg group"
-                   title="Voltar ao Início">
+                    class="p-3 bg-gray-800 hover:bg-gray-700 text-white rounded-2xl transition border border-gray-700 shadow-lg group"
+                    title="Voltar ao Início">
                     <span class="group-hover:-translate-x-1 transition-transform duration-200 inline-block">◀</span>
                 </a>
                 <div>
@@ -41,7 +41,7 @@
 
             {{-- NOVO: CARD DE REPOSIÇÃO URGENTE (NEGATIVOS) --}}
             <a href="{{ route('bar.products.index', ['filter_status' => 'out_of_stock']) }}"
-               class="bg-gray-900 border {{ $outOfStockCount > 0 ? 'border-red-500 ring-1 ring-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.15)]' : 'border-gray-800' }} p-6 rounded-3xl transition-all hover:scale-[1.02] group">
+                class="bg-gray-900 border {{ $outOfStockCount > 0 ? 'border-red-500 ring-1 ring-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.15)]' : 'border-gray-800' }} p-6 rounded-3xl transition-all hover:scale-[1.02] group">
                 <div class="flex items-center justify-between mb-4">
                     <span class="p-3 rounded-2xl {{ $outOfStockCount > 0 ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-800 text-gray-500' }}">🛒</span>
                     <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Reposição Urgente</span>
@@ -52,7 +52,7 @@
 
             {{-- Status Crítico (Abaixo do Mínimo) --}}
             <a href="{{ route('bar.products.index', ['filter_status' => 'low_stock']) }}"
-               class="bg-gray-900 border {{ $lowStockProducts->count() > 0 ? 'border-orange-500/50 shadow-[0_0_20px_rgba(249,115,22,0.1)]' : 'border-gray-800' }} p-6 rounded-3xl transition-all hover:scale-[1.02]">
+                class="bg-gray-900 border {{ $lowStockProducts->count() > 0 ? 'border-orange-500/50 shadow-[0_0_20px_rgba(249,115,22,0.1)]' : 'border-gray-800' }} p-6 rounded-3xl transition-all hover:scale-[1.02]">
                 <div class="flex items-center justify-between mb-4">
                     <span class="p-3 rounded-2xl {{ $lowStockProducts->count() > 0 ? 'bg-orange-500/20 text-orange-500' : 'bg-gray-800 text-gray-400' }}">🚨</span>
                     <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Abaixo do Mínimo</span>
@@ -83,10 +83,10 @@
         </div>
 
         @if (session('success'))
-            <div class="mb-6 p-4 bg-green-900/50 border border-green-500 text-green-200 rounded-xl font-bold flex items-center gap-3 animate-bounce">
-                <span class="text-xl">✅</span>
-                {{ session('success') }}
-            </div>
+        <div class="mb-6 p-4 bg-green-900/50 border border-green-500 text-green-200 rounded-xl font-bold flex items-center gap-3 animate-bounce">
+            <span class="text-xl">✅</span>
+            {{ session('success') }}
+        </div>
         @endif
 
         {{-- FILTROS ATUALIZADOS --}}
@@ -102,7 +102,7 @@
                         class="bg-gray-950 border-gray-800 rounded-xl text-white focus:border-orange-500 focus:ring-orange-500 p-4 font-bold min-w-[200px] cursor-pointer">
                         <option value="">📂 Todas Categorias</option>
                         @foreach ($categories as $cat)
-                            <option value="{{ $cat->id }}" {{ request('bar_category_id') == $cat->id ? 'selected' : '' }}>{{ $cat->name }}</option>
+                        <option value="{{ $cat->id }}" {{ request('bar_category_id') == $cat->id ? 'selected' : '' }}>{{ $cat->name }}</option>
                         @endforeach
                     </select>
 
@@ -116,9 +116,9 @@
                     <span class="text-[9px] font-black text-gray-600 uppercase mr-2 tracking-[0.2em]">Exibir apenas:</span>
 
                     @php
-                        $currentStatus = request('filter_status', 'all');
-                        $btnBase = 'px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border ';
-                        $queryParams = request()->except(['filter_status', 'page']);
+                    $currentStatus = request('filter_status', 'all');
+                    $btnBase = 'px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border ';
+                    $queryParams = request()->except(['filter_status', 'page']);
                     @endphp
 
                     <a href="{{ route('bar.products.index', array_merge($queryParams, ['filter_status' => 'all'])) }}"
@@ -142,10 +142,10 @@
                     </a>
 
                     @if (request()->anyFilled(['search', 'bar_category_id', 'filter_status']))
-                        <a href="{{ route('bar.products.index') }}"
-                            class="ml-auto text-[10px] font-black text-orange-500 hover:text-white transition-colors uppercase tracking-widest border-b border-orange-500">
-                            Resetar Filtros
-                        </a>
+                    <a href="{{ route('bar.products.index') }}"
+                        class="ml-auto text-[10px] font-black text-orange-500 hover:text-white transition-colors uppercase tracking-widest border-b border-orange-500">
+                        Resetar Filtros
+                    </a>
                     @endif
                 </div>
             </form>
@@ -166,87 +166,98 @@
                 </thead>
                 <tbody class="divide-y divide-gray-800/50">
                     @forelse($products as $product)
-                        <tr class="hover:bg-gray-800/30 transition-all duration-300 {{ !$product->is_active ? 'opacity-40 grayscale' : '' }}">
-                            <td class="p-6 text-center">
-                                <span class="w-2.5 h-2.5 rounded-full {{ $product->is_active ? 'bg-green-500 shadow-[0_0_12px_rgba(34,197,94,0.4)]' : 'bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.4)]' }} inline-block"></span>
-                            </td>
+                    <tr class="hover:bg-gray-800/30 transition-all duration-300 {{ !$product->is_active ? 'opacity-40 grayscale' : '' }}">
+                        <td class="p-6 text-center">
+                            <span class="w-2.5 h-2.5 rounded-full {{ $product->is_active ? 'bg-green-500 shadow-[0_0_12px_rgba(34,197,94,0.4)]' : 'bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.4)]' }} inline-block"></span>
+                        </td>
 
-                            <td class="p-6">
-                                <div class="flex flex-col">
-                                    <span class="font-black text-white uppercase tracking-tight text-sm leading-tight">{{ $product->name }}</span>
-                                    <span class="text-[9px] text-gray-500 uppercase font-black tracking-widest mt-1">
-                                        🏷️ {{ $product->barcode ?? 'Sem Código' }} | {{ $product->category->name ?? 'Geral' }}
-                                    </span>
-                                </div>
-                            </td>
-
-                            <td class="p-6 text-center">
-                                @if($product->manage_stock)
-                                    <span class="text-[8px] bg-blue-900/30 text-blue-400 px-3 py-1 rounded-lg border border-blue-500/20 font-black uppercase italic tracking-tighter">Controlado</span>
-                                @else
-                                    <span class="text-[8px] bg-gray-800 text-gray-500 px-3 py-1 rounded-lg border border-gray-700 font-black uppercase italic tracking-tighter">Livre (Negativo)</span>
-                                @endif
-                            </td>
-
-                            <td class="p-6 text-center">
-                                {{-- Lógica de cores para estoque --}}
-                                @php
-                                    $stockClass = 'bg-gray-950 text-gray-400 border-gray-800';
-                                    if($product->stock_quantity < 0) {
-                                        $stockClass = 'bg-red-900/40 text-red-500 border-red-500/50 font-black animate-pulse';
-                                    } elseif($product->manage_stock && $product->stock_quantity <= $product->min_stock) {
-                                        $stockClass = 'bg-yellow-900/30 text-yellow-500 border-yellow-500/30';
-                                    } elseif($product->stock_quantity > 0) {
-                                        $stockClass = 'bg-gray-950 text-green-500 border-green-500/20';
-                                    }
-                                @endphp
-                                <span class="px-4 py-1.5 rounded-xl text-[11px] font-black uppercase border {{ $stockClass }}">
-                                    {{ $product->stock_quantity }} UNID.
+                        <td class="p-6">
+                            <div class="flex flex-col">
+                                <span class="font-black text-white uppercase tracking-tight text-sm leading-tight">{{ $product->name }}</span>
+                                <span class="text-[9px] text-gray-500 uppercase font-black tracking-widest mt-1">
+                                    🏷️ {{ $product->barcode ?? 'Sem Código' }} | {{ $product->category->name ?? 'Geral' }}
                                 </span>
-                            </td>
+                            </div>
+                        </td>
 
-                            <td class="p-6 text-center font-black text-orange-500 italic text-sm">
-                                R$ {{ number_format($product->sale_price, 2, ',', '.') }}
-                            </td>
+                        <td class="p-6 text-center">
+                            @if($product->manage_stock)
+                            <span class="text-[8px] bg-blue-900/30 text-blue-400 px-3 py-1 rounded-lg border border-blue-500/20 font-black uppercase italic tracking-tighter">Controlado</span>
+                            @else
+                            <span class="text-[8px] bg-gray-800 text-gray-500 px-3 py-1 rounded-lg border border-gray-700 font-black uppercase italic tracking-tighter">Livre (Negativo)</span>
+                            @endif
+                        </td>
 
-                            <td class="p-6 text-right">
-                                <div class="flex justify-end gap-3">
-                                    @if($product->manage_stock)
-                                        <button type="button"
-                                            onclick="openLossModal({{ $product->id }}, '{{ $product->name }}')"
-                                            class="w-10 h-10 flex items-center justify-center bg-gray-800 hover:bg-red-900 text-red-500 rounded-xl transition-all border border-red-500/10 {{ !$product->is_active ? 'opacity-20 cursor-not-allowed' : '' }}"
-                                            title="Registrar Perda" {{ !$product->is_active ? 'disabled' : '' }}>
-                                            ⚠️
-                                        </button>
-                                    @endif
+                        <td class="p-6 text-center">
+                            {{-- Lógica de cores para estoque --}}
+                            @php
+                            $stockClass = 'bg-gray-950 text-gray-400 border-gray-800';
+                            if($product->stock_quantity < 0) {
+                                $stockClass='bg-red-900/40 text-red-500 border-red-500/50 font-black animate-pulse' ;
+                                } elseif($product->manage_stock && $product->stock_quantity <= $product->min_stock) {
+                                    $stockClass = 'bg-yellow-900/30 text-yellow-500 border-yellow-500/30';
+                                    } elseif($product->stock_quantity > 0) {
+                                    $stockClass = 'bg-gray-950 text-green-500 border-green-500/20';
+                                    }
+                                    @endphp
+                                    <span class="px-4 py-1.5 rounded-xl text-[11px] font-black uppercase border {{ $stockClass }}">
+                                        {{ $product->stock_quantity }} UNID.
+                                    </span>
+                        </td>
 
-                                    <a href="{{ route('bar.products.edit', $product->id) }}"
-                                        class="w-10 h-10 flex items-center justify-center bg-gray-800 hover:bg-orange-600 text-white rounded-xl transition-all active:scale-90 border border-gray-700"
-                                        title="Editar Ficha">
-                                        ⚙️
-                                    </a>
+                        <td class="p-6 text-center font-black text-orange-500 italic text-sm">
+                            R$ {{ number_format($product->sale_price, 2, ',', '.') }}
+                        </td>
 
-                                    <form id="form-status-{{ $product->id }}" action="{{ route('bar.products.destroy', $product->id) }}" method="POST">
-                                        @csrf @method('DELETE')
-                                        <input type="hidden" name="status_reason" id="reason-{{ $product->id }}">
-                                        <button type="button"
-                                            onclick="confirmStatusChange({{ $product->id }}, {{ $product->is_active ? 'true' : 'false' }})"
-                                            class="w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 border {{ $product->is_active ? 'bg-gray-800 text-red-500 border-red-500/20 hover:bg-red-900/30' : 'bg-green-600 text-white border-green-500/20 hover:bg-green-500' }}">
-                                            {!! $product->is_active ? '🗑️' : '✅' !!}
-                                        </button>
-                                    </form>
+                        <td class="p-6 text-right">
+                            <div class="flex justify-end gap-3">
+                                {{-- 1. REGISTRAR PERDA: Todos vêem, mas o Modal tem a trava de senha (já fizemos) --}}
+                                @if($product->manage_stock)
+                                <button type="button"
+                                    onclick="openLossModal({{ $product->id }}, '{{ $product->name }}')"
+                                    class="w-10 h-10 flex items-center justify-center bg-gray-800 hover:bg-red-900 text-red-500 rounded-xl transition-all border border-red-500/10 {{ !$product->is_active ? 'opacity-20 cursor-not-allowed' : '' }}"
+                                    title="Registrar Perda" {{ !$product->is_active ? 'disabled' : '' }}>
+                                    ⚠️
+                                </button>
+                                @endif
+
+                                {{-- 2. EDITAR FICHA: Somente Gestores e Admins podem alterar dados de produtos existentes --}}
+                                @if(in_array(auth()->user()->role, ['admin', 'gestor']))
+                                <a href="{{ route('bar.products.edit', $product->id) }}"
+                                    class="w-10 h-10 flex items-center justify-center bg-gray-800 hover:bg-orange-600 text-white rounded-xl transition-all active:scale-90 border border-gray-700"
+                                    title="Editar Ficha">
+                                    ⚙️
+                                </a>
+                                @else
+                                {{-- Cadeado visual para o Colaborador saber que não tem acesso --}}
+                                <div class="w-10 h-10 flex items-center justify-center bg-gray-900/50 text-gray-700 rounded-xl border border-gray-800 cursor-not-allowed"
+                                    title="Edição restrita a supervisores">
+                                    🔒
                                 </div>
-                            </td>
-                        </tr>
+                                @endif
+
+                                {{-- 3. MUDAR STATUS: Todos vêem o botão, mas o SCRIPT pedirá autorização (ajustaremos a seguir) --}}
+                                <form id="form-status-{{ $product->id }}" action="{{ route('bar.products.destroy', $product->id) }}" method="POST">
+                                    @csrf @method('DELETE')
+                                    <input type="hidden" name="status_reason" id="reason-{{ $product->id }}">
+                                    <button type="button"
+                                        onclick="confirmStatusChange({{ $product->id }}, {{ $product->is_active ? 'true' : 'false' }})"
+                                        class="w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-90 border {{ $product->is_active ? 'bg-gray-800 text-red-500 border-red-500/20 hover:bg-red-900/30' : 'bg-green-600 text-white border-green-500/20 hover:bg-green-500' }}">
+                                        {!! $product->is_active ? '🗑️' : '✅' !!}
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
                     @empty
-                        <tr>
-                            <td colspan="6" class="p-24 text-center">
-                                <div class="flex flex-col items-center opacity-20">
-                                    <span class="text-6xl mb-4">🔎</span>
-                                    <p class="font-black uppercase text-xs tracking-[0.3em] text-gray-500">Nenhum item localizado</p>
-                                </div>
-                            </td>
-                        </tr>
+                    <tr>
+                        <td colspan="6" class="p-24 text-center">
+                            <div class="flex flex-col items-center opacity-20">
+                                <span class="text-6xl mb-4">🔎</span>
+                                <p class="font-black uppercase text-xs tracking-[0.3em] text-gray-500">Nenhum item localizado</p>
+                            </div>
+                        </td>
+                    </tr>
                     @endforelse
                 </tbody>
             </table>
@@ -266,7 +277,7 @@
                 <p id="loss_product_name" class="text-orange-500 font-bold text-xs uppercase mt-2 tracking-widest"></p>
             </div>
 
-            <form action="{{ route('bar.products.record_loss') }}" method="POST">
+            <form id="formPerdaEstoque" action="{{ route('bar.products.record_loss') }}" method="POST">
                 @csrf
                 <input type="hidden" name="product_id" id="loss_product_id">
                 <div class="space-y-6">
@@ -281,45 +292,82 @@
                 </div>
                 <div class="flex gap-4 mt-10">
                     <button type="button" onclick="closeLossModal()" class="flex-1 py-4 text-gray-500 font-black text-[10px] uppercase tracking-widest hover:text-white transition-colors">Cancelar</button>
-                    <button type="submit" class="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-600/30 active:scale-95 transition-all">Confirmar Baixa</button>
+
+                    {{-- Alterado: type="button" e adicionado o onclick com a trava --}}
+                    <button type="button"
+                        onclick="requisitarAutorizacao(() => document.getElementById('formPerdaEstoque').submit())"
+                        class="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-600/30 active:scale-95 transition-all">
+                        Confirmar Baixa
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 
     <script>
+        /**
+         * 🛡️ Gerencia a alteração de status (Ativar/Desativar) 
+         * Agora exige motivo E autorização do supervisor.
+         */
         function confirmStatusChange(id, isActive) {
             const action = isActive ? 'DESATIVAR' : 'REATIVAR';
+
+            // 1. Solicita o motivo para o registro de auditoria
             const reason = prompt(`Deseja realmente ${action} este produto?\n\nInforme o motivo para auditoria:`);
+
             if (reason !== null && reason.trim() !== "") {
-                document.getElementById('reason-' + id).value = reason;
-                document.getElementById('form-status-' + id).submit();
+
+                // 2. 🔒 Intercepta a ação para exigir senha de Gestor/Admin
+                requisitarAutorizacao(() => {
+                    document.getElementById('reason-' + id).value = reason;
+                    document.getElementById('form-status-' + id).submit();
+                });
+
             } else if (reason !== null) {
-                alert("O motivo é obrigatório.");
+                alert("O motivo é obrigatório para realizar esta alteração.");
             }
         }
 
+        /**
+         * Abre o modal de registro de perda/quebra
+         */
         function openLossModal(id, name) {
             document.getElementById('loss_product_id').value = id;
             document.getElementById('loss_product_name').innerText = name;
             document.getElementById('lossModal').classList.remove('hidden');
+
+            // Foca automaticamente no campo de quantidade
             setTimeout(() => {
                 const input = document.querySelector('#lossModal input[name="quantity"]');
                 if (input) input.focus();
             }, 100);
         }
 
+        /**
+         * Fecha o modal de perda
+         */
         function closeLossModal() {
             document.getElementById('lossModal').classList.add('hidden');
         }
 
+        /**
+         * Atalho para fechar modal com a tecla ESC
+         */
         document.addEventListener('keydown', (e) => {
             if (e.key === "Escape") closeLossModal();
         });
     </script>
 
     <style>
-        nav[role="navigation"] svg { width: 1.2rem; display: inline; }
-        .relative.z-0.inline-flex { border-radius: 1rem; overflow: hidden; border: 1px solid #1f2937; }
+        nav[role="navigation"] svg {
+            width: 1.2rem;
+            display: inline;
+        }
+
+        .relative.z-0.inline-flex {
+            border-radius: 1rem;
+            overflow: hidden;
+            border: 1px solid #1f2937;
+        }
     </style>
 </x-bar-layout>

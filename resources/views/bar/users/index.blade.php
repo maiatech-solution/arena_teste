@@ -13,11 +13,14 @@
                         <h1 class="text-4xl font-black text-white uppercase tracking-tighter">
                             {{ $pageTitle }} <span class="text-orange-600">Equipe</span>
                         </h1>
-                        <p class="text-gray-500 font-bold uppercase text-xs tracking-widest mt-1 italic">Gestão de
-                            Colaboradores e Acessos Administrativos</p>
+                        <p class="text-gray-500 font-bold uppercase text-xs tracking-widest mt-1 italic">
+                            Gestão de Colaboradores e Acessos Administrativos
+                        </p>
                     </div>
                 </div>
 
+                {{-- 🛡️ PROTEÇÃO VISUAL: Admin e Gestor podem cadastrar novos integrantes --}}
+                @if(in_array(auth()->user()->role, ['admin', 'gestor']))
                 <a href="{{ route('bar.users.create') }}"
                     class="inline-flex items-center px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white font-black rounded-xl shadow-lg shadow-orange-600/20 hover:scale-105 transition-transform text-center uppercase tracking-widest gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -25,35 +28,36 @@
                     </svg>
                     Novo Colaborador
                 </a>
+                @endif
             </div>
 
             <div
                 class="bg-gray-900 overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] sm:rounded-[2.5rem] p-8 border border-gray-800">
 
                 @if (session('success'))
-                    <div class="bg-green-500/10 border-l-4 border-green-500 text-green-500 p-4 mb-6 rounded-xl shadow-lg animate-bounce-short"
-                        role="alert">
-                        <div class="flex items-center gap-3">
-                            <span class="text-xl">✅</span>
-                            <div>
-                                <p class="font-black uppercase text-xs tracking-widest">Sucesso!</p>
-                                <p class="text-sm font-bold opacity-90">{{ session('success') }}</p>
-                            </div>
+                <div class="bg-green-500/10 border-l-4 border-green-500 text-green-500 p-4 mb-6 rounded-xl shadow-lg animate-bounce-short"
+                    role="alert">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xl">✅</span>
+                        <div>
+                            <p class="font-black uppercase text-xs tracking-widest">Sucesso!</p>
+                            <p class="text-sm font-bold opacity-90">{{ session('success') }}</p>
                         </div>
                     </div>
+                </div>
                 @endif
 
                 @if (session('error'))
-                    <div class="bg-red-500/10 border-l-4 border-red-500 text-red-500 p-4 mb-6 rounded-xl shadow-lg"
-                        role="alert">
-                        <div class="flex items-center gap-3">
-                            <span class="text-xl">⚠️</span>
-                            <div>
-                                <p class="font-black uppercase text-xs tracking-widest">Erro!</p>
-                                <p class="text-sm font-bold opacity-90">{{ session('error') }}</p>
-                            </div>
+                <div class="bg-red-500/10 border-l-4 border-red-500 text-red-500 p-4 mb-6 rounded-xl shadow-lg"
+                    role="alert">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xl">⚠️</span>
+                        <div>
+                            <p class="font-black uppercase text-xs tracking-widest">Erro!</p>
+                            <p class="text-sm font-bold opacity-90">{{ session('error') }}</p>
                         </div>
                     </div>
+                </div>
                 @endif
 
                 <div class="mb-8">
@@ -73,14 +77,14 @@
                             </button>
 
                             @if (!empty($search))
-                                <a href="{{ route('bar.users.index') }}"
-                                    class="px-5 py-4 bg-gray-800 text-gray-400 font-black rounded-2xl hover:bg-gray-700 transition-all border border-gray-700 flex items-center justify-center"
-                                    title="Limpar busca">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </a>
+                            <a href="{{ route('bar.users.index') }}"
+                                class="px-5 py-4 bg-gray-800 text-gray-400 font-black rounded-2xl hover:bg-gray-700 transition-all border border-gray-700 flex items-center justify-center"
+                                title="Limpar busca">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </a>
                             @endif
                         </div>
                     </form>
@@ -109,118 +113,125 @@
                         </thead>
                         <tbody class="divide-y divide-gray-800">
                             @forelse ($users as $user)
-                                <tr class="hover:bg-orange-600/[0.03] transition-colors group">
-                                    <td class="px-8 py-6 whitespace-nowrap">
-                                        <div class="flex items-center gap-4">
-                                            <div
-                                                class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white font-black border border-gray-600 group-hover:border-orange-500/50 transition-all duration-300">
-                                                {{ strtoupper(substr($user->name, 0, 1)) }}
-                                            </div>
-                                            <div>
-                                                <div class="text-sm font-black text-white uppercase tracking-tight">
-                                                    {{ $user->name }}</div>
-                                                <div class="text-[11px] text-gray-500 font-bold tracking-wide">
-                                                    {{ $user->email }}</div>
-                                                <div class="mt-1">
-                                                    @if ($user->role === 'admin')
-                                                        <span
-                                                            class="px-2 py-0.5 rounded text-[8px] font-black bg-red-500/10 text-red-500 uppercase border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]">Admin
-                                                            Full</span>
-                                                    @else
-                                                        <span
-                                                            class="px-2 py-0.5 rounded text-[8px] font-black bg-indigo-500/10 text-indigo-500 uppercase border border-indigo-500/20">Gestor
-                                                            Staff</span>
-                                                    @endif
-                                                </div>
-                                            </div>
+                            <tr class="hover:bg-orange-600/[0.03] transition-colors group">
+                                <td class="px-8 py-6 whitespace-nowrap">
+                                    <div class="flex items-center gap-4">
+                                        <div
+                                            class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white font-black border border-gray-600 group-hover:border-orange-500/50 transition-all duration-300">
+                                            {{ strtoupper(substr($user->name, 0, 1)) }}
                                         </div>
-                                    </td>
-
-                                    <td class="px-8 py-6 whitespace-nowrap text-sm font-bold text-gray-400">
-                                        <span
-                                            class="text-orange-500/80">{{ $user->arena->name ?? 'Acesso Global' }}</span>
-                                    </td>
-
-                                    <td
-                                        class="px-8 py-6 whitespace-nowrap text-xs text-gray-400 font-mono tracking-tighter">
-                                        {{ $user->whatsapp_contact ?? 'Não informado' }}
-                                    </td>
-
-                                    <td class="px-8 py-6 whitespace-nowrap">
-                                        <span class="flex items-center gap-2">
-                                            <span
-                                                class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse"></span>
-                                            <span
-                                                class="text-[10px] font-black text-white uppercase tracking-widest">Ativo</span>
-                                        </span>
-                                    </td>
-
-                                    <td class="px-8 py-6 whitespace-nowrap text-center">
-                                        <div class="flex justify-center items-center gap-3">
-
-                                            {{-- 🛡️ REGRA DE HIERARQUIA VISUAL --}}
-                                            @php
-                                                $podeEditar =
-                                                    auth()->user()->role === 'admin' || $user->role !== 'admin';
-                                            @endphp
-
-                                            @if ($podeEditar)
-                                                {{-- BOTÃO EDITAR LIBERADO --}}
-                                                <a href="{{ route('bar.users.edit', $user) }}"
-                                                    class="bg-gray-800 hover:bg-orange-600 p-2.5 rounded-xl transition-all border border-gray-700 text-white shadow-lg group/btn active:scale-95">
-                                                    <svg class="w-4 h-4 group-hover/btn:rotate-12 transition-transform"
-                                                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                                            stroke-width="2"
-                                                            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                                    </svg>
-                                                </a>
-
-                                                {{-- BOTÃO EXCLUIR LIBERADO (Apenas se não for o próprio usuário logado) --}}
-                                                @if (Auth::id() !== $user->id)
-                                                    <form action="{{ route('bar.users.destroy', $user) }}"
-                                                        method="POST" onsubmit="return false;" class="inline">
-                                                        @csrf @method('DELETE')
-                                                        <button type="button" onclick="showCustomConfirmation(this)"
-                                                            class="bg-gray-800 hover:bg-red-600 p-2.5 rounded-xl transition-all border border-gray-700 text-white shadow-lg group/del active:scale-95"
-                                                            data-username="{{ $user->name }}"
-                                                            data-userid="{{ $user->id }}">
-                                                            <svg class="w-4 h-4 group-hover/del:scale-110 transition-transform"
-                                                                fill="none" stroke="currentColor"
-                                                                viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                                    stroke-width="2"
-                                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
-                                                                </path>
-                                                            </svg>
-                                                        </button>
-                                                    </form>
+                                        <div>
+                                            <div class="text-sm font-black text-white uppercase tracking-tight">
+                                                {{ $user->name }}
+                                            </div>
+                                            <div class="text-[11px] text-gray-500 font-bold tracking-wide">
+                                                {{ $user->email }}
+                                            </div>
+                                            <div class="mt-1">
+                                                @if ($user->role === 'admin')
+                                                <span class="px-2 py-0.5 rounded text-[8px] font-black bg-red-500/10 text-red-500 uppercase border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]">
+                                                    Admin Full
+                                                </span>
+                                                @elseif ($user->role === 'gestor')
+                                                <span class="px-2 py-0.5 rounded text-[8px] font-black bg-indigo-500/10 text-indigo-500 uppercase border border-indigo-500/20">
+                                                    Gestor Staff
+                                                </span>
+                                                @else
+                                                {{-- Para o Colaborador, usamos Laranja para destacar que é operacional --}}
+                                                <span class="px-2 py-0.5 rounded text-[8px] font-black bg-orange-500/10 text-orange-500 uppercase border border-orange-500/20">
+                                                    Colaborador
+                                                </span>
                                                 @endif
-                                            @else
-                                                {{-- 🔒 CADEADO: Indica conta administrativa protegida --}}
-                                                <div class="bg-gray-900/50 p-2.5 rounded-xl border border-gray-800 text-gray-700 cursor-not-allowed"
-                                                    title="Conta administrativa protegida. Somente Admins podem editar.">
-                                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path fill-rule="evenodd"
-                                                            d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                                                            clip-rule="evenodd" />
-                                                    </svg>
-                                                </div>
-                                            @endif
+                                            </div>
                                         </div>
-                                    </td>
-                                </tr>
+                                    </div>
+                                </td>
+
+                                <td class="px-8 py-6 whitespace-nowrap text-sm font-bold text-gray-400">
+                                    <span
+                                        class="text-orange-500/80">{{ $user->arena->name ?? 'Acesso Global' }}</span>
+                                </td>
+
+                                <td
+                                    class="px-8 py-6 whitespace-nowrap text-xs text-gray-400 font-mono tracking-tighter">
+                                    {{ $user->whatsapp_contact ?? 'Não informado' }}
+                                </td>
+
+                                <td class="px-8 py-6 whitespace-nowrap">
+                                    <span class="flex items-center gap-2">
+                                        <span
+                                            class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse"></span>
+                                        <span
+                                            class="text-[10px] font-black text-white uppercase tracking-widest">Ativo</span>
+                                    </span>
+                                </td>
+
+                                <td class="px-8 py-6 whitespace-nowrap text-center">
+                                    <div class="flex justify-center items-center gap-3">
+
+                                        {{-- 🛡️ REGRA DE HIERARQUIA VISUAL --}}
+                                        @php
+                                        $podeEditar =
+                                        auth()->user()->role === 'admin' || $user->role !== 'admin';
+                                        @endphp
+
+                                        @if ($podeEditar)
+                                        {{-- BOTÃO EDITAR LIBERADO --}}
+                                        <a href="{{ route('bar.users.edit', $user) }}"
+                                            class="bg-gray-800 hover:bg-orange-600 p-2.5 rounded-xl transition-all border border-gray-700 text-white shadow-lg group/btn active:scale-95">
+                                            <svg class="w-4 h-4 group-hover/btn:rotate-12 transition-transform"
+                                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                            </svg>
+                                        </a>
+
+                                        {{-- BOTÃO EXCLUIR LIBERADO (Apenas se não for o próprio usuário logado) --}}
+                                        @if (Auth::id() !== $user->id)
+                                        <form action="{{ route('bar.users.destroy', $user) }}"
+                                            method="POST" onsubmit="return false;" class="inline">
+                                            @csrf @method('DELETE')
+                                            <button type="button" onclick="showCustomConfirmation(this)"
+                                                class="bg-gray-800 hover:bg-red-600 p-2.5 rounded-xl transition-all border border-gray-700 text-white shadow-lg group/del active:scale-95"
+                                                data-username="{{ $user->name }}"
+                                                data-userid="{{ $user->id }}">
+                                                <svg class="w-4 h-4 group-hover/del:scale-110 transition-transform"
+                                                    fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2"
+                                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                                                    </path>
+                                                </svg>
+                                            </button>
+                                        </form>
+                                        @endif
+                                        @else
+                                        {{-- 🔒 CADEADO: Indica conta administrativa protegida --}}
+                                        <div class="bg-gray-900/50 p-2.5 rounded-xl border border-gray-800 text-gray-700 cursor-not-allowed"
+                                            title="Conta administrativa protegida. Somente Admins podem editar.">
+                                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd"
+                                                    d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                                                    clip-rule="evenodd" />
+                                            </svg>
+                                        </div>
+                                        @endif
+                                    </div>
+                                </td>
+                            </tr>
                             @empty
-                                <tr>
-                                    <td colspan="5" class="px-8 py-16 text-center">
-                                        <div class="flex flex-col items-center">
-                                            <span class="text-4xl mb-4">🔍</span>
-                                            <p
-                                                class="text-gray-500 font-black uppercase tracking-widest text-xs italic">
-                                                Nenhum integrante da equipe encontrado.</p>
-                                        </div>
-                                    </td>
-                                </tr>
+                            <tr>
+                                <td colspan="5" class="px-8 py-16 text-center">
+                                    <div class="flex flex-col items-center">
+                                        <span class="text-4xl mb-4">🔍</span>
+                                        <p
+                                            class="text-gray-500 font-black uppercase tracking-widest text-xs italic">
+                                            Nenhum integrante da equipe encontrado.</p>
+                                    </div>
+                                </td>
+                            </tr>
                             @endforelse
                         </tbody>
                     </table>

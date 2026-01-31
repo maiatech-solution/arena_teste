@@ -103,7 +103,8 @@
 
         <div class="text-center">
             <h2 class="font-bold text-lg" style="margin:0; text-transform: uppercase;">
-                {{ config('app.name', 'ARENA BOOKING') }}</h2>
+                {{ config('app.name', 'ARENA BOOKING') }}
+            </h2>
             <p style="margin: 5px 0; font-size: 11px;">Comprovante de Mesa</p>
         </div>
 
@@ -121,15 +122,15 @@
 
         <table class="items-table">
             @foreach ($order->items as $item)
-                <tr>
-                    <td style="padding: 4px 0;">
-                        <span style="display:block;">{{ $item->quantity }}x {{ $item->product->name }}</span>
-                        <small style="color: #666;">R$ {{ number_format($item->unit_price, 2, ',', '.') }} un</small>
-                    </td>
-                    <td class="text-right" style="vertical-align: top; padding-top: 4px;">
-                        R$ {{ number_format($item->subtotal, 2, ',', '.') }}
-                    </td>
-                </tr>
+            <tr>
+                <td style="padding: 4px 0;">
+                    <span style="display:block;">{{ $item->quantity }}x {{ $item->product->name }}</span>
+                    <small style="color: #666;">R$ {{ number_format($item->unit_price, 2, ',', '.') }} un</small>
+                </td>
+                <td class="text-right" style="vertical-align: top; padding-top: 4px;">
+                    R$ {{ number_format($item->subtotal, 2, ',', '.') }}
+                </td>
+            </tr>
             @endforeach
         </table>
 
@@ -150,25 +151,25 @@
 
     <div class="max-w-md mx-auto mt-8 no-print flex flex-col gap-4 pb-12">
         @php
-            $sugestaoFone = preg_replace('/[^0-9]/', '', $order->customer_phone);
+        $sugestaoFone = preg_replace('/[^0-9]/', '', $order->customer_phone);
 
-            // Montando a lista de itens para a mensagem
-            $itensTexto = '';
-            foreach ($order->items as $item) {
-                $itensTexto .= "• {$item->quantity}x {$item->product->name}\n";
-            }
+        // Montando a lista de itens para a mensagem
+        $itensTexto = '';
+        foreach ($order->items as $item) {
+        $itensTexto .= "• {$item->quantity}x {$item->product->name}\n";
+        }
 
-            $msgBase = '*✨ ' . strtoupper(config('app.name')) . " ✨*\n";
-            $msgBase .= "--------------------------------\n";
-            $msgBase .= 'Olá, ' . ($order->customer_name ?? 'Cliente') . "! 👋\n";
-            $msgBase .= "Aqui está o resumo da sua comanda:\n\n";
-            $msgBase .= "*ITENS PEDIDOS:*\n";
-            $msgBase .= $itensTexto;
-            $msgBase .= "\n*TOTAL: R$ " . number_format($order->total_value, 2, ',', '.') . "*\n";
-            $msgBase .= "--------------------------------\n";
-            $msgBase .=
-                'Mesa: ' . str_pad($order->table->identifier, 2, '0', STR_PAD_LEFT) . " | Pedido: #{$order->id}\n\n";
-            $msgBase .= 'Agradecemos a preferência! Volte sempre! 😊';
+        $msgBase = '*✨ ' . strtoupper(config('app.name')) . " ✨*\n";
+        $msgBase .= "--------------------------------\n";
+        $msgBase .= 'Olá, ' . ($order->customer_name ?? 'Cliente') . "! 👋\n";
+        $msgBase .= "Aqui está o resumo da sua comanda:\n\n";
+        $msgBase .= "*ITENS PEDIDOS:*\n";
+        $msgBase .= $itensTexto;
+        $msgBase .= "\n*TOTAL: R$ " . number_format($order->total_value, 2, ',', '.') . "*\n";
+        $msgBase .= "--------------------------------\n";
+        $msgBase .=
+        'Mesa: ' . str_pad($order->table->identifier, 2, '0', STR_PAD_LEFT) . " | Pedido: #{$order->id}\n\n";
+        $msgBase .= 'Agradecemos a preferência! Volte sempre! 😊';
         @endphp
 
         <button onclick="enviarZapComPergunta()"
@@ -209,45 +210,59 @@
         </div>
     </div>
 
-   <script>
-    /**
-     * Função para enviar o resumo via WhatsApp
-     */
-    function enviarZapComPergunta() {
-        // Pega o fone que veio do banco como sugestão
-        let fone = prompt("Confirme o WhatsApp do cliente:", "{{ $sugestaoFone }}");
+    <script>
+        /**
+         * Função para enviar o resumo via WhatsApp
+         */
+        function enviarZapComPergunta() {
+            // Pega o fone que veio do banco como sugestão (apenas números)
+            let foneSugestao = "{{ $sugestaoFone }}";
+            let fone = prompt("Confirme o WhatsApp do cliente:", foneSugestao);
 
-        if (fone) {
-            // Remove tudo que não é número
-            let foneLimpo = fone.replace(/\D/g, '');
+            if (fone) {
+                // Remove tudo que não é número
+                let foneLimpo = fone.replace(/\D/g, '');
 
-            // Usamos encodeURIComponent para garantir que quebras de linha e emojis funcionem na URL
-            // O uso das crases ( ` ) no JS permite strings com múltiplas linhas sem erro
-            let textoMensagem = encodeURIComponent(`{!! $msgBase !!}`);
+                // 🚀 TRATAMENTO ESPECIAL: Convertendo a mensagem do Blade para String JS de forma segura
+                // Usamos JSON.parse para garantir que as quebras de linha (\n) do PHP não quebrem o JS
+                let textoMensagem = encodeURIComponent(`{!! str_replace(["\r", "\n"], ["", "\n"], $msgBase) !!}`);
 
-            let urlZap = "https://api.whatsapp.com/send?phone=55" + foneLimpo + "&text=" + textoMensagem;
+                let urlZap = "https://api.whatsapp.com/send?phone=55" + foneLimpo + "&text=" + textoMensagem;
 
-            window.open(urlZap, '_blank');
+                window.open(urlZap, '_blank');
+            }
         }
-    }
 
-    /**
-     * Controle do Modal de Sucesso
-     */
-    document.addEventListener('DOMContentLoaded', function() {
-        @if (session('show_success_modal'))
+        /**
+         * Controle do Modal de Sucesso (Exibido após fechar a mesa)
+         */
+        document.addEventListener('DOMContentLoaded', function() {
+            // Verifica se existe a sessão de sucesso enviada pela Controller
+            @if(session('show_success_modal'))
             const modal = document.getElementById('modalSucesso');
             if (modal) {
                 modal.classList.remove('hidden');
+                // Garante que o modal fique acima de outros elementos de impressão
+                modal.style.zIndex = "9999";
             }
-        @endif
-    });
+            @endif
+        });
 
-    function fecharModalSucesso() {
-        const modal = document.getElementById('modalSucesso');
-        if (modal) {
-            modal.classList.add('hidden');
+        /**
+         * Fecha o modal e permite visualizar o recibo na tela
+         */
+        function fecharModalSucesso() {
+            const modal = document.getElementById('modalSucesso');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
         }
-    }
-</script>
+
+        // Atalho de teclado: Pressionar 'ESC' fecha o modal de sucesso
+        document.addEventListener('keydown', function(event) {
+            if (event.key === "Escape") {
+                fecharModalSucesso();
+            }
+        });
+    </script>
 </x-bar-layout>

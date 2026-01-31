@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rules;
 
 class BarUserController extends Controller
@@ -15,8 +16,9 @@ class BarUserController extends Controller
         $search = $request->input('search');
         $arenaId = auth()->user()->arena_id;
 
+        // Agora incluímos 'colaborador' na listagem da equipe
         $query = User::where('arena_id', $arenaId)
-            ->whereIn('role', ['gestor', 'admin']);
+            ->whereIn('role', ['gestor', 'admin', 'colaborador']);
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -42,19 +44,29 @@ class BarUserController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
-            'role' => ['required', 'in:gestor,admin'],
+            'role' => ['required', 'in:gestor,admin,colaborador'], // 👈 Adicionado colaborador
             'whatsapp_contact' => ['nullable', 'string', 'max:15'],
         ]);
 
-        // 🛡️ Segurança: Somente admin cria outro admin. Gestor só cria gestor.
-        $finalRole = auth()->user()->role === 'admin' ? $request->role : 'gestor';
+        $authUser = auth()->user();
+        $requestedRole = $request->role;
+
+        // 🛡️ VALIDAÇÃO DE HIERARQUIA (Back-end)
+        // Se um colaborador tentar criar um gestor via script/postman, o sistema barra.
+        if ($authUser->role === 'colaborador' && $requestedRole !== 'colaborador') {
+            return redirect()->back()->with('error', 'Você só tem permissão para cadastrar colaboradores.');
+        }
+
+        if ($authUser->role === 'gestor' && $requestedRole === 'admin') {
+            return redirect()->back()->with('error', 'Gestores não podem cadastrar Administradores.');
+        }
 
         User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'arena_id' => auth()->user()->arena_id,
-            'role' => $finalRole,
+            'arena_id' => $authUser->arena_id,
+            'role' => $requestedRole, // Aqui usamos o role validado acima
             'whatsapp_contact' => $request->whatsapp_contact,
             'status' => 'active',
             'customer_qualification' => 'normal',
@@ -63,18 +75,23 @@ class BarUserController extends Controller
             'no_show_count' => 0,
         ]);
 
-        return redirect()->route('bar.users.index')->with('success', 'Colaborador adicionado à equipe!');
+        return redirect()->route('bar.users.index')->with('success', 'Novo integrante adicionado à equipe!');
     }
 
     public function edit(User $user)
     {
-        // 🛡️ SEGURANÇA MÁXIMA: Impede que Gestor abra a edição de um Admin
-        if (auth()->user()->role !== 'admin' && $user->role === 'admin') {
+        $authUser = auth()->user();
+
+        // 🛡️ Segurança: Impede que níveis inferiores editem níveis superiores
+        if ($authUser->role === 'colaborador' && $user->role !== 'colaborador') {
+             return redirect()->route('bar.users.index')->with('error', 'Acesso negado: Você só pode editar outros colaboradores.');
+        }
+
+        if ($authUser->role === 'gestor' && $user->role === 'admin') {
             return redirect()->route('bar.users.index')->with('error', 'Segurança: Gestores não podem editar Administradores.');
         }
 
-        // Segurança de Arena
-        if ($user->arena_id !== auth()->user()->arena_id) {
+        if ($user->arena_id !== $authUser->arena_id) {
             return redirect()->route('bar.users.index')->with('error', 'Acesso negado.');
         }
 
@@ -83,28 +100,30 @@ class BarUserController extends Controller
 
     public function update(Request $request, User $user)
     {
-        // 🛡️ SEGURANÇA MÁXIMA: Bloqueia atualização se um Gestor tentar forçar via POST
-        if (auth()->user()->role !== 'admin' && $user->role === 'admin') {
-            abort(403, 'Ação não permitida para o seu nível de acesso.');
-        }
+        $authUser = auth()->user();
 
-        if ($user->arena_id !== auth()->user()->arena_id) abort(403);
+        // 🛡️ Bloqueio de segurança via servidor
+        if ($authUser->role === 'colaborador' && $user->role !== 'colaborador') abort(403);
+        if ($authUser->role === 'gestor' && $user->role === 'admin') abort(403);
+        if ($user->arena_id !== $authUser->arena_id) abort(403);
 
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,'.$user->id],
             'whatsapp_contact' => ['nullable', 'string', 'max:15'],
-            'role' => ['required', 'in:gestor,admin'],
+            'role' => ['required', 'in:gestor,admin,colaborador'],
         ]);
 
-        // 🛡️ Bloqueia alteração de cargo se não for Admin
-        $userAuthRole = strtolower(trim(auth()->user()->role));
-        $finalRole = ($userAuthRole === 'admin') ? $request->role : $user->role;
+        // Validação de mudança de cargo (Hierarquia)
+        $newRole = $request->role;
+        if ($authUser->role === 'colaborador' && $newRole !== 'colaborador') $newRole = 'colaborador';
+        if ($authUser->role === 'gestor' && $newRole === 'admin') $newRole = 'gestor';
+        if ($authUser->role !== 'admin' && $user->id === $authUser->id) $newRole = $authUser->role; // Impede auto-promoção
 
         $user->update([
             'name' => $request->name,
             'email' => $request->email,
-            'role' => $finalRole,
+            'role' => $newRole,
             'whatsapp_contact' => $request->whatsapp_contact,
         ]);
 
@@ -118,19 +137,25 @@ class BarUserController extends Controller
 
     public function destroy(User $user)
     {
-        // 🛡️ SEGURANÇA MÁXIMA: Gestor não pode excluir Administrador
-        if (auth()->user()->role !== 'admin' && $user->role === 'admin') {
+        $authUser = auth()->user();
+
+        // 🛡️ Gestor ou Colaborador não excluem Admin
+        if ($authUser->role !== 'admin' && $user->role === 'admin') {
             return redirect()->route('bar.users.index')->with('error', 'Ação proibida: Somente administradores podem remover outros administradores.');
         }
 
-        // Impede auto-exclusão
-        if ($user->id === auth()->id()) {
+        // Colaborador só exclui colaborador
+        if ($authUser->role === 'colaborador' && $user->role !== 'colaborador') {
+            return redirect()->route('bar.users.index')->with('error', 'Acesso negado.');
+        }
+
+        if ($user->id === $authUser->id) {
             return redirect()->route('bar.users.index')->with('error', 'Você não pode excluir sua própria conta.');
         }
 
-        if ($user->arena_id !== auth()->user()->arena_id) abort(403);
+        if ($user->arena_id !== $authUser->arena_id) abort(403);
 
         $user->delete();
-        return redirect()->route('bar.users.index')->with('success', 'Colaborador removido da equipe.');
+        return redirect()->route('bar.users.index')->with('success', 'Integrante removido da equipe.');
     }
 }

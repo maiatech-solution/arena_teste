@@ -41,10 +41,14 @@ class ModuleController extends Controller
             'estado'           => 'nullable|string|max:2',
         ]);
 
-        CompanyInfo::updateOrCreate(['id' => 1], $validated);
+        // Salva ou atualiza a empresa ID 1
+        $company = CompanyInfo::updateOrCreate(['id' => 1], $validated);
 
-        return redirect()->route('modules.selection')
-            ->with('success', 'Informações salvas! Agora escolha o módulo de operação.');
+        // 🚀 O PULO DO GATO:
+        // Redirecionamos para 'admin.plans' para que o usuário seja OBRIGADO
+        // a escolher entre Arena, Bar ou Combo antes de tentar entrar nos módulos.
+        return redirect()->route('admin.plans')
+            ->with('success', 'Unidade configurada! Agora selecione o plano de módulos para ativar seu acesso.');
     }
 
     /**
@@ -106,6 +110,7 @@ class ModuleController extends Controller
         $company = CompanyInfo::first();
         $user = Auth::user();
 
+        // Bloqueia alteração se o plano já existe e o usuário não for admin
         if ($company && $company->modules_active > 0 && !$user->is_admin) {
             return redirect()->back()->with('error', 'Apenas administradores podem alterar o plano de módulos.');
         }
@@ -116,6 +121,7 @@ class ModuleController extends Controller
 
         $newModule = (int) $request->module;
 
+        // Regras de validação de upgrade/downgrade para não-admins
         if (!$user->is_admin && $company) {
             if ($company->modules_active == 1 && $newModule == 2) {
                 return redirect()->back()->with('error', 'Para adicionar o Bar mantendo sua Arena, escolha o Combo Full.');
@@ -128,19 +134,23 @@ class ModuleController extends Controller
             }
         }
 
+        // Se a companhia não existir (segurança para banco limpo), cria a instância
         if (!$company) {
             $company = new CompanyInfo();
             $company->id = 1;
             $company->nome_fantasia = 'Unidade Principal';
         }
 
+        // Salva o novo plano
         $company->modules_active = $newModule;
         $company->save();
 
-        $msg = 'Configuração de módulos atualizada com sucesso!';
+        $msg = 'Plano ativado com sucesso! Agora você já pode acessar os módulos liberados.';
 
-        // Após salvar o plano, volta para a tela de gestão técnica (Rádios)
-        return redirect()->route('admin.plans')->with('success', $msg);
+        // 🚀 O AJUSTE ESTÁ AQUI:
+        // Em vez de voltar para 'admin.plans', mandamos para 'modules.selection'
+        // Assim, o usuário vê os cards do Bar/Arena para clicar e entrar.
+        return redirect()->route('modules.selection')->with('success', $msg);
     }
 
     /**
@@ -151,7 +161,16 @@ class ModuleController extends Controller
         $company = CompanyInfo::first();
         $user = Auth::user();
 
-        if (!$user->is_admin && (!$company || $company->modules_active != 3)) {
+        // Se você for ADMIN, o sistema deve deixar você trocar independente do plano
+        if ($user->is_admin) {
+            if ($target === 'bar' || $target === 'pdv') {
+                return redirect()->route('bar.dashboard');
+            }
+            return redirect()->route('dashboard');
+        }
+
+        // Regra para usuários comuns
+        if (!$company || $company->modules_active != 3) {
             return redirect()->back()->with('error', 'Troca de ambiente disponível apenas no plano Combo.');
         }
 

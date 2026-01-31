@@ -19,8 +19,9 @@ class IsGestor
 
         $user = Auth::user();
 
-        // 2. Verifica se tem acesso administrativo
-        if (!$user->has_admin_access) {
+        // 2. Verifica se tem acesso administrativo (Admin, Gestor ou Colaborador)
+        // No seu Model User, garanta que has_admin_access retorne true para esses 3 roles
+        if (!in_array($user->role, ['admin', 'gestor', 'colaborador'])) {
             abort(403, 'Acesso não autorizado.');
         }
 
