@@ -240,8 +240,13 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
         Route::get('/recibo/{orderId}', [BarTableController::class, 'printReceipt'])->name('receipt');
     });
 
-    // 💰 Gestão Financeira (🔒 Restrito)
-    Route::get('/caixa', [BarCashController::class, 'index'])->middleware(['role:admin,gestor'])->name('cash.index');
+    // 💰 GESTÃO FINANCEIRA DE CAIXA (🔒 Restrito)
+    Route::prefix('caixa')->name('cash.')->middleware(['role:admin,gestor'])->group(function () {
+        Route::get('/', [BarCashController::class, 'index'])->name('index'); // bar.cash.index
+        Route::post('/abrir', [BarCashController::class, 'open'])->name('open'); // bar.cash.open
+        Route::post('/movimentar', [BarCashController::class, 'storeMovement'])->name('movement'); // bar.cash.movement
+        Route::post('/fechar', [BarCashController::class, 'close'])->name('close'); // bar.cash.close
+    });
 
     // 👥 Gestão de Equipe Bar (🔒 Restrito)
     Route::prefix('usuarios')->name('users.')->middleware(['role:admin,gestor'])->group(function () {

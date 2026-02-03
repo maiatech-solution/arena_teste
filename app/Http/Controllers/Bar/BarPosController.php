@@ -7,6 +7,8 @@ use App\Models\Bar\BarProduct;
 use App\Models\Bar\BarSale;
 use App\Models\Bar\BarSaleItem;
 use App\Models\Bar\BarCategory;
+use App\Models\Bar\BarCashSession;    // Importado
+use App\Models\Bar\BarCashMovement;   // Importado
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -14,9 +16,6 @@ class BarPosController extends Controller
 {
     public function index()
     {
-        // Pegamos produtos ativos que:
-        // 1. Tenham estoque disponível (> 0)
-        // 2. OU que não dependam de controle de estoque (manage_stock = false)
         $products = BarProduct::where('is_active', true)
             ->where(function ($query) {
                 $query->where('stock_quantity', '>', 0)
@@ -32,46 +31,40 @@ class BarPosController extends Controller
 
     public function store(Request $request)
     {
-        // 1. Ajuste na Validação: agora aceitamos a lista de pagamentos
         $request->validate([
             'items' => 'required|array',
-            'payments' => 'nullable|array', // Nova lista de pagamentos
-            'payment_method' => 'nullable|string', // Para manter compatibilidade
+            'payments' => 'required|array', // Agora exigimos os pagamentos
             'total_value' => 'required|numeric'
         ]);
 
         try {
             return DB::transaction(function () use ($request) {
-
-                // Determinar o método de pagamento para salvar no banco
-                // Se houver múltiplos, salvamos como 'misto', se não, pegamos o único.
-                $metodoFinal = 'misto';
-                if ($request->payments && count($request->payments) === 1) {
-                    $metodoFinal = $request->payments[0]['method'];
-                } elseif ($request->payment_method) {
-                    $metodoFinal = $request->payment_method;
+                
+                // 1. BUSCAR SESSÃO DE CAIXA ATIVA
+                $session = BarCashSession::where('status', 'open')->first();
+                if (!$session) {
+                    throw new \Exception("Não existe um caixa aberto! Por favor, abra o caixa primeiro.");
                 }
 
-                // 1. Criar a Venda
+                // Determinar o método final (apenas para histórico da BarSale)
+                $metodoFinal = count($request->payments) > 1 ? 'misto' : $request->payments[0]['method'];
+
+                // 2. Criar a Venda
                 $sale = BarSale::create([
                     'user_id' => auth()->id(),
                     'total_value' => $request->total_value,
                     'payment_method' => $metodoFinal,
                     'status' => 'pago',
-                    // Se sua tabela tiver uma coluna JSON para detalhes, você pode salvar assim:
-                    // 'payment_details' => json_encode($request->payments)
                 ]);
 
-                // 2. Processar cada item
+                // 3. Processar Itens e Estoque
                 foreach ($request->items as $item) {
                     $product = BarProduct::findOrFail($item['id']);
 
-                    // 🚀 AJUSTE DA TRAVA: Só lança erro se manage_stock for TRUE
                     if ($product->manage_stock && $product->stock_quantity < $item['quantity']) {
                         throw new \Exception("Estoque insuficiente para: {$product->name}");
                     }
 
-                    // Registrar o item da venda
                     BarSaleItem::create([
                         'bar_sale_id' => $sale->id,
                         'bar_product_id' => $product->id,
@@ -79,10 +72,9 @@ class BarPosController extends Controller
                         'price_at_sale' => $product->sale_price
                     ]);
 
-                    // 📉 Baixa no estoque
                     $product->decrement('stock_quantity', $item['quantity']);
 
-                    // 📜 REGISTRO NO HISTÓRICO
+                    // Histórico de Estoque
                     \App\Models\Bar\BarStockMovement::create([
                         'bar_product_id' => $product->id,
                         'user_id'        => auth()->id(),
@@ -92,9 +84,27 @@ class BarPosController extends Controller
                     ]);
                 }
 
+                // 4. 🚀 INTEGRAÇÃO COM O CAIXA (O QUE ESTAVA FALTANDO)
+                foreach ($request->payments as $pay) {
+                    BarCashMovement::create([
+                        'bar_cash_session_id' => $session->id,
+                        'user_id'             => auth()->id(),
+                        'bar_sale_id'         => $sale->id, // Use o ID da venda aqui
+                        'type'                => 'venda',
+                        'payment_method'      => $pay['method'], // 'dinheiro', 'pix', etc.
+                        'amount'              => $pay['value'],
+                        'description'         => "Venda Direta PDV #{$sale->id}"
+                    ]);
+
+                    // Se foi pago em dinheiro, atualiza o saldo esperado na gaveta
+                    if ($pay['method'] === 'dinheiro') {
+                        $session->increment('expected_balance', $pay['value']);
+                    }
+                }
+
                 return response()->json([
                     'success' => true,
-                    'message' => 'Venda finalizada com sucesso!'
+                    'message' => 'Venda finalizada e caixa atualizado!'
                 ]);
             });
         } catch (\Exception $e) {

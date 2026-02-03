@@ -222,46 +222,69 @@ class BarTableController extends Controller
     }
 
     /**
-     * 🏁 FINALIZAR MESA (FECHAMENTO ESTILO PDV)
+     * 🏁 FINALIZAR MESA (FECHAMENTO ESTILO PDV INTEGRADO AO CAIXA)
      */
     public function closeOrder(Request $request, $id)
     {
-        // Usamos uma transação para garantir que a mesa só libere se o pedido for salvo
         return DB::transaction(function () use ($request, $id) {
             $table = BarTable::findOrFail($id);
 
-            // 🔍 Busca a comanda ativa usando o status 'open' (conforme seu banco)
             $order = $table->orders()
                 ->where('status', 'open')
                 ->latest()
                 ->first();
 
             if (!$order) {
-                // Caso a mesa esteja "presa" como ocupada mas sem comanda
                 if ($table->status == 'occupied') {
                     $table->update(['status' => 'available']);
                     return redirect()->route('bar.tables.index')
                         ->with('success', 'Mesa liberada, mas nenhuma comanda ativa foi encontrada.');
                 }
-
                 return redirect()->route('bar.tables.index')
                     ->with('error', '⚠️ Nenhuma comanda ativa encontrada para esta mesa.');
             }
 
-            // ✅ Atualiza a comanda com os dados do formulário
-            // Mudamos para 'paid' para evitar o erro de "Data truncated"
+            // 1. ATUALIZA A COMANDA
             $order->update([
                 'status'         => 'paid',
                 'customer_name'  => $request->customer_name,
                 'customer_phone' => $request->customer_phone,
-                'payment_method' => $request->pagamentos, // Salva o JSON dos pagamentos
+                'payment_method' => $request->pagamentos,
                 'closed_at'      => now(),
             ]);
 
-            // ✅ Libera a mesa para o próximo cliente
+            // 💰 2. INTEGRAÇÃO COM O CAIXA (BAR_CASH_MOVEMENTS)
+            $session = \App\Models\Bar\BarCashSession::where('status', 'open')->first();
+
+            if ($session) {
+                // Decodificamos o JSON de pagamentos (ex: [{"metodo":"pix","valor":50},{"metodo":"dinheiro","valor":20}])
+                $pagamentosArray = json_decode($request->pagamentos, true);
+
+                if (is_array($pagamentosArray)) {
+                    foreach ($pagamentosArray as $pag) {
+                        if ($pag['valor'] > 0) {
+                            \App\Models\Bar\BarCashMovement::create([
+                                'bar_cash_session_id' => $session->id,
+                                'user_id'             => auth()->id(),
+                                'bar_order_id'        => $order->id,
+                                'type'                => 'venda',
+                                'payment_method'      => $pag['metodo'], // pix, dinheiro, debito, etc
+                                'amount'              => $pag['valor'],
+                                'description'         => "Venda Mesa #{$table->identifier}",
+                            ]);
+
+                            // Se for dinheiro, atualizamos o saldo esperado do caixa para auditoria
+                            if ($pag['metodo'] == 'dinheiro') {
+                                $session->increment('expected_balance', $pag['valor']);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ✅ Libera a mesa
             $table->update(['status' => 'available']);
 
-            // 🚀 Redireciona para o recibo ou para o index conforme o desejo do usuário
             if ($request->print_coupon == "1") {
                 return redirect()->route('bar.tables.receipt', $order->id)
                     ->with('show_success_modal', true)

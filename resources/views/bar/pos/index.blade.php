@@ -23,7 +23,15 @@
                         </div>
 
                         <div class="flex-1 relative">
+                            {{-- 1. BLOCO ISCA (Invisível): O navegador 'descarrega' os dados salvos aqui --}}
+                            <div style="position: absolute; left: -9999px; top: -9999px;">
+                                <input type="text" name="fake_search_user">
+                                <input type="password" name="fake_search_pass">
+                            </div>
+
+                            {{-- 2. CAMPO DE BUSCA REAL --}}
                             <input type="text" id="mainSearch" onkeyup="liveSearch()"
+                                autocomplete="new-password" {{-- Reforço para o navegador não sugerir nada --}}
                                 placeholder="🔍 Nome ou Código de Barras (Bipagem)..."
                                 class="w-full bg-gray-950 border-gray-800 rounded-2xl text-white p-4 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all">
                         </div>
@@ -117,10 +125,23 @@
                         <div>
                             <label id="inputLabel"
                                 class="block text-[9px] font-black text-gray-500 uppercase mb-2">Valor Recebido</label>
+
                             <div class="relative">
+                                {{-- 1. BLOCO ISCA (Invisível): O navegador 'descarrega' os dados salvos aqui e deixa o campo de valor limpo --}}
+                                <div style="position: absolute; left: -9999px; top: -9999px;">
+                                    <input type="text" name="fake_payment_user">
+                                    <input type="password" name="fake_payment_pass">
+                                </div>
+
                                 <span
                                     class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-black text-sm">R$</span>
-                                <input type="number" id="amountReceived" step="0.01" oninput="calculatePayment()"
+
+                                <input type="number"
+                                    id="amountReceived"
+                                    name="amount_received_field"
+                                    step="0.01"
+                                    oninput="calculatePayment()"
+                                    autocomplete="new-password" {{-- Reforço para ignorar sugestões --}}
                                     class="w-full bg-gray-950 border-gray-800 rounded-xl text-white p-3 pl-10 focus:border-orange-500 outline-none font-black text-lg">
                             </div>
                         </div>
@@ -478,20 +499,22 @@
             }
 
             try {
-                const response = await fetch('{{ route('
-                    bar.pos.store ') }}', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json', // Importante para o Laravel entender
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                        },
-                        body: JSON.stringify({
-                            items: cart,
-                            payments: finalPayments, // Enviamos a lista completa de pagamentos
-                            total_value: currentCartTotal
-                        })
-                    });
+                // Definimos a URL em uma constante simples para o formatador não quebrar
+                const url = "{{ route('bar.pos.store') }}";
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({
+                        items: cart,
+                        payments: finalPayments,
+                        total_value: currentCartTotal
+                    })
+                });
 
                 const data = await response.json();
                 if (data.success) {
