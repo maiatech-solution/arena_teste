@@ -42,7 +42,7 @@
                     </button>
 
                     {{-- Na index.blade.php --}}
-                    <button type="button" onclick="tentarEncerrarTurno()"
+                    <button type="button" onclick="validarAntesDeFechar()"
                         class="px-8 py-3 bg-white text-black font-black rounded-2xl uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-xl border-b-4 border-gray-300">
                         🔒 Encerrar Turno
                     </button>

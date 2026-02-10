@@ -42,7 +42,7 @@
                 {{ $isEsgotado ? 'opacity-40 grayscale cursor-not-allowed' : 'hover:bg-orange-600 hover:border-orange-500' }}"
                         {{ $isEsgotado ? 'disabled' : '' }}>
 
-                        <div class="text-2xl mb-2 group-hover:scale-110 transition-transform"></div>
+                        <div class="text-2xl mb-2 group-hover:scale-110 transition-transform">🍺</div>
 
                         <div class="w-full">
                             <h3
@@ -184,7 +184,6 @@
                     </div>
                 </div>
             </div>
-
             {{-- LADO DIREITO: ENTRADA DE PAGAMENTOS --}}
             <div class="p-8 flex-1">
                 <div class="flex justify-between mb-8">
@@ -241,13 +240,10 @@
                     <input type="hidden" name="customer_name" id="hidden_customer_name">
                     <input type="hidden" name="customer_phone" id="hidden_customer_phone">
                     <input type="hidden" name="pagamentos" id="inputPagamentosHidden">
-
-                    {{-- ADICIONE ESTE CAMPO AQUI --}}
-                    <input type="hidden" name="discount_value" id="hidden_discount_value" value="0">
-
                     <input type="hidden" name="print_coupon" id="inputPrintCoupon" value="0">
                     <input type="hidden" name="send_whatsapp" id="inputSendWhatsApp" value="0">
 
+                    {{-- O botão chama abrirOpcoesFinais() para decidir se imprime ou não antes de enviar --}}
                     <button type="button" onclick="abrirOpcoesFinais()" id="btnFinalizarGeral"
                         class="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] uppercase tracking-[0.3em] text-sm shadow-2xl transition-all opacity-30 cursor-not-allowed"
                         disabled>
@@ -312,7 +308,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}' // Mantido conforme seu padrão, mas certifique-se que o token é renovado
                     },
                     body: JSON.stringify({
                         product_id: productId,
@@ -320,6 +316,7 @@
                     })
                 });
 
+                // Se a resposta for 419 (Token expirado), recarrega a página
                 if (response.status === 419) {
                     window.location.reload();
                     return;
@@ -334,6 +331,7 @@
                 }
             } catch (error) {
                 console.error("Erro na requisição:", error);
+                // Evita alertas chatos se o usuário apenas fechar a aba
                 if (error.name !== 'AbortError') {
                     alert("❌ Erro de conexão ao tentar lançar o produto.");
                 }
@@ -343,7 +341,7 @@
         // 4. Lógica do Modal de Checkout
         function abrirCheckout() {
             document.getElementById('modalCheckout').classList.remove('hidden');
-            atualizarTelaPagamento(); // Garante que o valor sugerido considere o desconto inicial
+            document.getElementById('inputValorPago').value = (totalMesa - pagoAcumulado).toFixed(2);
             document.getElementById('inputValorPago').focus();
         }
 
@@ -363,27 +361,8 @@
             }
         }
 
-        // NOVA FUNÇÃO: Liberar o campo de desconto após autorização do Supervisor
-        function liberarCampoDesconto() {
-            const input = document.getElementById('inputDesconto');
-            if (input) {
-                input.disabled = false;
-                input.focus();
-                input.select();
-                const btn = document.getElementById('btnLiberarDesconto');
-                if (btn) {
-                    btn.innerText = "✅ LIBERADO";
-                    btn.classList.replace('bg-red-600', 'bg-green-600');
-                }
-            }
-        }
-
-        // 6. Atualizar Cálculos de Restante e Troco na Tela (INCLUINDO DESCONTO)
+        // 6. Atualizar Cálculos de Restante e Troco na Tela
         function atualizarTelaPagamento() {
-            // Pega o desconto e calcula o novo total líquido
-            const desconto = parseFloat(document.getElementById('inputDesconto').value) || 0;
-            const novoTotalMesa = totalMesa - desconto;
-
             pagoAcumulado = pagamentos.reduce((acc, p) => acc + p.valor, 0);
             const lista = document.getElementById('listaPagamentos');
 
@@ -397,10 +376,9 @@
             </div>
         `).join('');
 
-            const faltante = novoTotalMesa - pagoAcumulado;
-            const troco = pagoAcumulado > novoTotalMesa ? pagoAcumulado - novoTotalMesa : 0;
+            const faltante = totalMesa - pagoAcumulado;
+            const troco = pagoAcumulado > totalMesa ? pagoAcumulado - totalMesa : 0;
 
-            // Atualiza elementos visuais
             document.getElementById('textRestante').innerText = 'R$ ' + (faltante > 0 ? faltante : 0).toLocaleString(
                 'pt-br', {
                     minimumFractionDigits: 2
@@ -409,9 +387,8 @@
                 minimumFractionDigits: 2
             });
 
-            // Validação do botão Finalizar
             const btn = document.getElementById('btnFinalizarGeral');
-            if (pagoAcumulado >= (novoTotalMesa - 0.01)) {
+            if (pagoAcumulado >= (totalMesa - 0.01)) {
                 btn.disabled = false;
                 btn.classList.remove('opacity-30', 'cursor-not-allowed');
             } else {
@@ -419,16 +396,11 @@
                 btn.classList.add('opacity-30', 'cursor-not-allowed');
             }
 
-            // Alimenta valor sugerido para pagamento
             if (faltante > 0) {
                 document.getElementById('inputValorPago').value = faltante.toFixed(2);
             } else {
                 document.getElementById('inputValorPago').value = '0.00';
             }
-
-            // Atualiza campo oculto do formulário para o PHP
-            const hiddenDiscount = document.getElementById('hidden_discount_value');
-            if (hiddenDiscount) hiddenDiscount.value = desconto;
         }
 
         // 7. Remover Pagamento da Lista
@@ -460,12 +432,8 @@
             document.getElementById('hidden_customer_phone').value = document.getElementById('customer_phone').value;
             document.getElementById('inputPagamentosHidden').value = JSON.stringify(pagamentos);
 
-            // Garante que o valor final do desconto seja enviado
-            const descontoFinal = document.getElementById('inputDesconto').value;
-            const hiddenDiscountField = document.getElementById('hidden_discount_value');
-            if (hiddenDiscountField) hiddenDiscountField.value = descontoFinal;
+            console.log("Enviando formulário final com ação:", acao);
 
-            console.log("Enviando venda finalizada com desconto de R$", descontoFinal);
             document.getElementById('formFecharMesa').submit();
         }
     </script>

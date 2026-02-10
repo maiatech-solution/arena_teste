@@ -41,33 +41,10 @@
                         🔺 Reforço
                     </button>
 
-                    {{-- Na index.blade.php --}}
-                    <button type="button" onclick="tentarEncerrarTurno()"
+                    <button onclick="requisitarAutorizacao(() => openModalClosing())"
                         class="px-8 py-3 bg-white text-black font-black rounded-2xl uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-xl border-b-4 border-gray-300">
                         🔒 Encerrar Turno
                     </button>
-
-                    <script>
-                        /**
-                         * 🛡️ Verificação de Pré-fechamento
-                         * Impede que o modal de autorização abra se houver pendências
-                         */
-                        function tentarEncerrarTurno() {
-                            // Pega a variável injetada pelo PHP
-                            const mesasAbertas = {{ $mesasAbertasCount }};
-
-                            if (mesasAbertas > 0) {
-                                // Exibe o erro e mata a execução aqui
-                                alert("⚠️ OPERAÇÃO BLOQUEADA\n\nExistem " + mesasAbertas +
-                                    " mesa(s) aberta(s) no sistema.\nVocê precisa finalizar todos os pagamentos antes de fechar o caixa."
-                                );
-                                return;
-                            }
-
-                            // Se não houver mesas, segue o fluxo normal de autorização
-                            requisitarAutorizacao(() => openModalClosing());
-                        }
-                    </script>
                 </div>
             @endif
         </div>
@@ -84,25 +61,16 @@
                         Não há sessões de caixa ativas no momento. <br>Inicie um novo turno para processar vendas.
                     </p>
 
-                    <form action="{{ route('bar.cash.open') }}" method="POST" id="formOpenCash">
+                    <form action="{{ route('bar.cash.open') }}" method="POST">
                         @csrf
-
-                        {{-- 🔑 CAMPOS DE ESPELHO (Essenciais para enviar a senha do Adriano ao Controller) --}}
-                        <input type="hidden" name="supervisor_email">
-                        <input type="hidden" name="supervisor_password">
-
                         <div class="text-left mb-6">
                             <label
-                                class="text-gray-500 uppercase text-[10px] font-black ml-4 mb-2 block tracking-widest">
-                                Troco Inicial de Gaveta
-                            </label>
+                                class="text-gray-500 uppercase text-[10px] font-black ml-4 mb-2 block tracking-widest">Troco
+                                Inicial de Gaveta</label>
                             <input type="number" name="opening_balance" step="0.01" value="0.00" required
-                                class="w-full bg-black border-2 border-gray-800 rounded-3xl p-6 text-white text-3xl font-black text-center focus:border-green-500 outline-none transition-all shadow-inner font-mono">
+                                class="w-full bg-black border-2 border-gray-800 rounded-3xl p-6 text-white text-3xl font-black text-center focus:border-green-500 outline-none transition-all shadow-inner">
                         </div>
-
-                        {{-- 🚀 BOTÃO COM GATILHO DE AUTORIZAÇÃO --}}
-                        <button type="button"
-                            onclick="requisitarAutorizacao(() => enviarComAutorizacao('formOpenCash'))"
+                        <button type="submit"
                             class="w-full py-6 bg-green-600 hover:bg-green-500 text-white font-black rounded-3xl uppercase tracking-widest shadow-lg shadow-green-900/40 transition-all active:scale-95">
                             Abrir Turno de Trabalho
                         </button>
@@ -222,117 +190,80 @@
     @include('bar.cash.modals.closing')
 
     <script>
-        // 🧠 MEMÓRIA GLOBAL BLINDADA
+        // 🧠 MEMÓRIA GLOBAL DO CAIXA
+        // Usamos window. para não conflitar com declarações locais
         window.supervisorMemoriaEmail = "";
         window.supervisorMemoriaPass = "";
 
         /**
-         * 1. MONITOR DE INPUT
-         * Captura os dados enquanto o supervisor digita.
+         * 1. MONITOR DE TECLADO:
+         * Captura os dados no exato momento da digitação.
          */
         document.addEventListener('input', function(e) {
-            const t = e.target;
-            if (t.type === 'email' || t.name === 'email' || t.id === 'authEmail') {
-                window.supervisorMemoriaEmail = t.value;
+            if (e.target.id === 'authEmail' || e.target.name === 'email') {
+                window.supervisorMemoriaEmail = e.target.value;
             }
-            if (t.type === 'password' || t.name === 'password' || t.id === 'authPassword') {
-                window.supervisorMemoriaPass = t.value;
+            if (e.target.id === 'authPassword' || e.target.name === 'password') {
+                window.supervisorMemoriaPass = e.target.value;
             }
         });
 
         /**
-         * 2. TRAVA DE SEGURANÇA: MESAS ABERTAS
+         * 2. REQUISITAR AUTORIZAÇÃO:
+         * Removido o 'var/let' da acaoPendente para usar a que já existe no Layout
          */
-        function tentarEncerrarTurno() {
-            // Puxa a contagem enviada pelo PHP
-            const mesasAbertas = {{ $mesasAbertasCount ?? 0 }};
+        function requisitarAutorizacao(callback) {
+            const userRole = "{{ auth()->user()->role }}";
 
-            if (mesasAbertas > 0) {
-                alert("⚠️ OPERAÇÃO BLOQUEADA\n\nExistem " + mesasAbertas +
-                    " mesa(s) aberta(s) no sistema.\nVocê precisa finalizar todos os pagamentos antes de fechar o caixa."
-                    );
-                return false;
+            if (userRole === 'admin' || userRole === 'gestor') {
+                callback();
+                return;
             }
 
-            // Se o layout tiver a função de autorização, chama ela
-            if (typeof requisitarAutorizacao === 'function') {
-                requisitarAutorizacao(() => openModalClosing());
+            // Apenas atribui, não declara!
+            if (typeof acaoPendente !== 'undefined') {
+                acaoPendente = callback;
             } else {
-                // Caso a função não exista por erro de carregamento do layout
-                openModalClosing();
+                // Caso o layout não tenha, criamos dinamicamente na window
+                window.acaoPendente = callback;
+            }
+
+            const modalAuth = document.getElementById('modalAuthSupervisor');
+            if (modalAuth) {
+                modalAuth.classList.remove('hidden');
+                const emailField = document.getElementById('authEmail');
+                if (emailField) emailField.focus();
             }
         }
 
         /**
-         * 3. FUNÇÕES DE ABERTURA DOS MODAIS
-         */
-        function openModalMovement(type) {
-            const modal = document.getElementById('modalMovement');
-            const title = document.getElementById('modalTitle');
-            const typeInput = document.getElementById('movementType');
-            const btnSubmit = document.getElementById('btnSubmit');
-
-            if (modal) {
-                typeInput.value = type;
-                if (type === 'sangria') {
-                    title.innerText = '🔻 Sangria de Caixa';
-                    btnSubmit.className =
-                        "flex-1 py-4 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest transition-all shadow-lg bg-red-600 hover:bg-red-500";
-                } else {
-                    title.innerText = '🔺 Reforço (Aporte)';
-                    btnSubmit.className =
-                        "flex-1 py-4 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest transition-all shadow-lg bg-blue-600 hover:bg-blue-500";
-                }
-                modal.classList.remove('hidden');
-            }
-        }
-
-        function openModalClosing() {
-            const modal = document.getElementById('modalFecharCaixa');
-            if (modal) {
-                modal.classList.remove('hidden');
-                setTimeout(() => {
-                    const input = modal.querySelector('input[name="actual_balance"]');
-                    if (input) input.focus();
-                }, 200);
-            }
-        }
-
-        function closeModal(id) {
-            const modal = document.getElementById(id);
-            if (modal) modal.classList.add('hidden');
-        }
-
-        /**
-         * 4. ENVIAR COM AUTORIZAÇÃO
+         * 3. ENVIAR COM AUTORIZAÇÃO:
          */
         function enviarComAutorizacao(idFormulario) {
             const form = document.getElementById(idFormulario);
-            const emailFinal = window.supervisorMemoriaEmail;
-            const passFinal = window.supervisorMemoriaPass;
+
+            // Pega da memória capturada pelo monitor de input
+            const emailFinal = window.supervisorMemoriaEmail || document.getElementById('authEmail')?.value;
+            const passFinal = window.supervisorMemoriaPass || document.getElementById('authPassword')?.value;
+
+            console.log("🚀 Debug Caixa - Enviando Form:", idFormulario, " | Autorizador:", emailFinal);
 
             if (form && emailFinal && passFinal) {
-                const mEmail = form.querySelector('input[name="supervisor_email"]');
-                const mPass = form.querySelector('input[name="supervisor_password"]');
+                // Busca os inputs hidden (mirror) dentro do formulário específico
+                const mEmail = form.querySelector('input[name="supervisor_email"]') || form.querySelector('#mirror_email');
+                const mPass = form.querySelector('input[name="supervisor_password"]') || form.querySelector(
+                    '#mirror_password');
 
                 if (mEmail && mPass) {
                     mEmail.value = emailFinal;
                     mPass.value = passFinal;
                     form.submit();
                 } else {
-                    alert("Erro técnico: Campos de supervisor não encontrados.");
+                    alert("Erro técnico: Campos de espelho não encontrados no formulário.");
                 }
             } else {
-                alert("⚠️ Autorização necessária: As credenciais do supervisor não foram detectadas.");
-                location.reload();
+                alert("⚠️ Credenciais não capturadas. Por favor, redigite a senha de supervisor.");
             }
         }
-
-        // Tornar as funções globais explicitamente para o HTML encontrar
-        window.tentarEncerrarTurno = tentarEncerrarTurno;
-        window.openModalMovement = openModalMovement;
-        window.openModalClosing = openModalClosing;
-        window.closeModal = closeModal;
-        window.enviarComAutorizacao = enviarComAutorizacao;
     </script>
 </x-bar-layout>

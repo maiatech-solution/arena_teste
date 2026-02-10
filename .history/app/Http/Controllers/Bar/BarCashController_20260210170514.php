@@ -165,13 +165,13 @@ class BarCashController extends Controller
             return back()->with('error', '⚠️ Acesso negado! Somente um Gestor ou Admin pode validar o encerramento do turno.');
         }
 
-        // 🔥 3.5 TRAVA DE MESAS ABERTAS: Corrigido para 'occupied' e 'identifier'
-        $mesasAbertas = \App\Models\Bar\BarTable::where('status', 'occupied')->get();
+        // 🔥 3.5 TRAVA DE MESAS ABERTAS: Verifica se há mesas ocupadas
+        // Estou assumindo o Model BarTable, ajuste se o nome for diferente.
+        $mesasAbertas = \App\Models\Bar\BarTable::where('status', 'open')->get();
 
         if ($mesasAbertas->count() > 0) {
-            // Usamos 'identifier' que é o campo que você usa na sua View de Mesas
-            $numeros = $mesasAbertas->pluck('identifier')->implode(', ');
-            return back()->with('error', "⚠️ Bloqueio de Fechamento: Existem mesas ocupadas ({$numeros}). Finalize todas as comandas antes de fechar o caixa.");
+            $numeros = $mesasAbertas->pluck('number')->implode(', ');
+            return back()->with('error', "⚠️ Bloqueio de Fechamento: Existem mesas abertas ({$numeros}). Finalize todas as comandas antes de fechar o caixa.");
         }
 
         // 4. Validação técnica dos campos de fechamento

@@ -27,51 +27,63 @@ class BarCashController extends Controller
             ? $openSession
             : BarCashSession::whereDate('opened_at', $date)->latest()->first();
 
-        // 🛡️ TRAVA CORRIGIDA: Agora buscando o status real 'occupied'
-        $mesasAbertasCount = \App\Models\Bar\BarTable::where('status', 'occupied')->count();
-
         // 3. MOVIMENTAÇÕES
         $movements = collect();
-        $allMovements = collect();
+        $allMovements = collect(); // Criamos uma coleção para o cálculo TOTAL
 
         if ($currentSession) {
+            // Pegamos TODAS as movimentações da sessão para os cálculos dos cards
             $allMovements = BarCashMovement::with(['user', 'barOrder.table'])
                 ->where('bar_cash_session_id', $currentSession->id)
                 ->get();
 
+            // Para a TABELA (Histórico), filtramos se for colaborador
             if (!in_array($user->role, ['admin', 'gestor'])) {
                 $movements = $allMovements->where('user_id', $user->id);
             } else {
                 $movements = $allMovements;
             }
 
+            // Ordenamos o histórico para exibição
             $movements = $movements->sortByDesc('created_at');
         }
 
-        // 4. CÁLCULOS FINANCEIROS TOTAIS
+        // 4. CÁLCULOS FINANCEIROS TOTAIS (Baseados em allMovements - Gaveta Única)
+
+        // Reforços e Vendas em Dinheiro (Total da Gaveta)
         $reforcos = $allMovements->where('type', 'reforco')->where('payment_method', 'dinheiro')->sum('amount');
         $vendasDinheiro = $allMovements->where('type', 'venda')->where('payment_method', 'dinheiro')->sum('amount');
+
+        // Vendas Digitais (Total do estabelecimento)
         $vendasDigital = $allMovements->where('type', 'venda')->whereIn('payment_method', ['pix', 'credito', 'debito'])->sum('amount');
+
+        // Sangrias (Total retirado da gaveta/contas)
         $sangriasDinheiro = $allMovements->where('type', 'sangria')->where('payment_method', 'dinheiro')->sum('amount');
         $sangriasDigital = $allMovements->where('type', 'sangria')->whereIn('payment_method', ['pix', 'credito', 'debito'])->sum('amount');
 
+        // Faturamento Digital Líquido
         $faturamentoDigital = $vendasDigital - $sangriasDigital;
+
+        // --- LÓGICA DE GAVETA UNIFICADA ---
+        // O saldo inicial da sessão SEMPRE conta para o dinheiro em gaveta, independente de quem logou
         $saldoInicialSessao = $currentSession ? $currentSession->opening_balance : 0;
+
+        // Valor exato que deve estar no caixa físico agora
         $dinheiroGeral = $saldoInicialSessao + $vendasDinheiro + $reforcos - $sangriasDinheiro;
+
         $totalBruto = $vendasDinheiro + $vendasDigital;
         $sangrias = $sangriasDinheiro + $sangriasDigital;
 
         return view('bar.cash.index', compact(
             'currentSession',
             'openSession',
-            'movements',
+            'movements', // Filtrado para o colaborador na tabela
             'date',
-            'dinheiroGeral',
-            'reforcos',
-            'sangrias',
+            'dinheiroGeral', // Total Gaveta
+            'reforcos',      // Total Gaveta
+            'sangrias',      // Total Gaveta
             'faturamentoDigital',
-            'totalBruto',
-            'mesasAbertasCount'
+            'totalBruto'
         ));
     }
 
@@ -165,13 +177,13 @@ class BarCashController extends Controller
             return back()->with('error', '⚠️ Acesso negado! Somente um Gestor ou Admin pode validar o encerramento do turno.');
         }
 
-        // 🔥 3.5 TRAVA DE MESAS ABERTAS: Corrigido para 'occupied' e 'identifier'
-        $mesasAbertas = \App\Models\Bar\BarTable::where('status', 'occupied')->get();
+        // 🔥 3.5 TRAVA DE MESAS ABERTAS: Verifica se há mesas ocupadas
+        // Estou assumindo o Model BarTable, ajuste se o nome for diferente.
+        $mesasAbertas = \App\Models\Bar\BarTable::where('status', 'open')->get();
 
         if ($mesasAbertas->count() > 0) {
-            // Usamos 'identifier' que é o campo que você usa na sua View de Mesas
-            $numeros = $mesasAbertas->pluck('identifier')->implode(', ');
-            return back()->with('error', "⚠️ Bloqueio de Fechamento: Existem mesas ocupadas ({$numeros}). Finalize todas as comandas antes de fechar o caixa.");
+            $numeros = $mesasAbertas->pluck('number')->implode(', ');
+            return back()->with('error', "⚠️ Bloqueio de Fechamento: Existem mesas abertas ({$numeros}). Finalize todas as comandas antes de fechar o caixa.");
         }
 
         // 4. Validação técnica dos campos de fechamento

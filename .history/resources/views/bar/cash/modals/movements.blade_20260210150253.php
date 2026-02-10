@@ -54,3 +54,72 @@
         </form>
     </div>
 </div>
+
+<script>
+    // 🧠 Memória global para persistir os dados do supervisor
+    window.tempSupervisorEmail = window.tempSupervisorEmail || "";
+    window.tempSupervisorPass = window.tempSupervisorPass || "";
+
+    // ⚡ Escuta o teclado para capturar os dados ANTES do modal de login fechar
+    document.addEventListener('input', function (e) {
+        if (e.target.id === 'authEmail' || e.target.name === 'email') {
+            window.tempSupervisorEmail = e.target.value;
+        }
+        if (e.target.id === 'authPassword' || e.target.name === 'password') {
+            window.tempSupervisorPass = e.target.value;
+        }
+    });
+
+    function openModalMovement(type) {
+        const modal = document.getElementById('modalMovement');
+        const title = document.getElementById('modalTitle');
+        const typeInput = document.getElementById('movementType');
+        const btnSubmit = document.getElementById('btnSubmit');
+
+        if (modal && typeInput) {
+            typeInput.value = type;
+            if (type === 'sangria') {
+                title.innerText = '🔻 Sangria de Caixa';
+                btnSubmit.className = "flex-1 py-4 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest transition-all shadow-lg bg-red-600 hover:bg-red-500";
+            } else {
+                title.innerText = '🔺 Reforço (Aporte)';
+                btnSubmit.className = "flex-1 py-4 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest transition-all shadow-lg bg-blue-600 hover:bg-blue-500";
+            }
+            modal.classList.remove('hidden');
+        }
+    }
+
+    function closeModal(id) {
+        const modal = document.getElementById(id);
+        if (modal) modal.classList.add('hidden');
+    }
+
+    function enviarComAutorizacao(idFormulario) {
+        const form = document.getElementById(idFormulario);
+
+        // Busca o valor atual ou o que foi salvo na memória
+        const emailInput = document.getElementById('authEmail') || document.querySelector('input[name="email"]');
+        const passInput = document.getElementById('authPassword') || document.querySelector('input[name="password"]');
+
+        const emailFinal = (emailInput && emailInput.value !== "") ? emailInput.value : window.tempSupervisorEmail;
+        const passFinal = (passInput && passInput.value !== "") ? passInput.value : window.tempSupervisorPass;
+
+        console.log("🛠️ Debug Final - Form:", idFormulario, "| Email:", emailFinal);
+
+        if (form && emailFinal !== "" && passFinal !== "") {
+            document.getElementById('mirror_email').value = emailFinal;
+            document.getElementById('mirror_password').value = passFinal;
+
+            form.submit();
+        } else {
+            alert("⚠️ Erro: Credenciais do gestor não capturadas. Por favor, redigite o e-mail e a senha no modal de autorização.");
+            console.error("Dados faltantes:", { emailFinal, passFinal });
+        }
+    }
+
+    window.onclick = function(event) {
+        if (event.target.id === 'modalMovement' || event.target.id === 'modalFecharCaixa') {
+            closeModal(event.target.id);
+        }
+    }
+</script>

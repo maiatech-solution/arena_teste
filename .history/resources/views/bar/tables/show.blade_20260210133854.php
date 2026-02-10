@@ -42,7 +42,7 @@
                 {{ $isEsgotado ? 'opacity-40 grayscale cursor-not-allowed' : 'hover:bg-orange-600 hover:border-orange-500' }}"
                         {{ $isEsgotado ? 'disabled' : '' }}>
 
-                        <div class="text-2xl mb-2 group-hover:scale-110 transition-transform"></div>
+                        <div class="text-2xl mb-2 group-hover:scale-110 transition-transform">🍺</div>
 
                         <div class="w-full">
                             <h3
@@ -142,19 +142,21 @@
             {{-- LADO ESQUERDO: RESUMO FINANCEIRO --}}
             <div class="p-8 bg-gray-800/30 border-r border-gray-800 w-full md:w-96">
                 <h3 class="text-white font-black uppercase italic mb-8 tracking-widest">Resumo Financeiro</h3>
-                <div class="space-y-4">
+                <div class="space-y-4"> {{-- Diminuí o space-y para caber o novo card --}}
+
+                    {{-- TOTAL ORIGINAL --}}
                     <div class="bg-gray-950 p-6 rounded-3xl border border-gray-800 text-white font-black">
                         <span class="text-gray-500 text-[9px] uppercase block mb-1">Total da Mesa</span>
                         <span class="text-4xl">R$ {{ number_format($order->total_value, 2, ',', '.') }}</span>
                     </div>
 
-                    {{-- NOVO: BLOCO DE DESCONTO COM TRAVA DE SEGURANÇA --}}
+                    {{-- NOVO: BLOCO DE DESCONTO COM TRAVA --}}
                     <div class="bg-red-600/5 p-6 rounded-3xl border border-red-600/20">
                         <div class="flex justify-between items-center mb-1">
                             <span class="text-red-500 text-[9px] font-black uppercase block">Desconto</span>
 
-                            {{-- Botão de liberar só aparece para quem NÃO é gestor/admin --}}
-                            @if (!in_array(auth()->user()->role, ['admin', 'gestor']))
+                            {{-- Só mostra o botão de liberar se o usuário logado for 'colaborador' --}}
+                            @if (auth()->user()->role === 'colaborador')
                                 <button type="button" id="btnLiberarDesconto"
                                     onclick="requisitarAutorizacao(() => liberarCampoDesconto())"
                                     class="text-[8px] bg-red-600 text-white px-2 py-0.5 rounded font-black uppercase shadow-lg active:scale-95 transition-all">
@@ -173,11 +175,14 @@
                         </div>
                     </div>
 
+                    {{-- RESTANTE (Cálculo dinâmico via JS) --}}
                     <div class="bg-orange-600/10 p-6 rounded-3xl border border-orange-600/20">
                         <span class="text-orange-500 text-[9px] font-black uppercase block mb-1">Restante</span>
                         <span class="text-4xl font-black text-orange-500" id="textRestante">R$
                             {{ number_format($order->total_value, 2, ',', '.') }}</span>
                     </div>
+
+                    {{-- TROCO --}}
                     <div class="bg-green-600/10 p-6 rounded-3xl border border-green-600/20">
                         <span class="text-green-500 text-[9px] font-black uppercase block mb-1">Troco</span>
                         <span class="text-4xl font-black text-green-500" id="textTroco">R$ 0,00</span>
@@ -241,13 +246,10 @@
                     <input type="hidden" name="customer_name" id="hidden_customer_name">
                     <input type="hidden" name="customer_phone" id="hidden_customer_phone">
                     <input type="hidden" name="pagamentos" id="inputPagamentosHidden">
-
-                    {{-- ADICIONE ESTE CAMPO AQUI --}}
-                    <input type="hidden" name="discount_value" id="hidden_discount_value" value="0">
-
                     <input type="hidden" name="print_coupon" id="inputPrintCoupon" value="0">
                     <input type="hidden" name="send_whatsapp" id="inputSendWhatsApp" value="0">
 
+                    {{-- O botão chama abrirOpcoesFinais() para decidir se imprime ou não antes de enviar --}}
                     <button type="button" onclick="abrirOpcoesFinais()" id="btnFinalizarGeral"
                         class="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] uppercase tracking-[0.3em] text-sm shadow-2xl transition-all opacity-30 cursor-not-allowed"
                         disabled>
@@ -312,7 +314,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}' // Mantido conforme seu padrão, mas certifique-se que o token é renovado
                     },
                     body: JSON.stringify({
                         product_id: productId,
@@ -320,6 +322,7 @@
                     })
                 });
 
+                // Se a resposta for 419 (Token expirado), recarrega a página
                 if (response.status === 419) {
                     window.location.reload();
                     return;
@@ -334,6 +337,7 @@
                 }
             } catch (error) {
                 console.error("Erro na requisição:", error);
+                // Evita alertas chatos se o usuário apenas fechar a aba
                 if (error.name !== 'AbortError') {
                     alert("❌ Erro de conexão ao tentar lançar o produto.");
                 }
@@ -343,7 +347,7 @@
         // 4. Lógica do Modal de Checkout
         function abrirCheckout() {
             document.getElementById('modalCheckout').classList.remove('hidden');
-            atualizarTelaPagamento(); // Garante que o valor sugerido considere o desconto inicial
+            document.getElementById('inputValorPago').value = (totalMesa - pagoAcumulado).toFixed(2);
             document.getElementById('inputValorPago').focus();
         }
 
@@ -363,27 +367,8 @@
             }
         }
 
-        // NOVA FUNÇÃO: Liberar o campo de desconto após autorização do Supervisor
-        function liberarCampoDesconto() {
-            const input = document.getElementById('inputDesconto');
-            if (input) {
-                input.disabled = false;
-                input.focus();
-                input.select();
-                const btn = document.getElementById('btnLiberarDesconto');
-                if (btn) {
-                    btn.innerText = "✅ LIBERADO";
-                    btn.classList.replace('bg-red-600', 'bg-green-600');
-                }
-            }
-        }
-
-        // 6. Atualizar Cálculos de Restante e Troco na Tela (INCLUINDO DESCONTO)
+        // 6. Atualizar Cálculos de Restante e Troco na Tela
         function atualizarTelaPagamento() {
-            // Pega o desconto e calcula o novo total líquido
-            const desconto = parseFloat(document.getElementById('inputDesconto').value) || 0;
-            const novoTotalMesa = totalMesa - desconto;
-
             pagoAcumulado = pagamentos.reduce((acc, p) => acc + p.valor, 0);
             const lista = document.getElementById('listaPagamentos');
 
@@ -397,10 +382,9 @@
             </div>
         `).join('');
 
-            const faltante = novoTotalMesa - pagoAcumulado;
-            const troco = pagoAcumulado > novoTotalMesa ? pagoAcumulado - novoTotalMesa : 0;
+            const faltante = totalMesa - pagoAcumulado;
+            const troco = pagoAcumulado > totalMesa ? pagoAcumulado - totalMesa : 0;
 
-            // Atualiza elementos visuais
             document.getElementById('textRestante').innerText = 'R$ ' + (faltante > 0 ? faltante : 0).toLocaleString(
                 'pt-br', {
                     minimumFractionDigits: 2
@@ -409,9 +393,8 @@
                 minimumFractionDigits: 2
             });
 
-            // Validação do botão Finalizar
             const btn = document.getElementById('btnFinalizarGeral');
-            if (pagoAcumulado >= (novoTotalMesa - 0.01)) {
+            if (pagoAcumulado >= (totalMesa - 0.01)) {
                 btn.disabled = false;
                 btn.classList.remove('opacity-30', 'cursor-not-allowed');
             } else {
@@ -419,16 +402,11 @@
                 btn.classList.add('opacity-30', 'cursor-not-allowed');
             }
 
-            // Alimenta valor sugerido para pagamento
             if (faltante > 0) {
                 document.getElementById('inputValorPago').value = faltante.toFixed(2);
             } else {
                 document.getElementById('inputValorPago').value = '0.00';
             }
-
-            // Atualiza campo oculto do formulário para o PHP
-            const hiddenDiscount = document.getElementById('hidden_discount_value');
-            if (hiddenDiscount) hiddenDiscount.value = desconto;
         }
 
         // 7. Remover Pagamento da Lista
@@ -460,12 +438,8 @@
             document.getElementById('hidden_customer_phone').value = document.getElementById('customer_phone').value;
             document.getElementById('inputPagamentosHidden').value = JSON.stringify(pagamentos);
 
-            // Garante que o valor final do desconto seja enviado
-            const descontoFinal = document.getElementById('inputDesconto').value;
-            const hiddenDiscountField = document.getElementById('hidden_discount_value');
-            if (hiddenDiscountField) hiddenDiscountField.value = descontoFinal;
+            console.log("Enviando formulário final com ação:", acao);
 
-            console.log("Enviando venda finalizada com desconto de R$", descontoFinal);
             document.getElementById('formFecharMesa').submit();
         }
     </script>

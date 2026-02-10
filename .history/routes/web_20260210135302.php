@@ -242,16 +242,15 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
 
     // 💰 GESTÃO FINANCEIRA DE CAIXA
     Route::prefix('caixa')->name('cash.')->group(function () {
-        // Acesso à tela principal
+        // Todos podem acessar a tela (o filtro de quem mexe no dinheiro será na Controller)
         Route::get('/', [BarCashController::class, 'index'])->name('index');
 
-        // 🔓 REMOVIDO O MIDDLEWARE DAQUI:
-        // Agora o Controller valida o supervisor internamente via modal de senha.
-        Route::post('/abrir', [BarCashController::class, 'open'])->name('open');
+        // Ações que o colaborador pode tentar fazer, mas a Controller vai pedir senha/validar
         Route::post('/movimentar', [BarCashController::class, 'storeMovement'])->name('movement');
         Route::post('/fechar', [BarCashController::class, 'close'])->name('close');
 
-        // Ações que continuam restritas (Apenas Admin/Gestor podem clicar no botão de reabrir)
+        // Ações estritamente proibidas (Só Admin/Gestor acessam a rota)
+        Route::post('/abrir', [BarCashController::class, 'open'])->middleware(['role:admin,gestor'])->name('open');
         Route::post('/reabrir/{id}', [BarCashController::class, 'reopen'])->middleware(['role:admin,gestor'])->name('reopen');
     });
 

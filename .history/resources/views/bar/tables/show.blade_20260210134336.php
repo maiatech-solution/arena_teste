@@ -42,7 +42,7 @@
                 {{ $isEsgotado ? 'opacity-40 grayscale cursor-not-allowed' : 'hover:bg-orange-600 hover:border-orange-500' }}"
                         {{ $isEsgotado ? 'disabled' : '' }}>
 
-                        <div class="text-2xl mb-2 group-hover:scale-110 transition-transform"></div>
+                        <div class="text-2xl mb-2 group-hover:scale-110 transition-transform">🍺</div>
 
                         <div class="w-full">
                             <h3

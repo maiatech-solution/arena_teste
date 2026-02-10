@@ -27,51 +27,63 @@ class BarCashController extends Controller
             ? $openSession
             : BarCashSession::whereDate('opened_at', $date)->latest()->first();
 
-        // 🛡️ TRAVA CORRIGIDA: Agora buscando o status real 'occupied'
-        $mesasAbertasCount = \App\Models\Bar\BarTable::where('status', 'occupied')->count();
-
         // 3. MOVIMENTAÇÕES
         $movements = collect();
-        $allMovements = collect();
+        $allMovements = collect(); // Criamos uma coleção para o cálculo TOTAL
 
         if ($currentSession) {
+            // Pegamos TODAS as movimentações da sessão para os cálculos dos cards
             $allMovements = BarCashMovement::with(['user', 'barOrder.table'])
                 ->where('bar_cash_session_id', $currentSession->id)
                 ->get();
 
+            // Para a TABELA (Histórico), filtramos se for colaborador
             if (!in_array($user->role, ['admin', 'gestor'])) {
                 $movements = $allMovements->where('user_id', $user->id);
             } else {
                 $movements = $allMovements;
             }
 
+            // Ordenamos o histórico para exibição
             $movements = $movements->sortByDesc('created_at');
         }
 
-        // 4. CÁLCULOS FINANCEIROS TOTAIS
+        // 4. CÁLCULOS FINANCEIROS TOTAIS (Baseados em allMovements - Gaveta Única)
+
+        // Reforços e Vendas em Dinheiro (Total da Gaveta)
         $reforcos = $allMovements->where('type', 'reforco')->where('payment_method', 'dinheiro')->sum('amount');
         $vendasDinheiro = $allMovements->where('type', 'venda')->where('payment_method', 'dinheiro')->sum('amount');
+
+        // Vendas Digitais (Total do estabelecimento)
         $vendasDigital = $allMovements->where('type', 'venda')->whereIn('payment_method', ['pix', 'credito', 'debito'])->sum('amount');
+
+        // Sangrias (Total retirado da gaveta/contas)
         $sangriasDinheiro = $allMovements->where('type', 'sangria')->where('payment_method', 'dinheiro')->sum('amount');
         $sangriasDigital = $allMovements->where('type', 'sangria')->whereIn('payment_method', ['pix', 'credito', 'debito'])->sum('amount');
 
+        // Faturamento Digital Líquido
         $faturamentoDigital = $vendasDigital - $sangriasDigital;
+
+        // --- LÓGICA DE GAVETA UNIFICADA ---
+        // O saldo inicial da sessão SEMPRE conta para o dinheiro em gaveta, independente de quem logou
         $saldoInicialSessao = $currentSession ? $currentSession->opening_balance : 0;
+
+        // Valor exato que deve estar no caixa físico agora
         $dinheiroGeral = $saldoInicialSessao + $vendasDinheiro + $reforcos - $sangriasDinheiro;
+
         $totalBruto = $vendasDinheiro + $vendasDigital;
         $sangrias = $sangriasDinheiro + $sangriasDigital;
 
         return view('bar.cash.index', compact(
             'currentSession',
             'openSession',
-            'movements',
+            'movements', // Filtrado para o colaborador na tabela
             'date',
-            'dinheiroGeral',
-            'reforcos',
-            'sangrias',
+            'dinheiroGeral', // Total Gaveta
+            'reforcos',      // Total Gaveta
+            'sangrias',      // Total Gaveta
             'faturamentoDigital',
-            'totalBruto',
-            'mesasAbertasCount'
+            'totalBruto'
         ));
     }
 
@@ -98,60 +110,89 @@ class BarCashController extends Controller
     }
 
     /**
-     * Abrir o Caixa (Início de Turno com Autorização de Supervisor)
+     * Abrir o Caixa (Início de Turno)
      */
     public function open(Request $request)
     {
-        // 0. 🛡️ VALIDAÇÃO DO SUPERVISOR (Ponte de Segurança)
-        if (!$request->supervisor_email || !$request->supervisor_password) {
-            return back()->with('error', '⚠️ Autorização necessária: As credenciais do supervisor não foram detectadas.');
+        $request->validate([
+            'opening_balance' => 'required|numeric|min:0',
+        ]);
+
+        $exists = BarCashSession::where('status', 'open')->exists();
+        if ($exists) {
+            return back()->with('error', 'Já existe um caixa aberto!');
         }
 
+        BarCashSession::create([
+            'user_id' => auth()->id(),
+            'opening_balance' => $request->opening_balance,
+            'expected_balance' => $request->opening_balance, // Inicia o cálculo de auditoria
+            'status' => 'open',
+            'opened_at' => now(),
+        ]);
+
+        return redirect()->route('bar.cash.index')->with('success', 'Turno iniciado com sucesso!');
+    }
+
+    /**
+     * Lançar Sangria ou Reforço (Validando Supervisor)
+     */
+    public function storeMovement(Request $request)
+    {
+        // 1. Busca o supervisor pelas credenciais enviadas do modal
         $supervisor = \App\Models\User::where('email', $request->supervisor_email)->first();
 
+        // 2. Valida se o supervisor existe, se a senha bate e se ele tem poder (admin/gestor)
         if (!$supervisor || !\Illuminate\Support\Facades\Hash::check($request->supervisor_password, $supervisor->password)) {
             return back()->with('error', '⚠️ Falha na autorização: E-mail ou Senha do supervisor incorretos.');
         }
 
         if (!in_array($supervisor->role, ['admin', 'gestor'])) {
-            return back()->with('error', '⚠️ Acesso negado! Somente um Gestor ou Admin pode autorizar a abertura de caixa.');
+            return back()->with('error', '⚠️ Operação negada! O usuário autorizador não tem nível de Gestor/Admin.');
         }
 
-        // 1. Validação técnica do valor informado
+        // 3. Validação dos dados do movimento
         $request->validate([
-            'opening_balance' => 'required|numeric|min:0',
+            'type' => 'required|in:sangria,reforco',
+            'payment_method' => 'required|in:dinheiro,pix,debito,credito',
+            'amount' => 'required|numeric|min:0.01',
+            'description' => 'required|string|max:191',
         ]);
 
-        // Evita duplicidade de sessões abertas
-        $exists = BarCashSession::where('status', 'open')->exists();
-        if ($exists) {
-            return back()->with('error', 'Já existe um caixa aberto no sistema!');
-        }
+        return DB::transaction(function () use ($request, $supervisor) {
+            $session = BarCashSession::where('status', 'open')->lockForUpdate()->first();
 
-        // 2. Criação da Sessão com auditoria (Carimbo do Gestor)
-        BarCashSession::create([
-            'user_id' => auth()->id(), // Quem vai operar fisicamente (ex: Blenda)
-            'opening_balance' => $request->opening_balance,
-            'expected_balance' => $request->opening_balance,
-            'status' => 'open',
-            'opened_at' => now(),
-            'notes' => "Abertura autorizada por: {$supervisor->name}" // Registra quem deu o aval
-        ]);
+            if (!$session) {
+                return back()->with('error', 'Não há caixa aberto.');
+            }
 
-        return redirect()->route('bar.cash.index')->with('success', 'Turno iniciado com sucesso! Autorizado por ' . $supervisor->name);
+            // Criamos o movimento, mas agora registramos quem autorizou se quiser (opcional)
+            BarCashMovement::create([
+                'bar_cash_session_id' => $session->id,
+                'user_id' => auth()->id(), // Quem está operando (ex: Blenda)
+                'type' => $request->type,
+                'payment_method' => $request->payment_method,
+                'amount' => $request->amount,
+                'description' => $request->description . " (Auth: {$supervisor->name})",
+            ]);
+
+            if ($request->payment_method === 'dinheiro') {
+                if ($request->type === 'reforco') {
+                    $session->increment('expected_balance', $request->amount);
+                } else {
+                    $session->decrement('expected_balance', $request->amount);
+                }
+            }
+
+            return back()->with('success', 'Movimentação autorizada e registrada com sucesso!');
+        });
     }
 
     /**
      * Fechar o Caixa com Auditoria (🔒 Restrito a Gestores)
-     * Modelo: Validação de Supervisor via Modal
      */
     public function close(Request $request)
     {
-        // 0. 🛡️ VALIDAÇÃO INICIAL: Garante que os dados do supervisor chegaram
-        if (!$request->supervisor_email || !$request->supervisor_password) {
-            return back()->with('error', '⚠️ Autorização necessária: As credenciais do supervisor não foram detectadas.');
-        }
-
         // 1. Busca o supervisor pelas credenciais enviadas do modal de fechamento
         $supervisor = \App\Models\User::where('email', $request->supervisor_email)->first();
 
@@ -160,51 +201,39 @@ class BarCashController extends Controller
             return back()->with('error', '⚠️ Falha na autorização: E-mail ou Senha do supervisor incorretos.');
         }
 
-        // 3. Valida se quem está autorizando tem o cargo correto
+        // 3. Valida se quem está autorizando é Admin ou Gestor
         if (!in_array($supervisor->role, ['admin', 'gestor'])) {
-            return back()->with('error', '⚠️ Acesso negado! Somente um Gestor ou Admin pode validar o encerramento do turno.');
+            return back()->with('error', '⚠️ Acesso negado! O encerramento de turno exige a validação de um Gestor ou Admin.');
         }
 
-        // 🔥 3.5 TRAVA DE MESAS ABERTAS: Corrigido para 'occupied' e 'identifier'
-        $mesasAbertas = \App\Models\Bar\BarTable::where('status', 'occupied')->get();
-
-        if ($mesasAbertas->count() > 0) {
-            // Usamos 'identifier' que é o campo que você usa na sua View de Mesas
-            $numeros = $mesasAbertas->pluck('identifier')->implode(', ');
-            return back()->with('error', "⚠️ Bloqueio de Fechamento: Existem mesas ocupadas ({$numeros}). Finalize todas as comandas antes de fechar o caixa.");
-        }
-
-        // 4. Validação técnica dos campos de fechamento
+        // 4. Validação dos campos de fechamento
         $request->validate([
             'actual_balance' => 'required|numeric|min:0',
             'notes' => 'nullable|string|max:500'
         ]);
 
         return DB::transaction(function () use ($request, $supervisor) {
-            // Busca a sessão aberta travando a linha para evitar cálculos errados
             $session = BarCashSession::where('status', 'open')->lockForUpdate()->first();
 
             if (!$session) {
-                return back()->with('error', 'Erro: Não há nenhuma sessão de caixa aberta para fechar.');
+                return back()->with('error', 'Caixa não encontrado ou já encerrado.');
             }
 
-            // Lógica de Auditoria: Confronto do esperado no sistema vs contado fisicamente
             $expected = $session->expected_balance;
             $actual = $request->actual_balance;
             $difference = $actual - $expected;
 
-            // 5. Atualiza a sessão com o carimbo de quem autorizou
+            // 5. Atualiza a sessão com a nota de quem autorizou
             $session->update([
                 'closing_balance' => $actual,
                 'status' => 'closed',
                 'closed_at' => now(),
-                // Concatena as observações do operador com o nome do supervisor
-                'notes' => ($request->notes ? $request->notes . " | " : "") . "Fechamento autorizado por: {$supervisor->name}"
+                'notes' => $request->notes . " (Fechamento autorizado por: {$supervisor->name})"
             ]);
 
             $msg = "Turno encerrado com sucesso!";
 
-            // 📊 Feedback de Quebra ou Sobra de Gaveta
+            // Notificação de Quebra ou Sobra
             if ($difference < 0) {
                 $msg .= " Quebra detectada: R$ " . number_format(abs($difference), 2, ',', '.');
             } elseif ($difference > 0) {
