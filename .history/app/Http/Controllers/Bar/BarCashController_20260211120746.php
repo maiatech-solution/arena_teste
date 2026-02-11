@@ -89,47 +89,35 @@ class BarCashController extends Controller
         ));
     }
 
-
     /**
-     * 💸 PROCESSAR MOVIMENTAÇÕES (Sangria e Reforço) com trava de data
+     * 💸 PROCESSAR MOVIMENTAÇÕES (Sangria e Reforço)
+     * Resolve o erro 500: Call to undefined method storeMovement
      */
     public function storeMovement(Request $request)
     {
-        // 0. 🛡️ VALIDAÇÃO DO SUPERVISOR
         if (!$request->supervisor_email || !$request->supervisor_password) {
             return back()->with('error', '⚠️ Autorização necessária: As credenciais do supervisor não foram detectadas.');
         }
 
         $supervisor = \App\Models\User::where('email', $request->supervisor_email)->first();
 
-        if (!$supervisor || !\Illuminate\Support\Facades\Hash::check($request->supervisor_password, $supervisor->password)) {
+        if (!$supervisor || !Hash::check($request->supervisor_password, $supervisor->password)) {
             return back()->with('error', '⚠️ Falha na autorização: E-mail ou Senha do supervisor incorretos.');
         }
 
-        // 1. BUSCA SESSÃO ATIVA
-        $session = BarCashSession::where('status', 'open')->first();
-
-        if (!$session) {
-            return back()->with('error', 'Erro: Não há nenhuma sessão de caixa aberta.');
-        }
-
-        // 🛡️ NOVA TRAVA DE DATA: Impede movimentar valores em caixas de dias anteriores
-        $dataAbertura = \Carbon\Carbon::parse($session->opened_at)->format('Y-m-d');
-        $hoje = date('Y-m-d');
-
-        if ($dataAbertura !== $hoje) {
-            return back()->with('error', '⚠️ BLOQUEIO DE MOVIMENTAÇÃO: Este caixa pertence ao dia anterior (' . \Carbon\Carbon::parse($session->opened_at)->format('d/m') . '). Encerre este turno antes de realizar sangrias ou reforços hoje.');
-        }
-
-        // 2. VALIDAÇÃO TÉCNICA
         $request->validate([
             'type' => 'required|in:sangria,reforco',
             'amount' => 'required|numeric|min:0.01',
             'description' => 'required|string|max:255',
         ]);
 
+        $session = BarCashSession::where('status', 'open')->first();
+
+        if (!$session) {
+            return back()->with('error', 'Erro: Não há nenhuma sessão de caixa aberta.');
+        }
+
         return DB::transaction(function () use ($request, $session, $supervisor) {
-            // 3. CRIA A MOVIMENTAÇÃO
             BarCashMovement::create([
                 'bar_cash_session_id' => $session->id,
                 'user_id' => auth()->id(),
@@ -139,7 +127,6 @@ class BarCashController extends Controller
                 'description' => $request->description . " (Autorizado por: {$supervisor->name})",
             ]);
 
-            // 4. ATUALIZA SALDO ESPERADO NA GAVETA
             if ($request->type === 'reforco') {
                 $session->increment('expected_balance', $request->amount);
                 $msg = "Reforço realizado com sucesso!";

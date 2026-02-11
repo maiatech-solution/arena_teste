@@ -20,24 +20,6 @@
             </div>
         </div>
 
-        {{-- 🚩 ALERTA DE CAIXA VENCIDO (Aparece se o caixa for de ontem) --}}
-        @if(isset($caixaVencido) && $caixaVencido)
-            <div class="mb-8 bg-red-600 border-2 border-white/20 p-6 rounded-[2rem] flex items-center justify-between animate-pulse shadow-2xl shadow-red-900/40">
-                <div class="flex items-center gap-4">
-                    <span class="text-3xl">⚠️</span>
-                    <div>
-                        <h4 class="text-white font-black uppercase italic leading-none text-lg">Turno de Ontem Detectado!</h4>
-                        <p class="text-white/80 text-[10px] font-bold uppercase tracking-widest mt-1">
-                            O caixa aberto pertence ao dia {{ \Carbon\Carbon::parse($openSession->opened_at)->format('d/m') }}. Encerre-o antes de operar o salão hoje.
-                        </p>
-                    </div>
-                </div>
-                <a href="{{ route('bar.cash.index') }}" class="bg-white text-red-600 px-6 py-2 rounded-xl font-black uppercase text-[10px] hover:scale-105 transition-all shadow-lg">
-                    Resolver Agora
-                </a>
-            </div>
-        @endif
-
         @if (session('success'))
         <div
             class="bg-green-600 text-white p-4 rounded-2xl mb-6 font-black uppercase text-[10px] tracking-widest shadow-lg shadow-green-600/20">
@@ -89,15 +71,8 @@
                             class="text-[9px] font-black text-green-500 uppercase tracking-widest">Livre</span>
                         <form action="{{ route('bar.tables.open', $table->id) }}" method="POST">
                             @csrf
-                            {{-- 🛡️ BOTÃO TRAVADO SE O CAIXA FOR DE ONTEM --}}
                             <button type="submit"
-                                @if(isset($caixaVencido) && $caixaVencido)
-                                    disabled title="Feche o caixa de ontem primeiro"
-                                    class="block mt-2 text-[10px] bg-gray-800 text-gray-600 px-4 py-1.5 rounded-full font-black uppercase cursor-not-allowed opacity-50"
-                                @else
-                                    class="block mt-2 text-[10px] bg-white text-black px-4 py-1.5 rounded-full font-black hover:bg-orange-500 hover:text-white transition-colors uppercase"
-                                @endif
-                            >
+                                class="block mt-2 text-[10px] bg-white text-black px-4 py-1.5 rounded-full font-black hover:bg-orange-500 hover:text-white transition-colors uppercase">
                                 Abrir
                             </button>
                         </form>
@@ -107,11 +82,11 @@
 
                         {{-- Busca a ordem que está aberta para essa mesa no momento --}}
                         @php
-                        $ordemAtiva = $table->orders()->where('status', 'open')->first();
+                        $ordemAtiva = $table->orders()->where('status', 'aberto')->first();
                         @endphp
 
                         @if ($ordemAtiva)
-                        <span class="text-[8px] text-gray-500 font-bold mb-1 mt-1 uppercase block">
+                        <span class="text-[8px] text-gray-500 font-bold mb-1 mt-1 uppercase">
                             Desde {{ $ordemAtiva->created_at->format('H:i') }}
                         </span>
                         @endif

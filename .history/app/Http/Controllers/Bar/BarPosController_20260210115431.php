@@ -33,26 +33,17 @@ class BarPosController extends Controller
     {
         $request->validate([
             'items' => 'required|array',
-            'payments' => 'required|array',
+            'payments' => 'required|array', // Agora exigimos os pagamentos
             'total_value' => 'required|numeric'
         ]);
 
         try {
             return DB::transaction(function () use ($request) {
-
+                
                 // 1. BUSCAR SESSÃO DE CAIXA ATIVA
                 $session = BarCashSession::where('status', 'open')->first();
-
                 if (!$session) {
                     throw new \Exception("Não existe um caixa aberto! Por favor, abra o caixa primeiro.");
-                }
-
-                // 🛡️ NOVA TRAVA: BLOQUEIO DE CAIXA DO DIA ANTERIOR
-                $dataAbertura = \Carbon\Carbon::parse($session->opened_at)->format('Y-m-d');
-                $hoje = date('Y-m-d');
-
-                if ($dataAbertura !== $hoje) {
-                    throw new \Exception("⚠️ CAIXA VENCIDO: O caixa aberto é de ontem (" . \Carbon\Carbon::parse($session->opened_at)->format('d/m') . "). Você deve encerrar o turno antigo e abrir um novo para hoje antes de vender.");
                 }
 
                 // Determinar o método final (apenas para histórico da BarSale)
@@ -93,14 +84,14 @@ class BarPosController extends Controller
                     ]);
                 }
 
-                // 4. INTEGRAÇÃO COM O CAIXA
+                // 4. 🚀 INTEGRAÇÃO COM O CAIXA (O QUE ESTAVA FALTANDO)
                 foreach ($request->payments as $pay) {
                     BarCashMovement::create([
                         'bar_cash_session_id' => $session->id,
                         'user_id'             => auth()->id(),
-                        'bar_sale_id'         => $sale->id,
+                        'bar_sale_id'         => $sale->id, // Use o ID da venda aqui
                         'type'                => 'venda',
-                        'payment_method'      => $pay['method'],
+                        'payment_method'      => $pay['method'], // 'dinheiro', 'pix', etc.
                         'amount'              => $pay['value'],
                         'description'         => "Venda Direta PDV #{$sale->id}"
                     ]);
@@ -117,7 +108,6 @@ class BarPosController extends Controller
                 ]);
             });
         } catch (\Exception $e) {
-            // Como o PDV usa AJAX, o erro cai aqui e envia a mensagem pro alerta do JS
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()

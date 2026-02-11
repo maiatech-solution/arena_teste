@@ -30,8 +30,9 @@
                             </div>
 
                             {{-- 2. CAMPO DE BUSCA REAL --}}
-                            <input type="text" id="mainSearch" onkeyup="liveSearch()" autocomplete="new-password"
-                                {{-- Reforço para o navegador não sugerir nada --}} placeholder="🔍 Nome ou Código de Barras (Bipagem)..."
+                            <input type="text" id="mainSearch" onkeyup="liveSearch()"
+                                autocomplete="new-password" {{-- Reforço para o navegador não sugerir nada --}}
+                                placeholder="🔍 Nome ou Código de Barras (Bipagem)..."
                                 class="w-full bg-gray-950 border-gray-800 rounded-2xl text-white p-4 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all">
                         </div>
 
@@ -40,7 +41,7 @@
                                 class="w-full bg-gray-950 border-gray-800 rounded-2xl text-white p-4 focus:border-orange-500 outline-none uppercase font-black text-xs tracking-widest cursor-pointer">
                                 <option value="all">📁 TODAS CATEGORIAS</option>
                                 @foreach ($categories as $cat)
-                                    <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+                                <option value="{{ $cat->id }}">{{ $cat->name }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -50,31 +51,31 @@
                 <div class="flex-1 overflow-y-auto p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 no-scrollbar"
                     id="productsGrid">
                     @foreach ($products as $product)
-                        <button
-                            onclick="addToCart({{ $product->id }}, '{{ $product->name }}', {{ $product->sale_price }}, {{ $product->stock_quantity }}, {{ $product->manage_stock }})"
-                            data-category="{{ $product->bar_category_id }}" data-name="{{ strtolower($product->name) }}"
-                            data-barcode="{{ $product->barcode }}"
-                            class="product-card group relative p-3 bg-gray-800 hover:bg-orange-600 rounded-2xl border border-gray-700 hover:border-orange-500 transition-all flex flex-col items-center justify-center text-center active:scale-95 shadow-md h-28">
+                    <button
+                        onclick="addToCart({{ $product->id }}, '{{ $product->name }}', {{ $product->sale_price }}, {{ $product->stock_quantity }}, {{ $product->manage_stock }})"
+                        data-category="{{ $product->bar_category_id }}" data-name="{{ strtolower($product->name) }}"
+                        data-barcode="{{ $product->barcode }}"
+                        class="product-card group relative p-3 bg-gray-800 hover:bg-orange-600 rounded-2xl border border-gray-700 hover:border-orange-500 transition-all flex flex-col items-center justify-center text-center active:scale-95 shadow-md h-28">
 
-                            <div class="absolute top-1.5 right-1.5">
-                                <span
-                                    class="text-[7px] font-black px-1.5 py-0.5 rounded bg-gray-950/60 {{ $product->manage_stock && $product->stock_quantity <= $product->min_stock ? 'text-red-500 animate-pulse' : 'text-gray-400' }}">
-                                    {{ $product->stock_quantity }}
-                                </span>
-                            </div>
+                        <div class="absolute top-1.5 right-1.5">
+                            <span
+                                class="text-[7px] font-black px-1.5 py-0.5 rounded bg-gray-950/60 {{ $product->manage_stock && $product->stock_quantity <= $product->min_stock ? 'text-red-500 animate-pulse' : 'text-gray-400' }}">
+                                {{ $product->stock_quantity }}
+                            </span>
+                        </div>
 
-                            <div class="text-xl mb-1 group-hover:scale-110 transition-transform">📦</div>
+                        <div class="text-xl mb-1 group-hover:scale-110 transition-transform">📦</div>
 
-                            <div class="w-full">
-                                <h3
-                                    class="text-[9px] font-black text-white uppercase leading-tight line-clamp-2 mb-1 group-hover:text-white px-1">
-                                    {{ $product->name }}
-                                </h3>
-                                <span class="text-orange-500 font-black text-xs group-hover:text-white">
-                                    R$ {{ number_format($product->sale_price, 2, ',', '.') }}
-                                </span>
-                            </div>
-                        </button>
+                        <div class="w-full">
+                            <h3
+                                class="text-[9px] font-black text-white uppercase leading-tight line-clamp-2 mb-1 group-hover:text-white px-1">
+                                {{ $product->name }}
+                            </h3>
+                            <span class="text-orange-500 font-black text-xs group-hover:text-white">
+                                R$ {{ number_format($product->sale_price, 2, ',', '.') }}
+                            </span>
+                        </div>
+                    </button>
                     @endforeach
                 </div>
             </div>
@@ -135,8 +136,12 @@
                                 <span
                                     class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-black text-sm">R$</span>
 
-                                <input type="number" id="amountReceived" name="amount_received_field" step="0.01"
-                                    oninput="calculatePayment()" autocomplete="new-password" {{-- Reforço para ignorar sugestões --}}
+                                <input type="number"
+                                    id="amountReceived"
+                                    name="amount_received_field"
+                                    step="0.01"
+                                    oninput="calculatePayment()"
+                                    autocomplete="new-password" {{-- Reforço para ignorar sugestões --}}
                                     class="w-full bg-gray-950 border-gray-800 rounded-xl text-white p-3 pl-10 focus:border-orange-500 outline-none font-black text-lg">
                             </div>
                         </div>
@@ -151,20 +156,20 @@
                     {{-- Métodos de Pagamento --}}
                     <div class="grid grid-cols-2 gap-2">
                         @php
-                            $metodos = [
-                                'dinheiro' => ['label' => 'Dinheiro', 'icon' => '💵'],
-                                'pix' => ['label' => 'PIX', 'icon' => '📱'],
-                                'debito' => ['label' => 'Débito', 'icon' => '💳'],
-                                'credito' => ['label' => 'Crédito', 'icon' => '💳'],
-                            ];
+                        $metodos = [
+                        'dinheiro' => ['label' => 'Dinheiro', 'icon' => '💵'],
+                        'pix' => ['label' => 'PIX', 'icon' => '📱'],
+                        'debito' => ['label' => 'Débito', 'icon' => '💳'],
+                        'credito' => ['label' => 'Crédito', 'icon' => '💳'],
+                        ];
                         @endphp
                         @foreach ($metodos as $key => $info)
-                            <button onclick="setPaymentMethod('{{ $key }}')"
-                                class="pay-btn flex items-center gap-2 p-3 rounded-2xl border border-gray-800 bg-gray-900 text-gray-500 transition-all font-black text-[10px] uppercase hover:border-orange-500/50"
-                                id="btn-{{ $key }}">
-                                <span>{{ $info['icon'] }}</span>
-                                {{ $info['label'] }}
-                            </button>
+                        <button onclick="setPaymentMethod('{{ $key }}')"
+                            class="pay-btn flex items-center gap-2 p-3 rounded-2xl border border-gray-800 bg-gray-900 text-gray-500 transition-all font-black text-[10px] uppercase hover:border-orange-500/50"
+                            id="btn-{{ $key }}">
+                            <span>{{ $info['icon'] }}</span>
+                            {{ $info['label'] }}
+                        </button>
                         @endforeach
                     </div>
 
@@ -470,8 +475,7 @@
             }
         }
 
-
-        // 🔥 FINALIZAR (Com Trava de Caixa Vencido e Atalho)
+        // 🔥 FINALIZAR
         async function checkout() {
             const amountInputVal = parseFloat(document.getElementById('amountReceived').value) || 0;
             const totalPaid = payments.reduce((acc, p) => acc + p.value, 0) + amountInputVal;
@@ -485,6 +489,7 @@
             btn.disabled = true;
             btn.innerText = 'PROCESSANDO...';
 
+            // Se houver um valor no input mas não foi "adicionado" à lista, adicionamos agora
             let finalPayments = [...payments];
             if (amountInputVal > 0 && paymentMethod) {
                 finalPayments.push({
@@ -494,6 +499,7 @@
             }
 
             try {
+                // Definimos a URL em uma constante simples para o formatador não quebrar
                 const url = "{{ route('bar.pos.store') }}";
 
                 const response = await fetch(url, {
@@ -511,22 +517,10 @@
                 });
 
                 const data = await response.json();
-
                 if (data.success) {
                     showReceipt(totalPaid);
                 } else {
-                    // 🚨 AQUI ENTRA A MÁGICA: Detecção de Caixa Vencido
-                    if (data.message.includes("VENCIDO")) {
-                        const irParaCaixa = confirm(data.message +
-                            "\n\nDeseja ir para a tela de Gestão de Caixa agora?");
-                        if (irParaCaixa) {
-                            window.location.href = "{{ route('bar.cash.index') }}";
-                            return;
-                        }
-                    } else {
-                        alert('❌ ERRO: ' + data.message);
-                    }
-
+                    alert('❌ ERRO NO SERVIDOR: ' + data.message);
                     btn.disabled = false;
                     btn.innerText = 'Finalizar Venda';
                 }

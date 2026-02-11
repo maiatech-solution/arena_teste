@@ -89,7 +89,10 @@ class BarCashController extends Controller
         ));
     }
 
-
+    /**
+     * 💸 PROCESSAR MOVIMENTAÇÕES (Sangria e Reforço)
+     * Resolve o erro 500: Call to undefined method storeMovement
+     */
     /**
      * 💸 PROCESSAR MOVIMENTAÇÕES (Sangria e Reforço) com trava de data
      */

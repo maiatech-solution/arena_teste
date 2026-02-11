@@ -1,28 +1,6 @@
 <x-bar-layout>
     <div class="max-w-[1600px] mx-auto px-6 py-8">
 
-        @if (isset($caixaVencido) && $caixaVencido)
-            <div
-                class="mb-8 bg-red-600 border-2 border-white/20 p-6 rounded-[2rem] flex items-center justify-between animate-pulse">
-                <div class="flex items-center gap-4">
-                    <span class="text-3xl">⚠️</span>
-                    <div>
-                        <h4 class="text-white font-black uppercase italic leading-none">Atenção: Caixa do dia anterior!
-                        </h4>
-                        <p class="text-white/80 text-[10px] font-bold uppercase tracking-widest mt-1">
-                            Este caixa foi aberto em
-                            {{ \Carbon\Carbon::parse($openSession->opened_at)->format('d/m') }}. Feche-o antes de
-                            iniciar o movimento de hoje.
-                        </p>
-                    </div>
-                </div>
-                <button onclick="tentarEncerrarTurno()"
-                    class="bg-white text-red-600 px-6 py-2 rounded-xl font-black uppercase text-[10px] hover:scale-105 transition-all">
-                    Fechar Agora
-                </button>
-            </div>
-        @endif
-
         {{-- HEADER COM FILTRO DE DATA --}}
         <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-10">
             <div>
@@ -272,7 +250,7 @@
             if (mesasAbertas > 0) {
                 alert("⚠️ OPERAÇÃO BLOQUEADA\n\nExistem " + mesasAbertas +
                     " mesa(s) aberta(s) no sistema.\nVocê precisa finalizar todos os pagamentos antes de fechar o caixa."
-                );
+                    );
                 return false;
             }
 

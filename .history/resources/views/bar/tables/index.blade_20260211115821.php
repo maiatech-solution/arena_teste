@@ -24,7 +24,6 @@
         @if(isset($caixaVencido) && $caixaVencido)
             <div class="mb-8 bg-red-600 border-2 border-white/20 p-6 rounded-[2rem] flex items-center justify-between animate-pulse shadow-2xl shadow-red-900/40">
                 <div class="flex items-center gap-4">
-                    <span class="text-3xl">⚠️</span>
                     <div>
                         <h4 class="text-white font-black uppercase italic leading-none text-lg">Turno de Ontem Detectado!</h4>
                         <p class="text-white/80 text-[10px] font-bold uppercase tracking-widest mt-1">

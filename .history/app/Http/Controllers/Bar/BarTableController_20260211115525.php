@@ -9,10 +9,8 @@ use App\Models\Bar\BarOrderItem;
 use App\Models\Bar\BarProduct;
 use App\Models\Bar\BarCategory;
 use App\Models\Bar\BarStockMovement;
-use App\Models\Bar\BarCashSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class BarTableController extends Controller
 {
@@ -21,25 +19,13 @@ class BarTableController extends Controller
      */
     public function index()
     {
-        // O index agora esconde APENAS o que for 'inactive'.
+        // O index agora esconde APENAS o que for 'inactive' (configuração de layout).
+        // Mesas 'reserved' (desativadas pelo botão 🚫) continuam aparecendo no mapa.
         $tables = BarTable::where('status', '!=', 'inactive')
             ->orderByRaw('CAST(identifier AS UNSIGNED) ASC')
             ->get();
 
-        // 🛡️ DETECÇÃO DE CAIXA VENCIDO (Para alimentar o banner e os botões cinzas no Front)
-        $openSession = BarCashSession::where('status', 'open')->first();
-        $caixaVencido = false;
-
-        if ($openSession) {
-            $dataAbertura = Carbon::parse($openSession->opened_at)->startOfDay();
-            $hoje = Carbon::today();
-
-            if ($dataAbertura->lt($hoje)) {
-                $caixaVencido = true;
-            }
-        }
-
-        return view('bar.tables.index', compact('tables', 'caixaVencido', 'openSession'));
+        return view('bar.tables.index', compact('tables'));
     }
 
     /**
@@ -63,11 +49,14 @@ class BarTableController extends Controller
             }
         }
 
-        // 3. Atualiza o status em massa
+        // 3. Atualiza o status em massa:
+        // Mesas DENTRO do novo limite: se estavam 'inactive', voltam para 'available'.
+        // Respeitamos o status 'occupied' para não resetar mesas com clientes agora.
         BarTable::whereRaw('CAST(identifier AS UNSIGNED) <= ?', [$totalDesejado])
-            ->whereIn('status', ['inactive', 'reserved'])
+            ->whereIn('status', ['inactive', 'reserved']) // Reativa tanto as ocultas quanto as bloqueadas
             ->update(['status' => 'available']);
 
+        // Mesas FORA do novo limite: ganham status 'inactive' para sumirem do mapa de vez.
         BarTable::whereRaw('CAST(identifier AS UNSIGNED) > ?', [$totalDesejado])
             ->update(['status' => 'inactive']);
 
@@ -92,6 +81,9 @@ class BarTableController extends Controller
     }
 
     /**
+     * Abre a Comanda
+     */
+    /**
      * Abre a Comanda (Com trava de segurança de data)
      */
     public function open($id)
@@ -99,7 +91,7 @@ class BarTableController extends Controller
         $table = BarTable::findOrFail($id);
 
         // 1. BUSCA A SESSÃO DE CAIXA ATIVA
-        $session = BarCashSession::where('status', 'open')->first();
+        $session = \App\Models\Bar\BarCashSession::where('status', 'open')->first();
 
         // 2. 🛡️ VALIDAÇÃO DE CAIXA: Verifica se existe caixa aberto
         if (!$session) {
@@ -107,11 +99,11 @@ class BarTableController extends Controller
         }
 
         // 3. 🛡️ VALIDAÇÃO DE DATA: Impede abrir mesa com caixa de ontem
-        $dataAbertura = Carbon::parse($session->opened_at)->format('Y-m-d');
+        $dataAbertura = \Carbon\Carbon::parse($session->opened_at)->format('Y-m-d');
         $hoje = date('Y-m-d');
 
         if ($dataAbertura !== $hoje) {
-            return back()->with('error', '⚠️ ATENÇÃO: O caixa aberto pertence ao dia anterior (' . Carbon::parse($session->opened_at)->format('d/m') . '). Você deve encerrar o turno antigo e abrir um novo para hoje antes de iniciar novos atendimentos.');
+            return back()->with('error', '⚠️ ATENÇÃO: O caixa aberto pertence ao dia anterior (' . \Carbon\Carbon::parse($session->opened_at)->format('d/m') . '). Você deve encerrar o turno antigo e abrir um novo para hoje antes de iniciar novos atendimentos.');
         }
 
         // 4. VERIFICA DISPONIBILIDADE DA MESA
@@ -169,10 +161,12 @@ class BarTableController extends Controller
                 $product = BarProduct::findOrFail($request->product_id);
                 $qty = $request->quantity ?? 1;
 
+                // 🚀 A MESMA TRAVA DA BarPosController
                 if ($product->manage_stock && $product->stock_quantity < $qty) {
                     throw new \Exception("Estoque insuficiente para: {$product->name}");
                 }
 
+                // Lógica de inserir/incrementar na comanda
                 $item = BarOrderItem::where('bar_order_id', $order->id)
                     ->where('bar_product_id', $product->id)
                     ->first();
@@ -190,9 +184,13 @@ class BarTableController extends Controller
                     ]);
                 }
 
+                // Atualiza o total da mesa
                 $order->update(['total_value' => $order->items()->sum('subtotal')]);
+
+                // 📉 BAIXA NO ESTOQUE (Igual ao PDV)
                 $product->decrement('stock_quantity', $qty);
 
+                // 📜 REGISTRO NO HISTÓRICO (Igual ao PDV)
                 BarStockMovement::create([
                     'bar_product_id' => $product->id,
                     'user_id'        => auth()->id(),
@@ -220,17 +218,21 @@ class BarTableController extends Controller
                 $product = $item->product;
                 $quantidadeEstornada = $item->quantity;
 
+                // 1. Devolve a quantidade ao estoque (se o produto for controlado)
                 if ($product->manage_stock) {
                     $product->increment('stock_quantity', $quantidadeEstornada);
+
+                    // 📜 Registra a ENTRADA por estorno no histórico
                     BarStockMovement::create([
                         'bar_product_id' => $product->id,
                         'user_id'        => auth()->id(),
-                        'quantity'       => $quantidadeEstornada,
+                        'quantity'       => $quantidadeEstornada, // Positivo pois está entrando de volta
                         'type'           => 'entrada',
                         'description'    => "Estorno: Item removido da Mesa #{$order->table->identifier}",
                     ]);
                 }
 
+                // 2. Remove o item e atualiza o total da mesa
                 $item->delete();
                 $order->update(['total_value' => $order->items()->sum('subtotal') ?? 0]);
 
@@ -251,7 +253,7 @@ class BarTableController extends Controller
             $table = BarTable::findOrFail($id);
 
             // 1. BUSCA A SESSÃO DE CAIXA ATIVA
-            $session = BarCashSession::where('status', 'open')->first();
+            $session = \App\Models\Bar\BarCashSession::where('status', 'open')->first();
 
             // 🛡️ VALIDAÇÃO DE CAIXA: Verifica se existe caixa aberto
             if (!$session) {
@@ -260,12 +262,12 @@ class BarTableController extends Controller
             }
 
             // 🛡️ VALIDAÇÃO DE DATA: Impede receber pagamento em caixa do dia anterior
-            $dataAbertura = Carbon::parse($session->opened_at)->format('Y-m-d');
+            $dataAbertura = \Carbon\Carbon::parse($session->opened_at)->format('Y-m-d');
             $hoje = date('Y-m-d');
 
             if ($dataAbertura !== $hoje) {
                 return redirect()->route('bar.tables.index')
-                    ->with('error', '⚠️ CAIXA VENCIDO: O caixa aberto é de ontem (' . Carbon::parse($session->opened_at)->format('d/m') . '). Você deve encerrar o turno antigo na Gestão de Caixa antes de receber pagamentos de mesas hoje.');
+                    ->with('error', '⚠️ CAIXA VENCIDO: O caixa aberto é de ontem (' . \Carbon\Carbon::parse($session->opened_at)->format('d/m') . '). Você deve encerrar o turno antigo na Gestão de Caixa antes de receber pagamentos de mesas hoje.');
             }
 
             // 2. BUSCA A COMANDA ATIVA
@@ -294,6 +296,7 @@ class BarTableController extends Controller
             ]);
 
             // 💰 4. INTEGRAÇÃO COM O CAIXA (Lançamento de Movimentações)
+            // Decodificamos o JSON de pagamentos
             $pagamentosArray = json_decode($request->pagamentos, true);
 
             if (is_array($pagamentosArray)) {
@@ -309,6 +312,7 @@ class BarTableController extends Controller
                             'description'         => "Venda Mesa #{$table->identifier}",
                         ]);
 
+                        // Se for dinheiro, atualizamos o saldo esperado do caixa
                         if ($pag['metodo'] == 'dinheiro') {
                             $session->increment('expected_balance', $pag['valor']);
                         }
@@ -337,6 +341,8 @@ class BarTableController extends Controller
     public function printReceipt($orderId)
     {
         $order = BarOrder::with(['items.product', 'table'])->findOrFail($orderId);
+
+        // Verifica se a ordem realmente pertence a uma mesa (opcional)
         return view('bar.tables.receipt', compact('order'));
     }
 }
