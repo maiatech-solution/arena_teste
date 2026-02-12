@@ -71,8 +71,8 @@
                         <label
                             class="text-gray-500 uppercase text-[10px] font-black ml-2 mb-2 block tracking-widest">Contagem
                             Real na Gaveta</label>
-                        <input type="number" name="actual_balance" id="actual_balance_input" step="0.01"
-                            min="0" required placeholder="0,00" oninput="calcularDiferenca()"
+                        <input type="number" name="actual_balance" id="actual_balance_input" step="0.01" min="0" required
+                            placeholder="0,00" oninput="calcularDiferenca()"
                             class="w-full bg-black border-2 border-gray-800 rounded-2xl p-6 text-white text-4xl font-black text-center focus:border-orange-600 outline-none transition-all shadow-inner font-mono">
 
                         {{-- 📊 DISPLAY DE DIFERENÇA EM TEMPO REAL --}}
@@ -145,13 +145,13 @@
         // 1. Puxamos os dois valores do PHP
         const esperadoDinheiro = {{ $openSession->expected_balance ?? 0 }};
         const esperadoDigital = {{ $faturamentoDigital ?? 0 }};
-
+        
         // 2. O esperado real para a conferência é o Bruto (Soma dos dois)
         const totalEsperado = esperadoDinheiro + esperadoDigital;
-
+        
         const input = document.getElementById('actual_balance_input');
         const contado = parseFloat(input.value) || 0;
-
+        
         const display = document.getElementById('msg_diferenca');
         const diferenca = contado - totalEsperado;
 
@@ -164,15 +164,11 @@
             display.innerText = "✅ VALOR EXATO";
             display.className = "text-[10px] font-black uppercase tracking-widest text-green-500";
         } else if (diferenca > 0) {
-            display.innerText = "➕ SOBRA: R$ " + diferenca.toLocaleString('pt-br', {
-                minimumFractionDigits: 2
-            });
+            display.innerText = "➕ SOBRA: R$ " + diferenca.toLocaleString('pt-br', {minimumFractionDigits: 2});
             display.className = "text-[10px] font-black uppercase tracking-widest text-blue-400";
         } else {
             // Agora: 20 - 23 = -3 (Falta 3)
-            display.innerText = "⚠️ FALTA: R$ " + Math.abs(diferenca).toLocaleString('pt-br', {
-                minimumFractionDigits: 2
-            });
+            display.innerText = "⚠️ FALTA: R$ " + Math.abs(diferenca).toLocaleString('pt-br', {minimumFractionDigits: 2});
             display.className = "text-[10px] font-black uppercase tracking-widest text-red-500";
         }
     }

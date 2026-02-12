@@ -343,31 +343,21 @@
             const form = document.getElementById(idFormulario);
             if (!form) return;
 
-            /**
-             * 1. IDENTIFICAÇÃO DOS CAMPOS DE SENHA
-             * Temos dois: um no fechamento (modal) e outro na abertura (tela principal)
-             */
-            const inputSenhaFechamento = document.getElementById('password_direta_gestor');
-            const inputSenhaAbertura = document.getElementById('password_direta_abertura');
+            // 1. Tenta pegar a senha do campo físico de senha que está no modal
+            const inputSenhaDireta = document.getElementById('password_direta_gestor');
 
-            // Seleciona o campo correto baseado em qual formulário está sendo enviado
-            const inputSenhaDireta = (idFormulario === 'formCloseCash') ? inputSenhaFechamento : inputSenhaAbertura;
-
-            /**
-             * 2. COLETA DE DADOS (E-mail e Senha)
-             */
-            // Pega o e-mail (do hidden injetado pelo PHP ou da memória global)
+            // 2. Tenta pegar o e-mail que o PHP já injetou no hidden
             const hiddenEmail = form.querySelector('input[name="supervisor_email"]')?.value;
-            let emailFinal = hiddenEmail || window.supervisorMemoriaEmail;
 
-            // Pega a senha (do campo físico na tela ou da memória global)
+            // 3. Define as variáveis finais seguindo a ordem de prioridade
+            // Prioridade Senha: Campo do Modal > Memória Global > Busca no DOM
             let passFinal = (inputSenhaDireta && inputSenhaDireta.value) ? inputSenhaDireta.value : window
                 .supervisorMemoriaPass;
 
-            /**
-             * 3. 🛡️ PLANO B: BUSCA NO DOM
-             * Caso os campos acima falhem, ele varre a página atrás de qualquer input de autorização
-             */
+            // Prioridade E-mail: Campo Hidden do Form > Memória Global > Busca no DOM
+            let emailFinal = hiddenEmail || window.supervisorMemoriaEmail;
+
+            // 🛡️ PLANO B: Se ainda estiver vazio (ex: outro formulário que não o de fechamento), busca no DOM
             if (!emailFinal || !passFinal) {
                 const inputEmail = document.getElementById('authEmail') || document.querySelector('input[type="email"]');
                 const inputPass = document.getElementById('authPassword') || document.querySelector(
@@ -377,9 +367,7 @@
                 if (!passFinal && inputPass) passFinal = inputPass.value;
             }
 
-            /**
-             * 4. VALIDAÇÃO E SUBMISSÃO
-             */
+            // 4. Validação e Processamento do Envio
             if (form && emailFinal && passFinal && passFinal.trim() !== "") {
                 const mEmail = form.querySelector('input[name="supervisor_email"]');
                 const mPass = form.querySelector('input[name="supervisor_password"]');
@@ -388,22 +376,15 @@
                     mEmail.value = emailFinal;
                     mPass.value = passFinal;
 
-                    console.log("Autorização vinculada com sucesso. Enviando: " + idFormulario);
+                    console.log("Autorização vinculada. Enviando formulário: " + idFormulario);
                     form.submit();
                 } else {
                     alert("Erro técnico: Campos de supervisor não encontrados no formulário.");
                 }
             } else {
-                // Se cair aqui, foca no campo de senha correto para o usuário digitar
-                alert("⚠️ Autorização necessária: Por favor, digite sua senha de GESTOR para confirmar.");
-                if (inputSenhaDireta) {
-                    inputSenhaDireta.focus();
-                } else {
-                    // Se nem o campo direto existe, tenta abrir a autorização do layout (Plano C)
-                    if (typeof requisitarAutorizacao === 'function') {
-                        requisitarAutorizacao();
-                    }
-                }
+                // Se cair aqui, é porque realmente não preencheu a senha no campo do modal
+                alert("⚠️ Autorização necessária: Por favor, digite sua senha de gestor no campo de confirmação.");
+                if (inputSenhaDireta) inputSenhaDireta.focus();
             }
         }
 

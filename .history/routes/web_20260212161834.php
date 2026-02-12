@@ -272,11 +272,9 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
         Route::get('/produtos', [BarReportController::class, 'products'])->name('products');
         Route::get('/caixas', [BarReportController::class, 'cashier'])->name('cashier');
         Route::get('/movimentacoes', [BarReportController::class, 'movements'])->name('movements');
+        Route::get('/equipe', [BarReportController::class, 'users'])->name('users');
         Route::get('/pagamentos', [BarReportController::class, 'payments'])->name('payments');
-
-        // 🆕 Novas rotas que estavam faltando:
-        Route::get('/diario', [BarReportController::class, 'daily'])->name('daily');
-        Route::get('/cancelamentos', [BarReportController::class, 'cancelations'])->name('cancelations');
+        Route::get('/clientes', [BarReportController::class, 'customers'])->name('customers');
     });
 });
 

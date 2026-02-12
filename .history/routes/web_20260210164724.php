@@ -24,7 +24,6 @@ use App\Http\Controllers\Bar\BarTableController;
 use App\Http\Controllers\Bar\BarCashController;
 use App\Http\Controllers\Bar\BarUserController;
 use App\Http\Controllers\Bar\BarCompanyController;
-use App\Http\Controllers\Bar\BarReportController;
 
 // 🏠 ROTA RAIZ
 Route::get('/', function () {
@@ -264,19 +263,6 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
         Route::get('/{user}/edit', [BarUserController::class, 'edit'])->name('edit');
         Route::put('/{user}', [BarUserController::class, 'update'])->name('update');
         Route::delete('/{user}', [BarUserController::class, 'destroy'])->name('destroy');
-    });
-
-    // 📊 RELATÓRIOS FINANCEIROS E ANALÍTICOS (🔒 Restrito Admin/Gestor)
-    Route::prefix('relatorios')->name('reports.')->middleware(['role:admin,gestor'])->group(function () {
-        Route::get('/', [BarReportController::class, 'index'])->name('index');
-        Route::get('/produtos', [BarReportController::class, 'products'])->name('products');
-        Route::get('/caixas', [BarReportController::class, 'cashier'])->name('cashier');
-        Route::get('/movimentacoes', [BarReportController::class, 'movements'])->name('movements');
-        Route::get('/pagamentos', [BarReportController::class, 'payments'])->name('payments');
-
-        // 🆕 Novas rotas que estavam faltando:
-        Route::get('/diario', [BarReportController::class, 'daily'])->name('daily');
-        Route::get('/cancelamentos', [BarReportController::class, 'cancelations'])->name('cancelations');
     });
 });
 

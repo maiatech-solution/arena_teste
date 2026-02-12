@@ -25,8 +25,7 @@
                                 'bar.products.index' => 'Estoque',
                                 'bar.tables.index' => 'Mesas',
                                 'bar.cash.index' => 'Caixa',
-                                'bar.reports.index' => 'Relatórios', // ✅ Adicionado aqui
-                                'bar.users.index' => 'Usuários',
+                                'bar.users.index' => 'Usuários', // ✅ Adicionado aqui
                             ];
                         @endphp
 
@@ -157,13 +156,11 @@
                 <x-responsive-nav-link :href="route('bar.cash.index')" :active="request()->routeIs('bar.cash.*')"
                     class="text-gray-300">Caixa</x-responsive-nav-link>
 
-                {{-- ✅ Relatórios no Mobile --}}
-                <x-responsive-nav-link :href="route('bar.reports.index')" :active="request()->routeIs('bar.reports.*')"
-                    class="text-gray-300">Relatórios</x-responsive-nav-link>
-
+                {{-- ✅ Link Corrigido para a View Dark de Usuários --}}
                 <x-responsive-nav-link :href="route('bar.users.index')" :active="request()->routeIs('bar.users.*')"
                     class="text-gray-300">Equipe</x-responsive-nav-link>
 
+                {{-- ✅ Adicionado: Configurações da Empresa no Bar --}}
                 <x-responsive-nav-link :href="route('bar.company.edit')" :active="request()->routeIs('bar.company.*')"
                     class="text-gray-300">Configurações</x-responsive-nav-link>
             @endif
@@ -180,6 +177,7 @@
 
             @if (Auth::user()->has_admin_access)
                 @if (request()->is('bar*'))
+                    {{-- 🍺 Links Responsivos para o ambiente BAR --}}
                     <x-responsive-nav-link :href="route('bar.company.edit')" :active="request()->routeIs('bar.company.*')" class="text-gray-300">
                         🏢 Dados do estabelecimento
                     </x-responsive-nav-link>
@@ -188,6 +186,7 @@
                         👥 Gerenciar Equipe
                     </x-responsive-nav-link>
                 @else
+                    {{-- 🏟️ Links Originais para o ambiente ARENA --}}
                     <x-responsive-nav-link :href="route('admin.company.edit')" :active="request()->routeIs('admin.company.*')" class="text-gray-300">
                         🏟️ Dados do estabelecimento
                     </x-responsive-nav-link>

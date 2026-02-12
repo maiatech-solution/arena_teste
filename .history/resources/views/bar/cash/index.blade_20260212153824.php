@@ -109,9 +109,8 @@
                     <form action="{{ route('bar.cash.open') }}" method="POST" id="formOpenCash">
                         @csrf
 
-                        {{-- 🔑 CAMPOS DE ESPELHO (Injetamos o e-mail se já estiver logado como gestor) --}}
-                        <input type="hidden" name="supervisor_email"
-                            value="{{ in_array(auth()->user()->role, ['admin', 'gestor']) ? auth()->user()->email : '' }}">
+                        {{-- 🔑 CAMPOS DE ESPELHO (Essenciais para enviar a senha do Adriano ao Controller) --}}
+                        <input type="hidden" name="supervisor_email">
                         <input type="hidden" name="supervisor_password">
 
                         <div class="text-left mb-6">
@@ -123,19 +122,9 @@
                                 class="w-full bg-black border-2 border-gray-800 rounded-3xl p-6 text-white text-3xl font-black text-center focus:border-green-500 outline-none transition-all shadow-inner font-mono">
                         </div>
 
-                        {{-- 🛡️ CAMPO PARA GESTOR LOGADO ASSINAR A ABERTURA --}}
-                        @if (in_array(auth()->user()->role, ['admin', 'gestor']))
-                            <div class="mb-6 p-4 bg-green-600/5 border border-green-600/20 rounded-3xl text-center">
-                                <span
-                                    class="text-[9px] font-black text-green-500 uppercase block mb-2 tracking-widest">Confirmar
-                                    Abertura</span>
-                                <input type="password" id="password_direta_abertura" placeholder="Sua senha de Gestor"
-                                    class="w-full max-w-xs bg-black border border-gray-800 rounded-xl p-3 text-white text-center text-sm outline-none focus:border-green-500 transition-all font-mono">
-                            </div>
-                        @endif
-
-                        {{-- 🚀 BOTÃO ATUALIZADO (Troque o requisitarAutorizacao por enviarComAutorizacao direto) --}}
-                        <button type="button" onclick="enviarComAutorizacao('formOpenCash')"
+                        {{-- 🚀 BOTÃO COM GATILHO DE AUTORIZAÇÃO --}}
+                        <button type="button"
+                            onclick="requisitarAutorizacao(() => enviarComAutorizacao('formOpenCash'))"
                             class="w-full py-6 bg-green-600 hover:bg-green-500 text-white font-black rounded-3xl uppercase tracking-widest shadow-lg shadow-green-900/40 transition-all active:scale-95">
                             Abrir Turno de Trabalho
                         </button>
@@ -255,20 +244,20 @@
     @include('bar.cash.modals.closing')
 
     <script>
-        // 🧠 MEMÓRIA GLOBAL BLINDADA
+        // 🧠 MEMÓRIA GLOBAL
         window.supervisorMemoriaEmail = "";
         window.supervisorMemoriaPass = "";
 
         /**
          * 1. MONITOR DE INPUT
-         * Captura os dados enquanto o supervisor digita.
+         * Mantém as variáveis atualizadas enquanto o supervisor digita na janelinha preta.
          */
         document.addEventListener('input', function(e) {
             const t = e.target;
-            if (t.type === 'email' || t.name === 'email' || t.id === 'authEmail') {
+            if (t.id === 'authEmail' || t.name === 'supervisor_email' || t.type === 'email') {
                 window.supervisorMemoriaEmail = t.value;
             }
-            if (t.type === 'password' || t.name === 'password' || t.id === 'authPassword') {
+            if (t.id === 'authPassword' || t.name === 'supervisor_password' || t.type === 'password') {
                 window.supervisorMemoriaPass = t.value;
             }
         });
@@ -277,45 +266,31 @@
          * 2. TRAVA DE SEGURANÇA: MESAS ABERTAS
          */
         function tentarEncerrarTurno() {
-            // Puxa a contagem enviada pelo PHP
             const mesasAbertas = {{ $mesasAbertasCount ?? 0 }};
 
             if (mesasAbertas > 0) {
                 alert("⚠️ OPERAÇÃO BLOQUEADA\n\nExistem " + mesasAbertas +
                     " mesa(s) aberta(s) no sistema.\nVocê precisa finalizar todos os pagamentos antes de fechar o caixa."
-                );
+                    );
                 return false;
             }
 
-            // Se o layout tiver a função de autorização, chama ela
             if (typeof requisitarAutorizacao === 'function') {
                 requisitarAutorizacao(() => openModalClosing());
             } else {
-                // Caso a função não exista por erro de carregamento do layout
                 openModalClosing();
             }
         }
 
         /**
-         * 3. FUNÇÕES DE ABERTURA DOS MODAIS
+         * 3. FUNÇÕES DE MODAIS
          */
         function openModalMovement(type) {
             const modal = document.getElementById('modalMovement');
-            const title = document.getElementById('modalTitle');
-            const typeInput = document.getElementById('movementType');
-            const btnSubmit = document.getElementById('btnSubmit');
-
             if (modal) {
-                typeInput.value = type;
-                if (type === 'sangria') {
-                    title.innerText = '🔻 Sangria de Caixa';
-                    btnSubmit.className =
-                        "flex-1 py-4 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest transition-all shadow-lg bg-red-600 hover:bg-red-500";
-                } else {
-                    title.innerText = '🔺 Reforço (Aporte)';
-                    btnSubmit.className =
-                        "flex-1 py-4 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest transition-all shadow-lg bg-blue-600 hover:bg-blue-500";
-                }
+                document.getElementById('movementType').value = type;
+                document.getElementById('modalTitle').innerText = type === 'sangria' ? '🔻 Sangria de Caixa' :
+                    '🔺 Reforço (Aporte)';
                 modal.classList.remove('hidden');
             }
         }
@@ -337,77 +312,43 @@
         }
 
         /**
-         * 4. 🚀 ENVIAR COM AUTORIZAÇÃO (Mantendo sua estrutura original com Plano B e C)
+         * 4. 🚀 ENVIAR COM AUTORIZAÇÃO (VERSÃO INFALÍVEL)
          */
         function enviarComAutorizacao(idFormulario) {
             const form = document.getElementById(idFormulario);
-            if (!form) return;
 
-            /**
-             * 1. IDENTIFICAÇÃO DOS CAMPOS DE SENHA
-             * Temos dois: um no fechamento (modal) e outro na abertura (tela principal)
-             */
-            const inputSenhaFechamento = document.getElementById('password_direta_gestor');
-            const inputSenhaAbertura = document.getElementById('password_direta_abertura');
+            // 🔍 BUSCA DIRETA: Tenta pegar o valor atualizado direto dos campos da janelinha preta
+            // Usamos os IDs padrão que o Layout costuma usar (authEmail e authPassword)
+            let email = window.supervisorMemoriaEmail ||
+                (document.getElementById('authEmail') ? document.getElementById('authEmail').value : "");
 
-            // Seleciona o campo correto baseado em qual formulário está sendo enviado
-            const inputSenhaDireta = (idFormulario === 'formCloseCash') ? inputSenhaFechamento : inputSenhaAbertura;
+            let pass = window.supervisorMemoriaPass ||
+                (document.getElementById('authPassword') ? document.getElementById('authPassword').value : "");
 
-            /**
-             * 2. COLETA DE DADOS (E-mail e Senha)
-             */
-            // Pega o e-mail (do hidden injetado pelo PHP ou da memória global)
-            const hiddenEmail = form.querySelector('input[name="supervisor_email"]')?.value;
-            let emailFinal = hiddenEmail || window.supervisorMemoriaEmail;
-
-            // Pega a senha (do campo físico na tela ou da memória global)
-            let passFinal = (inputSenhaDireta && inputSenhaDireta.value) ? inputSenhaDireta.value : window
-                .supervisorMemoriaPass;
-
-            /**
-             * 3. 🛡️ PLANO B: BUSCA NO DOM
-             * Caso os campos acima falhem, ele varre a página atrás de qualquer input de autorização
-             */
-            if (!emailFinal || !passFinal) {
-                const inputEmail = document.getElementById('authEmail') || document.querySelector('input[type="email"]');
-                const inputPass = document.getElementById('authPassword') || document.querySelector(
-                    'input[type="password"]');
-
-                if (!emailFinal && inputEmail) emailFinal = inputEmail.value;
-                if (!passFinal && inputPass) passFinal = inputPass.value;
+            // Validação de segurança: Se ainda estiver vazio, dá o erro amigável
+            if (!email || !pass || email.trim() === "" || pass.trim() === "") {
+                alert(
+                    "⚠️ Autorização necessária!\n\nPor favor, digite o e-mail e a senha do gestor na janela de autorização que aparece ANTES deste modal.");
+                return;
             }
 
-            /**
-             * 4. VALIDAÇÃO E SUBMISSÃO
-             */
-            if (form && emailFinal && passFinal && passFinal.trim() !== "") {
+            if (form) {
                 const mEmail = form.querySelector('input[name="supervisor_email"]');
                 const mPass = form.querySelector('input[name="supervisor_password"]');
 
                 if (mEmail && mPass) {
-                    mEmail.value = emailFinal;
-                    mPass.value = passFinal;
+                    mEmail.value = email;
+                    mPass.value = pass;
 
-                    console.log("Autorização vinculada com sucesso. Enviando: " + idFormulario);
+                    console.log("Autorização capturada. Enviando formulário...");
                     form.submit();
                 } else {
-                    alert("Erro técnico: Campos de supervisor não encontrados no formulário.");
-                }
-            } else {
-                // Se cair aqui, foca no campo de senha correto para o usuário digitar
-                alert("⚠️ Autorização necessária: Por favor, digite sua senha de GESTOR para confirmar.");
-                if (inputSenhaDireta) {
-                    inputSenhaDireta.focus();
-                } else {
-                    // Se nem o campo direto existe, tenta abrir a autorização do layout (Plano C)
-                    if (typeof requisitarAutorizacao === 'function') {
-                        requisitarAutorizacao();
-                    }
+                    alert("Erro técnico: O formulário não contém os campos ocultos de supervisor.");
                 }
             }
         }
 
-        // Tornar as funções globais explicitamente para o HTML encontrar
+        // Exportação global
         window.tentarEncerrarTurno = tentarEncerrarTurno;
         window.openModalMovement = openModalMovement;
         window.openModalClosing = openModalClosing;

@@ -20,7 +20,7 @@
         </div>
 
         <div class="p-8">
-            {{-- 📊 DASHBOARD DE FECHAMENTO --}}
+            {{-- 📊 DASHBOARD DE FECHAMENTO (LAYOUT OTIMIZADO) --}}
             <div class="space-y-4 mb-8">
                 <div class="grid grid-cols-2 gap-4">
                     {{-- GAVETA --}}
@@ -41,7 +41,7 @@
                     </div>
                 </div>
 
-                {{-- BRUTO TOTAL --}}
+                {{-- BRUTO TOTAL (DESTAQUE CENTRAL) --}}
                 <div
                     class="bg-orange-600/10 p-5 rounded-3xl border border-orange-600/20 flex justify-between items-center px-8">
                     <div>
@@ -61,6 +61,7 @@
             <form action="{{ route('bar.cash.close') }}" method="POST" id="formCloseCash">
                 @csrf
 
+                {{-- 🔑 CAMPOS DE ESPELHO (Injetamos seu e-mail automaticamente se for Gestor) --}}
                 <input type="hidden" name="supervisor_email"
                     value="{{ in_array(auth()->user()->role, ['admin', 'gestor']) ? auth()->user()->email : '' }}">
                 <input type="hidden" name="supervisor_password" id="mirror_password_closing">
@@ -71,14 +72,9 @@
                         <label
                             class="text-gray-500 uppercase text-[10px] font-black ml-2 mb-2 block tracking-widest">Contagem
                             Real na Gaveta</label>
-                        <input type="number" name="actual_balance" id="actual_balance_input" step="0.01"
-                            min="0" required placeholder="0,00" oninput="calcularDiferenca()"
+                        <input type="number" name="actual_balance" step="0.01" min="0" required
+                            placeholder="0,00"
                             class="w-full bg-black border-2 border-gray-800 rounded-2xl p-6 text-white text-4xl font-black text-center focus:border-orange-600 outline-none transition-all shadow-inner font-mono">
-
-                        {{-- 📊 DISPLAY DE DIFERENÇA EM TEMPO REAL --}}
-                        <div id="display_diferenca" class="mt-2 text-center h-4">
-                            <span id="msg_diferenca" class="text-[10px] font-black uppercase tracking-widest"></span>
-                        </div>
                     </div>
 
                     {{-- OBSERVAÇÕES --}}
@@ -91,6 +87,7 @@
                     </div>
                 </div>
 
+                {{-- 🛡️ CAMPO DE SENHA DIRETO NO MODAL (Aparece para você que é Gestor) --}}
                 @if (in_array(auth()->user()->role, ['admin', 'gestor']))
                     <div class="mt-6 p-5 bg-orange-600/5 border border-orange-600/20 rounded-[2rem] text-center">
                         <span
@@ -108,7 +105,8 @@
                         class="py-4 text-gray-500 font-black rounded-2xl uppercase text-[10px] tracking-widest hover:bg-gray-800 hover:text-white transition-all">
                         Cancelar
                     </button>
-                    <button type="button" onclick="enviarComAutorizacao('formCloseCash')"
+                    {{-- 🚀 CHAMADA PARA A NOVA FUNÇÃO DE ENVIO --}}
+                    <button type="button" onclick="enviarFechamentoFinal()"
                         class="py-4 bg-orange-600 hover:bg-orange-500 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest transition-all shadow-lg shadow-orange-900/40 active:scale-95">
                         Encerrar Turno
                     </button>
@@ -134,46 +132,6 @@
         const modal = document.getElementById('modalFecharCaixa');
         if (modal) {
             modal.classList.add('hidden');
-        }
-    }
-
-
-    /**
-     * 📊 CÁLCULO DE QUEBRA/SOBRA (Soma Dinheiro + Digital)
-     */
-    function calcularDiferenca() {
-        // 1. Puxamos os dois valores do PHP
-        const esperadoDinheiro = {{ $openSession->expected_balance ?? 0 }};
-        const esperadoDigital = {{ $faturamentoDigital ?? 0 }};
-
-        // 2. O esperado real para a conferência é o Bruto (Soma dos dois)
-        const totalEsperado = esperadoDinheiro + esperadoDigital;
-
-        const input = document.getElementById('actual_balance_input');
-        const contado = parseFloat(input.value) || 0;
-
-        const display = document.getElementById('msg_diferenca');
-        const diferenca = contado - totalEsperado;
-
-        if (input.value === "") {
-            display.innerText = "";
-            return;
-        }
-
-        if (Math.abs(diferenca) < 0.01) {
-            display.innerText = "✅ VALOR EXATO";
-            display.className = "text-[10px] font-black uppercase tracking-widest text-green-500";
-        } else if (diferenca > 0) {
-            display.innerText = "➕ SOBRA: R$ " + diferenca.toLocaleString('pt-br', {
-                minimumFractionDigits: 2
-            });
-            display.className = "text-[10px] font-black uppercase tracking-widest text-blue-400";
-        } else {
-            // Agora: 20 - 23 = -3 (Falta 3)
-            display.innerText = "⚠️ FALTA: R$ " + Math.abs(diferenca).toLocaleString('pt-br', {
-                minimumFractionDigits: 2
-            });
-            display.className = "text-[10px] font-black uppercase tracking-widest text-red-500";
         }
     }
 </script>
