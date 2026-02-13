@@ -48,11 +48,14 @@ class BarReportController extends Controller
         // 4. Sangrias
         $totalSangriasMes = BarCashMovement::where('type', 'sangria')->whereBetween('created_at', [$startDate, $endDate])->sum('amount');
 
-        return view('bar.reports.index', compact('faturamentoMensal', 'totalItensMes', 'ticketMedio', 'totalSangriasMes', 'mesReferencia'));
+        return view('bar.reports.index', compact('faturamentoMensal', 'totalItensMes', 'ticketMedio', 'totalSangriasMes'));
     }
 
     /**
      * RANKING DE PRODUTOS + MARGEM DE LUCRO
+     */
+    /**
+     * Relatório de Ranking de Produtos + Lucratividade
      */
     public function products(Request $request)
     {
@@ -60,6 +63,7 @@ class BarReportController extends Controller
         $startDate = Carbon::parse($mesReferencia)->startOfMonth();
         $endDate = Carbon::parse($mesReferencia)->endOfMonth();
 
+        // 1. Consolida itens de Mesas e PDV (Venda Direta)
         $rankingFinal = DB::table('bar_order_items as oi')
             ->join('bar_orders as o', 'oi.bar_order_id', '=', 'o.id')
             ->select('oi.bar_product_id', 'oi.quantity', 'oi.subtotal')
@@ -68,15 +72,12 @@ class BarReportController extends Controller
             ->unionAll(
                 DB::table('bar_sale_items as si')
                     ->join('bar_sales as s', 'si.bar_sale_id', '=', 's.id')
-                    ->select(
-                        'si.bar_product_id',
-                        'si.quantity',
-                        DB::raw('(si.quantity * si.price_at_sale) as subtotal')
-                    )
+                    ->select('si.bar_product_id', 'si.quantity', 'si.subtotal')
                     ->where('s.status', 'paid')
                     ->whereBetween('s.created_at', [$startDate, $endDate])
             );
 
+        // 2. Agrupa por produto e soma as quantidades/faturamento
         $ranking = DB::table(DB::raw("({$rankingFinal->toSql()}) as combined"))
             ->mergeBindings($rankingFinal)
             ->select(
@@ -88,13 +89,23 @@ class BarReportController extends Controller
             ->orderBy('total_qty', 'desc')
             ->get();
 
+        // 3. Processa cálculos de Margem de Lucro para cada item
         foreach ($ranking as $item) {
-            $product = BarProduct::find($item->bar_product_id);
+            $product = \App\Models\Bar\BarProduct::find($item->bar_product_id);
+
             $item->product = $product;
+
+            // Pega o custo (se não houver custo cadastrado, assume 0)
             $custoUnitario = $product->purchase_price ?? 0;
+
+            // Cálculos financeiros
             $item->total_cost = $custoUnitario * $item->total_qty;
             $item->total_profit = $item->total_revenue - $item->total_cost;
-            $item->margin_percent = $item->total_revenue > 0 ? ($item->total_profit / $item->total_revenue) * 100 : 0;
+
+            // Calcula a % da margem
+            $item->margin_percent = $item->total_revenue > 0
+                ? ($item->total_profit / $item->total_revenue) * 100
+                : 0;
         }
 
         return view('bar.reports.products', compact('ranking', 'mesReferencia'));
@@ -106,70 +117,13 @@ class BarReportController extends Controller
     public function cashier(Request $request)
     {
         $mesReferencia = $request->input('mes_referencia', now()->format('Y-m'));
-        $startDate = \Carbon\Carbon::parse($mesReferencia)->startOfMonth();
-        $endDate = \Carbon\Carbon::parse($mesReferencia)->endOfMonth();
 
-        $sessoes = \App\Models\Bar\BarCashSession::with('user')
-            ->whereBetween('opened_at', [$startDate, $endDate])
+        $sessoes = BarCashSession::with('user')
+            ->whereMonth('opened_at', Carbon::parse($mesReferencia)->month)
             ->orderBy('opened_at', 'desc')
             ->get();
 
-        // Adicionei o $key => para podermos identificar o primeiro item
-        foreach ($sessoes as $key => $sessao) {
-            // 1. Soma Mesas vinculadas a este ID de sessão
-            $vendasMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $sessao->id)
-                ->where('status', 'paid')
-                ->sum('total_value');
-
-            // 2. Soma PDV vinculados a este ID de sessão
-            $vendasPDV = \App\Models\Bar\BarSale::where('bar_cash_session_id', $sessao->id)
-                ->where('status', 'pago')
-                ->sum('total_value');
-
-            // 3. Movimentações de caixa (Sangria/Reforço)
-            $movimentacoes = \App\Models\Bar\BarCashMovement::where('bar_cash_session_id', $sessao->id)->get();
-            $suprimentos = $movimentacoes->where('type', 'suprimento')->sum('amount');
-            $sangrias = $movimentacoes->where('type', 'sangria')->sum('amount');
-
-            // 4. Resultado Final Unificado
-            $sessao->vendas_turno = $vendasMesas + $vendasPDV;
-
-            // Total esperado = Fundo + Vendas + Reforços - Sangrias
-            $sessao->total_sistema_esperado = $sessao->opening_balance + $sessao->vendas_turno + $suprimentos - $sangrias;
-        }
-
-        return view('bar.reports.cashier', compact('sessoes', 'mesReferencia'));
-    }
-
-    /**
-     * RESUMO DE VENDAS DIÁRIAS
-     */
-    public function daily(Request $request)
-    {
-        $mesReferencia = $request->input('mes_referencia', now()->format('Y-m'));
-        $startDate = Carbon::parse($mesReferencia)->startOfMonth();
-        $endDate = Carbon::parse($mesReferencia)->endOfMonth();
-
-        $vendasMesas = BarOrder::where('status', 'paid')
-            ->whereBetween('updated_at', [$startDate, $endDate])
-            ->select(DB::raw('DATE(updated_at) as date'), DB::raw('SUM(total_value) as total'))
-            ->groupBy('date')->get();
-
-        $vendasPDV = BarSale::where('status', 'paid')
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->select(DB::raw('DATE(created_at) as date'), DB::raw('SUM(total_value) as total'))
-            ->groupBy('date')->get();
-
-        $datas = [];
-        foreach ($vendasMesas as $v) {
-            $datas[$v->date]['mesas'] = $v->total;
-        }
-        foreach ($vendasPDV as $v) {
-            $datas[$v->date]['pdv'] = $v->total;
-        }
-        ksort($datas);
-
-        return view('bar.reports.daily', compact('datas', 'mesReferencia'));
+        return view('bar.reports.cashier', compact('sessoes'));
     }
 
     /**
@@ -192,20 +146,7 @@ class BarReportController extends Controller
                     ->groupBy('payment_method')
             )->get();
 
-        return view('bar.reports.payments', compact('pagamentos', 'mesReferencia'));
-    }
-
-    /**
-     * DESCONTOS E CANCELAMENTOS (LOGS)
-     */
-    public function cancelations(Request $request)
-    {
-        // Aqui você pode buscar ordens canceladas ou com descontos > 0
-        $cancelamentos = BarOrder::where('status', 'canceled')
-            ->orWhere('discount_value', '>', 0)
-            ->orderBy('updated_at', 'desc')->paginate(20);
-
-        return view('bar.reports.cancelations', compact('cancelamentos'));
+        return view('bar.reports.payments', compact('pagamentos'));
     }
 
     /**

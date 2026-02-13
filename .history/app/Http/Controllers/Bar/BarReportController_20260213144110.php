@@ -106,35 +106,32 @@ class BarReportController extends Controller
     public function cashier(Request $request)
     {
         $mesReferencia = $request->input('mes_referencia', now()->format('Y-m'));
-        $startDate = \Carbon\Carbon::parse($mesReferencia)->startOfMonth();
-        $endDate = \Carbon\Carbon::parse($mesReferencia)->endOfMonth();
+        $startDate = Carbon::parse($mesReferencia)->startOfMonth();
+        $endDate = Carbon::parse($mesReferencia)->endOfMonth();
 
-        $sessoes = \App\Models\Bar\BarCashSession::with('user')
+        $sessoes = BarCashSession::with('user')
             ->whereBetween('opened_at', [$startDate, $endDate])
             ->orderBy('opened_at', 'desc')
             ->get();
 
-        // Adicionei o $key => para podermos identificar o primeiro item
-        foreach ($sessoes as $key => $sessao) {
-            // 1. Soma Mesas vinculadas a este ID de sessão
-            $vendasMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $sessao->id)
-                ->where('status', 'paid')
+        foreach ($sessoes as $sessao) {
+            $fimTurno = $sessao->closed_at ?? now();
+
+            // Soma TUDO (Digital + Físico) que aconteceu entre a abertura e o fechamento
+            $vendasMesas = \App\Models\Bar\BarOrder::where('status', 'paid')
+                ->whereBetween('updated_at', [$sessao->opened_at, $fimTurno])
                 ->sum('total_value');
 
-            // 2. Soma PDV vinculados a este ID de sessão
-            $vendasPDV = \App\Models\Bar\BarSale::where('bar_cash_session_id', $sessao->id)
-                ->where('status', 'pago')
+            $vendasPDV = \App\Models\Bar\BarSale::where('status', 'paid')
+                ->whereBetween('created_at', [$sessao->opened_at, $fimTurno])
                 ->sum('total_value');
 
-            // 3. Movimentações de caixa (Sangria/Reforço)
             $movimentacoes = \App\Models\Bar\BarCashMovement::where('bar_cash_session_id', $sessao->id)->get();
             $suprimentos = $movimentacoes->where('type', 'suprimento')->sum('amount');
             $sangrias = $movimentacoes->where('type', 'sangria')->sum('amount');
 
-            // 4. Resultado Final Unificado
+            // Atribui os valores que a sua View está chamando
             $sessao->vendas_turno = $vendasMesas + $vendasPDV;
-
-            // Total esperado = Fundo + Vendas + Reforços - Sangrias
             $sessao->total_sistema_esperado = $sessao->opening_balance + $sessao->vendas_turno + $suprimentos - $sangrias;
         }
 

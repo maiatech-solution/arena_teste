@@ -126,12 +126,23 @@ class BarReportController extends Controller
                 ->where('status', 'pago')
                 ->sum('total_value');
 
+            // 🕵️ DEBUG PARA IDENTIFICAR O "LIXO" NOS TESTES
+            // Usamos $key === 0 para pegar apenas a primeira linha do relatório
+            if ($key === 0) {
+                $detalhesPDV = \App\Models\Bar\BarSale::where('bar_cash_session_id', $sessao->id)->get(['id', 'total_value', 'created_at']);
+                $detalhesMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $sessao->id)->get(['id', 'total_value', 'created_at']);
+
+                dump("--- DEBUG CAIXA ATUAL #{$sessao->id} ---");
+                dump("Vendas PDV encontradas neste ID:", $detalhesPDV->toArray());
+                dump("Vendas MESAS encontradas neste ID:", $detalhesMesas->toArray());
+            }
+
             // 3. Movimentações de caixa (Sangria/Reforço)
             $movimentacoes = \App\Models\Bar\BarCashMovement::where('bar_cash_session_id', $sessao->id)->get();
             $suprimentos = $movimentacoes->where('type', 'suprimento')->sum('amount');
             $sangrias = $movimentacoes->where('type', 'sangria')->sum('amount');
 
-            // 4. Resultado Final Unificado
+            // Resultado Final
             $sessao->vendas_turno = $vendasMesas + $vendasPDV;
 
             // Total esperado = Fundo + Vendas + Reforços - Sangrias

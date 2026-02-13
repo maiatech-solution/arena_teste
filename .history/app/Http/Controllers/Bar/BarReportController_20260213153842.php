@@ -114,8 +114,7 @@ class BarReportController extends Controller
             ->orderBy('opened_at', 'desc')
             ->get();
 
-        // Adicionei o $key => para podermos identificar o primeiro item
-        foreach ($sessoes as $key => $sessao) {
+        foreach ($sessoes as $sessao) {
             // 1. Soma Mesas vinculadas a este ID de sessão
             $vendasMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $sessao->id)
                 ->where('status', 'paid')
@@ -126,12 +125,23 @@ class BarReportController extends Controller
                 ->where('status', 'pago')
                 ->sum('total_value');
 
+            // 🕵️ DEBUG PARA IDENTIFICAR O "LIXO" NOS TESTES
+            // Ele só vai mostrar o debug para a sessão mais recente (ajuste o número se necessário)
+            if ($loop->first) {
+                $detalhesPDV = \App\Models\Bar\BarSale::where('bar_cash_session_id', $sessao->id)->get(['id', 'total_value', 'created_at']);
+                $detalhesMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $sessao->id)->get(['id', 'total_value', 'created_at']);
+
+                dump("--- DEBUG CAIXA #{$sessao->id} ---");
+                dump("Vendas PDV encontradas:", $detalhesPDV->toArray());
+                dump("Vendas MESAS encontradas:", $detalhesMesas->toArray());
+            }
+
             // 3. Movimentações de caixa (Sangria/Reforço)
             $movimentacoes = \App\Models\Bar\BarCashMovement::where('bar_cash_session_id', $sessao->id)->get();
             $suprimentos = $movimentacoes->where('type', 'suprimento')->sum('amount');
             $sangrias = $movimentacoes->where('type', 'sangria')->sum('amount');
 
-            // 4. Resultado Final Unificado
+            // Resultado Final
             $sessao->vendas_turno = $vendasMesas + $vendasPDV;
 
             // Total esperado = Fundo + Vendas + Reforços - Sangrias

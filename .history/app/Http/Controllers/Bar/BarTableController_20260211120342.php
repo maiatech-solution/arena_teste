@@ -284,14 +284,13 @@ class BarTableController extends Controller
                     ->with('error', '⚠️ Nenhuma comanda ativa encontrada para esta mesa.');
             }
 
-            // 3. ATUALIZA A COMANDA PARA PAGA (Carimbando o ID do caixa)
+            // 3. ATUALIZA A COMANDA PARA PAGA
             $order->update([
-                'status'              => 'paid',
-                'customer_name'       => $request->customer_name,
-                'customer_phone'      => $request->customer_phone,
-                'payment_method'      => $request->pagamentos,
-                'closed_at'           => now(),
-                'bar_cash_session_id' => $session->id, // 🔥 A MÁGICA ESTÁ AQUI
+                'status'         => 'paid',
+                'customer_name'  => $request->customer_name,
+                'customer_phone' => $request->customer_phone,
+                'payment_method' => $request->pagamentos,
+                'closed_at'      => now(),
             ]);
 
             // 💰 4. INTEGRAÇÃO COM O CAIXA (Lançamento de Movimentações)

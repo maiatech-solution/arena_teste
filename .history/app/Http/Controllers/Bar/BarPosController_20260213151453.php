@@ -58,14 +58,14 @@ class BarPosController extends Controller
                 // Determinar o método final (apenas para histórico da BarSale)
                 $metodoFinal = count($request->payments) > 1 ? 'misto' : $request->payments[0]['method'];
 
-                // 2. Criar a Venda (Forma Manual - Mais segura para garantir a gravação do ID)
-                $sale = new BarSale();
-                $sale->user_id = auth()->id();
-                $sale->total_value = $request->total_value;
-                $sale->payment_method = $metodoFinal;
-                $sale->status = 'pago';
-                $sale->bar_cash_session_id = $session->id; // 🔥 O carimbo entra direto aqui
-                $sale->save(); // 💾 Gravação garantida
+                // 2. Criar a Venda (Adicione a linha do bar_cash_session_id aqui)
+                $sale = BarSale::create([
+                    'user_id' => auth()->id(),
+                    'total_value' => $request->total_value,
+                    'payment_method' => $metodoFinal,
+                    'status' => 'pago',
+                    'bar_cash_session_id' => $session->id, // 👈 ADICIONE ESTA LINHA EXATAMENTE AQUI
+                ]);
 
                 // 3. Processar Itens e Estoque
                 foreach ($request->items as $item) {

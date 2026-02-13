@@ -10,22 +10,27 @@ class BarSale extends Model
 {
     use HasFactory;
 
+    // Nome da tabela explicitado para evitar erros com o prefixo do Model
     protected $table = 'bar_sales';
 
-    // 🔥 Adicionado bar_cash_session_id para permitir a gravação
     protected $fillable = [
         'user_id',
         'total_value',
         'payment_method',
-        'status',
-        'bar_cash_session_id'
+        'status'
     ];
 
+    /**
+     * Relacionamento: Uma venda possui vários itens
+     */
     public function items()
     {
         return $this->hasMany(BarSaleItem::class, 'bar_sale_id');
     }
 
+    /**
+     * Relacionamento: Uma venda pertence a um usuário (vendedor)
+     */
     public function user()
     {
         return $this->belongsTo(User::class);

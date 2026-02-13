@@ -43,9 +43,10 @@ class BarCashController extends Controller
         $vendasDigital = 0;
         $reforcos = 0;
         $sangriasDinheiro = 0;
+        $sangriasDigital = 0;
 
         if ($currentSession) {
-            // 1. MOVIMENTAÇÕES PARA O HISTÓRICO VISUAL
+            // 1. MOVIMENTAÇÕES PARA O HISTÓRICO (Sangrias, Reforços e logs)
             $allMovements = BarCashMovement::with(['user', 'barOrder.table'])
                 ->where('bar_cash_session_id', $currentSession->id)
                 ->get();
@@ -56,41 +57,46 @@ class BarCashController extends Controller
 
             $movements = $movements->sortByDesc('created_at');
 
-            // 2. 🎯 AUDITORIA REAL: Soma direta do faturamento bruto por ID de Sessão
-            // Isso resolve o problema de "sumiço" de valores no PDV e Mesas
-            $faturamentoBrutoMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $currentSession->id)
+            // 2. 🎯 AUDITORIA REAL: Busca direto nas fontes da verdade
+            $vendasMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $currentSession->id)
                 ->where('status', 'paid')
-                ->sum('total_value');
+                ->get();
 
-            $faturamentoBrutoPDV = \App\Models\Bar\BarSale::where('bar_cash_session_id', $currentSession->id)
+            $vendasPDV = \App\Models\Bar\BarSale::where('bar_cash_session_id', $currentSession->id)
                 ->where('status', 'pago')
-                ->sum('total_value');
+                ->get();
 
-            // 3. SEPARAÇÃO POR MÉTODO (Baseado na tabela de Movimentações)
-            // Como o store de Mesas e PDV alimentam esta tabela, os valores estarão aqui
-            $vendasDinheiro = $allMovements->where('type', 'venda')->where('payment_method', 'dinheiro')->sum('amount');
+            // Separando Dinheiro de Digital nas Mesas
+            foreach ($vendasMesas as $order) {
+                $pagamentos = json_decode($order->payment_method, true);
+                if (is_array($pagamentos)) {
+                    foreach ($pagamentos as $p) {
+                        if ($p['metodo'] == 'dinheiro') $vendasDinheiro += $p['valor'];
+                        else $vendasDigital += $p['valor'];
+                    }
+                }
+            }
 
-            $vendasDigital = $allMovements->where('type', 'venda')
-                ->whereIn('payment_method', ['pix', 'credito', 'debito', 'cartao', 'misto'])
-                ->sum('amount');
+            // Separando Dinheiro de Digital no PDV
+            // (Assumindo que no PDV você salva o método final ou tem o histórico de pagamentos)
+            foreach ($vendasPDV as $sale) {
+                if ($sale->payment_method == 'dinheiro') $vendasDinheiro += $sale->total_value;
+                else $vendasDigital += $sale->total_value;
+            }
 
+            // Reforços e Sangrias (Baseado nas movimentações manuais)
             $reforcos = $allMovements->where('type', 'reforco')->sum('amount');
             $sangriasDinheiro = $allMovements->where('type', 'sangria')->sum('amount');
-
-            // CÁLCULOS FINAIS
-            $totalBruto = $faturamentoBrutoMesas + $faturamentoBrutoPDV; // 🔥 O valor de R$ 14,00 será este aqui
-            $faturamentoDigital = $vendasDigital;
-            $saldoInicialSessao = $currentSession->opening_balance;
-
-            // Dinheiro esperado na gaveta
-            $dinheiroGeral = $saldoInicialSessao + $vendasDinheiro + $reforcos - $sangriasDinheiro;
-            $sangrias = $allMovements->where('type', 'sangria')->sum('amount');
-        } else {
-            $totalBruto = 0;
-            $faturamentoDigital = 0;
-            $dinheiroGeral = 0;
-            $sangrias = 0;
         }
+
+        // 3. CÁLCULOS FINAIS
+        $faturamentoDigital = $vendasDigital;
+        $totalBruto = $vendasDinheiro + $vendasDigital;
+        $saldoInicialSessao = $currentSession ? $currentSession->opening_balance : 0;
+
+        // Dinheiro que deve estar na gaveta agora:
+        $dinheiroGeral = $saldoInicialSessao + $vendasDinheiro + $reforcos - $sangriasDinheiro;
+        $sangrias = $sangriasDinheiro;
 
         return view('bar.cash.index', compact(
             'currentSession',
@@ -234,39 +240,10 @@ class BarCashController extends Controller
     /**
      * Fechar o Caixa com Auditoria (Versão Corrigida e Sincronizada)
      */
-    /**
-     * Fechar o Caixa com Auditoria (Versão Completa e Corrigida)
-     */
     public function close(Request $request)
     {
-        // 1. Validação das credenciais do supervisor (Necessário para criar a variável $supervisor)
-        if (!$request->supervisor_email || !$request->supervisor_password) {
-            return back()->with('error', '⚠️ Autorização necessária.');
-        }
+        // ... (Mantenha as validações de supervisor e mesas abertas que já existem no seu código) ...
 
-        $supervisor = \App\Models\User::where('email', $request->supervisor_email)->first();
-
-        if (!$supervisor || !Hash::check($request->supervisor_password, $supervisor->password)) {
-            return back()->with('error', '⚠️ Falha na autorização.');
-        }
-
-        if (!in_array($supervisor->role, ['admin', 'gestor'])) {
-            return back()->with('error', '⚠️ Acesso negado.');
-        }
-
-        // 2. Trava de Mesas Abertas
-        $mesasAbertas = BarTable::where('status', 'occupied')->get();
-        if ($mesasAbertas->count() > 0) {
-            $numeros = $mesasAbertas->pluck('identifier')->implode(', ');
-            return back()->with('error', "⚠️ Bloqueio: Existem mesas ocupadas ({$numeros}).");
-        }
-
-        $request->validate([
-            'actual_balance' => 'required|numeric|min:0',
-            'notes' => 'nullable|string|max:500'
-        ]);
-
-        // 3. Processamento do Fechamento
         return DB::transaction(function () use ($request, $supervisor) {
             $session = BarCashSession::where('status', 'open')->lockForUpdate()->first();
 
@@ -274,7 +251,7 @@ class BarCashController extends Controller
                 return back()->with('error', 'Erro: Não há nenhuma sessão de caixa aberta.');
             }
 
-            // 🎯 RECALCULO EM TEMPO REAL (Auditado)
+            // 🎯 RECALCULO EM TEMPO REAL (Igual ao Relatório de Auditoria)
             $vendasMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $session->id)
                 ->where('status', 'paid')
                 ->sum('total_value');
@@ -283,20 +260,21 @@ class BarCashController extends Controller
                 ->where('status', 'pago')
                 ->sum('total_value');
 
-            // Movimentações manuais (Suprimento/Sangria)
+            // Busca movimentações de Sangria e Reforço (apenas em dinheiro)
             $movimentacoes = BarCashMovement::where('bar_cash_session_id', $session->id)->get();
             $reforcos = $movimentacoes->where('type', 'reforco')->sum('amount');
             $sangrias = $movimentacoes->where('type', 'sangria')->sum('amount');
 
-            // Cálculo do esperado (Fundo + Vendas + Reforços - Sangrias)
-            $totalEsperadoSistema = $session->opening_balance + $vendasMesas + $vendasPDV + $reforcos - $sangrias;
+            // 💰 O valor que DEVE estar na gaveta + digital
+            $faturamentoTotal = $vendasMesas + $vendasPDV;
+            $totalEsperadoSistema = $session->opening_balance + $faturamentoTotal + $reforcos - $sangrias;
 
-            $actual = $request->actual_balance;
+            $actual = $request->actual_balance; // O que o Adriano informou que tem
             $difference = $actual - $totalEsperadoSistema;
 
             $session->update([
                 'closing_balance' => $actual,
-                'expected_balance' => $totalEsperadoSistema,
+                'expected_balance' => $totalEsperadoSistema, // Atualiza para o valor real auditado
                 'status' => 'closed',
                 'closed_at' => now(),
                 'notes' => ($request->notes ? $request->notes . " | " : "") . "Fechamento autorizado por: {$supervisor->name}"

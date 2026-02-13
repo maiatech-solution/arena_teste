@@ -8,16 +8,7 @@ use App\Models\User;
 class BarOrder extends Model
 {
     protected $table = 'bar_orders';
-
-    // 🔥 Adicionado bar_cash_session_id para permitir a gravação
-    protected $fillable = [
-        'bar_table_id',
-        'user_id',
-        'total_value',
-        'status',
-        'closed_at',
-        'bar_cash_session_id'
-    ];
+    protected $fillable = ['bar_table_id', 'user_id', 'total_value', 'status', 'closed_at'];
 
     public function table()
     {

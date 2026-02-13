@@ -114,8 +114,7 @@ class BarReportController extends Controller
             ->orderBy('opened_at', 'desc')
             ->get();
 
-        // Adicionei o $key => para podermos identificar o primeiro item
-        foreach ($sessoes as $key => $sessao) {
+        foreach ($sessoes as $sessao) {
             // 1. Soma Mesas vinculadas a este ID de sessão
             $vendasMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $sessao->id)
                 ->where('status', 'paid')
@@ -123,7 +122,7 @@ class BarReportController extends Controller
 
             // 2. Soma PDV vinculados a este ID de sessão
             $vendasPDV = \App\Models\Bar\BarSale::where('bar_cash_session_id', $sessao->id)
-                ->where('status', 'pago')
+                ->where('status', 'pago') // Note que aqui o status é 'pago' em português no seu banco
                 ->sum('total_value');
 
             // 3. Movimentações de caixa (Sangria/Reforço)
@@ -131,7 +130,7 @@ class BarReportController extends Controller
             $suprimentos = $movimentacoes->where('type', 'suprimento')->sum('amount');
             $sangrias = $movimentacoes->where('type', 'sangria')->sum('amount');
 
-            // 4. Resultado Final Unificado
+            // Resultado Final
             $sessao->vendas_turno = $vendasMesas + $vendasPDV;
 
             // Total esperado = Fundo + Vendas + Reforços - Sangrias

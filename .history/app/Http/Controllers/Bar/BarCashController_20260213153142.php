@@ -43,9 +43,10 @@ class BarCashController extends Controller
         $vendasDigital = 0;
         $reforcos = 0;
         $sangriasDinheiro = 0;
+        $sangriasDigital = 0;
 
         if ($currentSession) {
-            // 1. MOVIMENTAÇÕES PARA O HISTÓRICO VISUAL
+            // 1. MOVIMENTAÇÕES PARA O HISTÓRICO (Sangrias, Reforços e logs)
             $allMovements = BarCashMovement::with(['user', 'barOrder.table'])
                 ->where('bar_cash_session_id', $currentSession->id)
                 ->get();
@@ -56,41 +57,46 @@ class BarCashController extends Controller
 
             $movements = $movements->sortByDesc('created_at');
 
-            // 2. 🎯 AUDITORIA REAL: Soma direta do faturamento bruto por ID de Sessão
-            // Isso resolve o problema de "sumiço" de valores no PDV e Mesas
-            $faturamentoBrutoMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $currentSession->id)
+            // 2. 🎯 AUDITORIA REAL: Busca direto nas fontes da verdade
+            $vendasMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $currentSession->id)
                 ->where('status', 'paid')
-                ->sum('total_value');
+                ->get();
 
-            $faturamentoBrutoPDV = \App\Models\Bar\BarSale::where('bar_cash_session_id', $currentSession->id)
+            $vendasPDV = \App\Models\Bar\BarSale::where('bar_cash_session_id', $currentSession->id)
                 ->where('status', 'pago')
-                ->sum('total_value');
+                ->get();
 
-            // 3. SEPARAÇÃO POR MÉTODO (Baseado na tabela de Movimentações)
-            // Como o store de Mesas e PDV alimentam esta tabela, os valores estarão aqui
-            $vendasDinheiro = $allMovements->where('type', 'venda')->where('payment_method', 'dinheiro')->sum('amount');
+            // Separando Dinheiro de Digital nas Mesas
+            foreach ($vendasMesas as $order) {
+                $pagamentos = json_decode($order->payment_method, true);
+                if (is_array($pagamentos)) {
+                    foreach ($pagamentos as $p) {
+                        if ($p['metodo'] == 'dinheiro') $vendasDinheiro += $p['valor'];
+                        else $vendasDigital += $p['valor'];
+                    }
+                }
+            }
 
-            $vendasDigital = $allMovements->where('type', 'venda')
-                ->whereIn('payment_method', ['pix', 'credito', 'debito', 'cartao', 'misto'])
-                ->sum('amount');
+            // Separando Dinheiro de Digital no PDV
+            // (Assumindo que no PDV você salva o método final ou tem o histórico de pagamentos)
+            foreach ($vendasPDV as $sale) {
+                if ($sale->payment_method == 'dinheiro') $vendasDinheiro += $sale->total_value;
+                else $vendasDigital += $sale->total_value;
+            }
 
+            // Reforços e Sangrias (Baseado nas movimentações manuais)
             $reforcos = $allMovements->where('type', 'reforco')->sum('amount');
             $sangriasDinheiro = $allMovements->where('type', 'sangria')->sum('amount');
-
-            // CÁLCULOS FINAIS
-            $totalBruto = $faturamentoBrutoMesas + $faturamentoBrutoPDV; // 🔥 O valor de R$ 14,00 será este aqui
-            $faturamentoDigital = $vendasDigital;
-            $saldoInicialSessao = $currentSession->opening_balance;
-
-            // Dinheiro esperado na gaveta
-            $dinheiroGeral = $saldoInicialSessao + $vendasDinheiro + $reforcos - $sangriasDinheiro;
-            $sangrias = $allMovements->where('type', 'sangria')->sum('amount');
-        } else {
-            $totalBruto = 0;
-            $faturamentoDigital = 0;
-            $dinheiroGeral = 0;
-            $sangrias = 0;
         }
+
+        // 3. CÁLCULOS FINAIS
+        $faturamentoDigital = $vendasDigital;
+        $totalBruto = $vendasDinheiro + $vendasDigital;
+        $saldoInicialSessao = $currentSession ? $currentSession->opening_balance : 0;
+
+        // Dinheiro que deve estar na gaveta agora:
+        $dinheiroGeral = $saldoInicialSessao + $vendasDinheiro + $reforcos - $sangriasDinheiro;
+        $sangrias = $sangriasDinheiro;
 
         return view('bar.cash.index', compact(
             'currentSession',

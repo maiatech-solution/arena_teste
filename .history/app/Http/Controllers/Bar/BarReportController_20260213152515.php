@@ -105,40 +105,18 @@ class BarReportController extends Controller
      */
     public function cashier(Request $request)
     {
-        $mesReferencia = $request->input('mes_referencia', now()->format('Y-m'));
-        $startDate = \Carbon\Carbon::parse($mesReferencia)->startOfMonth();
-        $endDate = \Carbon\Carbon::parse($mesReferencia)->endOfMonth();
+        $sessao = \App\Models\Bar\BarCashSession::orderBy('id', 'desc')->first();
 
-        $sessoes = \App\Models\Bar\BarCashSession::with('user')
-            ->whereBetween('opened_at', [$startDate, $endDate])
-            ->orderBy('opened_at', 'desc')
-            ->get();
+        $vendasMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $sessao->id)->sum('total_value');
+        $vendasPDV = \App\Models\Bar\BarSale::where('bar_cash_session_id', $sessao->id)->sum('total_value');
 
-        // Adicionei o $key => para podermos identificar o primeiro item
-        foreach ($sessoes as $key => $sessao) {
-            // 1. Soma Mesas vinculadas a este ID de sessão
-            $vendasMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $sessao->id)
-                ->where('status', 'paid')
-                ->sum('total_value');
-
-            // 2. Soma PDV vinculados a este ID de sessão
-            $vendasPDV = \App\Models\Bar\BarSale::where('bar_cash_session_id', $sessao->id)
-                ->where('status', 'pago')
-                ->sum('total_value');
-
-            // 3. Movimentações de caixa (Sangria/Reforço)
-            $movimentacoes = \App\Models\Bar\BarCashMovement::where('bar_cash_session_id', $sessao->id)->get();
-            $suprimentos = $movimentacoes->where('type', 'suprimento')->sum('amount');
-            $sangrias = $movimentacoes->where('type', 'sangria')->sum('amount');
-
-            // 4. Resultado Final Unificado
-            $sessao->vendas_turno = $vendasMesas + $vendasPDV;
-
-            // Total esperado = Fundo + Vendas + Reforços - Sangrias
-            $sessao->total_sistema_esperado = $sessao->opening_balance + $sessao->vendas_turno + $suprimentos - $sangrias;
-        }
-
-        return view('bar.reports.cashier', compact('sessoes', 'mesReferencia'));
+        // DEBUG: Isso vai mostrar os valores na tela e parar tudo.
+        dd([
+            'ID_SESSAO' => $sessao->id,
+            'SOMA_MESAS' => $vendasMesas,
+            'SOMA_PDV' => $vendasPDV,
+            'TOTAL_ENCONTRADO' => $vendasMesas + $vendasPDV
+        ]);
     }
 
     /**
