@@ -255,17 +255,20 @@
     @include('bar.cash.modals.closing')
 
     <script>
-        // 🧠 MEMÓRIA GLOBAL PARA CAPTURA DE CREDENCIAIS
+        // 🧠 MEMÓRIA GLOBAL BLINDADA
         window.supervisorMemoriaEmail = "";
         window.supervisorMemoriaPass = "";
 
-        // 1. MONITOR DE INPUT (Captura em tempo real)
+        /**
+         * 1. MONITOR DE INPUT
+         * Captura os dados enquanto o supervisor digita.
+         */
         document.addEventListener('input', function(e) {
             const t = e.target;
-            if (t.type === 'email' || t.name === 'supervisor_email') {
+            if (t.type === 'email' || t.name === 'email' || t.id === 'authEmail') {
                 window.supervisorMemoriaEmail = t.value;
             }
-            if (t.type === 'password' || t.name === 'supervisor_password' || t.id.includes('password_direta')) {
+            if (t.type === 'password' || t.name === 'password' || t.id === 'authPassword') {
                 window.supervisorMemoriaPass = t.value;
             }
         });
@@ -274,18 +277,27 @@
          * 2. TRAVA DE SEGURANÇA: MESAS ABERTAS
          */
         function tentarEncerrarTurno() {
+            // Puxa a contagem enviada pelo PHP
             const mesasAbertas = {{ $mesasAbertasCount ?? 0 }};
+
             if (mesasAbertas > 0) {
                 alert("⚠️ OPERAÇÃO BLOQUEADA\n\nExistem " + mesasAbertas +
-                    " mesa(s) aberta(s). Finalize as contas antes de fechar o caixa.");
+                    " mesa(s) aberta(s) no sistema.\nVocê precisa finalizar todos os pagamentos antes de fechar o caixa."
+                );
                 return false;
             }
-            // Abre o modal de fechamento
-            openModalClosing();
+
+            // Se o layout tiver a função de autorização, chama ela
+            if (typeof requisitarAutorizacao === 'function') {
+                requisitarAutorizacao(() => openModalClosing());
+            } else {
+                // Caso a função não exista por erro de carregamento do layout
+                openModalClosing();
+            }
         }
 
         /**
-         * 3. CONTROLE DE MODAIS
+         * 3. FUNÇÕES DE ABERTURA DOS MODAIS
          */
         function openModalMovement(type) {
             const modal = document.getElementById('modalMovement');
@@ -295,11 +307,15 @@
 
             if (modal) {
                 typeInput.value = type;
-                title.innerText = (type === 'sangria') ? '🔻 Sangria de Caixa' : '🔺 Reforço (Aporte)';
-                btnSubmit.className = (type === 'sangria') ?
-                    "flex-1 py-4 bg-red-600 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest shadow-lg" :
-                    "flex-1 py-4 bg-blue-600 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest shadow-lg";
-
+                if (type === 'sangria') {
+                    title.innerText = '🔻 Sangria de Caixa';
+                    btnSubmit.className =
+                        "flex-1 py-4 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest transition-all shadow-lg bg-red-600 hover:bg-red-500";
+                } else {
+                    title.innerText = '🔺 Reforço (Aporte)';
+                    btnSubmit.className =
+                        "flex-1 py-4 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest transition-all shadow-lg bg-blue-600 hover:bg-blue-500";
+                }
                 modal.classList.remove('hidden');
             }
         }
@@ -321,49 +337,40 @@
         }
 
         /**
-         * 4. 🚀 ENVIO COM AUTORIZAÇÃO (Onde estava o erro)
+         * 4. 🚀 ENVIAR COM AUTORIZAÇÃO (Mantendo sua estrutura original com Plano B e C)
          */
         function enviarComAutorizacao(idFormulario) {
             const form = document.getElementById(idFormulario);
             if (!form) return;
 
-            // IDs dos campos de senha visíveis em cada contexto
-            const camposSenha = {
-                'formCloseCash': 'password_direta_gestor',
-                'formOpenCash': 'password_direta_abertura',
-                'formMovement': 'password_direta_movimentacao' // ID que está no seu modal de sangria
-            };
-
-            const inputSenhaVisivel = document.getElementById(camposSenha[idFormulario]);
-
-            // Prioridade 1: Senha digitada agora | Prioridade 2: Memória global
-            const passFinal = (inputSenhaVisivel && inputSenhaVisivel.value) ?
-                inputSenhaVisivel.value :
-                window.supervisorMemoriaPass;
-
-            // Puxa o email (seja do campo oculto ou do usuário logado)
-            const emailFinal = form.querySelector('input[name="supervisor_email"]')?.value || window.supervisorMemoriaEmail;
-
-            if (!passFinal || passFinal.trim() === "") {
-                alert("⚠️ Autorização necessária: Digite a senha de GESTOR.");
-                if (inputSenhaVisivel) inputSenhaVisivel.focus();
-                return;
+            // 1. Identifica onde está a senha baseado no formulário aberto
+            let inputSenhaDireta;
+            if (idFormulario === 'formCloseCash') {
+                inputSenhaDireta = document.getElementById('password_direta_gestor');
+            } else if (idFormulario === 'formOpenCash') {
+                inputSenhaDireta = document.getElementById('password_direta_abertura');
+            } else if (idFormulario === 'formMovement') {
+                inputSenhaDireta = document.getElementById('password_direta_movimento'); // 👈 O novo campo do modal
             }
 
-            // Injeta os dados no formulário antes de enviar
-            const mEmail = form.querySelector('input[name="supervisor_email"]');
-            const mPass = form.querySelector('input[name="supervisor_password"]');
+            // ... restante da sua lógica de coleta de e-mail e senha ...
 
-            if (mEmail && mPass) {
-                mEmail.value = emailFinal;
-                mPass.value = passFinal;
-                form.submit();
-            } else {
-                alert("Erro: Campos de supervisor não encontrados no formulário.");
+            // Na hora de injetar no form, use o ID correto para o movimento também
+            if (form && emailFinal && passFinal) {
+                const mEmail = form.querySelector('input[name="supervisor_email"]');
+                const mPass = (idFormulario === 'formMovement') ?
+                    document.getElementById('mirror_password_movement') :
+                    form.querySelector('input[name="supervisor_password"]');
+
+                if (mEmail && mPass) {
+                    mEmail.value = emailFinal;
+                    mPass.value = passFinal;
+                    form.submit();
+                }
             }
         }
 
-        // Exporta para o escopo global
+        // Tornar as funções globais explicitamente para o HTML encontrar
         window.tentarEncerrarTurno = tentarEncerrarTurno;
         window.openModalMovement = openModalMovement;
         window.openModalClosing = openModalClosing;

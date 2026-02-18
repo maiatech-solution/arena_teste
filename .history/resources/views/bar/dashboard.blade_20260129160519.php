@@ -79,19 +79,6 @@
                 <p class="text-gray-500 text-sm leading-relaxed font-medium">Controle de colaboradores, cargos e acessos ao painel do bar.</p>
             </a>
 
-            <a href="{{ route('bar.reports.cashier') }}" class="group bg-gray-900 p-8 rounded-3xl border border-gray-700/30 hover:border-orange-600/50 transition-all duration-300 shadow-2xl relative">
-                <div class="flex justify-between items-start mb-6">
-                    <div class="w-14 h-14 bg-gray-800 flex items-center justify-center rounded-2xl group-hover:bg-orange-600 transition-colors duration-300 shadow-inner">
-                        <svg class="w-8 h-8 text-orange-500 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                        </svg>
-                    </div>
-                    <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest group-hover:text-orange-500 transition-colors">Auditado</span>
-                </div>
-                <h3 class="text-2xl font-bold text-white mb-2 tracking-tighter uppercase">Relatórios e Auditoria</h3>
-                <p class="text-gray-500 text-sm leading-relaxed font-medium">Conferência de turnos, faturamento detalhado e histórico de quebras.</p>
-            </a>
-
         </div>
     </div>
 </x-bar-layout>
