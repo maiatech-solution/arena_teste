@@ -114,7 +114,8 @@ class BarReportController extends Controller
             ->orderBy('opened_at', 'desc')
             ->get();
 
-        foreach ($sessoes as $sessao) {
+        // Adicionei o $key => para podermos identificar o primeiro item
+        foreach ($sessoes as $key => $sessao) {
             // 1. Soma Mesas vinculadas a este ID de sessão
             $vendasMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $sessao->id)
                 ->where('status', 'paid')
@@ -127,16 +128,14 @@ class BarReportController extends Controller
 
             // 3. Movimentações de caixa (Sangria/Reforço)
             $movimentacoes = \App\Models\Bar\BarCashMovement::where('bar_cash_session_id', $sessao->id)->get();
-
-            // 🔥 AQUI ESTAVA O ERRO: Mudamos de 'suprimento' para 'reforco'
-            $reforcos = $movimentacoes->where('type', 'reforco')->sum('amount');
+            $suprimentos = $movimentacoes->where('type', 'suprimento')->sum('amount');
             $sangrias = $movimentacoes->where('type', 'sangria')->sum('amount');
 
             // 4. Resultado Final Unificado
             $sessao->vendas_turno = $vendasMesas + $vendasPDV;
 
-            // FÓRMULA CORRIGIDA: Total esperado = Fundo + Vendas + Reforços - Sangrias
-            $sessao->total_sistema_esperado = $sessao->opening_balance + $sessao->vendas_turno + $reforcos - $sangrias;
+            // Total esperado = Fundo + Vendas + Reforços - Sangrias
+            $sessao->total_sistema_esperado = $sessao->opening_balance + $sessao->vendas_turno + $suprimentos - $sangrias;
         }
 
         return view('bar.reports.cashier', compact('sessoes', 'mesReferencia'));
