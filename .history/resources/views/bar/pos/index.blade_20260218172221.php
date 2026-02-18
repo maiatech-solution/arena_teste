@@ -236,39 +236,38 @@
 
     <script>
         let cart = [];
-        let payments = []; // 🆕 Lista de pagamentos acumulados
+        let payments = [];
         let paymentMethod = null;
         let currentCartTotal = 0;
 
-        // 🔄 ATUALIZA OS NÚMEROS DE ESTOQUE NO GRID EM TEMPO REAL (VISUAL)
+        // 🔄 ATUALIZA OS NÚMEROS DE ESTOQUE NO GRID EM TEMPO REAL
         function updateVisualStock() {
             const productCards = document.querySelectorAll('.product-card');
 
             productCards.forEach(card => {
-                // Extraímos o ID e o estoque original do atributo onclick do botão
+                // Extraímos o ID e o estoque original do atributo onclick
                 const onClickAttr = card.getAttribute('onclick');
-                // RegExp para pegar o 1º parâmetro (ID) e o 4º (Estoque Total)
                 const match = onClickAttr.match(/addToCart\((\d+),\s*'.*?',\s*[\d.]+,\s*(\d+)/);
 
                 if (match) {
                     const productId = parseInt(match[1]);
                     const originalStock = parseInt(match[2]);
 
-                    // Verifica quanto desse item já está ocupado no carrinho
+                    // Verifica quanto desse item já está no carrinho
                     const cartItem = cart.find(item => item.id === productId);
                     const qtyInCart = cartItem ? cartItem.quantity : 0;
 
                     const remainingStock = originalStock - qtyInCart;
 
-                    // Localiza o span que mostra o número do estoque
+                    // Atualiza o badge de estoque no card
                     const stockBadge = card.querySelector('span');
                     if (stockBadge) {
                         stockBadge.innerText = remainingStock;
 
-                        // Alerta visual de estoque zerado
+                        // Alerta visual de estoque zerado ou crítico
                         if (remainingStock <= 0) {
                             stockBadge.classList.add('text-red-500', 'font-black');
-                            card.style.opacity = '0.6'; // Card fica levemente transparente
+                            card.style.opacity = '0.6';
                         } else {
                             stockBadge.classList.remove('text-red-500');
                             card.style.opacity = '1';
@@ -320,7 +319,6 @@
         }
 
         function removeFromCart(index) {
-            // 🛡️ Antes de tirar o item do carrinho, o supervisor precisa autorizar
             requisitarAutorizacao(() => {
                 cart.splice(index, 1);
                 renderCart();
@@ -328,7 +326,6 @@
         }
 
         function clearCart() {
-            // 🛡️ Substituímos o confirm pela senha do supervisor
             requisitarAutorizacao(() => {
                 resetSale();
             });
@@ -345,7 +342,7 @@
                 totalText.innerText = 'R$ 0,00';
                 currentCartTotal = 0;
                 resetSale();
-                updateVisualStock(); // Atualiza para devolver os números ao grid
+                updateVisualStock(); // Atualiza para restaurar estoques visuais
                 return;
             }
 
@@ -368,7 +365,7 @@
             totalText.innerText = `R$ ${currentCartTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
 
             calculatePayment();
-            updateVisualStock(); // 🔥 Sincroniza o estoque no grid com o carrinho
+            updateVisualStock(); // 🔥 Chamada vital para o estoque em tempo real
         }
 
         function liveSearch() {
@@ -450,12 +447,10 @@
             });
 
             const listDiv = document.getElementById('paymentsList');
-            const appliedDiv = document.getElementById('paymentsApplied');
             listDiv.classList.remove('hidden');
 
             renderPaymentsUI();
 
-            // Reset para o próximo
             paymentMethod = null;
             document.getElementById('amountReceived').value = "";
             document.getElementById('paymentCalculator').classList.add('hidden');
@@ -604,8 +599,9 @@
 
         function closeReceipt() {
             document.getElementById('receiptModal').classList.add('hidden');
-            // Usamos reload para garantir que o estoque novo venha do servidor
-            window.location.reload();
+            resetSale();
+            // Recarregar a página para resetar os estoques do banco no visual ou apenas updateVisualStock()
+            location.reload();
         }
 
         function resetSale() {

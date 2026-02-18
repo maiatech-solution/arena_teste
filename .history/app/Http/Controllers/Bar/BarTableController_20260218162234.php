@@ -42,7 +42,7 @@ class BarTableController extends Controller
         return view('bar.tables.index', compact('tables', 'caixaVencido', 'openSession'));
     }
 
-    /**
+   /**
      * Sincroniza a quantidade de mesas (Cria ou oculta mesas extras)
      */
     public function sync(Request $request)
@@ -53,7 +53,7 @@ class BarTableController extends Controller
         // 1. Identifica a maior mesa já criada (pelo número, não por contagem)
         $maxAtual = BarTable::max(DB::raw('CAST(identifier AS UNSIGNED)')) ?: 0;
 
-        // 2. Cria novas mesas APENAS se o número solicitado for maior que o histórico
+        // 2. Cria novas mesas APENAS se o número solicitado for maior que o maior identificador existente
         if ($totalDesejado > $maxAtual) {
             for ($i = $maxAtual + 1; $i <= $totalDesejado; $i++) {
                 BarTable::create([
@@ -69,14 +69,10 @@ class BarTableController extends Controller
             ->update(['status' => 'available']);
 
         // 4. 🛡️ Desativa mesas fora do limite (Apenas se NÃO estiverem ocupadas)
-        // Forçamos o valor com aspas simples diretamente no SQL para evitar o erro de truncamento
-        DB::table('bar_tables')
-            ->whereRaw('CAST(identifier AS UNSIGNED) > ?', [$totalDesejado])
+        // Usar o Eloquent aqui garante que as aspas sejam colocadas corretamente no SQL
+        BarTable::whereRaw('CAST(identifier AS UNSIGNED) > ?', [$totalDesejado])
             ->where('status', '!=', 'occupied')
-            ->update([
-                'status' => DB::raw("'inactive'"), // 🔥 Note as aspas simples dentro das duplas: "'valor'"
-                'updated_at' => now()
-            ]);
+            ->update(['status' => 'inactive']);
 
         // 5. Verifica se alguma mesa ficou visível por estar ocupada mesmo acima do limite
         $ocupadasForaLimite = BarTable::whereRaw('CAST(identifier AS UNSIGNED) > ?', [$totalDesejado])

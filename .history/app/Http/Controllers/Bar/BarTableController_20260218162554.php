@@ -69,12 +69,12 @@ class BarTableController extends Controller
             ->update(['status' => 'available']);
 
         // 4. 🛡️ Desativa mesas fora do limite (Apenas se NÃO estiverem ocupadas)
-        // Forçamos o valor com aspas simples diretamente no SQL para evitar o erro de truncamento
+        // Usamos DB::table para evitar o erro de "Data truncated" forçando a string correta
         DB::table('bar_tables')
             ->whereRaw('CAST(identifier AS UNSIGNED) > ?', [$totalDesejado])
             ->where('status', '!=', 'occupied')
             ->update([
-                'status' => DB::raw("'inactive'"), // 🔥 Note as aspas simples dentro das duplas: "'valor'"
+                'status' => 'inactive',
                 'updated_at' => now()
             ]);
 

@@ -240,44 +240,6 @@
         let paymentMethod = null;
         let currentCartTotal = 0;
 
-        // 🔄 ATUALIZA OS NÚMEROS DE ESTOQUE NO GRID EM TEMPO REAL (VISUAL)
-        function updateVisualStock() {
-            const productCards = document.querySelectorAll('.product-card');
-
-            productCards.forEach(card => {
-                // Extraímos o ID e o estoque original do atributo onclick do botão
-                const onClickAttr = card.getAttribute('onclick');
-                // RegExp para pegar o 1º parâmetro (ID) e o 4º (Estoque Total)
-                const match = onClickAttr.match(/addToCart\((\d+),\s*'.*?',\s*[\d.]+,\s*(\d+)/);
-
-                if (match) {
-                    const productId = parseInt(match[1]);
-                    const originalStock = parseInt(match[2]);
-
-                    // Verifica quanto desse item já está ocupado no carrinho
-                    const cartItem = cart.find(item => item.id === productId);
-                    const qtyInCart = cartItem ? cartItem.quantity : 0;
-
-                    const remainingStock = originalStock - qtyInCart;
-
-                    // Localiza o span que mostra o número do estoque
-                    const stockBadge = card.querySelector('span');
-                    if (stockBadge) {
-                        stockBadge.innerText = remainingStock;
-
-                        // Alerta visual de estoque zerado
-                        if (remainingStock <= 0) {
-                            stockBadge.classList.add('text-red-500', 'font-black');
-                            card.style.opacity = '0.6'; // Card fica levemente transparente
-                        } else {
-                            stockBadge.classList.remove('text-red-500');
-                            card.style.opacity = '1';
-                        }
-                    }
-                }
-            });
-        }
-
         // 🟢 ADICIONAR AO CARRINHO
         function addToCart(id, name, price, stock, manageStock) {
             const existingItem = cart.find(item => item.id === id);
@@ -345,7 +307,6 @@
                 totalText.innerText = 'R$ 0,00';
                 currentCartTotal = 0;
                 resetSale();
-                updateVisualStock(); // Atualiza para devolver os números ao grid
                 return;
             }
 
@@ -368,7 +329,6 @@
             totalText.innerText = `R$ ${currentCartTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
 
             calculatePayment();
-            updateVisualStock(); // 🔥 Sincroniza o estoque no grid com o carrinho
         }
 
         function liveSearch() {
@@ -431,6 +391,7 @@
                 feedbackDiv.classList.add('bg-orange-900/20', 'text-orange-500');
                 label.innerText = "Falta Pagar:";
                 valueSpan.innerText = `R$ ${Math.abs(diff).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+                // Se o valor digitado for maior que 0 e menor que o que falta, mostra botão de adicionar parcial
                 addBtn.classList.toggle('hidden', currentInput <= 0);
             } else {
                 feedbackDiv.classList.add('hidden');
@@ -440,6 +401,7 @@
             validateCheckout(totalWithInput);
         }
 
+        // ➕ ADICIONAR PAGAMENTO À LISTA
         function addPayment() {
             const val = parseFloat(document.getElementById('amountReceived').value) || 0;
             if (val <= 0 || !paymentMethod) return;
@@ -449,11 +411,18 @@
                 value: val
             });
 
+            // UI Update
             const listDiv = document.getElementById('paymentsList');
             const appliedDiv = document.getElementById('paymentsApplied');
             listDiv.classList.remove('hidden');
 
-            renderPaymentsUI();
+            appliedDiv.innerHTML = payments.map((p, i) => `
+            <div class="flex justify-between items-center bg-gray-800 p-2 rounded-xl border border-gray-700 animate-slide-in">
+                <span class="text-[9px] text-white font-black uppercase">${p.method}</span>
+                <span class="text-[10px] text-orange-500 font-black">R$ ${p.value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                <button onclick="removePayment(${i})" class="text-red-500 ml-2">✕</button>
+            </div>
+        `).join('');
 
             // Reset para o próximo
             paymentMethod = null;
@@ -477,7 +446,7 @@
         function renderPaymentsUI() {
             const appliedDiv = document.getElementById('paymentsApplied');
             appliedDiv.innerHTML = payments.map((p, i) => `
-            <div class="flex justify-between items-center bg-gray-800 p-2 rounded-xl border border-gray-700 animate-slide-in">
+            <div class="flex justify-between items-center bg-gray-800 p-2 rounded-xl border border-gray-700">
                 <span class="text-[9px] text-white font-black uppercase">${p.method}</span>
                 <span class="text-[10px] text-orange-500 font-black">R$ ${p.value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                 <button onclick="removePayment(${i})" class="text-red-500 ml-2">✕</button>
@@ -487,7 +456,7 @@
 
         function validateCheckout(totalPaid) {
             const finishBtn = document.getElementById('finishBtn');
-            const isValid = cart.length > 0 && totalPaid >= (currentCartTotal - 0.01);
+            const isValid = cart.length > 0 && totalPaid >= (currentCartTotal - 0.01); // Margem para arredondamento
 
             finishBtn.disabled = !isValid;
             if (isValid) {
@@ -501,6 +470,8 @@
             }
         }
 
+
+        // 🔥 FINALIZAR (Com Trava de Caixa Vencido e Atalho)
         async function checkout() {
             const amountInputVal = parseFloat(document.getElementById('amountReceived').value) || 0;
             const totalPaid = payments.reduce((acc, p) => acc + p.value, 0) + amountInputVal;
@@ -524,6 +495,7 @@
 
             try {
                 const url = "{{ route('bar.pos.store') }}";
+
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: {
@@ -543,6 +515,7 @@
                 if (data.success) {
                     showReceipt(totalPaid);
                 } else {
+                    // 🚨 AQUI ENTRA A MÁGICA: Detecção de Caixa Vencido
                     if (data.message.includes("VENCIDO")) {
                         const irParaCaixa = confirm(data.message +
                             "\n\nDeseja ir para a tela de Gestão de Caixa agora?");
@@ -553,6 +526,7 @@
                     } else {
                         alert('❌ ERRO: ' + data.message);
                     }
+
                     btn.disabled = false;
                     btn.innerText = 'Finalizar Venda';
                 }
@@ -574,6 +548,7 @@
             document.getElementById('receiptChange').innerText =
                 `R$ ${Math.max(0, change).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
 
+            // Mostra os métodos usados no recibo
             const methodsUsed = payments.length > 0 ? payments.map(p => p.method).join(' + ') : paymentMethod;
             document.getElementById('receiptPayment').innerText = methodsUsed;
 
@@ -604,8 +579,7 @@
 
         function closeReceipt() {
             document.getElementById('receiptModal').classList.add('hidden');
-            // Usamos reload para garantir que o estoque novo venha do servidor
-            window.location.reload();
+            resetSale();
         }
 
         function resetSale() {

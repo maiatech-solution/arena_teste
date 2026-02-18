@@ -50,12 +50,12 @@ class BarTableController extends Controller
         $request->validate(['total_tables' => 'required|integer|min:1']);
         $totalDesejado = (int) $request->total_tables;
 
-        // 1. Identifica a maior mesa já criada (pelo número, não por contagem)
-        $maxAtual = BarTable::max(DB::raw('CAST(identifier AS UNSIGNED)')) ?: 0;
+        // 1. Verifica quantas mesas existem fisicamente no banco de dados
+        $atualNoBanco = BarTable::count();
 
-        // 2. Cria novas mesas APENAS se o número solicitado for maior que o histórico
-        if ($totalDesejado > $maxAtual) {
-            for ($i = $maxAtual + 1; $i <= $totalDesejado; $i++) {
+        // 2. Cria novas mesas se o número solicitado for maior que o histórico total
+        if ($totalDesejado > $atualNoBanco) {
+            for ($i = $atualNoBanco + 1; $i <= $totalDesejado; $i++) {
                 BarTable::create([
                     'identifier' => $i,
                     'status' => 'available'
@@ -63,29 +63,13 @@ class BarTableController extends Controller
             }
         }
 
-        // 3. Ativa mesas que estavam ocultas ou reservadas dentro do novo limite
+        // 3. Atualiza o status em massa
         BarTable::whereRaw('CAST(identifier AS UNSIGNED) <= ?', [$totalDesejado])
             ->whereIn('status', ['inactive', 'reserved'])
             ->update(['status' => 'available']);
 
-        // 4. 🛡️ Desativa mesas fora do limite (Apenas se NÃO estiverem ocupadas)
-        // Forçamos o valor com aspas simples diretamente no SQL para evitar o erro de truncamento
-        DB::table('bar_tables')
-            ->whereRaw('CAST(identifier AS UNSIGNED) > ?', [$totalDesejado])
-            ->where('status', '!=', 'occupied')
-            ->update([
-                'status' => DB::raw("'inactive'"), // 🔥 Note as aspas simples dentro das duplas: "'valor'"
-                'updated_at' => now()
-            ]);
-
-        // 5. Verifica se alguma mesa ficou visível por estar ocupada mesmo acima do limite
-        $ocupadasForaLimite = BarTable::whereRaw('CAST(identifier AS UNSIGNED) > ?', [$totalDesejado])
-            ->where('status', 'occupied')
-            ->count();
-
-        if ($ocupadasForaLimite > 0) {
-            return back()->with('warning', "Layout atualizado! Porém, {$ocupadasForaLimite} mesa(s) acima do limite continuam visíveis por estarem com comandas abertas.");
-        }
+        BarTable::whereRaw('CAST(identifier AS UNSIGNED) > ?', [$totalDesejado])
+            ->update(['status' => 'inactive']);
 
         return back()->with('success', 'Layout do salão atualizado!');
     }
