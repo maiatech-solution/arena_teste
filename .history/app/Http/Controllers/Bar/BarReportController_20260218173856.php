@@ -217,37 +217,29 @@ class BarReportController extends Controller
      */
     public function movements(Request $request)
     {
-        // 1. Query para o Histórico de Movimentações (Tabela)
+        // 1. Iniciamos a Query com os relacionamentos necessários
         $query = BarStockMovement::with(['product.category', 'user']);
 
-        // Filtro por Tipo (Entrada ou Saída)
+        // 2. Filtro por Tipo (Entrada ou Saída)
         if ($request->filled('type')) {
             $query->where('type', $request->type);
         }
 
-        // Filtro por Data Específica
+        // 3. Filtro por Data Específica
         if ($request->filled('date')) {
             $query->whereDate('created_at', $request->date);
         }
 
-        // Filtro por Busca de Nome de Produto
-        if ($request->filled('search')) {
-            $query->whereHas('product', function ($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->search . '%');
-            });
+        // 4. Filtro por Produto (Caso queira adicionar uma busca por nome no futuro)
+        if ($request->filled('product_id')) {
+            $query->where('bar_product_id', $request->product_id);
         }
 
-        // Paginação das movimentações
+        // 5. Executa a paginação mantendo os filtros na URL
         $movimentacoes = $query->orderBy('created_at', 'desc')
             ->paginate(30)
-            ->withQueryString();
+            ->withQueryString(); // 🔥 Importante para não perder o filtro ao mudar de página
 
-        // 2. 🔥 NOVIDADE: Busca a Posição Atual de todos os itens (Resumo do Topo)
-        // Ordenamos pelos que têm menos estoque primeiro para destacar o que precisa comprar
-        $inventorySummary = \App\Models\Bar\BarProduct::with('category')
-            ->orderBy('stock_quantity', 'asc')
-            ->get();
-
-        return view('bar.reports.movements', compact('movimentacoes', 'inventorySummary'));
+        return view('bar.reports.movements', compact('movimentacoes'));
     }
 }
