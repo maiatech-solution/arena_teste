@@ -192,7 +192,7 @@
         </div>
 
         {{-- POSIÇÃO ATUAL DE ESTOQUE (INVENTÁRIO REAL-TIME) --}}
-        <div class="mb-10 mt-10 bg-gray-900 border border-gray-800 rounded-[2.5rem] p-8 shadow-2xl">
+        <div class="mb-10 mt-12 bg-gray-900 border border-gray-800 rounded-[2.5rem] p-8 shadow-2xl">
             <div class="flex items-center gap-3 mb-8">
                 <span class="text-2xl">📊</span>
                 <h2 class="text-lg font-black text-white uppercase italic tracking-tighter">
