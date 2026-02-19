@@ -9,7 +9,8 @@
                             <span class="text-xl font-black text-white leading-none uppercase tracking-tighter italic">
                                 {{ $site_info->nome_fantasia ?? 'Bar System' }}
                             </span>
-                            <span class="text-[10px] font-black text-orange-500 uppercase tracking-widest leading-tight mt-1">
+                            <span
+                                class="text-[10px] font-black text-orange-500 uppercase tracking-widest leading-tight mt-1">
                                 Gestão Online
                             </span>
                         </div>
@@ -19,23 +20,18 @@
                 @if (!request()->routeIs('bar.dashboard'))
                     <div class="hidden md:flex items-center space-x-2 sm:ms-10">
                         @php
-                            // ATUALIZADO: Apontando para os Painéis intermediários
                             $links = [
-                                'bar.pdv.painel' => 'PDV',
+                                'bar.pdv' => 'PDV',
                                 'bar.products.index' => 'Estoque',
-                                'bar.tables.painel' => 'Mesas',
+                                'bar.tables.index' => 'Mesas',
                                 'bar.cash.index' => 'Caixa',
-                                'bar.reports.index' => 'Relatórios',
+                                'bar.reports.index' => 'Relatórios', // ✅ Adicionado aqui
                                 'bar.users.index' => 'Usuários',
                             ];
                         @endphp
 
                         @foreach ($links as $route => $label)
-                            @php
-                                // Lógica para manter o botão ativo mesmo em rotas filhas
-                                $routePrefix = str_replace('.painel', '', $route);
-                                $active = request()->routeIs($route) || request()->routeIs($routePrefix . '.*');
-                            @endphp
+                            @php $active = request()->routeIs($route); @endphp
                             <a href="{{ route($route) }}"
                                 class="px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all duration-300
                                {{ $active
@@ -55,22 +51,24 @@
                             <button
                                 class="flex items-center gap-3 px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-xl hover:bg-gray-800 hover:border-orange-500/50 transition-all duration-200 shadow-lg focus:outline-none">
                                 <div class="flex flex-col text-right">
-                                    <span class="text-[10px] font-black uppercase text-orange-500 leading-none mb-1">
-                                        Acesso Gestor
-                                    </span>
-                                    <span class="text-sm font-bold text-white leading-tight">
-                                        {{ Auth::user()->name }}
-                                    </span>
+                                    <span
+                                        class="text-[10px] font-black uppercase text-orange-500 leading-none mb-1">Acesso
+                                        Gestor</span>
+                                    <span
+                                        class="text-sm font-bold text-white leading-tight">{{ Auth::user()->name }}</span>
                                 </div>
-                                <svg class="h-4 w-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                <svg class="h-4 w-4 text-orange-500" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 9l-7 7-7-7" />
                                 </svg>
                             </button>
                         </x-slot>
 
                         <x-slot name="content">
                             @if (isset($site_info) && $site_info->modules_active == 3)
-                                <div class="block px-4 py-2 text-[10px] text-gray-400 font-black uppercase tracking-widest border-b border-gray-100 italic">
+                                <div
+                                    class="block px-4 py-2 text-[10px] text-gray-400 font-black uppercase tracking-widest border-b border-gray-100 italic">
                                     Mudar Ambiente
                                 </div>
 
@@ -87,13 +85,11 @@
                                 <div class="border-t border-gray-100"></div>
                             @endif
 
-                            <x-dropdown-link :href="route('profile.edit')">
-                                {{ __('Meu Perfil') }}
-                            </x-dropdown-link>
+                            <x-dropdown-link :href="route('profile.edit')">Meu Perfil</x-dropdown-link>
 
                             @if (Auth::user()->has_admin_access)
                                 @if (request()->is('bar*'))
-                                    {{-- 🍺 Links Dinâmicos para o BAR --}}
+                                    {{-- 🍺 Links Dinâmicos para o BAR (Tema Dark) --}}
                                     <x-dropdown-link :href="route('bar.company.edit')">
                                         {{ __('🏢 Dados do Estabelecimento') }}
                                     </x-dropdown-link>
@@ -102,7 +98,7 @@
                                         {{ __('👥 Gerenciar Equipe') }}
                                     </x-dropdown-link>
                                 @else
-                                    {{-- 🏟️ Links Originais para a ARENA --}}
+                                    {{-- 🏟️ Links Originais para a ARENA (Tema Light) --}}
                                     <x-dropdown-link :href="route('admin.company.edit')">
                                         {{ __('🏟️ Dados do Estabelecimento') }}
                                     </x-dropdown-link>
@@ -125,7 +121,7 @@
                                 <x-dropdown-link :href="route('logout')"
                                     onclick="event.preventDefault(); this.closest('form').submit();"
                                     class="text-red-600 font-bold border-t border-gray-100">
-                                    {{ __('Sair') }}
+                                    Sair
                                 </x-dropdown-link>
                             </form>
                         </x-slot>
@@ -152,18 +148,16 @@
     <div :class="{ 'block': open, 'hidden': !open }" class="hidden sm:hidden border-t border-gray-800 bg-gray-900">
         <div class="pt-2 pb-3 space-y-1">
             @if (!request()->routeIs('bar.dashboard'))
-                <x-responsive-nav-link :href="route('bar.pdv.painel')" :active="request()->routeIs('bar.pdv.*')"
+                <x-responsive-nav-link :href="route('bar.pdv')" :active="request()->routeIs('bar.pdv')"
                     class="text-gray-300">PDV</x-responsive-nav-link>
-
                 <x-responsive-nav-link :href="route('bar.products.index')" :active="request()->routeIs('bar.products.*')"
                     class="text-gray-300">Estoque</x-responsive-nav-link>
-
-                <x-responsive-nav-link :href="route('bar.tables.painel')" :active="request()->routeIs('bar.tables.*')"
+                <x-responsive-nav-link :href="route('bar.tables.index')" :active="request()->routeIs('bar.tables.*')"
                     class="text-gray-300">Mesas</x-responsive-nav-link>
-
                 <x-responsive-nav-link :href="route('bar.cash.index')" :active="request()->routeIs('bar.cash.*')"
                     class="text-gray-300">Caixa</x-responsive-nav-link>
 
+                {{-- ✅ Relatórios no Mobile --}}
                 <x-responsive-nav-link :href="route('bar.reports.index')" :active="request()->routeIs('bar.reports.*')"
                     class="text-gray-300">Relatórios</x-responsive-nav-link>
 
@@ -182,54 +176,40 @@
             @endif
 
             <hr class="border-gray-800 my-2">
+            <x-responsive-nav-link :href="route('profile.edit')" class="text-gray-300">Meu Perfil</x-responsive-nav-link>
 
-            <div class="pt-4 pb-1 border-t border-gray-800">
-                <div class="px-4">
-                    <div class="font-medium text-base text-gray-200">{{ Auth::user()->name }}</div>
-                    <div class="font-medium text-sm text-gray-500">{{ Auth::user()->email }}</div>
-                </div>
-
-                <div class="mt-3 space-y-1">
-                    <x-responsive-nav-link :href="route('profile.edit')" class="text-gray-300">
-                        {{ __('Meu Perfil') }}
+            @if (Auth::user()->has_admin_access)
+                @if (request()->is('bar*'))
+                    <x-responsive-nav-link :href="route('bar.company.edit')" :active="request()->routeIs('bar.company.*')" class="text-gray-300">
+                        🏢 Dados do estabelecimento
                     </x-responsive-nav-link>
 
-                    @if (Auth::user()->has_admin_access)
-                        @if (request()->is('bar*'))
-                            <x-responsive-nav-link :href="route('bar.company.edit')" class="text-gray-300">
-                                🏢 Dados do estabelecimento
-                            </x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('bar.users.index')" :active="request()->routeIs('bar.users.*')" class="text-gray-300">
+                        👥 Gerenciar Equipe
+                    </x-responsive-nav-link>
+                @else
+                    <x-responsive-nav-link :href="route('admin.company.edit')" :active="request()->routeIs('admin.company.*')" class="text-gray-300">
+                        🏟️ Dados do estabelecimento
+                    </x-responsive-nav-link>
 
-                            <x-responsive-nav-link :href="route('bar.users.index')" class="text-gray-300">
-                                👥 Gerenciar Equipe
-                            </x-responsive-nav-link>
-                        @else
-                            <x-responsive-nav-link :href="route('admin.company.edit')" class="text-gray-300">
-                                🏟️ Dados do estabelecimento
-                            </x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('admin.users.index')" :active="request()->routeIs('admin.users.*')" class="text-gray-300">
+                        👥 Gerenciar Usuários
+                    </x-responsive-nav-link>
+                @endif
+            @endif
 
-                            <x-responsive-nav-link :href="route('admin.users.index')" class="text-gray-300">
-                                👥 Gerenciar Usuários
-                            </x-responsive-nav-link>
-                        @endif
-                    @endif
+            @if (Auth::user()->is_admin)
+                <x-responsive-nav-link :href="route('admin.plans')" class="text-orange-500 font-black">⚙️ Gerenciar
+                    Plano</x-responsive-nav-link>
+            @endif
 
-                    @if (Auth::user()->is_admin)
-                        <x-responsive-nav-link :href="route('admin.plans')" class="text-orange-500 font-black">
-                            ⚙️ Gerenciar Plano
-                        </x-responsive-nav-link>
-                    @endif
-
-                    <form method="POST" action="{{ route('logout') }}">
-                        @csrf
-                        <x-responsive-nav-link :href="route('logout')"
-                            onclick="event.preventDefault(); this.closest('form').submit();"
-                            class="text-red-500 font-bold">
-                            {{ __('Sair') }}
-                        </x-responsive-nav-link>
-                    </form>
-                </div>
-            </div>
+            <form method="POST" action="{{ route('logout') }}">
+                @csrf
+                <x-responsive-nav-link :href="route('logout')"
+                    onclick="event.preventDefault(); this.closest('form').submit();" class="text-red-500">
+                    Sair
+                </x-responsive-nav-link>
+            </form>
         </div>
     </div>
 </nav>

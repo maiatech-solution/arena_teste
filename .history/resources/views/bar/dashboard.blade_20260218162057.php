@@ -10,8 +10,7 @@
 
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
 
-            {{-- 🛒 CARD PDV: Agora aponta para o PAINEL DE ESCOLHA --}}
-            <a href="{{ route('bar.pdv.painel') }}" class="group bg-gray-900 p-8 rounded-3xl border border-gray-800 hover:border-orange-600/50 transition-all duration-300 shadow-2xl relative overflow-hidden">
+            <a href="{{ route('bar.pdv') }}" class="group bg-gray-900 p-8 rounded-3xl border border-gray-800 hover:border-orange-600/50 transition-all duration-300 shadow-2xl relative overflow-hidden">
                 <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                     <span class="text-6xl text-white">🛒</span>
                 </div>
@@ -22,12 +21,11 @@
                         </svg>
                     </div>
                     <h3 class="text-2xl font-bold text-white mb-2 tracking-tighter uppercase">PDV / Balcão</h3>
-                    <p class="text-gray-500 text-sm leading-relaxed font-medium">Venda rápida ou consulta de histórico de balcão.</p>
+                    <p class="text-gray-500 text-sm leading-relaxed font-medium">Venda direta para o cliente com baixa imediata no estoque.</p>
                 </div>
             </a>
 
-            {{-- 🍽️ CARD MESAS: Agora aponta para o PAINEL DE ESCOLHA --}}
-            <a href="{{ route('bar.tables.painel') }}" class="group bg-gray-900 p-8 rounded-3xl border border-gray-700/30 hover:border-orange-600/50 transition-all duration-300 shadow-2xl relative">
+            <a href="{{ route('bar.tables.index') }}" class="group bg-gray-900 p-8 rounded-3xl border border-gray-700/30 hover:border-orange-600/50 transition-all duration-300 shadow-2xl relative">
                 <div class="flex justify-between items-start mb-6">
                     <div class="w-14 h-14 bg-gray-800 flex items-center justify-center rounded-2xl group-hover:bg-orange-600 transition-colors duration-300 shadow-inner">
                         <svg class="w-8 h-8 text-orange-500 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -41,10 +39,9 @@
                     @endif
                 </div>
                 <h3 class="text-2xl font-bold text-white mb-2 tracking-tighter uppercase">Gerenciar Mesas</h3>
-                <p class="text-gray-500 text-sm leading-relaxed font-medium">Abertura de comandas ou consulta de histórico de mesas.</p>
+                <p class="text-gray-500 text-sm leading-relaxed font-medium">Abertura de comandas, fechamento e controle de ocupação.</p>
             </a>
 
-            {{-- 📦 ESTOQUE --}}
             <a href="{{ route('bar.products.index') }}" class="group bg-gray-900 p-8 rounded-3xl border border-gray-700/30 hover:border-orange-600/50 transition-all duration-300 shadow-2xl relative">
                 <div class="flex justify-between items-start mb-6">
                     <div class="w-14 h-14 bg-gray-800 flex items-center justify-center rounded-2xl group-hover:bg-orange-600 transition-colors duration-300 shadow-inner">
@@ -62,7 +59,6 @@
                 <p class="text-gray-500 text-sm leading-relaxed font-medium">Cadastro de itens, preços de custo/venda e níveis mínimos.</p>
             </a>
 
-            {{-- 💰 CAIXA --}}
             <a href="{{ route('bar.cash.index') }}" class="group bg-gray-900 p-8 rounded-3xl border border-gray-700/30 hover:border-orange-600/50 transition-all duration-300 shadow-2xl relative">
                 <div class="w-14 h-14 bg-gray-800 flex items-center justify-center rounded-2xl mb-6 group-hover:bg-orange-600 transition-colors duration-300 shadow-inner">
                     <svg class="w-8 h-8 text-orange-500 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -73,7 +69,6 @@
                 <p class="text-gray-500 text-sm leading-relaxed font-medium">Abertura, fechamento e fluxo financeiro isolado.</p>
             </a>
 
-            {{-- 👥 EQUIPE --}}
             <a href="{{ route('bar.users.index') }}" class="group bg-gray-900 p-8 rounded-3xl border border-gray-700/30 hover:border-orange-600/50 transition-all duration-300 shadow-2xl relative">
                 <div class="w-14 h-14 bg-gray-800 flex items-center justify-center rounded-2xl mb-6 group-hover:bg-orange-600 transition-colors duration-300 shadow-inner">
                     <svg class="w-8 h-8 text-orange-500 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,7 +79,6 @@
                 <p class="text-gray-500 text-sm leading-relaxed font-medium">Controle de colaboradores, cargos e acessos ao painel do bar.</p>
             </a>
 
-            {{-- 📊 RELATÓRIOS --}}
             <a href="{{ route('bar.reports.index') }}" class="group bg-gray-900 p-8 rounded-3xl border border-gray-700/30 hover:border-orange-600/50 transition-all duration-300 shadow-2xl relative">
                 <div class="flex justify-between items-start mb-6">
                     <div class="w-14 h-14 bg-gray-800 flex items-center justify-center rounded-2xl group-hover:bg-orange-600 transition-colors duration-300 shadow-inner">

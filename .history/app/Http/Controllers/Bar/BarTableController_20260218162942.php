@@ -356,6 +356,4 @@ class BarTableController extends Controller
         $order = BarOrder::with(['items.product', 'table'])->findOrFail($orderId);
         return view('bar.tables.receipt', compact('order'));
     }
-
-    public function painel() { return view('bar.tables.painel'); }
 }

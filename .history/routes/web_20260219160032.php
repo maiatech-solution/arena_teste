@@ -197,40 +197,19 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
     // 🚀 Dashboard Principal
     Route::get('/dashboard', [BarDashboardController::class, 'index'])->name('dashboard');
 
-    // 🛒 MÓDULO PDV (Venda Direta / Balcão)
-    Route::prefix('pdv')->group(function () {
-        // Nova tela de escolha (Painel com 2 Cards)
-        Route::get('/painel', [BarPosController::class, 'painel'])->name('pdv.painel');
+    // 🛒 PDV - Venda Direta (Balcão)
+    Route::get('/pdv', [BarPosController::class, 'index'])->name('pdv');
+    Route::post('/pdv/venda', [BarPosController::class, 'store'])->name('pos.store');
+    //Route::get('/vendas/{sale}', [BarPosController::class, 'show'])->name('sales.show');
 
-        // Interface de Venda
-        Route::get('/', [BarPosController::class, 'index'])->name('pdv');
-        Route::post('/venda', [BarPosController::class, 'store'])->name('pos.store');
-    });
-
-    // 🍽️ MÓDULO MESAS (Comandas)
-    Route::prefix('mesas')->name('tables.')->group(function () {
-        // Nova tela de escolha (Painel com 2 Cards)
-        Route::get('/painel', [BarTableController::class, 'painel'])->name('painel');
-
-        // Interface de Gestão de Mesas
-        Route::get('/', [BarTableController::class, 'index'])->name('index');
-        Route::post('/sync', [BarTableController::class, 'sync'])->middleware(['role:admin,gestor'])->name('sync');
-        Route::post('/{id}/toggle', [BarTableController::class, 'toggleStatus'])->middleware(['role:admin,gestor'])->name('toggle');
-        Route::post('/{id}/abrir', [BarTableController::class, 'open'])->name('open');
-        Route::get('/{id}/comanda', [BarTableController::class, 'showOrder'])->name('show');
-        Route::post('/order/{orderId}/add-item', [BarTableController::class, 'addItem'])->name('add_item');
-        Route::delete('/item/{itemId}/remove', [BarTableController::class, 'removeItem'])->middleware(['role:admin,gestor'])->name('remove_item');
-        Route::post('/{id}/fechar', [BarTableController::class, 'closeOrder'])->name('close');
-        Route::get('/recibo/{orderId}', [BarTableController::class, 'printReceipt'])->name('receipt');
-    });
-
-    // 📄 HISTÓRICOS SEPARADOS (Acessados pelos cards de histórico)
+    // 📄 HISTÓRICOS SEPARADOS (Para evitar erros de banco de dados)
     Route::prefix('historico')->name('vendas.')->group(function () {
-        // 1. Histórico do PDV
+
+        // 1. Histórico do PDV (Venda Direta / Balcão)
         Route::get('/pdv', [BarOrderController::class, 'indexPdv'])->name('pdv.index');
         Route::post('/pdv/{sale}/cancelar', [BarOrderController::class, 'cancelarPdv'])->name('pdv.cancelar');
 
-        // 2. Histórico de Mesas
+        // 2. Histórico de Mesas (Comandas)
         Route::get('/mesas', [BarOrderController::class, 'indexMesas'])->name('mesas.index');
         Route::post('/mesas/{order}/cancelar', [BarOrderController::class, 'cancelarMesa'])->name('mesas.cancelar');
     });
@@ -255,6 +234,19 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
         'destroy' => 'products.destroy',
     ])->parameters(['estoque' => 'product']);
 
+    // 🍽️ Gestão de Mesas e Comandas
+    Route::prefix('mesas')->name('tables.')->group(function () {
+        Route::get('/', [BarTableController::class, 'index'])->name('index');
+        Route::post('/sync', [BarTableController::class, 'sync'])->middleware(['role:admin,gestor'])->name('sync');
+        Route::post('/{id}/toggle', [BarTableController::class, 'toggleStatus'])->middleware(['role:admin,gestor'])->name('toggle');
+        Route::post('/{id}/abrir', [BarTableController::class, 'open'])->name('open');
+        Route::get('/{id}/comanda', [BarTableController::class, 'showOrder'])->name('show');
+        Route::post('/order/{orderId}/add-item', [BarTableController::class, 'addItem'])->name('add_item');
+        Route::delete('/item/{itemId}/remove', [BarTableController::class, 'removeItem'])->middleware(['role:admin,gestor'])->name('remove_item');
+        Route::post('/{id}/fechar', [BarTableController::class, 'closeOrder'])->name('close');
+        Route::get('/recibo/{orderId}', [BarTableController::class, 'printReceipt'])->name('receipt');
+    });
+
     // 💰 GESTÃO FINANCEIRA DE CAIXA
     Route::prefix('caixa')->name('cash.')->group(function () {
         Route::get('/', [BarCashController::class, 'index'])->name('index');
@@ -274,7 +266,7 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
         Route::delete('/{user}', [BarUserController::class, 'destroy'])->name('destroy');
     });
 
-    // 📊 RELATÓRIOS FINANCEIROS (🔒 Restrito Admin/Gestor)
+    // 📊 RELATÓRIOS FINANCEIROS E ANALÍTICOS (🔒 Restrito Admin/Gestor)
     Route::prefix('relatorios')->name('reports.')->middleware(['role:admin,gestor'])->group(function () {
         Route::get('/', [BarReportController::class, 'index'])->name('index');
         Route::get('/produtos', [BarReportController::class, 'products'])->name('products');

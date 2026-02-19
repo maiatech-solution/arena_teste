@@ -125,6 +125,4 @@ class BarPosController extends Controller
             ], 422);
         }
     }
-
-    public function painel() { return view('bar.pos.painel'); }
 }
