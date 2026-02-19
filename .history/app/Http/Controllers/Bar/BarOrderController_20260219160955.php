@@ -53,7 +53,7 @@ class BarOrderController extends Controller
             return back()->with('error', '❌ OPERAÇÃO BLOQUEADA: Venda pertence a um turno de caixa já encerrado.');
         }
 
-        // Verifica se já está cancelada
+        // Verifica se já está cancelada (usando os dois termos possíveis)
         if (in_array($sale->status, ['cancelado', 'cancelled', 'anulada'])) {
             return back()->with('error', 'Esta venda já está cancelada.');
         }
@@ -76,26 +76,26 @@ class BarOrderController extends Controller
                     }
                 }
 
-                // 4. Estorno Financeiro
+                // 4. Estorno Financeiro (Abate do saldo esperado se for dinheiro)
                 if ($sale->payment_method === 'dinheiro') {
                     $caixaAberto->decrement('expected_balance', $sale->total_value);
                 }
 
-                // 5. Registrar Movimentação no Caixa com Motivo e Autorizador Concatenados
-                $motivoDesc = $request->reason ? " | MOTIVO: " . $request->reason : " | MOTIVO: Não informado";
-                $authDesc = " | POR: " . $supervisor->name; // 🔐 Nome do Supervisor para Auditoria
-
+                // 5. Registrar Movimentação no Caixa
+                // bar_order_id vai NULL porque PDV não é MESA (evita erro de Foreign Key)
                 BarCashMovement::create([
                     'bar_cash_session_id' => $caixaAberto->id,
-                    'user_id'             => auth()->id(), // Operador logado
+                    'user_id'             => auth()->id(),
                     'bar_order_id'        => null,
                     'type'                => 'estorno',
                     'payment_method'      => $sale->payment_method ?? 'misto',
                     'amount'              => $sale->total_value,
-                    'description'         => "ESTORNO PDV #{$sale->id}" . $motivoDesc . $authDesc
+                    'description'         => "ESTORNO PDV #{$sale->id}: Cancelada por gestor."
                 ]);
 
                 // 6. Atualizar status da venda
+                // 🔥 AJUSTE: Usando 'cancelado' (9 letras) em vez de 'cancelled'
+                // para evitar o erro SQLSTATE[01000] Data truncated
                 $sale->update(['status' => 'cancelado']);
             });
 
@@ -125,19 +125,12 @@ class BarOrderController extends Controller
     public function cancelarMesa(Request $request, BarOrder $order)
     {
         // 1. Validar Supervisor
-        if (!$request->supervisor_email) {
-            return back()->with('error', '❌ Erro técnico: O e-mail do supervisor não foi enviado pelo formulário.');
-        }
-
         $supervisor = User::where('email', $request->supervisor_email)->first();
-
-        // Validação tripla: Usuário existe? Senha bate? É admin/gestor?
         if (
-            !$supervisor ||
-            !Hash::check($request->supervisor_password, $supervisor->password) ||
+            !$supervisor || !Hash::check($request->supervisor_password, $supervisor->password) ||
             !in_array($supervisor->role, ['admin', 'gestor'])
         ) {
-            return back()->with('error', '❌ Autorização negada: E-mail ou Senha de gestor inválidos.');
+            return back()->with('error', '❌ Autorização negada: Senha de gestor inválida.');
         }
 
         // 2. Trava de Caixa
@@ -155,6 +148,7 @@ class BarOrderController extends Controller
 
                 // 3. Devolver itens ao estoque
                 foreach ($order->items as $item) {
+                    // Resolve o conflito de nomes de colunas entre tabelas de itens
                     $productId = $item->bar_product_id ?? $item->product_id;
 
                     if ($productId && $item->product) {
@@ -162,30 +156,27 @@ class BarOrderController extends Controller
 
                         BarStockMovement::create([
                             'bar_product_id' => $productId,
-                            'user_id'        => auth()->id(),
-                            'type'           => 'input',
-                            'quantity'       => $item->quantity,
-                            'description'    => "CANCELAMENTO MESA #{$order->id}: Autorizado por {$supervisor->name}.",
+                            'user_id' => auth()->id(),
+                            'type' => 'input',
+                            'quantity' => $item->quantity,
+                            'description' => "CANCELAMENTO MESA #{$order->id}: Por {$supervisor->name}.",
                         ]);
                     }
                 }
 
-                // 4. Registrar Estorno no Caixa
-                // 🔥 Ajuste: Concatenando Motivo E Autorizador na descrição
-                $motivoDesc = $request->reason ? " | MOTIVO: " . $request->reason : " | MOTIVO: Não informado";
-                $authDesc = " | POR: " . $supervisor->name; // 🔐 Auditoria: Quem deu a senha
-
+                // 4. Registrar Estorno no Caixa (bar_order_id permitido para mesas)
                 BarCashMovement::create([
                     'bar_cash_session_id' => $caixaAberto->id,
-                    'user_id'             => auth()->id(),
-                    'bar_order_id'        => $order->id,
-                    'type'                => 'estorno',
-                    'payment_method'      => $order->payment_method ?? 'misto',
-                    'amount'              => $order->total_value,
-                    'description'         => "ESTORNO MESA #{$order->id}" . $motivoDesc . $authDesc
+                    'user_id' => auth()->id(),
+                    'bar_order_id' => $order->id,
+                    'type' => 'estorno',
+                    'payment_method' => $order->payment_method ?? 'misto',
+                    'amount' => $order->total_value,
+                    'description' => "ESTORNO MESA #{$order->id}: Cancelada por gestor."
                 ]);
 
-                // 5. Atualizar status no banco
+                // 5. Atualizar status
+                // 🔥 AJUSTE VITAL: Usando 'cancelled' para bater exatamente com o seu ENUM do banco de dados
                 $order->update(['status' => 'cancelled']);
             });
 

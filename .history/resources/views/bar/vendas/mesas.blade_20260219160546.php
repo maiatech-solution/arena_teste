@@ -138,7 +138,6 @@
 
             <form id="formCancelarMesa" method="POST">
                 @csrf
-                {{-- Campos Ocultos que serão alimentados pelo JS --}}
                 <input type="hidden" name="supervisor_email" value="{{ in_array(auth()->user()->role, ['admin', 'gestor']) ? auth()->user()->email : '' }}">
                 <input type="hidden" name="supervisor_password">
 
@@ -146,13 +145,7 @@
                     class="w-full bg-black border border-gray-800 rounded-3xl p-5 text-white text-xs mb-6 h-28 focus:border-indigo-500 outline-none"></textarea>
 
                 <div class="p-6 bg-indigo-600/5 border border-indigo-600/20 rounded-[2.5rem] mb-6">
-                    {{-- NOVO: Campo de e-mail visível para colaborador --}}
-                    @if (!in_array(auth()->user()->role, ['admin', 'gestor']))
-                        <input type="email" id="email_auth_cancel" placeholder="E-MAIL DO GESTOR"
-                            class="w-full bg-black border border-gray-800 rounded-xl p-3 text-white text-center text-[10px] mb-3 outline-none focus:border-indigo-600 font-mono">
-                    @endif
-
-                    <input type="password" id="pass_auth_cancel" placeholder="SENHA DO GESTOR"
+                    <input type="password" id="pass_auth_cancel" placeholder="SENHA DO SUPERVISOR"
                         class="w-full bg-black border border-gray-800 rounded-2xl p-4 text-white text-center text-sm outline-none focus:border-indigo-600 font-mono tracking-[0.3em]">
                 </div>
 
@@ -179,24 +172,10 @@
         function confirmarCancelamentoMesa() {
             const form = document.getElementById('formCancelarMesa');
             const passInput = document.getElementById('pass_auth_cancel');
-            const emailInput = document.getElementById('email_auth_cancel'); // Campo de texto do colaborador
 
-            // Referência aos campos ocultos do form
-            const hiddenEmail = form.querySelector('input[name="supervisor_email"]');
-            const hiddenPass = form.querySelector('input[name="supervisor_password"]');
+            if(!passInput.value) { alert("Senha obrigatória!"); return; }
 
-            // Se o campo de email existir (colaborador), copia o valor para o hidden
-            if (emailInput && emailInput.value) {
-                hiddenEmail.value = emailInput.value;
-            }
-
-            if(!passInput.value) {
-                alert("⚠️ A senha do gestor é obrigatória!");
-                return;
-            }
-
-            // Alimenta a senha e envia
-            hiddenPass.value = passInput.value;
+            form.querySelector('input[name="supervisor_password"]').value = passInput.value;
             form.submit();
         }
     </script>

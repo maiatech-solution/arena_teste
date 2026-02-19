@@ -81,18 +81,18 @@ class BarOrderController extends Controller
                     $caixaAberto->decrement('expected_balance', $sale->total_value);
                 }
 
-                // 5. Registrar Movimentação no Caixa com Motivo e Autorizador Concatenados
+                // 5. Registrar Movimentação no Caixa com Motivo Concatenado
+                // 🔥 Ajuste: Como não há coluna 'reason', salvamos na descrição
                 $motivoDesc = $request->reason ? " | MOTIVO: " . $request->reason : " | MOTIVO: Não informado";
-                $authDesc = " | POR: " . $supervisor->name; // 🔐 Nome do Supervisor para Auditoria
 
                 BarCashMovement::create([
                     'bar_cash_session_id' => $caixaAberto->id,
-                    'user_id'             => auth()->id(), // Operador logado
-                    'bar_order_id'        => null,
+                    'user_id'             => auth()->id(),
+                    'bar_order_id'        => null, // PDV não é MESA
                     'type'                => 'estorno',
                     'payment_method'      => $sale->payment_method ?? 'misto',
                     'amount'              => $sale->total_value,
-                    'description'         => "ESTORNO PDV #{$sale->id}" . $motivoDesc . $authDesc
+                    'description'         => "ESTORNO PDV #{$sale->id}" . $motivoDesc
                 ]);
 
                 // 6. Atualizar status da venda
@@ -131,7 +131,6 @@ class BarOrderController extends Controller
 
         $supervisor = User::where('email', $request->supervisor_email)->first();
 
-        // Validação tripla: Usuário existe? Senha bate? É admin/gestor?
         if (
             !$supervisor ||
             !Hash::check($request->supervisor_password, $supervisor->password) ||
@@ -171,9 +170,8 @@ class BarOrderController extends Controller
                 }
 
                 // 4. Registrar Estorno no Caixa
-                // 🔥 Ajuste: Concatenando Motivo E Autorizador na descrição
+                // 🔥 Ajuste: Concatenando o motivo na descrição, já que a tabela não tem a coluna 'reason'
                 $motivoDesc = $request->reason ? " | MOTIVO: " . $request->reason : " | MOTIVO: Não informado";
-                $authDesc = " | POR: " . $supervisor->name; // 🔐 Auditoria: Quem deu a senha
 
                 BarCashMovement::create([
                     'bar_cash_session_id' => $caixaAberto->id,
@@ -182,7 +180,7 @@ class BarOrderController extends Controller
                     'type'                => 'estorno',
                     'payment_method'      => $order->payment_method ?? 'misto',
                     'amount'              => $order->total_value,
-                    'description'         => "ESTORNO MESA #{$order->id}" . $motivoDesc . $authDesc
+                    'description'         => "ESTORNO MESA #{$order->id}" . $motivoDesc
                 ]);
 
                 // 5. Atualizar status no banco

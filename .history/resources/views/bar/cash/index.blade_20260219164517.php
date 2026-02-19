@@ -287,10 +287,10 @@
                 // 3. Lógica de Auditoria (Desmembrando Título | Motivo | Autorizador)
                 $partesMotivo = explode(' | MOTIVO: ', $mov->description);
                 $tituloDescricao = $partesMotivo[0];
-
+                
                 $resto = $partesMotivo[1] ?? '';
                 $partesAutorizador = explode(' | POR: ', $resto);
-
+                
                 $motivoTexto = $partesAutorizador[0] ?? null;
                 $autorizadorNome = $partesAutorizador[1] ?? null;
             @endphp

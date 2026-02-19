@@ -53,7 +53,7 @@ class BarOrderController extends Controller
             return back()->with('error', '❌ OPERAÇÃO BLOQUEADA: Venda pertence a um turno de caixa já encerrado.');
         }
 
-        // Verifica se já está cancelada
+        // Verifica se já está cancelada (usando os dois termos possíveis)
         if (in_array($sale->status, ['cancelado', 'cancelled', 'anulada'])) {
             return back()->with('error', 'Esta venda já está cancelada.');
         }
@@ -76,26 +76,26 @@ class BarOrderController extends Controller
                     }
                 }
 
-                // 4. Estorno Financeiro
+                // 4. Estorno Financeiro (Abate do saldo esperado se for dinheiro)
                 if ($sale->payment_method === 'dinheiro') {
                     $caixaAberto->decrement('expected_balance', $sale->total_value);
                 }
 
-                // 5. Registrar Movimentação no Caixa com Motivo e Autorizador Concatenados
-                $motivoDesc = $request->reason ? " | MOTIVO: " . $request->reason : " | MOTIVO: Não informado";
-                $authDesc = " | POR: " . $supervisor->name; // 🔐 Nome do Supervisor para Auditoria
-
+                // 5. Registrar Movimentação no Caixa
+                // bar_order_id vai NULL porque PDV não é MESA (evita erro de Foreign Key)
                 BarCashMovement::create([
                     'bar_cash_session_id' => $caixaAberto->id,
-                    'user_id'             => auth()->id(), // Operador logado
+                    'user_id'             => auth()->id(),
                     'bar_order_id'        => null,
                     'type'                => 'estorno',
                     'payment_method'      => $sale->payment_method ?? 'misto',
                     'amount'              => $sale->total_value,
-                    'description'         => "ESTORNO PDV #{$sale->id}" . $motivoDesc . $authDesc
+                    'description'         => "ESTORNO PDV #{$sale->id}: Cancelada por gestor."
                 ]);
 
                 // 6. Atualizar status da venda
+                // 🔥 AJUSTE: Usando 'cancelado' (9 letras) em vez de 'cancelled'
+                // para evitar o erro SQLSTATE[01000] Data truncated
                 $sale->update(['status' => 'cancelado']);
             });
 
@@ -125,6 +125,7 @@ class BarOrderController extends Controller
     public function cancelarMesa(Request $request, BarOrder $order)
     {
         // 1. Validar Supervisor
+        // Verificamos se o email foi enviado no request
         if (!$request->supervisor_email) {
             return back()->with('error', '❌ Erro técnico: O e-mail do supervisor não foi enviado pelo formulário.');
         }
@@ -171,10 +172,6 @@ class BarOrderController extends Controller
                 }
 
                 // 4. Registrar Estorno no Caixa
-                // 🔥 Ajuste: Concatenando Motivo E Autorizador na descrição
-                $motivoDesc = $request->reason ? " | MOTIVO: " . $request->reason : " | MOTIVO: Não informado";
-                $authDesc = " | POR: " . $supervisor->name; // 🔐 Auditoria: Quem deu a senha
-
                 BarCashMovement::create([
                     'bar_cash_session_id' => $caixaAberto->id,
                     'user_id'             => auth()->id(),
@@ -182,7 +179,7 @@ class BarOrderController extends Controller
                     'type'                => 'estorno',
                     'payment_method'      => $order->payment_method ?? 'misto',
                     'amount'              => $order->total_value,
-                    'description'         => "ESTORNO MESA #{$order->id}" . $motivoDesc . $authDesc
+                    'description'         => "ESTORNO MESA #{$order->id}: Cancelada por gestor."
                 ]);
 
                 // 5. Atualizar status no banco

@@ -252,105 +252,100 @@
                 </div>
 
                 <div class="overflow-x-auto">
-                 <table class="w-full text-left">
-    <thead>
-        <tr class="text-gray-500 text-[10px] font-black uppercase tracking-widest border-b border-gray-800 bg-black/20">
-            <th class="p-6">Hora</th>
-            <th class="p-6">Descrição</th>
-            <th class="p-6">Operador</th>
-            <th class="p-6 text-right font-black">Valor</th>
-        </tr>
-    </thead>
-    <tbody class="divide-y divide-gray-800/50">
-        @forelse($movements as $mov)
-            @php
-                // 1. Lógica de cores e sinais
-                $isSaida = in_array($mov->type, ['sangria', 'estorno']);
-                $isVenda = in_array($mov->type, ['venda', 'reforco']);
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr
+                                class="text-gray-500 text-[10px] font-black uppercase tracking-widest border-b border-gray-800 bg-black/20">
+                                <th class="p-6">Hora</th>
+                                <th class="p-6">Descrição</th>
+                                <th class="p-6">Operador</th>
+                                <th class="p-6 text-right font-black">Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-800/50">
+                            @forelse($movements as $mov)
+                                @php
+                                    // 1. Lógica de cores e sinais
+                                    $isSaida = in_array($mov->type, ['sangria', 'estorno']);
+                                    $isVenda = in_array($mov->type, ['venda', 'reforco']);
 
-                $corValor = 'text-white';
-                if ($isSaida) { $corValor = 'text-red-500'; }
-                if ($isVenda) { $corValor = 'text-green-500'; }
+                                    $corValor = 'text-white';
+                                    if ($isSaida) {
+                                        $corValor = 'text-red-500';
+                                    }
+                                    if ($isVenda) {
+                                        $corValor = 'text-green-500';
+                                    }
 
-                // 2. Lógica visual para a Forma de Pagamento
-                $metodo = strtolower($mov->payment_method);
-                $bgMetodo = 'bg-gray-800 text-gray-400 border-gray-700';
+                                    // 2. Lógica visual para a Forma de Pagamento
+                                    $metodo = strtolower($mov->payment_method);
+                                    $bgMetodo = 'bg-gray-800 text-gray-400 border-gray-700'; // Padrão
 
-                if ($metodo == 'dinheiro') {
-                    $bgMetodo = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-                } elseif (in_array($metodo, ['pix', 'transferencia'])) {
-                    $bgMetodo = 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20';
-                } elseif (in_array($metodo, ['cartao', 'debito', 'credito', 'misto'])) {
-                    $bgMetodo = 'bg-purple-500/10 text-purple-400 border-purple-500/20';
-                }
+                                    if ($metodo == 'dinheiro') {
+                                        $bgMetodo = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+                                    } elseif (in_array($metodo, ['pix', 'transferencia'])) {
+                                        $bgMetodo = 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20';
+                                    } elseif (in_array($metodo, ['cartao', 'debito', 'credito', 'misto'])) {
+                                        $bgMetodo = 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+                                    }
 
-                // 3. Lógica de Auditoria (Desmembrando Título | Motivo | Autorizador)
-                $partesMotivo = explode(' | MOTIVO: ', $mov->description);
-                $tituloDescricao = $partesMotivo[0];
+                                    // 3. Lógica para extrair o motivo da descrição (Concatenação do Controller)
+                                    $partes = explode(' | MOTIVO: ', $mov->description);
+                                    $tituloDescricao = $partes[0];
+                                    $motivoTexto = $partes[1] ?? null;
+                                @endphp
+                                <tr class="hover:bg-white/[0.02] transition-colors group">
+                                    <td class="p-6 text-gray-500 font-bold text-xs">
+                                        {{ $mov->created_at->format('H:i') }}
+                                    </td>
+                                    <td class="p-6">
+                                        <span class="text-white block font-black text-xs uppercase tracking-tight">
+                                            {{ $tituloDescricao }}
+                                        </span>
 
-                $resto = $partesMotivo[1] ?? '';
-                $partesAutorizador = explode(' | POR: ', $resto);
+                                        {{-- Exibição do Motivo extraído da descrição --}}
+                                        @if ($motivoTexto)
+                                            <span class="text-[10px] text-orange-400 font-bold italic block mt-1">
+                                                💬 Motivo: {{ $motivoTexto }}
+                                            </span>
+                                        @endif
 
-                $motivoTexto = $partesAutorizador[0] ?? null;
-                $autorizadorNome = $partesAutorizador[1] ?? null;
-            @endphp
-            <tr class="hover:bg-white/[0.02] transition-colors group">
-                <td class="p-6 text-gray-500 font-bold text-xs">
-                    {{ $mov->created_at->format('H:i') }}
-                </td>
-                <td class="p-6">
-                    {{-- Título Principal --}}
-                    <span class="text-white block font-black text-xs uppercase tracking-tight">
-                        {{ $tituloDescricao }}
-                    </span>
+                                        <div class="flex items-center gap-2 mt-2">
+                                            {{-- Badge do Tipo de Movimento --}}
+                                            <span
+                                                class="text-[8px] uppercase font-black px-2 py-0.5 rounded border {{ $isSaida ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-blue-500/10 text-blue-500 border-blue-500/20' }}">
+                                                {{ $mov->type }}
+                                            </span>
 
-                    {{-- Exibição do Motivo (Laranja) --}}
-                    @if ($motivoTexto)
-                        <span class="text-[10px] text-orange-400 font-bold italic block mt-1">
-                            💬 Motivo: {{ $motivoTexto }}
-                        </span>
-                    @endif
-
-                    {{-- Exibição do Autorizador (Índigo/Roxo) --}}
-                    @if ($autorizadorNome)
-                        <span class="text-[9px] text-indigo-400 font-black uppercase tracking-widest block mt-1">
-                            🔐 Autorizado por: {{ $autorizadorNome }}
-                        </span>
-                    @endif
-
-                    <div class="flex items-center gap-2 mt-2">
-                        {{-- Badge do Tipo --}}
-                        <span class="text-[8px] uppercase font-black px-2 py-0.5 rounded border {{ $isSaida ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-blue-500/10 text-blue-500 border-blue-500/20' }}">
-                            {{ $mov->type }}
-                        </span>
-
-                        {{-- Badge da Forma de Pagamento --}}
-                        @if ($mov->payment_method)
-                            <span class="text-[8px] uppercase font-black px-2 py-0.5 rounded border {{ $bgMetodo }}">
-                                💳 {{ $mov->payment_method }}
-                            </span>
-                        @endif
-                    </div>
-                </td>
-                <td class="p-6 text-gray-400 text-[10px] font-bold uppercase italic tracking-widest">
-                    {{ $mov->user->name }}
-                </td>
-                <td class="p-6 text-right font-black italic text-xl {{ $corValor }}">
-                    {{ $isSaida ? '-' : ($isVenda ? '+' : '') }} R$
-                    {{ number_format($mov->amount, 2, ',', '.') }}
-                </td>
-            </tr>
-        @empty
-            <tr>
-                <td colspan="4" class="p-24 text-center opacity-20">
-                    <p class="text-gray-600 font-black uppercase tracking-widest italic text-3xl">
-                        Sem movimentações
-                    </p>
-                </td>
-            </tr>
-        @endforelse
-    </tbody>
-</table>
+                                            {{-- Badge da Forma de Pagamento --}}
+                                            @if ($mov->payment_method)
+                                                <span
+                                                    class="text-[8px] uppercase font-black px-2 py-0.5 rounded border {{ $bgMetodo }}">
+                                                    💳 {{ $mov->payment_method }}
+                                                </span>
+                                            @endif
+                                        </div>
+                                    </td>
+                                    <td
+                                        class="p-6 text-gray-400 text-[10px] font-bold uppercase italic tracking-widest">
+                                        {{ $mov->user->name }}
+                                    </td>
+                                    <td class="p-6 text-right font-black italic text-xl {{ $corValor }}">
+                                        {{ $isSaida ? '-' : ($isVenda ? '+' : '') }} R$
+                                        {{ number_format($mov->amount, 2, ',', '.') }}
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="4" class="p-24 text-center opacity-20">
+                                        <p class="text-gray-600 font-black uppercase tracking-widest italic text-3xl">
+                                            Sem movimentações
+                                        </p>
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
                 </div>
             </div>
         @endif
