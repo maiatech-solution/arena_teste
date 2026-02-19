@@ -200,7 +200,7 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
     // 🛒 PDV - Venda Direta (Balcão)
     Route::get('/pdv', [BarPosController::class, 'index'])->name('pdv');
     Route::post('/pdv/venda', [BarPosController::class, 'store'])->name('pos.store');
-    //Route::get('/vendas/{sale}', [BarPosController::class, 'show'])->name('sales.show');
+    Route::get('/vendas/{sale}', [BarPosController::class, 'show'])->name('sales.show');
 
     // 📄 HISTÓRICOS SEPARADOS (Para evitar erros de banco de dados)
     Route::prefix('historico')->name('vendas.')->group(function () {

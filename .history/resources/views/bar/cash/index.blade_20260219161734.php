@@ -172,9 +172,9 @@
 
                 {{-- ⚡ PIX RECEBIDO --}}
                 @php
-                    $vendasPix = $movements->where('payment_method', 'pix')->where('type', 'venda')->sum('amount');
-                    $estornosPix = $movements->where('payment_method', 'pix')->where('type', 'estorno')->sum('amount');
-                    $totalPix = max(0, $vendasPix - $estornosPix);
+                    $totalPix =
+                        $movements->where('payment_method', 'pix')->where('type', 'venda')->sum('amount') -
+                        $movements->where('payment_method', 'pix')->where('type', 'estorno')->sum('amount');
                 @endphp
                 <div
                     class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 shadow-2xl border-l-4 border-l-cyan-400">
@@ -185,18 +185,12 @@
                     </span>
                 </div>
 
-                {{-- 💳 CARTÕES (DÉBITO/CRÉDITO/MISTO) --}}
+                {{-- 💳 CARTÕES (DÉBITO/CRÉDITO) --}}
                 @php
                     $metodosCartao = ['cartao', 'debito', 'credito', 'misto'];
-                    $vendasCartao = $movements
-                        ->whereIn('payment_method', $metodosCartao)
-                        ->where('type', 'venda')
-                        ->sum('amount');
-                    $estornosCartao = $movements
-                        ->whereIn('payment_method', $metodosCartao)
-                        ->where('type', 'estorno')
-                        ->sum('amount');
-                    $totalCartao = max(0, $vendasCartao - $estornosCartao);
+                    $totalCartao =
+                        $movements->whereIn('payment_method', $metodosCartao)->where('type', 'venda')->sum('amount') -
+                        $movements->whereIn('payment_method', $metodosCartao)->where('type', 'estorno')->sum('amount');
                 @endphp
                 <div
                     class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 shadow-2xl border-l-4 border-l-purple-500">

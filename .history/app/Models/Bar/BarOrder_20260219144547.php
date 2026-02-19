@@ -28,20 +28,15 @@ class BarOrder extends Model
         return $this->hasMany(BarOrderItem::class);
     }
 
+    // Você já tem esta:
     public function waiter()
     {
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    // 🔴 ADICIONE ESTA AQUI (Para o Controller parar de dar erro):
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');
-    }
-
-    // 🚀 ADICIONE ESTA ÚLTIMA RELAÇÃO AQUI:
-    public function cashSession()
-    {
-        // Indica que a venda pertence a uma sessão de caixa
-        return $this->belongsTo(BarCashSession::class, 'bar_cash_session_id');
     }
 }

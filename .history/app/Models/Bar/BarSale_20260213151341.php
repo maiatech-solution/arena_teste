@@ -12,6 +12,7 @@ class BarSale extends Model
 
     protected $table = 'bar_sales';
 
+    // 🔥 Adicionado bar_cash_session_id para permitir a gravação
     protected $fillable = [
         'user_id',
         'total_value',
@@ -28,11 +29,5 @@ class BarSale extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
-    }
-
-    // 🔴 ADICIONE ESTA FUNÇÃO AQUI:
-    public function cashSession()
-    {
-        return $this->belongsTo(BarCashSession::class, 'bar_cash_session_id');
     }
 }

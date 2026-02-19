@@ -25,7 +25,7 @@ use App\Http\Controllers\Bar\BarCashController;
 use App\Http\Controllers\Bar\BarUserController;
 use App\Http\Controllers\Bar\BarCompanyController;
 use App\Http\Controllers\Bar\BarReportController;
-use App\Http\Controllers\Bar\BarOrderController;
+use App\Http\Controllers\Bar\BarOrderController; /
 
 // 🏠 ROTA RAIZ
 Route::get('/', function () {
@@ -200,18 +200,15 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
     // 🛒 PDV - Venda Direta (Balcão)
     Route::get('/pdv', [BarPosController::class, 'index'])->name('pdv');
     Route::post('/pdv/venda', [BarPosController::class, 'store'])->name('pos.store');
-    //Route::get('/vendas/{sale}', [BarPosController::class, 'show'])->name('sales.show');
+    Route::get('/vendas/{sale}', [BarPosController::class, 'show'])->name('sales.show');
 
-    // 📄 HISTÓRICOS SEPARADOS (Para evitar erros de banco de dados)
-    Route::prefix('historico')->name('vendas.')->group(function () {
+    // 📄 Histórico de Vendas e Cancelamentos
+    Route::prefix('vendas')->name('vendas.')->group(function () {
+        // Listagem de todas as vendas (Paid e Cancelled)
+        Route::get('/', [App\Http\Controllers\Bar\BarOrderController::class, 'indexVendas'])->name('index');
 
-        // 1. Histórico do PDV (Venda Direta / Balcão)
-        Route::get('/pdv', [BarOrderController::class, 'indexPdv'])->name('pdv.index');
-        Route::post('/pdv/{sale}/cancelar', [BarOrderController::class, 'cancelarPdv'])->name('pdv.cancelar');
-
-        // 2. Histórico de Mesas (Comandas)
-        Route::get('/mesas', [BarOrderController::class, 'indexMesas'])->name('mesas.index');
-        Route::post('/mesas/{order}/cancelar', [BarOrderController::class, 'cancelarMesa'])->name('mesas.cancelar');
+        // Rota de cancelamento (A autorização é validada internamente no Controller via senha)
+        Route::post('/{order}/cancelar', [App\Http\Controllers\Bar\BarOrderController::class, 'cancelarVenda'])->name('cancelar');
     });
 
     // 📦 Gestão de Estoque e Produtos
@@ -237,22 +234,35 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
     // 🍽️ Gestão de Mesas e Comandas
     Route::prefix('mesas')->name('tables.')->group(function () {
         Route::get('/', [BarTableController::class, 'index'])->name('index');
+
+        // Configuração de Mesas (🔒 Restrito)
         Route::post('/sync', [BarTableController::class, 'sync'])->middleware(['role:admin,gestor'])->name('sync');
         Route::post('/{id}/toggle', [BarTableController::class, 'toggleStatus'])->middleware(['role:admin,gestor'])->name('toggle');
+
+        // Operações de Comanda (Liberado)
         Route::post('/{id}/abrir', [BarTableController::class, 'open'])->name('open');
         Route::get('/{id}/comanda', [BarTableController::class, 'showOrder'])->name('show');
         Route::post('/order/{orderId}/add-item', [BarTableController::class, 'addItem'])->name('add_item');
+
+        // Estorno e Fechamento (🔒 Restrito)
         Route::delete('/item/{itemId}/remove', [BarTableController::class, 'removeItem'])->middleware(['role:admin,gestor'])->name('remove_item');
         Route::post('/{id}/fechar', [BarTableController::class, 'closeOrder'])->name('close');
+
         Route::get('/recibo/{orderId}', [BarTableController::class, 'printReceipt'])->name('receipt');
     });
 
     // 💰 GESTÃO FINANCEIRA DE CAIXA
     Route::prefix('caixa')->name('cash.')->group(function () {
+        // Acesso à tela principal
         Route::get('/', [BarCashController::class, 'index'])->name('index');
+
+        // 🔓 REMOVIDO O MIDDLEWARE DAQUI:
+        // Agora o Controller valida o supervisor internamente via modal de senha.
         Route::post('/abrir', [BarCashController::class, 'open'])->name('open');
         Route::post('/movimentar', [BarCashController::class, 'storeMovement'])->name('movement');
         Route::post('/fechar', [BarCashController::class, 'close'])->name('close');
+
+        // Ações que continuam restritas (Apenas Admin/Gestor podem clicar no botão de reabrir)
         Route::post('/reabrir/{id}', [BarCashController::class, 'reopen'])->middleware(['role:admin,gestor'])->name('reopen');
     });
 
@@ -273,6 +283,8 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
         Route::get('/caixas', [BarReportController::class, 'cashier'])->name('cashier');
         Route::get('/movimentacoes', [BarReportController::class, 'movements'])->name('movements');
         Route::get('/pagamentos', [BarReportController::class, 'payments'])->name('payments');
+
+        // 🆕 Novas rotas que estavam faltando:
         Route::get('/diario', [BarReportController::class, 'daily'])->name('daily');
         Route::get('/cancelamentos', [BarReportController::class, 'cancelations'])->name('cancelations');
     });

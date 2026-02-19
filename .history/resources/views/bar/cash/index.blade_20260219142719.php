@@ -158,78 +158,38 @@
             </div>
         @else
             {{-- CARDS FINANCEIROS --}}
-            <div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-10">
-                {{-- 💵 DINHEIRO REAL NA MÃO --}}
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
                 <div
-                    class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 relative shadow-2xl border-l-4 border-l-emerald-500">
+                    class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 relative overflow-hidden group shadow-2xl border-l-4 border-l-green-500">
                     <span
-                        class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2 italic">Dinheiro
+                        class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-bold tracking-tighter">Dinheiro
                         em Gaveta</span>
-                    <span class="text-4xl font-black text-white italic tracking-tighter font-mono">
-                        R$ {{ number_format($dinheiroGeral ?? 0, 2, ',', '.') }}
-                    </span>
+                    <span class="text-4xl font-black text-white italic tracking-tighter">R$
+                        {{ number_format($dinheiroGeral ?? 0, 2, ',', '.') }}</span>
                 </div>
-
-                {{-- ⚡ PIX RECEBIDO --}}
-                @php
-                    $vendasPix = $movements->where('payment_method', 'pix')->where('type', 'venda')->sum('amount');
-                    $estornosPix = $movements->where('payment_method', 'pix')->where('type', 'estorno')->sum('amount');
-                    $totalPix = max(0, $vendasPix - $estornosPix);
-                @endphp
                 <div
-                    class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 shadow-2xl border-l-4 border-l-cyan-400">
-                    <span class="text-[10px] font-black text-cyan-400 uppercase tracking-widest block mb-2 italic">Total
-                        em PIX</span>
-                    <span class="text-4xl font-black text-white italic tracking-tighter font-mono">
-                        R$ {{ number_format($totalPix, 2, ',', '.') }}
-                    </span>
-                </div>
-
-                {{-- 💳 CARTÕES (DÉBITO/CRÉDITO/MISTO) --}}
-                @php
-                    $metodosCartao = ['cartao', 'debito', 'credito', 'misto'];
-                    $vendasCartao = $movements
-                        ->whereIn('payment_method', $metodosCartao)
-                        ->where('type', 'venda')
-                        ->sum('amount');
-                    $estornosCartao = $movements
-                        ->whereIn('payment_method', $metodosCartao)
-                        ->where('type', 'estorno')
-                        ->sum('amount');
-                    $totalCartao = max(0, $vendasCartao - $estornosCartao);
-                @endphp
-                <div
-                    class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 shadow-2xl border-l-4 border-l-purple-500">
+                    class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 shadow-2xl border-l-4 border-l-blue-500">
                     <span
-                        class="text-[10px] font-black text-purple-400 uppercase tracking-widest block mb-2 italic">Cartões
-                        (Líquido)</span>
-                    <span class="text-4xl font-black text-white italic tracking-tighter font-mono">
-                        R$ {{ number_format($totalCartao, 2, ',', '.') }}
-                    </span>
+                        class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-bold tracking-tighter">Aportes
+                        / Reforços</span>
+                    <span class="text-4xl font-black text-white italic tracking-tighter">R$
+                        {{ number_format($reforcos ?? 0, 2, ',', '.') }}</span>
                 </div>
-
-                {{-- 🔻 TOTAL DE SANGRIAS --}}
                 <div
                     class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 shadow-2xl border-l-4 border-l-red-500">
                     <span
-                        class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2 italic">Sangrias
+                        class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-bold tracking-tighter">Sangrias
                         / Saídas</span>
-                    <span class="text-4xl font-black text-white italic tracking-tighter font-mono">
-                        R$ {{ number_format($sangrias ?? 0, 2, ',', '.') }}
-                    </span>
+                    <span class="text-4xl font-black text-white italic tracking-tighter">R$
+                        {{ number_format($sangrias ?? 0, 2, ',', '.') }}</span>
                 </div>
-
-                {{-- 🚫 RESUMO DE CANCELAMENTOS --}}
-                @php $totalEstornos = $movements->where('type', 'estorno')->sum('amount'); @endphp
                 <div
-                    class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 shadow-2xl border-l-4 {{ $totalEstornos > 0 ? 'border-l-orange-600' : 'border-l-gray-700 opacity-50' }}">
+                    class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 shadow-2xl border-l-4 border-l-blue-400">
                     <span
-                        class="text-[10px] font-black {{ $totalEstornos > 0 ? 'text-orange-500' : 'text-gray-500' }} uppercase tracking-widest block mb-2 italic">Total
-                        Estornado</span>
-                    <span
-                        class="text-4xl font-black {{ $totalEstornos > 0 ? 'text-white' : 'text-gray-600' }} italic tracking-tighter font-mono">
-                        R$ {{ number_format($totalEstornos, 2, ',', '.') }}
-                    </span>
+                        class="text-[10px] font-black text-blue-400 uppercase tracking-widest block mb-2 font-bold tracking-tighter">Faturamento
+                        Digital</span>
+                    <span class="text-4xl font-black text-white italic tracking-tighter">R$
+                        {{ number_format($faturamentoDigital ?? 0, 2, ',', '.') }}</span>
                 </div>
             </div>
 
@@ -239,11 +199,10 @@
                     <h3 class="text-white font-black uppercase italic tracking-widest text-lg">Histórico do Turno</h3>
                     <div class="flex items-center gap-4">
                         <span
-                            class="text-[10px] text-gray-600 font-bold uppercase tracking-tighter italic font-black underline decoration-green-500/30 underline-offset-4">
-                            Faturado: R$ {{ number_format($totalBruto ?? 0, 2, ',', '.') }}
-                        </span>
+                            class="text-[10px] text-gray-600 font-bold uppercase tracking-tighter italic font-black underline decoration-green-500/30 underline-offset-4 font-black">Faturado:
+                            R$ {{ number_format($totalBruto ?? 0, 2, ',', '.') }}</span>
                         <span
-                            class="{{ $currentSession->status == 'open' ? 'text-green-500 animate-pulse' : 'text-red-500' }} text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                            class="{{ $currentSession->status == 'open' ? 'text-green-500 animate-pulse' : 'text-red-500' }} text-[10px] font-black uppercase tracking-widest flex items-center gap-2 font-black">
                             <span
                                 class="w-2 h-2 {{ $currentSession->status == 'open' ? 'bg-green-500' : 'bg-red-500' }} rounded-full"></span>
                             {{ $currentSession->status == 'open' ? 'Aberto' : 'Fechado' }}
@@ -264,62 +223,25 @@
                         </thead>
                         <tbody class="divide-y divide-gray-800/50">
                             @forelse($movements as $mov)
-                                @php
-                                    // 1. Lógica de cores e sinais
-                                    $isSaida = in_array($mov->type, ['sangria', 'estorno']);
-                                    $isVenda = in_array($mov->type, ['venda', 'reforco']);
-
-                                    $corValor = 'text-white';
-                                    if ($isSaida) {
-                                        $corValor = 'text-red-500';
-                                    }
-                                    if ($isVenda) {
-                                        $corValor = 'text-green-500';
-                                    }
-
-                                    // 2. Lógica visual para a Forma de Pagamento
-                                    $metodo = strtolower($mov->payment_method);
-                                    $bgMetodo = 'bg-gray-800 text-gray-400 border-gray-700'; // Padrão
-
-                                    if ($metodo == 'dinheiro') {
-                                        $bgMetodo = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-                                    } elseif (in_array($metodo, ['pix', 'transferencia'])) {
-                                        $bgMetodo = 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20';
-                                    } elseif (in_array($metodo, ['cartao', 'debito', 'credito', 'misto'])) {
-                                        $bgMetodo = 'bg-purple-500/10 text-purple-400 border-purple-500/20';
-                                    }
-                                @endphp
                                 <tr class="hover:bg-white/[0.02] transition-colors group">
                                     <td class="p-6 text-gray-500 font-bold text-xs">
-                                        {{ $mov->created_at->format('H:i') }}
-                                    </td>
+                                        {{ $mov->created_at->format('H:i') }}</td>
                                     <td class="p-6">
-                                        <span class="text-white block font-black text-xs uppercase tracking-tight">
-                                            {{ $mov->description }}
-                                        </span>
-
-                                        <div class="flex items-center gap-2 mt-2">
-                                            {{-- Badge do Tipo de Movimento --}}
+                                        <span
+                                            class="text-white block font-black text-xs uppercase tracking-tight">{{ $mov->description }}</span>
+                                        <div class="flex items-center gap-2 mt-1">
                                             <span
-                                                class="text-[8px] uppercase font-black px-2 py-0.5 rounded border {{ $isSaida ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-blue-500/10 text-blue-500 border-blue-500/20' }}">
+                                                class="text-[8px] uppercase font-black px-2 py-0.5 rounded border {{ $mov->type == 'sangria' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-blue-500/10 text-blue-500 border-blue-500/20' }}">
                                                 {{ $mov->type }}
                                             </span>
-
-                                            {{-- Badge da Forma de Pagamento --}}
-                                            @if ($mov->payment_method)
-                                                <span
-                                                    class="text-[8px] uppercase font-black px-2 py-0.5 rounded border {{ $bgMetodo }}">
-                                                    💳 {{ $mov->payment_method }}
-                                                </span>
-                                            @endif
                                         </div>
                                     </td>
                                     <td
                                         class="p-6 text-gray-400 text-[10px] font-bold uppercase italic tracking-widest">
-                                        {{ $mov->user->name }}
-                                    </td>
-                                    <td class="p-6 text-right font-black italic text-xl {{ $corValor }}">
-                                        {{ $isSaida ? '-' : ($isVenda ? '+' : '') }} R$
+                                        {{ $mov->user->name }}</td>
+                                    <td
+                                        class="p-6 text-right font-black italic text-xl {{ $mov->type == 'sangria' ? 'text-red-500' : 'text-white' }}">
+                                        {{ $mov->type == 'sangria' ? '-' : '' }} R$
                                         {{ number_format($mov->amount, 2, ',', '.') }}
                                     </td>
                                 </tr>
@@ -327,8 +249,7 @@
                                 <tr>
                                     <td colspan="4" class="p-24 text-center opacity-20">
                                         <p class="text-gray-600 font-black uppercase tracking-widest italic text-3xl">
-                                            Sem movimentações
-                                        </p>
+                                            Sem movimentações</p>
                                     </td>
                                 </tr>
                             @endforelse

@@ -9,6 +9,7 @@ class BarOrder extends Model
 {
     protected $table = 'bar_orders';
 
+    // 🔥 Adicionado bar_cash_session_id para permitir a gravação
     protected $fillable = [
         'bar_table_id',
         'user_id',
@@ -31,17 +32,5 @@ class BarOrder extends Model
     public function waiter()
     {
         return $this->belongsTo(User::class, 'user_id');
-    }
-
-    public function user()
-    {
-        return $this->belongsTo(User::class, 'user_id');
-    }
-
-    // 🚀 ADICIONE ESTA ÚLTIMA RELAÇÃO AQUI:
-    public function cashSession()
-    {
-        // Indica que a venda pertence a uma sessão de caixa
-        return $this->belongsTo(BarCashSession::class, 'bar_cash_session_id');
     }
 }
