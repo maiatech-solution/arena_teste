@@ -60,26 +60,22 @@ class BarReportController extends Controller
         $startDate = Carbon::parse($mesReferencia)->startOfMonth();
         $endDate = Carbon::parse($mesReferencia)->endOfMonth();
 
-        // 1. Query das Mesas (Status: paid)
-        $ordersPart = DB::table('bar_order_items as oi')
+        $rankingFinal = DB::table('bar_order_items as oi')
             ->join('bar_orders as o', 'oi.bar_order_id', '=', 'o.id')
             ->select('oi.bar_product_id', 'oi.quantity', 'oi.subtotal')
-            ->where('o.status', 'paid') // Nas mesas é 'paid'
-            ->whereBetween('o.updated_at', [$startDate, $endDate]);
-
-        // 2. Query do PDV (Status: pago) - 🚨 AQUI ESTAVA O ERRO
-        $salesPart = DB::table('bar_sale_items as si')
-            ->join('bar_sales as s', 'si.bar_sale_id', '=', 's.id')
-            ->select(
-                'si.bar_product_id',
-                'si.quantity',
-                DB::raw('(si.quantity * si.price_at_sale) as subtotal')
-            )
-            ->where('s.status', 'pago') // 🎯 No PDV seu banco usa 'pago'
-            ->whereBetween('s.created_at', [$startDate, $endDate]);
-
-        // Unifica as duas origens
-        $rankingFinal = $ordersPart->unionAll($salesPart);
+            ->where('o.status', 'paid')
+            ->whereBetween('o.updated_at', [$startDate, $endDate])
+            ->unionAll(
+                DB::table('bar_sale_items as si')
+                    ->join('bar_sales as s', 'si.bar_sale_id', '=', 's.id')
+                    ->select(
+                        'si.bar_product_id',
+                        'si.quantity',
+                        DB::raw('(si.quantity * si.price_at_sale) as subtotal')
+                    )
+                    ->where('s.status', 'paid')
+                    ->whereBetween('s.created_at', [$startDate, $endDate])
+            );
 
         $ranking = DB::table(DB::raw("({$rankingFinal->toSql()}) as combined"))
             ->mergeBindings($rankingFinal)
@@ -92,17 +88,13 @@ class BarReportController extends Controller
             ->orderBy('total_qty', 'desc')
             ->get();
 
-        // 3. Processa os dados de lucro e produtos
         foreach ($ranking as $item) {
-            $product = BarProduct::with('category')->find($item->bar_product_id);
+            $product = BarProduct::find($item->bar_product_id);
             $item->product = $product;
-
-            if ($product) {
-                $custoUnitario = $product->purchase_price ?? 0;
-                $item->total_cost = $custoUnitario * $item->total_qty;
-                $item->total_profit = $item->total_revenue - $item->total_cost;
-                $item->margin_percent = $item->total_revenue > 0 ? ($item->total_profit / $item->total_revenue) * 100 : 0;
-            }
+            $custoUnitario = $product->purchase_price ?? 0;
+            $item->total_cost = $custoUnitario * $item->total_qty;
+            $item->total_profit = $item->total_revenue - $item->total_cost;
+            $item->margin_percent = $item->total_revenue > 0 ? ($item->total_profit / $item->total_revenue) * 100 : 0;
         }
 
         return view('bar.reports.products', compact('ranking', 'mesReferencia'));
@@ -156,35 +148,27 @@ class BarReportController extends Controller
     public function daily(Request $request)
     {
         $mesReferencia = $request->input('mes_referencia', now()->format('Y-m'));
-        $startDate = \Carbon\Carbon::parse($mesReferencia)->startOfMonth();
-        $endDate = \Carbon\Carbon::parse($mesReferencia)->endOfMonth();
+        $startDate = Carbon::parse($mesReferencia)->startOfMonth();
+        $endDate = Carbon::parse($mesReferencia)->endOfMonth();
 
-        // 1. Vendas de Mesas (Status: paid)
-        $vendasMesas = \App\Models\Bar\BarOrder::where('status', 'paid')
+        $vendasMesas = BarOrder::where('status', 'paid')
             ->whereBetween('updated_at', [$startDate, $endDate])
             ->select(DB::raw('DATE(updated_at) as date'), DB::raw('SUM(total_value) as total'))
             ->groupBy('date')->get();
 
-        // 2. Vendas de PDV (Status: pago) - AJUSTADO PARA O SEU BANCO
-        $vendasPDV = \App\Models\Bar\BarSale::where('status', 'pago')
+        $vendasPDV = BarSale::where('status', 'paid')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->select(DB::raw('DATE(created_at) as date'), DB::raw('SUM(total_value) as total'))
             ->groupBy('date')->get();
 
-        // 3. Monta o array com todos os dias do mês para o gráfico ficar bonito
         $datas = [];
-        $periodo = new \DatePeriod($startDate, new \DateInterval('P1D'), $endDate->addDay());
-
-        foreach ($periodo as $data) {
-            $datas[$data->format('Y-m-d')] = ['mesas' => 0, 'pdv' => 0];
-        }
-
         foreach ($vendasMesas as $v) {
             $datas[$v->date]['mesas'] = $v->total;
         }
         foreach ($vendasPDV as $v) {
             $datas[$v->date]['pdv'] = $v->total;
         }
+        ksort($datas);
 
         return view('bar.reports.daily', compact('datas', 'mesReferencia'));
     }
@@ -230,25 +214,12 @@ class BarReportController extends Controller
      */
     public function cancelations(Request $request)
     {
-        $mesReferencia = $request->input('mes_referencia', now()->format('Y-m'));
-        $startDate = \Carbon\Carbon::parse($mesReferencia)->startOfMonth();
-        $endDate = \Carbon\Carbon::parse($mesReferencia)->endOfMonth();
+        // Aqui você pode buscar ordens canceladas ou com descontos > 0
+        $cancelamentos = BarOrder::where('status', 'canceled')
+            ->orWhere('discount_value', '>', 0)
+            ->orderBy('updated_at', 'desc')->paginate(20);
 
-        // 1. Pedidos cancelados (Status correto: cancelled)
-        $cancelamentos = \App\Models\Bar\BarOrder::with(['user'])
-            ->where('status', 'cancelled')
-            ->whereBetween('updated_at', [$startDate, $endDate])
-            ->orderBy('updated_at', 'desc')
-            ->get();
-
-        // 2. Estornos de Itens (Quando removem um produto da mesa sem cancelar a conta toda)
-        $estornosEstoque = \App\Models\Bar\BarStockMovement::with(['product', 'user'])
-            ->where('description', 'like', '%Estorno%')
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        return view('bar.reports.cancelations', compact('cancelamentos', 'estornosEstoque', 'mesReferencia'));
+        return view('bar.reports.cancelations', compact('cancelamentos'));
     }
 
     /**

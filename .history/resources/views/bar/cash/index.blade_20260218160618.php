@@ -109,7 +109,7 @@
                     <form action="{{ route('bar.cash.open') }}" method="POST" id="formOpenCash">
                         @csrf
 
-                        {{-- 🔑 CAMPOS DE ESPELHO --}}
+                        {{-- 🔑 CAMPOS DE ESPELHO (Injetamos o e-mail se já estiver logado como gestor) --}}
                         <input type="hidden" name="supervisor_email"
                             value="{{ in_array(auth()->user()->role, ['admin', 'gestor']) ? auth()->user()->email : '' }}">
                         <input type="hidden" name="supervisor_password">
@@ -123,27 +123,18 @@
                                 class="w-full bg-black border-2 border-gray-800 rounded-3xl p-6 text-white text-3xl font-black text-center focus:border-green-500 outline-none transition-all shadow-inner font-mono">
                         </div>
 
-                        {{-- 🛡️ CAMPO DE AUTORIZAÇÃO (Aberto para todos, mas com lógica inteligente) --}}
-                        <div class="mb-6 p-4 bg-gray-800/50 border border-gray-800 rounded-3xl text-center">
-                            @if (in_array(auth()->user()->role, ['admin', 'gestor']))
-                                {{-- Se for o dono/gestor logado --}}
+                        {{-- 🛡️ CAMPO PARA GESTOR LOGADO ASSINAR A ABERTURA --}}
+                        @if (in_array(auth()->user()->role, ['admin', 'gestor']))
+                            <div class="mb-6 p-4 bg-green-600/5 border border-green-600/20 rounded-3xl text-center">
                                 <span
-                                    class="text-[9px] font-black text-green-500 uppercase block mb-2 tracking-widest">Confirme
-                                    sua Senha</span>
-                            @else
-                                {{-- Se for o colaborador logado --}}
-                                <span
-                                    class="text-[9px] font-black text-orange-500 uppercase block mb-2 tracking-widest animate-pulse">🔒
-                                    Senha do Gestor Necessária</span>
-                                <input type="email" id="email_supervisor_abertura" placeholder="E-MAIL DO GESTOR"
-                                    class="w-full max-w-xs bg-black border border-gray-800 rounded-xl p-3 text-white text-center text-[10px] mb-2 outline-none focus:border-orange-500 transition-all font-mono">
-                            @endif
+                                    class="text-[9px] font-black text-green-500 uppercase block mb-2 tracking-widest">Confirmar
+                                    Abertura</span>
+                                <input type="password" id="password_direta_abertura" placeholder="Sua senha de Gestor"
+                                    class="w-full max-w-xs bg-black border border-gray-800 rounded-xl p-3 text-white text-center text-sm outline-none focus:border-green-500 transition-all font-mono">
+                            </div>
+                        @endif
 
-                            <input type="password" id="password_direta_abertura" placeholder="DIGITE A SENHA"
-                                class="w-full max-w-xs bg-black border border-gray-800 rounded-xl p-3 text-white text-center text-sm outline-none focus:border-orange-500 transition-all font-mono">
-                        </div>
-
-                        {{-- 🚀 BOTÃO --}}
+                        {{-- 🚀 BOTÃO ATUALIZADO (Troque o requisitarAutorizacao por enviarComAutorizacao direto) --}}
                         <button type="button" onclick="enviarComAutorizacao('formOpenCash')"
                             class="w-full py-6 bg-green-600 hover:bg-green-500 text-white font-black rounded-3xl uppercase tracking-widest shadow-lg shadow-green-900/40 transition-all active:scale-95">
                             Abrir Turno de Trabalho

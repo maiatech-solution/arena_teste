@@ -1,0 +1,68 @@
+<x-bar-layout>
+    <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        {{-- CABEÇALHO --}}
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
+            <div class="flex items-center gap-5">
+                <a href="{{ route('bar.reports.index') }}"
+                    class="p-3 bg-gray-900 hover:bg-gray-800 text-orange-500 rounded-2xl border border-gray-800 transition-all shadow-lg">◀</a>
+                <div>
+                    <h1 class="text-4xl font-black text-white uppercase tracking-tighter italic">Fluxo de <span class="text-orange-600">Recebimento</span></h1>
+                    <p class="text-gray-500 font-bold text-[10px] uppercase tracking-[0.2em] mt-1">PDV e Comandas de Mesa</p>
+                </div>
+            </div>
+
+            <form action="{{ route('bar.reports.payments') }}" method="GET">
+                <input type="month" name="mes_referencia" value="{{ $mesReferencia }}" onchange="this.form.submit()"
+                       class="bg-black border-none rounded-2xl text-white text-[10px] font-black uppercase px-6 py-3 outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer">
+            </form>
+        </div>
+
+        {{-- CARDS --}}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div class="bg-orange-600 p-8 rounded-[2.5rem] shadow-xl shadow-orange-600/20 col-span-1 md:col-span-2 relative overflow-hidden group">
+                 <p class="text-[10px] font-black text-orange-200 uppercase tracking-widest mb-1">Faturamento Bruto Consolidado</p>
+                <h3 class="text-5xl font-black text-white italic tracking-tighter">
+                    R$ {{ number_format($pagamentos->sum('total'), 2, ',', '.') }}
+                </h3>
+            </div>
+            <div class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 flex flex-col justify-center">
+                <p class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total de Operações</p>
+                <h3 class="text-3xl font-black text-white italic tracking-tighter">{{ $pagamentos->sum('qtd') }}</h3>
+            </div>
+        </div>
+
+        {{-- TABELA --}}
+        <div class="bg-gray-900 border border-gray-800 rounded-[3rem] shadow-2xl overflow-hidden">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-black/40">
+                        <th class="p-8 text-[10px] font-black text-gray-500 uppercase tracking-widest">Modalidade</th>
+                        <th class="p-8 text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Volume</th>
+                        <th class="p-8 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Valor Total</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-800/50">
+                    @forelse($pagamentos as $p)
+                        <tr class="hover:bg-white/[0.02] transition-colors group">
+                            <td class="p-8">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-12 h-12 bg-black rounded-2xl flex items-center justify-center border border-gray-800 text-xl">
+                                        {{ str_contains(strtolower($p->method), 'pix') ? '💎' : (str_contains(strtolower($p->method), 'dinheiro') ? '💵' : '💳') }}
+                                    </div>
+                                    <span class="text-white font-black text-sm uppercase">{{ $p->method }}</span>
+                                </div>
+                            </td>
+                            <td class="p-8 text-center text-gray-400 font-black font-mono text-lg">{{ $p->qtd }}</td>
+                            <td class="p-8 text-right font-black text-orange-500 italic text-2xl">
+                                R$ {{ number_format($p->total, 2, ',', '.') }}
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="3" class="p-32 text-center text-gray-600 font-black uppercase">Sem registros</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+</x-bar-layout>

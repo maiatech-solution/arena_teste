@@ -139,7 +139,7 @@
         </div>
 
         {{-- 💡 LEGENDAS E AUDITORIA --}}
-        <div class="grid grid-cols-1 mt-10 md:grid-cols-2 gap-8 mt-12">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
             <div class="p-10 bg-gray-900/40 border border-gray-800 rounded-[3rem] relative overflow-hidden group">
                 <div class="absolute right-0 top-0 p-8 opacity-5 text-6xl group-hover:scale-110 transition-transform">⚖️</div>
                 <h4 class="text-emerald-500 text-[10px] font-black uppercase tracking-widest mb-4 italic">Auditoria de Precisão</h4>

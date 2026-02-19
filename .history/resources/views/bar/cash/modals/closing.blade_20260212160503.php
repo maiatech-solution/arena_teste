@@ -61,7 +61,6 @@
             <form action="{{ route('bar.cash.close') }}" method="POST" id="formCloseCash">
                 @csrf
 
-                {{-- 🔑 CAMPOS DE ESPELHO --}}
                 <input type="hidden" name="supervisor_email"
                     value="{{ in_array(auth()->user()->role, ['admin', 'gestor']) ? auth()->user()->email : '' }}">
                 <input type="hidden" name="supervisor_password" id="mirror_password_closing">
@@ -69,9 +68,9 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {{-- VALOR CONTADO --}}
                     <div>
-                        <label class="text-gray-500 uppercase text-[10px] font-black ml-2 mb-2 block tracking-widest">
-                            Contagem Real na Gaveta
-                        </label>
+                        <label
+                            class="text-gray-500 uppercase text-[10px] font-black ml-2 mb-2 block tracking-widest">Contagem
+                            Real na Gaveta</label>
                         <input type="number" name="actual_balance" id="actual_balance_input" step="0.01"
                             min="0" required placeholder="0,00" oninput="calcularDiferenca()"
                             class="w-full bg-black border-2 border-gray-800 rounded-2xl p-6 text-white text-4xl font-black text-center focus:border-orange-600 outline-none transition-all shadow-inner font-mono">
@@ -84,38 +83,25 @@
 
                     {{-- OBSERVAÇÕES --}}
                     <div>
-                        <label class="text-gray-500 uppercase text-[10px] font-black ml-2 mb-2 block tracking-widest">
-                            Observações do Turno
-                        </label>
+                        <label
+                            class="text-gray-500 uppercase text-[10px] font-black ml-2 mb-2 block tracking-widest">Observações
+                            do Turno</label>
                         <textarea name="notes" rows="3" placeholder="Ex: Diferença de troco..."
                             class="w-full bg-gray-800 border-none rounded-2xl p-4 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-600 outline-none text-xs h-[100px]"></textarea>
                     </div>
                 </div>
 
-                {{-- 🛡️ CAMPO DE AUTORIZAÇÃO UNIFICADO --}}
-                <div class="mt-6 p-5 bg-orange-600/5 border border-orange-600/20 rounded-[2rem] text-center">
-                    @if (in_array(auth()->user()->role, ['admin', 'gestor']))
-                        {{-- Se for o GESTOR logado --}}
-                        <span class="text-[9px] font-black text-orange-500 uppercase block mb-3 tracking-[0.2em]">
-                            Confirmação de Segurança
-                        </span>
-                        <p class="text-[8px] text-gray-600 mb-2 uppercase font-bold italic">
-                            Você está logado como {{ auth()->user()->name }}. Confirme sua senha.
-                        </p>
-                    @else
-                        {{-- Se for o COLABORADOR logado --}}
+                @if (in_array(auth()->user()->role, ['admin', 'gestor']))
+                    <div class="mt-6 p-5 bg-orange-600/5 border border-orange-600/20 rounded-[2rem] text-center">
                         <span
-                            class="text-[9px] font-black text-orange-500 uppercase block mb-2 tracking-widest animate-pulse">
-                            🔒 Autorização do Gestor Necessária
-                        </span>
-                        <input type="email" id="email_supervisor_fechamento" placeholder="E-MAIL DO GESTOR"
-                            class="w-full max-w-xs bg-black border border-gray-800 rounded-xl p-3 text-white text-center text-[10px] mb-2 outline-none focus:border-orange-600 transition-all font-mono uppercase">
-                    @endif
-
-                    {{-- Este campo SEMPRE deve existir para o JS não dar erro --}}
-                    <input type="password" id="password_direta_gestor" placeholder="SENHA DO GESTOR"
-                        class="w-full max-w-xs bg-black border border-gray-800 rounded-xl p-3 text-white text-center text-sm outline-none focus:border-orange-600 transition-all font-mono">
-                </div>
+                            class="text-[9px] font-black text-orange-500 uppercase block mb-3 tracking-[0.2em]">Confirmação
+                            de Segurança</span>
+                        <input type="password" id="password_direta_gestor" placeholder="Sua senha de Gestor"
+                            class="w-full max-w-xs bg-black border border-gray-800 rounded-xl p-3 text-white text-center text-sm outline-none focus:border-orange-600 transition-all font-mono">
+                        <p class="text-[8px] text-gray-600 mt-2 uppercase font-bold italic">Você está logado como
+                            {{ auth()->user()->name }}. Confirme sua senha para assinar o encerramento.</p>
+                    </div>
+                @endif
 
                 <div class="grid grid-cols-2 gap-4 mt-8">
                     <button type="button" onclick="closeModalClosing()"
