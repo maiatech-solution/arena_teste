@@ -29,38 +29,6 @@
             </form>
         </div>
 
-        {{-- Cards de Resumo --}}
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-
-            {{-- Card Estornos --}}
-            <div class="bg-gray-900 border border-gray-800 p-8 rounded-[2rem] shadow-xl">
-                <div class="flex items-center justify-between mb-4">
-                    <span class="p-3 bg-orange-600/10 text-orange-500 rounded-2xl">💰</span>
-                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Estornos de
-                        Caixa</span>
-                </div>
-                <h3 class="text-3xl font-black text-white italic">
-                    R$ {{ number_format($cancelamentosFinanceiros->sum('amount'), 2, ',', '.') }}
-                </h3>
-                <p class="text-gray-500 text-[10px] font-bold uppercase mt-1">Dinheiro devolvido aos clientes</p>
-            </div>
-
-            {{-- Card Prejuízo Real --}}
-            <div
-                class="bg-gray-900 border border-red-500/30 p-8 rounded-[2rem] shadow-xl bg-gradient-to-br from-red-500/5 to-transparent">
-                <div class="flex items-center justify-between mb-4">
-                    <span class="p-3 bg-red-600/10 text-red-500 rounded-2xl animate-pulse">📉</span>
-                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Prejuízo em
-                        Produtos</span>
-                </div>
-                <h3 class="text-3xl font-black text-white italic">
-                    R$ {{ number_format($valorTotalPerdas, 2, ',', '.') }}
-                </h3>
-                <p class="text-gray-500 text-[10px] font-bold uppercase mt-1">Custo de mercadoria jogada fora</p>
-            </div>
-
-        </div>
-
         {{-- BLOCO 1: ESTORNOS FINANCEIROS (O que saiu do dinheiro) --}}
         <div class="bg-gray-900 rounded-[2.5rem] border border-gray-800 shadow-2xl overflow-hidden mb-12">
             <div class="p-8 border-b border-gray-800 bg-black/20 flex justify-between items-center">
@@ -124,7 +92,8 @@
                     <span class="text-2xl">🗑️</span> Prejuízo Físico (Perdas)
                 </h2>
                 <span
-                    class="bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full animate-pulse tracking-widest">PERDAS</span>
+                    class="bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full animate-pulse tracking-widest">DESCARTE
+                    / VENCIMENTO</span>
             </div>
 
             <div class="overflow-x-auto">

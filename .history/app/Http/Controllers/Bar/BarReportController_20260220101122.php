@@ -123,34 +123,27 @@ class BarReportController extends Controller
             ->get();
 
         foreach ($sessoes as $sessao) {
-            // Se o caixa ainda estiver aberto, usamos o horário atual como limite
-            $dataFim = $sessao->closed_at ?? now();
-
-            // 1. Soma Mesas: Busca pelo ID OU pela janela de tempo (Garante que nada escape)
-            $vendasMesas = \App\Models\Bar\BarOrder::where('status', 'paid')
-                ->where(function ($q) use ($sessao, $dataFim) {
-                    $q->where('bar_cash_session_id', $sessao->id)
-                        ->orWhereBetween('updated_at', [$sessao->opened_at, $dataFim]);
-                })
+            // 1. Soma Mesas vinculadas a este ID de sessão
+            $vendasMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $sessao->id)
+                ->where('status', 'paid')
                 ->sum('total_value');
 
-            // 2. Soma PDV: Mesma lógica de segurança
-            $vendasPDV = \App\Models\Bar\BarSale::where('status', 'pago')
-                ->where(function ($q) use ($sessao, $dataFim) {
-                    $q->where('bar_cash_session_id', $sessao->id)
-                        ->orWhereBetween('created_at', [$sessao->opened_at, $dataFim]);
-                })
+            // 2. Soma PDV vinculados a este ID de sessão
+            $vendasPDV = \App\Models\Bar\BarSale::where('bar_cash_session_id', $sessao->id)
+                ->where('status', 'pago')
                 ->sum('total_value');
 
-            // 3. Movimentações (Sangria/Reforço)
+            // 3. Movimentações de caixa (Sangria/Reforço)
             $movimentacoes = \App\Models\Bar\BarCashMovement::where('bar_cash_session_id', $sessao->id)->get();
+
+            // 🔥 AQUI ESTAVA O ERRO: Mudamos de 'suprimento' para 'reforco'
             $reforcos = $movimentacoes->where('type', 'reforco')->sum('amount');
             $sangrias = $movimentacoes->where('type', 'sangria')->sum('amount');
 
             // 4. Resultado Final Unificado
             $sessao->vendas_turno = $vendasMesas + $vendasPDV;
 
-            // FÓRMULA: Total esperado = Fundo + Vendas + Reforços - Sangrias
+            // FÓRMULA CORRIGIDA: Total esperado = Fundo + Vendas + Reforços - Sangrias
             $sessao->total_sistema_esperado = $sessao->opening_balance + $sessao->vendas_turno + $reforcos - $sangrias;
         }
 
@@ -241,42 +234,31 @@ class BarReportController extends Controller
         $startDate = \Carbon\Carbon::parse($mesReferencia)->startOfMonth();
         $endDate = \Carbon\Carbon::parse($mesReferencia)->endOfMonth();
 
-        // 1. Financeiro (Estornos de Caixa)
+        // 1. Estornos Financeiros (O que saiu do dinheiro)
         $cancelamentosFinanceiros = \App\Models\Bar\BarCashMovement::with(['user'])
             ->where('type', 'estorno')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // 2. Prejuízo Real (Perdas/Vencidos)
-        $perdasReais = \App\Models\Bar\BarStockMovement::with(['product', 'user'])
-            ->where('type', 'perda')
+        // 2. Movimentações de Estoque (Auditoria Física)
+        // Vamos pegar TUDO que for 'loss' (perda do modal) ou 'input' (venda cancelada que voltou)
+        $movimentacoesEstoque = \App\Models\Bar\BarStockMovement::with(['product', 'user'])
             ->whereBetween('created_at', [$startDate, $endDate])
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        // 💰 NOVO: Cálculo do prejuízo total em R$ (Baseado no preço de custo)
-        $valorTotalPerdas = $perdasReais->sum(function ($movimento) {
-            return abs($movimento->quantity) * ($movimento->product->purchase_price ?? 0);
-        });
-
-        // 3. Apenas Retorno (Itens que voltaram para o estoque)
-        $retornosEstoque = \App\Models\Bar\BarStockMovement::with(['product', 'user'])
-            ->where('type', 'input')
-            ->where(function ($q) {
-                $q->where('description', 'like', '%CANCELAMENTO%')
-                    ->orWhere('description', 'like', '%ESTORNO%');
+            ->where(function ($query) {
+                $query->whereIn('type', ['loss', 'output']) // 'loss' é o que seu modal gera
+                    ->orWhere(function ($q) {
+                        $q->where('type', 'input')
+                            ->where('description', 'like', '%ESTORNO%'); // Apenas retornos de cancelamento
+                    });
             })
-            ->whereBetween('created_at', [$startDate, $endDate])
             ->orderBy('created_at', 'desc')
             ->get();
 
         return view('bar.reports.cancelations', compact(
             'cancelamentosFinanceiros',
-            'perdasReais',
-            'retornosEstoque',
-            'mesReferencia',
-            'valorTotalPerdas' // <-- Enviando para a view
+            'movimentacoesEstoque',
+            'mesReferencia'
         ));
     }
 

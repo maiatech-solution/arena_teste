@@ -124,7 +124,8 @@
                     <span class="text-2xl">🗑️</span> Prejuízo Físico (Perdas)
                 </h2>
                 <span
-                    class="bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full animate-pulse tracking-widest">PERDAS</span>
+                    class="bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full animate-pulse tracking-widest">DESCARTE
+                    / VENCIMENTO</span>
             </div>
 
             <div class="overflow-x-auto">

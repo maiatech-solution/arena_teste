@@ -190,36 +190,29 @@ Route::middleware(['auth', 'gestor'])->group(function () {
 // -----------------------------------------------------------------------------------
 Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(function () {
 
-    // 🚀 Dashboard Principal
-    Route::get('/dashboard', [BarDashboardController::class, 'index'])->name('dashboard');
-
-    // 👤 MEU PERFIL (Acesso à View Dark)
-    Route::get('/perfil', function () {
-        return view('bar.profile.index', [
-            'user' => auth()->user()
-        ]);
-    })->name('profile');
-
-    // 🔥 O SEGREDO: Captura o redirecionamento do Controller
-    // Se o Laravel tentar levar para 'bar.profile.edit', ele cai aqui e fica no layout Dark
-    Route::get('/profile-ajuste', function () {
-        return redirect()->route('bar.profile');
-    })->name('profile.edit');
-
     // 🏢 DADOS DA EMPRESA (🔒 Restrito)
     Route::get('/configuracoes/empresa', [BarCompanyController::class, 'edit'])->middleware(['role:admin,gestor'])->name('company.edit');
     Route::put('/configuracoes/empresa', [BarCompanyController::class, 'update'])->middleware(['role:admin,gestor'])->name('company.update');
 
+    // 🚀 Dashboard Principal
+    Route::get('/dashboard', [BarDashboardController::class, 'index'])->name('dashboard');
+
     // 🛒 MÓDULO PDV (Venda Direta / Balcão)
     Route::prefix('pdv')->group(function () {
+        // Nova tela de escolha (Painel com 2 Cards)
         Route::get('/painel', [BarPosController::class, 'painel'])->name('pdv.painel');
+
+        // Interface de Venda
         Route::get('/', [BarPosController::class, 'index'])->name('pdv');
         Route::post('/venda', [BarPosController::class, 'store'])->name('pos.store');
     });
 
     // 🍽️ MÓDULO MESAS (Comandas)
     Route::prefix('mesas')->name('tables.')->group(function () {
+        // Nova tela de escolha (Painel com 2 Cards)
         Route::get('/painel', [BarTableController::class, 'painel'])->name('painel');
+
+        // Interface de Gestão de Mesas
         Route::get('/', [BarTableController::class, 'index'])->name('index');
         Route::post('/sync', [BarTableController::class, 'sync'])->middleware(['role:admin,gestor'])->name('sync');
         Route::post('/{id}/toggle', [BarTableController::class, 'toggleStatus'])->middleware(['role:admin,gestor'])->name('toggle');
@@ -231,10 +224,13 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
         Route::get('/recibo/{orderId}', [BarTableController::class, 'printReceipt'])->name('receipt');
     });
 
-    // 📄 HISTÓRICOS SEPARADOS
+    // 📄 HISTÓRICOS SEPARADOS (Acessados pelos cards de histórico)
     Route::prefix('historico')->name('vendas.')->group(function () {
+        // 1. Histórico do PDV
         Route::get('/pdv', [BarOrderController::class, 'indexPdv'])->name('pdv.index');
         Route::post('/pdv/{sale}/cancelar', [BarOrderController::class, 'cancelarPdv'])->name('pdv.cancelar');
+
+        // 2. Histórico de Mesas
         Route::get('/mesas', [BarOrderController::class, 'indexMesas'])->name('mesas.index');
         Route::post('/mesas/{order}/cancelar', [BarOrderController::class, 'cancelarMesa'])->name('mesas.cancelar');
     });
@@ -244,9 +240,12 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
     Route::get('estoque/entrada', [BarProductController::class, 'stockEntry'])->name('products.stock_entry');
     Route::post('estoque/entrada', [BarProductController::class, 'processStockEntry'])->name('products.process_entry');
     Route::get('estoque/historico', [BarProductController::class, 'stockHistory'])->name('products.history');
+
+    // Ações de Estoque Sensíveis (🔒 Restrito)
     Route::post('estoque/registrar-perda', [BarProductController::class, 'recordLoss'])->middleware(['role:admin,gestor'])->name('products.record_loss');
     Route::patch('estoque/{product}/add-stock', [BarProductController::class, 'addStock'])->middleware(['role:admin,gestor'])->name('products.add_stock');
 
+    // CRUD de Estoque (Resource)
     Route::resource('estoque', BarProductController::class)->names([
         'index'   => 'products.index',
         'create'  => 'products.create',
@@ -265,7 +264,7 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
         Route::post('/reabrir/{id}', [BarCashController::class, 'reopen'])->middleware(['role:admin,gestor'])->name('reopen');
     });
 
-    // 👥 Gestão de Equipe Bar
+    // 👥 Gestão de Equipe Bar (🔒 Restrito)
     Route::prefix('usuarios')->name('users.')->middleware(['role:admin,gestor'])->group(function () {
         Route::get('/', [BarUserController::class, 'index'])->name('index');
         Route::get('/create', [BarUserController::class, 'create'])->name('create');
@@ -275,7 +274,7 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
         Route::delete('/{user}', [BarUserController::class, 'destroy'])->name('destroy');
     });
 
-    // 📊 RELATÓRIOS FINANCEIROS
+    // 📊 RELATÓRIOS FINANCEIROS (🔒 Restrito Admin/Gestor)
     Route::prefix('relatorios')->name('reports.')->middleware(['role:admin,gestor'])->group(function () {
         Route::get('/', [BarReportController::class, 'index'])->name('index');
         Route::get('/produtos', [BarReportController::class, 'products'])->name('products');
@@ -288,21 +287,10 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
 });
 
 // -----------------------------------------------------------------------------------
-// PERFIL E AUTH (ARENA) - ATUALIZADO PARA REPASSAR MENSAGENS AO BAR
+// PERFIL E AUTH
 // -----------------------------------------------------------------------------------
 Route::middleware('auth')->group(function () {
-    Route::get('/profile', function () {
-        // Captura a mensagem de sucesso se ela existir
-        $status = session('status');
-
-        if (str_contains(url()->previous(), '/bar')) {
-            // O segredo está no ->with('status', $status) que repassa o alerta
-            return redirect()->route('bar.profile')->with('status', $status);
-        }
-
-        return app(ProfileController::class)->edit(request());
-    })->name('profile.edit');
-
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });

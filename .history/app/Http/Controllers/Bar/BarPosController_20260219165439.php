@@ -58,19 +58,14 @@ class BarPosController extends Controller
                 // Determinar o método final (apenas para histórico da BarSale)
                 $metodoFinal = count($request->payments) > 1 ? 'misto' : $request->payments[0]['method'];
 
-                // 2. Criar a Venda
+                // 2. Criar a Venda (Forma Manual - Mais segura para garantir a gravação do ID)
                 $sale = new BarSale();
                 $sale->user_id = auth()->id();
                 $sale->total_value = $request->total_value;
                 $sale->payment_method = $metodoFinal;
                 $sale->status = 'pago';
-                $sale->bar_cash_session_id = $session->id; // Carimbo da sessão
-                $sale->save();
-
-                // 🔥 ATUALIZAÇÃO DO TOTAL DO SISTEMA (Auditoria)
-                // Isso impede que o relatório mostre "sobra" quando você recebe em PIX/Cartão
-                // Certifique-se de que a coluna 'total_vendas_sistema' existe na sua tabela
-                $session->increment('total_vendas_sistema', $request->total_value);
+                $sale->bar_cash_session_id = $session->id; // 🔥 O carimbo entra direto aqui
+                $sale->save(); // 💾 Gravação garantida
 
                 // 3. Processar Itens e Estoque
                 foreach ($request->items as $item) {
@@ -87,9 +82,7 @@ class BarPosController extends Controller
                         'price_at_sale' => $product->sale_price
                     ]);
 
-                    if ($product->manage_stock) {
-                        $product->decrement('stock_quantity', $item['quantity']);
-                    }
+                    $product->decrement('stock_quantity', $item['quantity']);
 
                     // Histórico de Estoque
                     \App\Models\Bar\BarStockMovement::create([
@@ -101,7 +94,7 @@ class BarPosController extends Controller
                     ]);
                 }
 
-                // 4. INTEGRAÇÃO COM O CAIXA (Movimentações financeiras detalhadas)
+                // 4. INTEGRAÇÃO COM O CAIXA
                 foreach ($request->payments as $pay) {
                     BarCashMovement::create([
                         'bar_cash_session_id' => $session->id,
@@ -113,7 +106,7 @@ class BarPosController extends Controller
                         'description'         => "Venda Direta PDV #{$sale->id}"
                     ]);
 
-                    // Atualiza o saldo esperado especificamente para DINHEIRO (gaveta física)
+                    // Se foi pago em dinheiro, atualiza o saldo esperado na gaveta
                     if ($pay['method'] === 'dinheiro') {
                         $session->increment('expected_balance', $pay['value']);
                     }
@@ -125,6 +118,7 @@ class BarPosController extends Controller
                 ]);
             });
         } catch (\Exception $e) {
+            // Como o PDV usa AJAX, o erro cai aqui e envia a mensagem pro alerta do JS
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()
@@ -132,8 +126,5 @@ class BarPosController extends Controller
         }
     }
 
-    public function painel()
-    {
-        return view('bar.pos.painel');
-    }
+    public function painel() { return view('bar.pos.painel'); }
 }

@@ -123,34 +123,27 @@ class BarReportController extends Controller
             ->get();
 
         foreach ($sessoes as $sessao) {
-            // Se o caixa ainda estiver aberto, usamos o horário atual como limite
-            $dataFim = $sessao->closed_at ?? now();
-
-            // 1. Soma Mesas: Busca pelo ID OU pela janela de tempo (Garante que nada escape)
-            $vendasMesas = \App\Models\Bar\BarOrder::where('status', 'paid')
-                ->where(function ($q) use ($sessao, $dataFim) {
-                    $q->where('bar_cash_session_id', $sessao->id)
-                        ->orWhereBetween('updated_at', [$sessao->opened_at, $dataFim]);
-                })
+            // 1. Soma Mesas vinculadas a este ID de sessão
+            $vendasMesas = \App\Models\Bar\BarOrder::where('bar_cash_session_id', $sessao->id)
+                ->where('status', 'paid')
                 ->sum('total_value');
 
-            // 2. Soma PDV: Mesma lógica de segurança
-            $vendasPDV = \App\Models\Bar\BarSale::where('status', 'pago')
-                ->where(function ($q) use ($sessao, $dataFim) {
-                    $q->where('bar_cash_session_id', $sessao->id)
-                        ->orWhereBetween('created_at', [$sessao->opened_at, $dataFim]);
-                })
+            // 2. Soma PDV vinculados a este ID de sessão
+            $vendasPDV = \App\Models\Bar\BarSale::where('bar_cash_session_id', $sessao->id)
+                ->where('status', 'pago')
                 ->sum('total_value');
 
-            // 3. Movimentações (Sangria/Reforço)
+            // 3. Movimentações de caixa (Sangria/Reforço)
             $movimentacoes = \App\Models\Bar\BarCashMovement::where('bar_cash_session_id', $sessao->id)->get();
+
+            // 🔥 AQUI ESTAVA O ERRO: Mudamos de 'suprimento' para 'reforco'
             $reforcos = $movimentacoes->where('type', 'reforco')->sum('amount');
             $sangrias = $movimentacoes->where('type', 'sangria')->sum('amount');
 
             // 4. Resultado Final Unificado
             $sessao->vendas_turno = $vendasMesas + $vendasPDV;
 
-            // FÓRMULA: Total esperado = Fundo + Vendas + Reforços - Sangrias
+            // FÓRMULA CORRIGIDA: Total esperado = Fundo + Vendas + Reforços - Sangrias
             $sessao->total_sistema_esperado = $sessao->opening_balance + $sessao->vendas_turno + $reforcos - $sangrias;
         }
 

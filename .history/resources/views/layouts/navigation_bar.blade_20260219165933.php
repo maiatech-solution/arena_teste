@@ -19,19 +19,20 @@
                 @if (!request()->routeIs('bar.dashboard'))
                     <div class="hidden md:flex items-center space-x-2 sm:ms-10">
                         @php
-                            // ATUALIZADO: Unificado 'Usuários' para evitar repetição
+                            // ATUALIZADO: Apontando para os Painéis intermediários
                             $links = [
                                 'bar.pdv.painel' => 'PDV',
                                 'bar.products.index' => 'Estoque',
                                 'bar.tables.painel' => 'Mesas',
                                 'bar.cash.index' => 'Caixa',
                                 'bar.reports.index' => 'Relatórios',
-                                'bar.users.index' => 'Equipe',
+                                'bar.users.index' => 'Usuários',
                             ];
                         @endphp
 
                         @foreach ($links as $route => $label)
                             @php
+                                // Lógica para manter o botão ativo mesmo em rotas filhas
                                 $routePrefix = str_replace('.painel', '', $route);
                                 $active = request()->routeIs($route) || request()->routeIs($routePrefix . '.*');
                             @endphp
@@ -73,6 +74,7 @@
                                     Mudar Ambiente
                                 </div>
 
+                                {{-- Lógica para alternar o botão de switch --}}
                                 @if (request()->is('bar*'))
                                     <x-dropdown-link :href="route('modules.switch', 'arena')" class="bg-indigo-50 text-indigo-700 font-bold">
                                         🏟️ Painel Arena
@@ -85,13 +87,13 @@
                                 <div class="border-t border-gray-100"></div>
                             @endif
 
-                            {{-- AJUSTADO: Apontando para o perfil do Bar --}}
-                            <x-dropdown-link :href="route('bar.profile')">
+                            <x-dropdown-link :href="route('profile.edit')">
                                 {{ __('Meu Perfil') }}
                             </x-dropdown-link>
 
                             @if (Auth::user()->has_admin_access)
                                 @if (request()->is('bar*'))
+                                    {{-- 🍺 Links Dinâmicos para o BAR --}}
                                     <x-dropdown-link :href="route('bar.company.edit')">
                                         {{ __('🏢 Dados do Estabelecimento') }}
                                     </x-dropdown-link>
@@ -100,6 +102,7 @@
                                         {{ __('👥 Gerenciar Equipe') }}
                                     </x-dropdown-link>
                                 @else
+                                    {{-- 🏟️ Links Originais para a ARENA --}}
                                     <x-dropdown-link :href="route('admin.company.edit')">
                                         {{ __('🏟️ Dados do Estabelecimento') }}
                                     </x-dropdown-link>
@@ -187,8 +190,7 @@
                 </div>
 
                 <div class="mt-3 space-y-1">
-                    {{-- AJUSTADO: Apontando para o perfil do Bar --}}
-                    <x-responsive-nav-link :href="route('bar.profile')" class="text-gray-300">
+                    <x-responsive-nav-link :href="route('profile.edit')" class="text-gray-300">
                         {{ __('Meu Perfil') }}
                     </x-responsive-nav-link>
 

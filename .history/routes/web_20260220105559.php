@@ -288,18 +288,14 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
 });
 
 // -----------------------------------------------------------------------------------
-// PERFIL E AUTH (ARENA) - ATUALIZADO PARA REPASSAR MENSAGENS AO BAR
+// PERFIL E AUTH (ARENA)
 // -----------------------------------------------------------------------------------
 Route::middleware('auth')->group(function () {
+    // Se alguém tentar acessar /profile vindo do BAR, mandamos de volta para a view dark
     Route::get('/profile', function () {
-        // Captura a mensagem de sucesso se ela existir
-        $status = session('status');
-
         if (str_contains(url()->previous(), '/bar')) {
-            // O segredo está no ->with('status', $status) que repassa o alerta
-            return redirect()->route('bar.profile')->with('status', $status);
+            return redirect()->route('bar.profile');
         }
-
         return app(ProfileController::class)->edit(request());
     })->name('profile.edit');
 

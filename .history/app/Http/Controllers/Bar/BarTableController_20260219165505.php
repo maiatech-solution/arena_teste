@@ -276,12 +276,12 @@ class BarTableController extends Controller
             }
 
             // 🛡️ VALIDAÇÃO DE DATA: Impede receber pagamento em caixa do dia anterior
-            $dataAbertura = \Carbon\Carbon::parse($session->opened_at)->format('Y-m-d');
+            $dataAbertura = Carbon::parse($session->opened_at)->format('Y-m-d');
             $hoje = date('Y-m-d');
 
             if ($dataAbertura !== $hoje) {
                 return redirect()->route('bar.tables.index')
-                    ->with('error', '⚠️ CAIXA VENCIDO: O caixa aberto é de ontem (' . \Carbon\Carbon::parse($session->opened_at)->format('d/m') . '). Você deve encerrar o turno antigo na Gestão de Caixa antes de receber pagamentos de mesas hoje.');
+                    ->with('error', '⚠️ CAIXA VENCIDO: O caixa aberto é de ontem (' . Carbon::parse($session->opened_at)->format('d/m') . '). Você deve encerrar o turno antigo na Gestão de Caixa antes de receber pagamentos de mesas hoje.');
             }
 
             // 2. BUSCA A COMANDA ATIVA
@@ -307,14 +307,10 @@ class BarTableController extends Controller
                 'customer_phone'      => $request->customer_phone,
                 'payment_method'      => $request->pagamentos,
                 'closed_at'           => now(),
-                'bar_cash_session_id' => $session->id,
+                'bar_cash_session_id' => $session->id, // 🔥 A MÁGICA ESTÁ AQUI
             ]);
 
-            // 🔥 ATUALIZAÇÃO DO FATURAMENTO TOTAL DO TURNO
-            // Isso garante que o relatório de conferência saiba o valor total vendido (independente do método)
-            $session->increment('total_vendas_sistema', $order->total_value);
-
-            // 💰 4. INTEGRAÇÃO COM O CAIXA (Lançamento de Movimentações Financeiras)
+            // 💰 4. INTEGRAÇÃO COM O CAIXA (Lançamento de Movimentações)
             $pagamentosArray = json_decode($request->pagamentos, true);
 
             if (is_array($pagamentosArray)) {
@@ -330,7 +326,6 @@ class BarTableController extends Controller
                             'description'         => "Venda Mesa #{$table->identifier}",
                         ]);
 
-                        // Atualiza o saldo esperado especificamente para DINHEIRO (conferência física)
                         if ($pag['metodo'] == 'dinheiro') {
                             $session->increment('expected_balance', $pag['valor']);
                         }
@@ -362,8 +357,5 @@ class BarTableController extends Controller
         return view('bar.tables.receipt', compact('order'));
     }
 
-    public function painel()
-    {
-        return view('bar.tables.painel');
-    }
+    public function painel() { return view('bar.tables.painel'); }
 }

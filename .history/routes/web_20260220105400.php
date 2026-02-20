@@ -193,17 +193,11 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
     // 🚀 Dashboard Principal
     Route::get('/dashboard', [BarDashboardController::class, 'index'])->name('dashboard');
 
-    // 👤 MEU PERFIL (Acesso à View Dark)
+    // 👤 MEU PERFIL (Ajustado para evitar 404 e garantir retorno ao Bar)
     Route::get('/perfil', function () {
         return view('bar.profile.index', [
             'user' => auth()->user()
         ]);
-    })->name('profile');
-
-    // 🔥 O SEGREDO: Captura o redirecionamento do Controller
-    // Se o Laravel tentar levar para 'bar.profile.edit', ele cai aqui e fica no layout Dark
-    Route::get('/profile-ajuste', function () {
-        return redirect()->route('bar.profile');
     })->name('profile.edit');
 
     // 🏢 DADOS DA EMPRESA (🔒 Restrito)
@@ -288,21 +282,10 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
 });
 
 // -----------------------------------------------------------------------------------
-// PERFIL E AUTH (ARENA) - ATUALIZADO PARA REPASSAR MENSAGENS AO BAR
+// PERFIL E AUTH
 // -----------------------------------------------------------------------------------
 Route::middleware('auth')->group(function () {
-    Route::get('/profile', function () {
-        // Captura a mensagem de sucesso se ela existir
-        $status = session('status');
-
-        if (str_contains(url()->previous(), '/bar')) {
-            // O segredo está no ->with('status', $status) que repassa o alerta
-            return redirect()->route('bar.profile')->with('status', $status);
-        }
-
-        return app(ProfileController::class)->edit(request());
-    })->name('profile.edit');
-
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
