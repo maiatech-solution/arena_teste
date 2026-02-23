@@ -117,47 +117,29 @@
     </div>
 
     <script>
-    async function consultarCep(cep) {
-        const valor = cep.replace(/\D/g, '');
+        function consultarCep(cep) {
+            const valor = cep.replace(/\D/g, '');
+            if (valor.length === 8) {
+                // Efeito visual simples de loading nos campos
+                const campos = ['logradouro', 'bairro', 'cidade', 'estado'];
+                campos.forEach(id => document.getElementById(id).placeholder = 'Buscando...');
 
-        if (valor.length === 8) {
-            // Feedback visual
-            const campos = ['logradouro', 'bairro', 'cidade', 'estado'];
-            campos.forEach(id => {
-                const el = document.getElementById(id);
-                if(el) el.value = 'Buscando...';
-            });
-
-            try {
-                // Usando BrasilAPI (Alternativa mais rápida e estável que ViaCEP)
-                const response = await fetch(`https://brasilapi.com.br/api/cep/v1/${valor}`);
-
-                if (!response.ok) throw new Error('CEP não encontrado');
-
-                const dados = await response.json();
-
-                // Preenchimento dos campos
-                document.getElementById('logradouro').value = dados.street || '';
-                document.getElementById('bairro').value = dados.neighborhood || '';
-                document.getElementById('cidade').value = dados.city || '';
-                document.getElementById('estado').value = dados.state || '';
-
-                document.getElementById('numero').focus();
-
-            } catch (error) {
-                console.error('Erro na BrasilAPI:', error);
-
-                // Se a BrasilAPI também falhar, avisamos o usuário
-                alert('Serviços de CEP instáveis. Por favor, preencha manualmente para prosseguir.');
-
-                // Limpa o "Buscando..." para permitir digitar
-                campos.forEach(id => {
-                    const el = document.getElementById(id);
-                    if(el) el.value = '';
-                });
+                fetch(`https://viacep.com.br/ws/${valor}/json/`)
+                    .then(response => response.json())
+                    .then(dados => {
+                        if (!dados.erro) {
+                            document.getElementById('logradouro').value = dados.logradouro;
+                            document.getElementById('bairro').value = dados.bairro;
+                            document.getElementById('cidade').value = dados.localidade;
+                            document.getElementById('estado').value = dados.uf;
+                            document.getElementById('numero').focus();
+                        } else {
+                            alert('CEP não encontrado.');
+                        }
+                    })
+                    .catch(error => console.error('Erro na busca do CEP:', error));
             }
         }
-    }
-</script>
+    </script>
 </body>
 </html>

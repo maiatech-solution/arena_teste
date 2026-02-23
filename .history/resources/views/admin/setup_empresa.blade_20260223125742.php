@@ -117,45 +117,38 @@
     </div>
 
     <script>
-    async function consultarCep(cep) {
-        const valor = cep.replace(/\D/g, '');
+    // 1. Tornamos a função GLOBAL para que o ViaCEP a encontre
+    window.preencherFormulario = function(dados) {
+        if (!("erro" in dados)) {
+            document.getElementById('logradouro').value = dados.logradouro;
+            document.getElementById('bairro').value = dados.bairro;
+            document.getElementById('cidade').value = dados.localidade;
+            document.getElementById('estado').value = dados.uf;
+            document.getElementById('numero').focus();
+        } else {
+            alert('CEP não encontrado.');
+        }
 
+        // Limpeza: remove o script injetado do HTML
+        const scriptOld = document.getElementById('viacep_script');
+        if (scriptOld) scriptOld.remove();
+    };
+
+    function consultarCep(cep) {
+        const valor = cep.replace(/\D/g, '');
         if (valor.length === 8) {
-            // Feedback visual
-            const campos = ['logradouro', 'bairro', 'cidade', 'estado'];
-            campos.forEach(id => {
-                const el = document.getElementById(id);
-                if(el) el.value = 'Buscando...';
+            // Efeito visual de loading
+            ['logradouro', 'bairro', 'cidade', 'estado'].forEach(id => {
+                document.getElementById(id).value = 'Buscando...';
             });
 
-            try {
-                // Usando BrasilAPI (Alternativa mais rápida e estável que ViaCEP)
-                const response = await fetch(`https://brasilapi.com.br/api/cep/v1/${valor}`);
+            // Criamos o elemento de script
+            const script = document.createElement('script');
+            script.id = 'viacep_script';
+            // Chamamos a função global
+            script.src = `https://viacep.com.br/ws/${valor}/json/?callback=preencherFormulario`;
 
-                if (!response.ok) throw new Error('CEP não encontrado');
-
-                const dados = await response.json();
-
-                // Preenchimento dos campos
-                document.getElementById('logradouro').value = dados.street || '';
-                document.getElementById('bairro').value = dados.neighborhood || '';
-                document.getElementById('cidade').value = dados.city || '';
-                document.getElementById('estado').value = dados.state || '';
-
-                document.getElementById('numero').focus();
-
-            } catch (error) {
-                console.error('Erro na BrasilAPI:', error);
-
-                // Se a BrasilAPI também falhar, avisamos o usuário
-                alert('Serviços de CEP instáveis. Por favor, preencha manualmente para prosseguir.');
-
-                // Limpa o "Buscando..." para permitir digitar
-                campos.forEach(id => {
-                    const el = document.getElementById(id);
-                    if(el) el.value = '';
-                });
-            }
+            document.body.appendChild(script);
         }
     }
 </script>

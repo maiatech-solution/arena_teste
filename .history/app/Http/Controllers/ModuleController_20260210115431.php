@@ -65,29 +65,24 @@ class ModuleController extends Controller
         }
 
         /**
-         * 🎯 REGRA DE NAVEGAÇÃO AJUSTADA:
-         * Mesmo sendo ADMIN, se o plano NÃO for Combo (3),
-         * queremos pular direto para o módulo ativo.
+         * 🎯 REGRA DE NAVEGAÇÃO
+         * Se for ADMIN ou se o plano for COMBO (3), mostra a tela de escolha (Cards).
          */
-
-        // Se o plano for COMBO (3), mostramos os cards para escolha
-        if ($company->modules_active == 3) {
+        if (Auth::user()->is_admin || $company->modules_active == 3) {
             return view('admin.choose_module', compact('company'));
         }
 
-        // Se o plano for apenas ARENA (1), vai direto
+        /**
+         * Se NÃO for admin e NÃO for combo, redirecionamos baseado no plano ativo.
+         */
         if ($company->modules_active == 1) {
             return redirect()->route('dashboard');
         }
 
-        // Se o plano for apenas PDV SYSTEM (2), vai direto
         if ($company->modules_active == 2) {
             return redirect()->route('bar.dashboard');
         }
 
-        /** * Caso o plano seja 0 (ainda não definido) ou ocorra algo inesperado,
-         * mostramos a tela de escolha para não travar o sistema.
-         */
         return view('admin.choose_module', compact('company'));
     }
 
@@ -150,20 +145,11 @@ class ModuleController extends Controller
         $company->modules_active = $newModule;
         $company->save();
 
-        $msg = 'Plano ativado com sucesso!';
+        $msg = 'Plano ativado com sucesso! Agora você já pode acessar os módulos liberados.';
 
-        // 🚀 REDIRECIONAMENTO INTELIGENTE FINAL:
-        // Se ativou apenas Arena (1), vai para o dashboard da Arena
-        if ($newModule == 1) {
-            return redirect()->route('dashboard')->with('success', $msg);
-        }
-
-        // Se ativou apenas PDV (2), vai direto para o dashboard do Bar
-        if ($newModule == 2) {
-            return redirect()->route('bar.dashboard')->with('success', $msg);
-        }
-
-        // Se for o Combo (3), aí sim mandamos para a tela de escolha (cards)
+        // 🚀 O AJUSTE ESTÁ AQUI:
+        // Em vez de voltar para 'admin.plans', mandamos para 'modules.selection'
+        // Assim, o usuário vê os cards do Bar/Arena para clicar e entrar.
         return redirect()->route('modules.selection')->with('success', $msg);
     }
 

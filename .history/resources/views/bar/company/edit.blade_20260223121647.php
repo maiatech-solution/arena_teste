@@ -158,47 +158,52 @@
     </div>
 
     <script>
-        async function consultarCep(cep) {
+        window.consultarCep = function(cep) {
             const valor = cep.replace(/\D/g, '');
 
             if (valor.length === 8) {
-                // Feedback visual nos campos
+                // Feedback visual direto nos elementos
                 const campos = ['logradouro', 'bairro', 'cidade', 'estado'];
                 campos.forEach(id => {
                     const el = document.getElementById(id);
-                    if (el) el.placeholder = 'Buscando...';
+                    el.disabled = false; // Habilitamos temporariamente para o JS escrever
+                    el.value = '...';
                 });
 
-                try {
-                    // Chamada para a BrasilAPI (Mais estável que ViaCEP)
-                    const response = await fetch(`https://brasilapi.com.br/api/cep/v1/${valor}`);
-
-                    if (!response.ok) throw new Error('CEP não encontrado');
-
-                    const dados = await response.json();
-
-                    // Preenchimento automático
-                    document.getElementById('logradouro').value = dados.street || '';
-                    document.getElementById('bairro').value = dados.neighborhood || '';
-                    document.getElementById('cidade').value = dados.city || '';
-                    document.getElementById('estado').value = dados.state || '';
-
-                    // Move o foco para o número para agilizar a digitação
-                    document.getElementById('numero').focus();
-
-                } catch (error) {
-                    console.error('Erro na busca do CEP:', error);
-
-                    // Se a API falhar (ex: erro 502 ou sem internet), avisa o usuário
-                    alert('O serviço de busca automática está instável. Por favor, preencha o endereço manualmente.');
-
-                    // Limpa os placeholders para o usuário digitar
-                    campos.forEach(id => {
-                        const el = document.getElementById(id);
-                        if (el) el.placeholder = '';
-                    });
-                }
+                const script = document.createElement('script');
+                script.src = `https://viacep.com.br/ws/${valor}/json/?callback=preencherCampos`;
+                document.body.appendChild(script);
             }
+        };
+
+        window.preencherCampos = function(dados) {
+            if (!dados.erro) {
+                document.getElementById('logradouro').value = dados.logradouro;
+                document.getElementById('bairro').value = dados.bairro;
+                document.getElementById('cidade').value = dados.localidade;
+                document.getElementById('estado').value = dados.uf;
+
+                // Focamos no número se ele não estiver bloqueado
+                const campoNumero = document.getElementById('numero');
+                if (!campoNumero.disabled) {
+                    campoNumero.focus();
+                }
+            } else {
+                alert("CEP não encontrado.");
+                limparCampos();
+            }
+
+            // Se o Alpine ainda estiver em modo de visualização, voltamos a bloquear os campos
+            // O próprio fieldset do Alpine cuidará disso automaticamente no próximo ciclo
+
+            const scripts = document.querySelectorAll('script[src^="https://viacep.com.br"]');
+            scripts.forEach(s => s.remove());
+        };
+
+        function limparCampos() {
+            ['logradouro', 'bairro', 'cidade', 'estado'].forEach(id => {
+                document.getElementById(id).value = '';
+            });
         }
     </script>
 </x-bar-layout>

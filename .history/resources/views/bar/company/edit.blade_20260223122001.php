@@ -158,47 +158,51 @@
     </div>
 
     <script>
-        async function consultarCep(cep) {
+        // 1. Função que dispara a busca (JSONP)
+        function consultarCep(cep) {
             const valor = cep.replace(/\D/g, '');
 
             if (valor.length === 8) {
                 // Feedback visual nos campos
-                const campos = ['logradouro', 'bairro', 'cidade', 'estado'];
-                campos.forEach(id => {
-                    const el = document.getElementById(id);
-                    if (el) el.placeholder = 'Buscando...';
-                });
+                document.getElementById('logradouro').value = 'Buscando...';
+                document.getElementById('bairro').value = 'Buscando...';
+                document.getElementById('cidade').value = 'Buscando...';
+                document.getElementById('estado').value = '...';
 
-                try {
-                    // Chamada para a BrasilAPI (Mais estável que ViaCEP)
-                    const response = await fetch(`https://brasilapi.com.br/api/cep/v1/${valor}`);
-
-                    if (!response.ok) throw new Error('CEP não encontrado');
-
-                    const dados = await response.json();
-
-                    // Preenchimento automático
-                    document.getElementById('logradouro').value = dados.street || '';
-                    document.getElementById('bairro').value = dados.neighborhood || '';
-                    document.getElementById('cidade').value = dados.city || '';
-                    document.getElementById('estado').value = dados.state || '';
-
-                    // Move o foco para o número para agilizar a digitação
-                    document.getElementById('numero').focus();
-
-                } catch (error) {
-                    console.error('Erro na busca do CEP:', error);
-
-                    // Se a API falhar (ex: erro 502 ou sem internet), avisa o usuário
-                    alert('O serviço de busca automática está instável. Por favor, preencha o endereço manualmente.');
-
-                    // Limpa os placeholders para o usuário digitar
-                    campos.forEach(id => {
-                        const el = document.getElementById(id);
-                        if (el) el.placeholder = '';
-                    });
-                }
+                // Cria o script dinâmico para burlar o bloqueio de CORS
+                const script = document.createElement('script');
+                script.src = `https://viacep.com.br/ws/${valor}/json/?callback=callbackCep`;
+                document.body.appendChild(script);
             }
+        }
+
+        // 2. Função de retorno (Callback) que o ViaCEP chama
+        // Ela PRECISA ser global, por isso usamos window.
+        window.callbackCep = function(dados) {
+            if (!("erro" in dados)) {
+                // Atualiza os campos do formulário
+                document.getElementById('logradouro').value = dados.logradouro;
+                document.getElementById('bairro').value = dados.bairro;
+                document.getElementById('cidade').value = dados.localidade;
+                document.getElementById('estado').value = dados.uf;
+
+                // Foca no campo número após preencher
+                document.getElementById('numero').focus();
+            } else {
+                alert("CEP não encontrado.");
+                limparCampos();
+            }
+
+            // Remove o script temporário
+            const scripts = document.querySelectorAll('script[src^="https://viacep.com.br"]');
+            scripts.forEach(s => s.remove());
+        };
+
+        function limparCampos() {
+            document.getElementById('logradouro').value = '';
+            document.getElementById('bairro').value = '';
+            document.getElementById('cidade').value = '';
+            document.getElementById('estado').value = '';
         }
     </script>
 </x-bar-layout>

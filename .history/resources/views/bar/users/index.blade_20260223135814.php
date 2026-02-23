@@ -11,7 +11,7 @@
                     </a>
                     <div>
                         <h1 class="text-4xl font-black text-white uppercase tracking-tighter">
-                            <span class="text-white">Gestão de</span> <span class="text-orange-600">Usuários </span>
+                            <span class="text-orange-600">Gestão d</span> <span class="text-white">e Usuários </span>
                         </h1>
                         <p class="text-gray-500 font-bold uppercase text-xs tracking-widest mt-1 italic">
                             Gestão de Colaboradores e Acessos Administrativos

@@ -150,20 +150,11 @@ class ModuleController extends Controller
         $company->modules_active = $newModule;
         $company->save();
 
-        $msg = 'Plano ativado com sucesso!';
+        $msg = 'Plano ativado com sucesso! Agora você já pode acessar os módulos liberados.';
 
-        // 🚀 REDIRECIONAMENTO INTELIGENTE FINAL:
-        // Se ativou apenas Arena (1), vai para o dashboard da Arena
-        if ($newModule == 1) {
-            return redirect()->route('dashboard')->with('success', $msg);
-        }
-
-        // Se ativou apenas PDV (2), vai direto para o dashboard do Bar
-        if ($newModule == 2) {
-            return redirect()->route('bar.dashboard')->with('success', $msg);
-        }
-
-        // Se for o Combo (3), aí sim mandamos para a tela de escolha (cards)
+        // 🚀 O AJUSTE ESTÁ AQUI:
+        // Em vez de voltar para 'admin.plans', mandamos para 'modules.selection'
+        // Assim, o usuário vê os cards do Bar/Arena para clicar e entrar.
         return redirect()->route('modules.selection')->with('success', $msg);
     }
 
