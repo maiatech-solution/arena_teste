@@ -40,14 +40,14 @@
                         </div>
                     </div>
 
-                    {{-- 📦 ÁREA DA COMPOSIÇÃO DO COMBO COM FILTRO INTELIGENTE --}}
+                    {{-- 📦 ÁREA DA COMPOSIÇÃO DO COMBO (SÓ APARECE SE FOR COMBO) --}}
                     <div class="md:col-span-2 bg-orange-600/5 border border-orange-600/20 p-6 rounded-2xl mb-4" x-show="isCombo" x-transition>
                         <div class="flex items-center justify-between mb-4 border-b border-orange-600/10 pb-4">
                             <div>
                                 <h3 class="text-orange-500 font-black text-xs uppercase italic tracking-widest">📋 Itens que compõem este combo</h3>
                                 <p class="text-[9px] text-gray-500 uppercase font-bold">O estoque destes itens será baixado automaticamente na venda</p>
                             </div>
-                            <button type="button" @click="comboItems.push({id: Date.now(), child_id: ''})"
+                            <button type="button" @click="comboItems.push({id: Date.now()})"
                                     class="bg-orange-600 hover:bg-orange-500 text-white text-[10px] font-black px-4 py-2 rounded-lg transition-all active:scale-95 shadow-lg shadow-orange-600/20">
                                 + ADICIONAR ITEM
                             </button>
@@ -55,37 +55,25 @@
 
                         <div class="space-y-3">
                             <template x-for="(item, index) in comboItems" :key="item.id">
-                                <div class="flex gap-3 items-center animate-in fade-in slide-in-from-top-1 bg-black/20 p-3 rounded-xl border border-gray-800">
+                                <div class="flex gap-3 items-center animate-in fade-in slide-in-from-top-1">
                                     <div class="flex-1">
-                                        <label class="block text-[9px] font-black text-gray-500 uppercase mb-1 ml-1">Buscar Produto (Digite o nome)</label>
-                                        <input type="text"
-                                            class="w-full bg-gray-950 border-gray-800 rounded-xl text-white text-xs p-2.5 focus:border-orange-500 outline-none"
-                                            placeholder="Comece a digitar o nome do produto..."
-                                            list="products_list"
-                                            @input="
-                                                let selectedOption = Array.from($el.list.options).find(opt => opt.value === $el.value);
-                                                item.child_id = selectedOption ? selectedOption.dataset.id : '';
-                                            ">
-                                        {{-- Campo oculto que envia o ID para o Controller --}}
-                                        <input type="hidden" :name="`combo_items[${index}][child_id]`" x-model="item.child_id">
+                                        <select :name="`combo_items[${index}][child_id]`" required
+                                            class="w-full bg-gray-950 border-gray-800 rounded-xl text-white text-xs p-2.5 focus:border-orange-500">
+                                            <option value="">Selecionar Produto...</option>
+                                            @foreach ($availableProducts as $avail)
+                                                <option value="{{ $avail->id }}">{{ $avail->name }}</option>
+                                            @endforeach
+                                        </select>
                                     </div>
                                     <div class="w-24">
-                                        <label class="block text-[9px] font-black text-gray-500 uppercase mb-1 text-center">Qtd</label>
                                         <input type="number" :name="`combo_items[${index}][quantity]`" value="1" min="1" required
                                             class="w-full bg-gray-950 border-gray-800 rounded-xl text-white text-xs p-2.5 text-center focus:border-orange-500" placeholder="Qtd">
                                     </div>
-                                    <button type="button" @click="comboItems = comboItems.filter(i => i.id !== item.id)" class="text-red-500 hover:text-red-400 p-2 font-black mt-4">
+                                    <button type="button" @click="comboItems = comboItems.filter(i => i.id !== item.id)" class="text-red-500 hover:text-red-400 p-2 font-black">
                                         ✕
                                     </button>
                                 </div>
                             </template>
-
-                            {{-- Lista de sugestões global (datalist) --}}
-                            <datalist id="products_list">
-                                @foreach ($availableProducts as $avail)
-                                    <option data-id="{{ $avail->id }}" value="{{ $avail->name }}">
-                                @endforeach
-                            </datalist>
 
                             <div x-show="comboItems.length === 0" class="text-center py-6 border-2 border-dashed border-gray-800/50 rounded-xl text-gray-600 text-[10px] font-bold uppercase tracking-widest">
                                 <span class="block mb-1 opacity-50">Clique no botão acima para adicionar itens</span>

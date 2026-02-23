@@ -133,90 +133,76 @@ class BarProductController extends Controller
 
     public function edit(BarProduct $product)
     {
-        // 1. Trava de segurança original mantida
         if (auth()->user()->role === 'colaborador') {
             return redirect()->route('bar.products.index')->with('error', 'Acesso negado.');
         }
 
-        // 2. Busca categorias para o select
-        $categories = \App\Models\Bar\BarCategory::orderBy('name', 'asc')->get();
+        $categories = BarCategory::orderBy('name', 'asc')->get();
 
-        // 3. Produtos disponíveis para compor o combo
+        // Produtos para o seletor (exceto o próprio produto para evitar loop)
         $availableProducts = BarProduct::where('is_active', true)
+            ->where('is_combo', false)
             ->where('id', '!=', $product->id)
             ->orderBy('name', 'asc')
             ->get();
 
-        // 4. 🔥 CARGA DOS DADOS: Ajustado para 'product' conforme seu Model de composição
-        $product->load(['compositions.product', 'category']);
+        // Carrega a composição atual se for combo
+        $product->load('compositions.product');
 
         return view('bar.products.edit', compact('product', 'categories', 'availableProducts'));
     }
 
     public function update(Request $request, BarProduct $product)
     {
-        // 1. Trava de segurança (Original)
         if (auth()->user()->role === 'colaborador') {
             abort(403);
         }
 
-        // 2. Ajuste de validação: se for combo, alguns campos não são obrigatórios no request
-        // porque o Alpine.js pode esconder/não enviar, ou o estoque é controlado pelos filhos.
         $validated = $request->validate([
             'name'             => 'required|string|max:255',
             'bar_category_id'  => 'required|exists:bar_categories,id',
             'barcode'          => 'nullable|string|max:13',
             'purchase_price'   => 'required|numeric|min:0',
             'sale_price'       => 'required|numeric|min:0',
-            'stock_quantity'   => $request->is_combo ? 'nullable' : 'required|integer',
-            'min_stock'        => $request->is_combo ? 'nullable' : 'required|integer|min:0',
+            'stock_quantity'   => 'required|integer',
+            'min_stock'        => 'required|integer|min:0',
             'is_active'        => 'required|boolean',
-            'unit_type'        => $request->is_combo ? 'nullable' : 'required|string|in:UN,FD,CX,KG',
-            'content_quantity' => $request->is_combo ? 'nullable' : 'required|integer|min:1',
+            'unit_type'        => 'required|string|in:UN,FD,CX,KG',
+            'content_quantity' => 'required|integer|min:1',
             'manage_stock'     => 'required|boolean',
             'is_combo'         => 'nullable|boolean',
         ]);
 
-        try {
-            DB::transaction(function () use ($request, $product, $validated) {
+        DB::transaction(function () use ($request, $product, $validated) {
+            if ($request->is_combo) {
+                $validated['manage_stock'] = false;
+            }
 
-                // 3. Forçar regras de combo antes de salvar
-                if ($request->is_combo) {
-                    $validated['manage_stock'] = false;
-                    $validated['stock_quantity'] = 0; // Combo não tem estoque próprio
-                    $validated['min_stock'] = 0;
-                }
+            $product->update($validated);
 
-                // 4. Atualizar o Produto
-                $product->update($validated);
+            // Se for combo, atualizamos os itens
+            if ($request->is_combo) {
+                // Remove os antigos e insere os novos (mais simples que fazer sync manual aqui)
+                $product->compositions()->delete();
 
-                // 5. Sincronizar Itens do Combo 🚀
-                if ($request->is_combo) {
-                    // Limpa a composição antiga (mais seguro que sync manual para o seu caso)
-                    $product->compositions()->delete();
-
-                    if ($request->has('combo_items')) {
-                        foreach ($request->combo_items as $item) {
-                            // Só registra se o item tiver um ID de produto filho selecionado
-                            if (!empty($item['child_id'])) {
-                                \App\Models\Bar\BarProductComposition::create([
-                                    'parent_id' => $product->id,
-                                    'child_id'  => $item['child_id'],
-                                    'quantity'  => $item['quantity'] ?? 1,
-                                ]);
-                            }
+                if ($request->has('combo_items')) {
+                    foreach ($request->combo_items as $item) {
+                        if (!empty($item['child_id'])) {
+                            \App\Models\Bar\BarProductComposition::create([
+                                'parent_id' => $product->id,
+                                'child_id'  => $item['child_id'],
+                                'quantity'  => $item['quantity'],
+                            ]);
                         }
                     }
-                } else {
-                    // Se o usuário desmarcou 'is_combo', removemos qualquer composição que sobrou
-                    $product->compositions()->delete();
                 }
-            });
+            } else {
+                // Se deixou de ser combo, remove composições órfãs
+                $product->compositions()->delete();
+            }
+        });
 
-            return redirect()->route('bar.products.index')->with('success', '✅ Produto atualizado com sucesso!');
-        } catch (\Exception $e) {
-            return back()->with('error', '❌ Erro ao salvar: ' . $e->getMessage())->withInput();
-        }
+        return redirect()->route('bar.products.index')->with('success', 'Produto atualizado!');
     }
 
     public function destroy(Request $request, BarProduct $product)

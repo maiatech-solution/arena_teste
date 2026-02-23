@@ -47,13 +47,15 @@ class BarPosController extends Controller
                     throw new \Exception("Não existe um caixa aberto! Por favor, abra o caixa primeiro.");
                 }
 
+                // 🛡️ NOVA TRAVA: BLOQUEIO DE CAIXA DO DIA ANTERIOR
                 $dataAbertura = \Carbon\Carbon::parse($session->opened_at)->format('Y-m-d');
                 $hoje = date('Y-m-d');
 
                 if ($dataAbertura !== $hoje) {
-                    throw new \Exception("⚠️ CAIXA VENCIDO: O caixa aberto é de ontem. Encerre o turno e abra um novo.");
+                    throw new \Exception("⚠️ CAIXA VENCIDO: O caixa aberto é de ontem (" . \Carbon\Carbon::parse($session->opened_at)->format('d/m') . "). Você deve encerrar o turno antigo e abrir um novo para hoje antes de vender.");
                 }
 
+                // Determinar o método final (apenas para histórico da BarSale)
                 $metodoFinal = count($request->payments) > 1 ? 'misto' : $request->payments[0]['method'];
 
                 // 2. Criar a Venda
@@ -62,34 +64,21 @@ class BarPosController extends Controller
                 $sale->total_value = $request->total_value;
                 $sale->payment_method = $metodoFinal;
                 $sale->status = 'pago';
-                $sale->bar_cash_session_id = $session->id;
+                $sale->bar_cash_session_id = $session->id; // Carimbo da sessão
                 $sale->save();
 
+                // 🔥 ATUALIZAÇÃO DO TOTAL DO SISTEMA (Auditoria)
+                // Isso impede que o relatório mostre "sobra" quando você recebe em PIX/Cartão
+                // Certifique-se de que a coluna 'total_vendas_sistema' existe na sua tabela
                 $session->increment('total_vendas_sistema', $request->total_value);
 
-                // 3. Processar Itens e Estoque Inteligente 🚀
+                // 3. Processar Itens e Estoque
                 foreach ($request->items as $item) {
-                    // Carregamos o produto com as composições E os produtos filhos (importante carregar o childProduct)
-                    $product = BarProduct::with('compositions.product')->findOrFail($item['id']);
+                    $product = BarProduct::findOrFail($item['id']);
 
-                    // --- NOVA VALIDAÇÃO UNIFICADA ---
-                    if ($product->is_combo) {
-                        // Se for combo, varre os itens da receita
-                        foreach ($product->compositions as $comp) {
-                            $filho = $comp->product;
-                            $necessario = $comp->quantity * $item['quantity'];
-
-                            if ($filho && $filho->manage_stock && $filho->stock_quantity < $necessario) {
-                                throw new \Exception("Estoque insuficiente para compor o combo! Falta: {$filho->name} (Precisa de {$necessario}, mas só tem {$filho->stock_quantity})");
-                            }
-                        }
-                    } else {
-                        // Se for simples, mantém sua lógica original
-                        if ($product->manage_stock && $product->stock_quantity < $item['quantity']) {
-                            throw new \Exception("Estoque insuficiente para: {$product->name} (Disponível: {$product->stock_quantity})");
-                        }
+                    if ($product->manage_stock && $product->stock_quantity < $item['quantity']) {
+                        throw new \Exception("Estoque insuficiente para: {$product->name}");
                     }
-                    // --- FIM DA VALIDAÇÃO ---
 
                     BarSaleItem::create([
                         'bar_sale_id' => $sale->id,
@@ -98,11 +87,21 @@ class BarPosController extends Controller
                         'price_at_sale' => $product->sale_price
                     ]);
 
-                    // Ele vai baixar o estoque do item OU dos itens do combo automaticamente!
-                    $product->baixarEstoque($item['quantity'], $sale->id);
+                    if ($product->manage_stock) {
+                        $product->decrement('stock_quantity', $item['quantity']);
+                    }
+
+                    // Histórico de Estoque
+                    \App\Models\Bar\BarStockMovement::create([
+                        'bar_product_id' => $product->id,
+                        'user_id'        => auth()->id(),
+                        'quantity'       => -$item['quantity'],
+                        'type'           => 'saida',
+                        'description'    => "Venda Direta PDV #{$sale->id}",
+                    ]);
                 }
 
-                // 4. INTEGRAÇÃO COM O CAIXA
+                // 4. INTEGRAÇÃO COM O CAIXA (Movimentações financeiras detalhadas)
                 foreach ($request->payments as $pay) {
                     BarCashMovement::create([
                         'bar_cash_session_id' => $session->id,
@@ -114,6 +113,7 @@ class BarPosController extends Controller
                         'description'         => "Venda Direta PDV #{$sale->id}"
                     ]);
 
+                    // Atualiza o saldo esperado especificamente para DINHEIRO (gaveta física)
                     if ($pay['method'] === 'dinheiro') {
                         $session->increment('expected_balance', $pay['value']);
                     }
@@ -121,7 +121,7 @@ class BarPosController extends Controller
 
                 return response()->json([
                     'success' => true,
-                    'message' => 'Venda finalizada e estoque atualizado!'
+                    'message' => 'Venda finalizada e caixa atualizado!'
                 ]);
             });
         } catch (\Exception $e) {

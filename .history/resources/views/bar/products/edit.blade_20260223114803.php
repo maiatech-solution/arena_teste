@@ -6,11 +6,12 @@
                 return [
                     'id' => $c->id,
                     'child_id' => $c->child_id,
-                    'name' => $c->product->name ?? 'Produto não encontrado',
+                    'name' => $c->childProduct->name ?? 'Produto não encontrado',
                     'quantity' => $c->quantity,
                 ];
             })->toJson() }}
     }">
+
         <div class="mb-8">
             <a href="{{ route('bar.products.index') }}"
                 class="text-orange-500 hover:text-orange-400 text-sm font-bold flex items-center gap-2 mb-4 transition-colors">

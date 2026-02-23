@@ -175,35 +175,19 @@ class BarTableController extends Controller
     }
 
     /**
-     * Lança item na comanda via AJAX (Agora com Trava de Combo 🛡️)
+     * Lança item na comanda via AJAX
      */
     public function addItem(Request $request, $orderId)
     {
         try {
             return DB::transaction(function () use ($request, $orderId) {
                 $order = BarOrder::findOrFail($orderId);
-                // Carregamos o produto com as composições E o produto real (filho)
-                $product = BarProduct::with('compositions.product')->findOrFail($request->product_id);
+                $product = BarProduct::findOrFail($request->product_id);
                 $qty = $request->quantity ?? 1;
 
-                // --- 🛡️ VALIDAÇÃO DE ESTOQUE UNIFICADA ---
-                if ($product->is_combo) {
-                    // Se for combo, verifica cada item da receita antes de lançar
-                    foreach ($product->compositions as $comp) {
-                        $filho = $comp->product;
-                        $necessario = $comp->quantity * $qty;
-
-                        if ($filho && $filho->manage_stock && $filho->stock_quantity < $necessario) {
-                            throw new \Exception("Estoque insuficiente para o combo! Falta: {$filho->name} (Disponível: {$filho->stock_quantity})");
-                        }
-                    }
-                } else {
-                    // Se for simples, valida o próprio estoque
-                    if ($product->manage_stock && $product->stock_quantity < $qty) {
-                        throw new \Exception("Estoque insuficiente para: {$product->name} (Disponível: {$product->stock_quantity})");
-                    }
+                if ($product->manage_stock && $product->stock_quantity < $qty) {
+                    throw new \Exception("Estoque insuficiente para: {$product->name}");
                 }
-                // --- FIM DA VALIDAÇÃO ---
 
                 $item = BarOrderItem::where('bar_order_id', $order->id)
                     ->where('bar_product_id', $product->id)
@@ -223,9 +207,15 @@ class BarTableController extends Controller
                 }
 
                 $order->update(['total_value' => $order->items()->sum('subtotal')]);
+                $product->decrement('stock_quantity', $qty);
 
-                // Baixa o estoque (seja item simples ou combo)
-                $product->baixarEstoque($qty, "Mesa #{$order->table->identifier} (Comanda #{$order->id})");
+                BarStockMovement::create([
+                    'bar_product_id' => $product->id,
+                    'user_id'        => auth()->id(),
+                    'quantity'       => -$qty,
+                    'type'           => 'saida',
+                    'description'    => "Lançamento Mesa #{$order->table->identifier} (Comanda #{$order->id})",
+                ]);
 
                 return response()->json(['success' => true]);
             });
@@ -235,7 +225,7 @@ class BarTableController extends Controller
     }
 
     /**
-     * Remove item da comanda (Atualizado para Combos 🔄)
+     * Remove item da comanda
      */
     public function removeItem($itemId)
     {
@@ -246,20 +236,27 @@ class BarTableController extends Controller
                 $product = $item->product;
                 $quantidadeEstornada = $item->quantity;
 
-                if ($product) {
-                    // 🚀 Chama a inteligência de estorno do Model que criamos
-                    $product->devolverEstoque($quantidadeEstornada, "Remoção Mesa #{$order->table->identifier}");
+                if ($product->manage_stock) {
+                    $product->increment('stock_quantity', $quantidadeEstornada);
+                    BarStockMovement::create([
+                        'bar_product_id' => $product->id,
+                        'user_id'        => auth()->id(),
+                        'quantity'       => $quantidadeEstornada,
+                        'type'           => 'entrada',
+                        'description'    => "Estorno: Item removido da Mesa #{$order->table->identifier}",
+                    ]);
                 }
 
                 $item->delete();
                 $order->update(['total_value' => $order->items()->sum('subtotal') ?? 0]);
 
-                return back()->with('success', 'Item removido e estoque devolvido com sucesso!');
+                return back()->with('success', 'Item removido e estoque estornado!');
             });
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao remover item: ' . $e->getMessage());
         }
     }
+
 
     /**
      * 🏁 FINALIZAR MESA (Com blindagem de data e integração ao caixa)

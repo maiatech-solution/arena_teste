@@ -69,27 +69,13 @@ class BarPosController extends Controller
 
                 // 3. Processar Itens e Estoque Inteligente 🚀
                 foreach ($request->items as $item) {
-                    // Carregamos o produto com as composições E os produtos filhos (importante carregar o childProduct)
-                    $product = BarProduct::with('compositions.product')->findOrFail($item['id']);
+                    // Carregamos o produto com as composições caso seja combo
+                    $product = BarProduct::with('compositions')->findOrFail($item['id']);
 
-                    // --- NOVA VALIDAÇÃO UNIFICADA ---
-                    if ($product->is_combo) {
-                        // Se for combo, varre os itens da receita
-                        foreach ($product->compositions as $comp) {
-                            $filho = $comp->product;
-                            $necessario = $comp->quantity * $item['quantity'];
-
-                            if ($filho && $filho->manage_stock && $filho->stock_quantity < $necessario) {
-                                throw new \Exception("Estoque insuficiente para compor o combo! Falta: {$filho->name} (Precisa de {$necessario}, mas só tem {$filho->stock_quantity})");
-                            }
-                        }
-                    } else {
-                        // Se for simples, mantém sua lógica original
-                        if ($product->manage_stock && $product->stock_quantity < $item['quantity']) {
-                            throw new \Exception("Estoque insuficiente para: {$product->name} (Disponível: {$product->stock_quantity})");
-                        }
+                    // Validação de estoque (Apenas para produtos simples)
+                    if (!$product->is_combo && $product->manage_stock && $product->stock_quantity < $item['quantity']) {
+                        throw new \Exception("Estoque insuficiente para: {$product->name}");
                     }
-                    // --- FIM DA VALIDAÇÃO ---
 
                     BarSaleItem::create([
                         'bar_sale_id' => $sale->id,
@@ -98,6 +84,7 @@ class BarPosController extends Controller
                         'price_at_sale' => $product->sale_price
                     ]);
 
+                    // 🔥 CHAMADA DO MÉTODO INTELIGENTE DO MODEL
                     // Ele vai baixar o estoque do item OU dos itens do combo automaticamente!
                     $product->baixarEstoque($item['quantity'], $sale->id);
                 }

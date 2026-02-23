@@ -44,24 +44,23 @@ class BarProduct extends Model
      */
     public function baixarEstoque($quantidadeVendida, $referencia = null)
     {
-        // 1. Se for um COMBO, busca os itens direto na tabela de composição
+        // 1. Se for um COMBO, processa os itens filhos
         if ($this->is_combo) {
-            // Buscamos direto na tabela para não ter erro de carregamento
-            $composicoes = \App\Models\Bar\BarProductComposition::where('parent_id', $this->id)->get();
+            $itensCombo = $this->compositions()->get();
 
-            foreach ($composicoes as $item) {
+            foreach ($itensCombo as $item) {
                 $produtoFilho = BarProduct::find($item->child_id);
 
                 if ($produtoFilho) {
                     $totalParaAbater = $item->quantity * $quantidadeVendida;
 
-                    // Se gerencia estoque, abate o número
+                    // 🛡️ SÓ diminui o número se a gestão estiver ativa (Ex: Refri sim, Coxinha não)
                     if ($produtoFilho->manage_stock) {
                         $produtoFilho->decrement('stock_quantity', $totalParaAbater);
                     }
 
-                    // REGISTRA O LOG DOS FILHOS (O que não estava aparecendo)
-                    \App\Models\Bar\BarStockMovement::create([
+                    // 🚀 SEMPRE gera o log de movimentação para auditoria
+                    BarStockMovement::create([
                         'bar_product_id' => $produtoFilho->id,
                         'user_id'        => auth()->id() ?? 1,
                         'quantity'       => -$totalParaAbater,
@@ -72,13 +71,13 @@ class BarProduct extends Model
             }
         }
 
-        // 2. Se for produto SIMPLES (abate ele mesmo)
+        // 2. Se for produto SIMPLES (venda direta de um item que não é combo)
         if (!$this->is_combo && $this->manage_stock) {
             $this->decrement('stock_quantity', $quantidadeVendida);
         }
 
-        // Log do item principal (O que já está aparecendo)
-        \App\Models\Bar\BarStockMovement::create([
+        // Registro da venda do item principal (o que sai no cupom/financeiro)
+        BarStockMovement::create([
             'bar_product_id' => $this->id,
             'user_id'        => auth()->id() ?? 1,
             'quantity'       => -$quantidadeVendida,

@@ -155,15 +155,13 @@ class BarOrderController extends Controller
         try {
             DB::transaction(function () use ($order, $supervisor, $request, $caixaAberto) {
 
-                // 3. Devolver itens ao estoque (Inteligente: Trata Combo e Simples) 🔄
+                // 3. Devolver itens ao estoque
                 foreach ($order->items as $item) {
                     $productId = $item->bar_product_id ?? $item->product_id;
 
                     if ($productId && $item->product) {
-                        // 🚀 Chama o método do Model que devolve os "filhos" caso seja combo
-                        $item->product->devolverEstoque($item->quantity, "MESA #{$order->id}");
+                        $item->product->increment('stock_quantity', $item->quantity);
 
-                        // Registro de movimentação para auditoria de cancelamento
                         BarStockMovement::create([
                             'bar_product_id' => $productId,
                             'user_id'        => auth()->id(),
@@ -175,6 +173,7 @@ class BarOrderController extends Controller
                 }
 
                 // 4. Registrar Estorno no Caixa
+                // 🔥 Ajuste: Concatenando Motivo E Autorizador na descrição
                 $motivoDesc = $request->reason ? " | MOTIVO: " . $request->reason : " | MOTIVO: Não informado";
                 $authDesc = " | POR: " . $supervisor->name; // 🔐 Auditoria: Quem deu a senha
 

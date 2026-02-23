@@ -139,16 +139,18 @@ class BarProductController extends Controller
         }
 
         // 2. Busca categorias para o select
-        $categories = \App\Models\Bar\BarCategory::orderBy('name', 'asc')->get();
+        $categories = BarCategory::orderBy('name', 'asc')->get();
 
         // 3. Produtos disponíveis para compor o combo
+        // Removi a trava 'is_combo', false para permitir que um combo tenha outro dentro,
+        // mas se preferir proibir combos dentro de combos, pode manter.
         $availableProducts = BarProduct::where('is_active', true)
             ->where('id', '!=', $product->id)
             ->orderBy('name', 'asc')
             ->get();
 
-        // 4. 🔥 CARGA DOS DADOS: Ajustado para 'product' conforme seu Model de composição
-        $product->load(['compositions.product', 'category']);
+        // 4. 🔥 CARGA DOS DADOS: Importante usar 'childProduct' que é o nome no Model
+        $product->load(['compositions.childProduct', 'category']);
 
         return view('bar.products.edit', compact('product', 'categories', 'availableProducts'));
     }

@@ -44,41 +44,36 @@ class BarProduct extends Model
      */
     public function baixarEstoque($quantidadeVendida, $referencia = null)
     {
-        // 1. Se for um COMBO, busca os itens direto na tabela de composição
+        // 1. Se for um COMBO, baixa individualmente os itens da receita
         if ($this->is_combo) {
-            // Buscamos direto na tabela para não ter erro de carregamento
-            $composicoes = \App\Models\Bar\BarProductComposition::where('parent_id', $this->id)->get();
+            $itensCombo = $this->compositions()->get();
 
-            foreach ($composicoes as $item) {
+            foreach ($itensCombo as $item) {
                 $produtoFilho = BarProduct::find($item->child_id);
 
-                if ($produtoFilho) {
+                if ($produtoFilho && $produtoFilho->manage_stock) {
                     $totalParaAbater = $item->quantity * $quantidadeVendida;
 
-                    // Se gerencia estoque, abate o número
-                    if ($produtoFilho->manage_stock) {
-                        $produtoFilho->decrement('stock_quantity', $totalParaAbater);
-                    }
+                    $produtoFilho->decrement('stock_quantity', $totalParaAbater);
 
-                    // REGISTRA O LOG DOS FILHOS (O que não estava aparecendo)
-                    \App\Models\Bar\BarStockMovement::create([
+                    BarStockMovement::create([
                         'bar_product_id' => $produtoFilho->id,
                         'user_id'        => auth()->id() ?? 1,
                         'quantity'       => -$totalParaAbater,
                         'type'           => 'saida',
-                        'description'    => "BAIXA AUTOMÁTICA COMBO: [{$this->name}]" . ($referencia ? " | Ref: {$referencia}" : ""),
+                        'description'    => "BAIXA COMBO: [{$this->name}]" . ($referencia ? " | Ref: {$referencia}" : ""),
                     ]);
                 }
             }
         }
 
-        // 2. Se for produto SIMPLES (abate ele mesmo)
+        // 2. Se for produto SIMPLES, abate o próprio estoque
         if (!$this->is_combo && $this->manage_stock) {
             $this->decrement('stock_quantity', $quantidadeVendida);
         }
 
-        // Log do item principal (O que já está aparecendo)
-        \App\Models\Bar\BarStockMovement::create([
+        // Registro da movimentação do item principal (para auditoria do que foi vendido)
+        BarStockMovement::create([
             'bar_product_id' => $this->id,
             'user_id'        => auth()->id() ?? 1,
             'quantity'       => -$quantidadeVendida,

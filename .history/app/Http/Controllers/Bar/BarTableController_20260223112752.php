@@ -175,35 +175,20 @@ class BarTableController extends Controller
     }
 
     /**
-     * Lança item na comanda via AJAX (Agora com Trava de Combo 🛡️)
+     * Lança item na comanda via AJAX (Atualizado para Combos 🚀)
      */
     public function addItem(Request $request, $orderId)
     {
         try {
             return DB::transaction(function () use ($request, $orderId) {
                 $order = BarOrder::findOrFail($orderId);
-                // Carregamos o produto com as composições E o produto real (filho)
-                $product = BarProduct::with('compositions.product')->findOrFail($request->product_id);
+                $product = BarProduct::findOrFail($request->product_id);
                 $qty = $request->quantity ?? 1;
 
-                // --- 🛡️ VALIDAÇÃO DE ESTOQUE UNIFICADA ---
-                if ($product->is_combo) {
-                    // Se for combo, verifica cada item da receita antes de lançar
-                    foreach ($product->compositions as $comp) {
-                        $filho = $comp->product;
-                        $necessario = $comp->quantity * $qty;
-
-                        if ($filho && $filho->manage_stock && $filho->stock_quantity < $necessario) {
-                            throw new \Exception("Estoque insuficiente para o combo! Falta: {$filho->name} (Disponível: {$filho->stock_quantity})");
-                        }
-                    }
-                } else {
-                    // Se for simples, valida o próprio estoque
-                    if ($product->manage_stock && $product->stock_quantity < $qty) {
-                        throw new \Exception("Estoque insuficiente para: {$product->name} (Disponível: {$product->stock_quantity})");
-                    }
+                // 🛡️ Validação de estoque (Apenas para produtos que não são combos)
+                if (!$product->is_combo && $product->manage_stock && $product->stock_quantity < $qty) {
+                    throw new \Exception("Estoque insuficiente para: {$product->name}");
                 }
-                // --- FIM DA VALIDAÇÃO ---
 
                 $item = BarOrderItem::where('bar_order_id', $order->id)
                     ->where('bar_product_id', $product->id)
@@ -224,7 +209,7 @@ class BarTableController extends Controller
 
                 $order->update(['total_value' => $order->items()->sum('subtotal')]);
 
-                // Baixa o estoque (seja item simples ou combo)
+                // 🔥 CHAMADA INTELIGENTE: Baixa o estoque do item ou dos filhos do combo
                 $product->baixarEstoque($qty, "Mesa #{$order->table->identifier} (Comanda #{$order->id})");
 
                 return response()->json(['success' => true]);
