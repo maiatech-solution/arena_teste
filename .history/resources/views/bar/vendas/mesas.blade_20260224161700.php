@@ -2,34 +2,19 @@
     {{-- 🚀 CONTAINER PRINCIPAL COM ESTADO DO MODAL (Alpine.js) --}}
     <div class="max-w-[1600px] mx-auto px-6 py-8" x-data="{
         modalDetalhes: false,
-        venda: {
-            id: '',
-            itens: [],
-            desconto: 0,
-            total_raw: 0,
-            total: '0,00',
-            operador: '',
-            pagamento: ''
-        },
+        venda: { itens: [] },
         carregando: false,
         abrirDetalhes(id) {
             this.carregando = true;
             this.modalDetalhes = true;
-            this.venda = { itens: [], desconto: 0, total_raw: 0 };
-            {{-- Limpa dados anteriores ao abrir novo --}}
             fetch(`/bar/relatorios/venda-detalhes/mesa/${id}`)
                 .then(res => res.json())
                 .then(data => {
                     this.venda = data;
                     this.carregando = false;
-                })
-                .catch(error => {
-                    console.error('Erro:', error);
-                    this.carregando = false;
                 });
         }
-    }"
-        @keydown.escape.window="modalDetalhes = false; if(typeof fecharModalCancelamento === 'function') fecharModalCancelamento()">
+    }">
 
         {{-- 🛰️ CABEÇALHO --}}
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
@@ -203,9 +188,10 @@
             @endif
         </div>
 
-        {{-- 📋 MODAL DE DETALHES --}}
+        {{-- 📋 MODAL DE DETALHES (ESTILO COMANDA DARK - ATUALIZADO) --}}
         <div x-show="modalDetalhes" x-transition.opacity
-            class="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 backdrop-blur-sm p-4">
+            class="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 backdrop-blur-sm p-4"
+            style="display: none;">
             <div @click.away="modalDetalhes = false"
                 class="bg-gray-900 border border-gray-800 w-full max-w-md rounded-[3rem] overflow-hidden shadow-2xl relative">
                 <div
@@ -215,8 +201,9 @@
                 <div class="p-10 relative">
                     <div class="flex justify-between items-start mb-8">
                         <div>
-                            <h3 class="text-white text-3xl font-black uppercase italic tracking-tighter">Comanda <span
-                                    class="text-orange-500">#</span><span x-text="venda.id"></span></h3>
+                            <h3 class="text-white text-3xl font-black uppercase italic tracking-tighter">
+                                Comanda <span class="text-orange-500">#</span><span x-text="venda.id"></span>
+                            </h3>
                             <p class="text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-1"
                                 x-text="venda.data"></p>
                         </div>
@@ -255,19 +242,20 @@
                         </div>
 
                         <div class="space-y-3 pt-4 border-t border-gray-800">
-                            <template x-if="(parseFloat(venda.desconto) || 0) > 0">
+                            {{-- 💰 BLOCO DE DESCONTO (LÓGICA PADRONIZADA) --}}
+                            <template x-if="parseFloat(venda.desconto) > 0">
                                 <div class="space-y-2 bg-black/20 p-4 rounded-2xl mb-4">
                                     <div
                                         class="flex justify-between items-center text-[10px] font-black uppercase italic text-gray-500">
                                         <span>Subtotal Bruto</span>
                                         <span
-                                            x-text="'R$ ' + (parseFloat(venda.total_raw || 0) + parseFloat(venda.desconto || 0)).toLocaleString('pt-BR', {minimumFractionDigits: 2})"></span>
+                                            x-text="'R$ ' + (parseFloat(venda.total_raw) + parseFloat(venda.desconto)).toLocaleString('pt-BR', {minimumFractionDigits: 2})"></span>
                                     </div>
                                     <div
                                         class="flex justify-between items-center text-[10px] font-black uppercase italic text-red-500">
                                         <span>Desconto Especial</span>
                                         <span
-                                            x-text="'- R$ ' + (parseFloat(venda.desconto || 0)).toLocaleString('pt-BR', {minimumFractionDigits: 2})"></span>
+                                            x-text="'- R$ ' + parseFloat(venda.desconto).toLocaleString('pt-BR', {minimumFractionDigits: 2})"></span>
                                     </div>
                                 </div>
                             </template>
@@ -276,14 +264,10 @@
                                 <span class="text-gray-500">Garçom/Atendente</span>
                                 <span class="text-gray-300" x-text="venda.operador"></span>
                             </div>
-
                             <div class="flex justify-between items-center text-[10px] font-black uppercase italic">
                                 <span class="text-gray-500">Meio de Pagamento</span>
-                                {{-- Ajuste aqui: mostra o pagamento ou um traço se vier vazio --}}
-                                <span class="text-green-500"
-                                    x-text="venda.pagamento ? venda.pagamento.toUpperCase() : '---'"></span>
+                                <span class="text-green-500" x-text="venda.pagamento"></span>
                             </div>
-
                             <div class="pt-4 border-t border-gray-800 flex justify-between items-end">
                                 <span class="text-gray-500 font-black uppercase text-xs italic">Total Pago</span>
                                 <span class="text-4xl font-black text-white italic tracking-tighter font-mono"
@@ -300,46 +284,70 @@
             </div>
         </div>
 
-        {{-- 🔒 MODAL DE CANCELAMENTO (Original mantido) --}}
+        {{-- 🔒 MODAL DE CANCELAMENTO (ESTORNO) --}}
+        {{-- 🔒 MODAL DE CANCELAMENTO (ESTORNO) --}}
         <div id="modalCancelamento"
             class="hidden fixed inset-0 z-[120] flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
             <div
                 class="bg-gray-900 border border-gray-800 w-full max-w-md rounded-[3rem] p-10 shadow-2xl relative overflow-hidden">
+
+                {{-- Marca d'água de fundo --}}
                 <div
                     class="absolute -right-10 -top-10 text-9xl opacity-5 italic font-black text-white pointer-events-none uppercase">
-                    VOID</div>
+                    VOID
+                </div>
+
                 <div class="text-center mb-8">
                     <div
                         class="w-20 h-20 bg-orange-600/10 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-orange-600/20 shadow-xl">
                         <span class="text-4xl">🚫</span>
                     </div>
-                    <h3 class="text-white text-2xl font-black uppercase italic tracking-tighter">Anular Comanda <span
-                            id="cancel_id_text" class="text-orange-500"></span></h3>
-                    <div class="mt-2 text-white font-black italic tracking-tighter">R$ <span
-                            id="cancel_valor_text"></span></div>
+                    <h3 class="text-white text-2xl font-black uppercase italic tracking-tighter">
+                        Anular Comanda <span id="cancel_id_text" class="text-orange-500"></span>
+                    </h3>
+                    <div class="mt-2 text-white font-black italic tracking-tighter text-xl">
+                        R$ <span id="cancel_valor_text"></span>
+                    </div>
                 </div>
+
                 <form id="formCancelarMesa" method="POST">
                     @csrf
+                    {{-- Campos ocultos para processar a autorização do supervisor --}}
                     <input type="hidden" name="supervisor_email"
                         value="{{ in_array(auth()->user()->role, ['admin', 'gestor']) ? auth()->user()->email : '' }}">
                     <input type="hidden" name="supervisor_password">
+
                     <div class="space-y-6">
+                        {{-- Justificativa --}}
                         <textarea name="reason" required placeholder="Motivo do estorno..."
-                            class="w-full bg-black border border-gray-800 rounded-3xl p-5 text-white text-xs h-28 focus:border-orange-500 transition-all shadow-inner placeholder:text-gray-700"></textarea>
-                        <div class="p-6 bg-orange-600/5 border border-orange-600/20 rounded-[2.5rem]">
+                            class="w-full bg-black border border-gray-800 rounded-3xl p-5 text-white text-xs h-28 focus:border-orange-500 transition-all shadow-inner placeholder:text-gray-700 outline-none resize-none"></textarea>
+
+                        {{-- Área de Autenticação --}}
+                        <div class="p-6 bg-orange-600/5 border border-orange-600/20 rounded-[2.5rem] space-y-3">
+                            <p
+                                class="text-[9px] font-black text-orange-500/50 uppercase text-center tracking-widest mb-2">
+                                Autorização Requerida</p>
+
                             @if (!in_array(auth()->user()->role, ['admin', 'gestor']))
                                 <input type="email" id="email_auth_cancel" placeholder="E-MAIL DO GESTOR"
-                                    class="w-full bg-black border border-gray-800 rounded-2xl p-4 text-white text-center text-[10px] mb-3 font-mono uppercase tracking-widest outline-none">
+                                    class="w-full bg-black border border-gray-800 rounded-2xl p-4 text-white text-center text-[10px] font-mono uppercase tracking-widest outline-none focus:border-orange-500 transition-all">
                             @endif
+
                             <input type="password" id="pass_auth_cancel" placeholder="SENHA DO GESTOR"
-                                class="w-full bg-black border border-gray-800 rounded-2xl p-4 text-white text-center text-sm font-mono tracking-[0.3em] outline-none">
+                                class="w-full bg-black border border-gray-800 rounded-2xl p-4 text-white text-center text-sm font-mono tracking-[0.3em] outline-none focus:border-orange-500 transition-all">
                         </div>
                     </div>
+
+                    {{-- Botões de Ação --}}
                     <div class="grid grid-cols-2 gap-4 mt-10">
                         <button type="button" onclick="fecharModalCancelamento()"
-                            class="py-5 text-gray-500 font-black rounded-3xl uppercase text-[10px] hover:text-white transition-all">Voltar</button>
+                            class="py-5 text-gray-500 font-black rounded-3xl uppercase text-[10px] hover:text-white hover:bg-white/5 transition-all">
+                            Voltar
+                        </button>
                         <button type="button" onclick="confirmarCancelamentoMesa()"
-                            class="py-5 bg-orange-600 hover:bg-orange-500 text-white font-black rounded-3xl uppercase text-[10px] tracking-widest shadow-xl shadow-orange-900/40 active:scale-95 transition-all">Confirmar</button>
+                            class="py-5 bg-orange-600 hover:bg-orange-500 text-white font-black rounded-3xl uppercase text-[10px] tracking-widest shadow-xl shadow-orange-900/40 active:scale-95 transition-all">
+                            Confirmar
+                        </button>
                     </div>
                 </form>
             </div>
@@ -377,26 +385,58 @@
             const form = document.getElementById('formCancelarMesa');
             const passInput = document.getElementById('pass_auth_cancel');
             const emailInput = document.getElementById('email_auth_cancel');
-
-            // Captura o botão que disparou a função
-            const btnSubmit = event.target;
-
             const emailFinal = emailInput ? emailInput.value : form.querySelector('input[name="supervisor_email"]').value;
-
             if (!passInput.value || !emailFinal) {
                 alert("⚠️ Autorização obrigatória.");
                 return;
             }
-
-            // 🔒 Proteção: Desabilita o botão para evitar cliques duplos
-            btnSubmit.disabled = true;
-            btnSubmit.innerText = "ANULANDO...";
-            btnSubmit.classList.add('opacity-50', 'cursor-not-allowed');
-
             form.querySelector('input[name="supervisor_email"]').value = emailFinal;
             form.querySelector('input[name="supervisor_password"]').value = passInput.value;
-
             form.submit();
         }
     </script>
+</x-bar-layout>
+
+
+<style>
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+
+    input[type="date"] {
+        color-scheme: dark;
+    }
+</style>
+
+<script>
+    function abrirModalCancelamento(id, valor) {
+        document.getElementById('cancel_id_text').innerText = '#' + id;
+        document.getElementById('cancel_valor_text').innerText = valor;
+        document.getElementById('formCancelarMesa').action = `/bar/historico/mesas/${id}/cancelar`;
+        document.getElementById('modalCancelamento').classList.remove('hidden');
+    }
+
+    function fecharModalCancelamento() {
+        document.getElementById('modalCancelamento').classList.add('hidden');
+    }
+
+    function confirmarCancelamentoMesa() {
+        const form = document.getElementById('formCancelarMesa');
+        const passInput = document.getElementById('pass_auth_cancel');
+        const emailInput = document.getElementById('email_auth_cancel');
+        const emailFinal = emailInput ? emailInput.value : form.querySelector('input[name="supervisor_email"]').value;
+        if (!passInput.value || !emailFinal) {
+            alert("⚠️ Autorização obrigatória.");
+            return;
+        }
+        form.querySelector('input[name="supervisor_email"]').value = emailFinal;
+        form.querySelector('input[name="supervisor_password"]').value = passInput.value;
+        form.submit();
+    }
+</script>
 </x-bar-layout>

@@ -338,64 +338,61 @@ class BarReportController extends Controller
     public function getDetails($tipo, $id)
     {
         try {
+            // Normaliza o tipo para evitar erros de caixa (Mesa vs mesa)
             $tipoLower = strtolower($tipo);
 
-            // 1. Busca os dados conforme o tipo (Mesa ou Venda Direta)
             if ($tipoLower === 'mesa' || $tipoLower === 'mesas') {
+                // Busca na tabela de Comandas/Mesas
                 $venda = BarOrder::with(['items.product', 'user'])->findOrFail($id);
             } else {
+                // Busca na tabela de PDV/Venda Direta
                 $venda = BarSale::with(['items.product', 'user'])->findOrFail($id);
             }
 
-            // 2. Formatação dos Itens e Cálculo do Subtotal Bruto
-            $subtotalBruto = 0;
-            $itensFormatados = $venda->items->map(function ($item) use (&$subtotalBruto) {
+            // 🧮 CÁLCULO BRUTO E FORMATAÇÃO DE ITENS (Sem perdas)
+            $subtotalBrutoCalculado = 0;
+
+            $itensFormatados = $venda->items->map(function ($item) use (&$subtotalBrutoCalculado) {
+                // Tenta pegar o preço unitário de várias fontes para garantir precisão
                 $precoUnitario = $item->price_at_sale ?? $item->unit_price ?? 0;
-                $valorItem = $item->quantity * $precoUnitario;
-                $subtotalBruto += $valorItem;
+
+                // Tenta usar o subtotal pronto do banco ou calcula na hora
+                $valorTotalItem = $item->subtotal ?? ($item->quantity * $precoUnitario);
+
+                // Acumula para o desconto matemático
+                $subtotalBrutoCalculado += $valorTotalItem;
 
                 return [
-                    'nome'     => $item->product->name ?? 'Produto',
+                    'nome'     => $item->product->name ?? 'Produto Removido',
                     'qtd'      => $item->quantity,
-                    'subtotal' => number_format($valorItem, 2, ',', '.')
+                    'preco'    => number_format($precoUnitario, 2, ',', '.'),
+                    'subtotal' => number_format($valorTotalItem, 2, ',', '.')
                 ];
             });
 
-            // 3. Definição de Valores (Total e Desconto Real)
-            $valorPago = (float)$venda->total_value;
+            $valorPagoFinal = (float)$venda->total_value;
 
-            // Se a coluna discount_value existir, usamos ela. Caso contrário, calculamos a diferença.
-            $desconto = isset($venda->discount_value)
-                ? (float)$venda->discount_value
-                : ($subtotalBruto - $valorPago);
+            // 💰 Lógica do Desconto: Se o banco tiver a coluna usa ela, se não, faz a conta
+            $desconto = $venda->discount_value ?? ($subtotalBrutoCalculado - $valorPagoFinal);
 
-            // 4. Tratativa do Meio de Pagamento / Status
-            $pagamentoInfo = $venda->payment_method;
-
-            if (!$pagamentoInfo) {
-                $pagamentoInfo = match ($venda->status) {
-                    'paid', 'pago' => 'PAGO',
-                    'cancelled', 'cancelado' => 'ANULADA',
-                    default => 'ABERTO',
-                };
-            }
-
-            // 5. Retorno do JSON para o Modal
             return response()->json([
                 'id'        => $venda->id,
                 'tipo'      => strtoupper($tipo),
                 'data'      => $venda->created_at->format('d/m/Y H:i'),
                 'operador'  => $venda->user->name ?? 'N/A',
-                'cliente'   => $venda->customer_name ?? 'Não identificado', // Campo novo
-                'pagamento' => strtoupper($pagamentoInfo),
-                'total'     => number_format($valorPago, 2, ',', '.'),
-                'total_raw' => $valorPago,
+                'pagamento' => strtoupper($venda->payment_method ?? 'Não informado'),
+                'total'     => number_format($valorPagoFinal, 2, ',', '.'),
+
+                // Campos cruciais para o Modal Alpine.js
+                'total_raw' => $valorPagoFinal,
                 'desconto'  => $desconto > 0.01 ? (float)$desconto : 0,
+
                 'itens'     => $itensFormatados
             ]);
         } catch (\Exception $e) {
+            // Em caso de erro, retorna JSON para não travar o modal do Alpine.js
             return response()->json([
-                'error'   => true,
+                'error'   => 'Venda não encontrada ou erro interno.',
                 'message' => $e->getMessage()
             ], 404);
         }

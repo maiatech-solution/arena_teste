@@ -203,7 +203,7 @@
             @endif
         </div>
 
-        {{-- 📋 MODAL DE DETALHES --}}
+        {{-- 📋 MODAL DE DETALHES (ESTILO COMANDA DARK - ATUALIZADO) --}}
         <div x-show="modalDetalhes" x-transition.opacity
             class="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 backdrop-blur-sm p-4">
             <div @click.away="modalDetalhes = false"
@@ -254,7 +254,9 @@
                             </div>
                         </div>
 
+                        {{-- 💰 NOVO BLOCO DE DESCONTO (LÓGICA PADRONIZADA) --}}
                         <div class="space-y-3 pt-4 border-t border-gray-800">
+
                             <template x-if="(parseFloat(venda.desconto) || 0) > 0">
                                 <div class="space-y-2 bg-black/20 p-4 rounded-2xl mb-4">
                                     <div
@@ -276,14 +278,10 @@
                                 <span class="text-gray-500">Garçom/Atendente</span>
                                 <span class="text-gray-300" x-text="venda.operador"></span>
                             </div>
-
                             <div class="flex justify-between items-center text-[10px] font-black uppercase italic">
                                 <span class="text-gray-500">Meio de Pagamento</span>
-                                {{-- Ajuste aqui: mostra o pagamento ou um traço se vier vazio --}}
-                                <span class="text-green-500"
-                                    x-text="venda.pagamento ? venda.pagamento.toUpperCase() : '---'"></span>
+                                <span class="text-green-500" x-text="venda.pagamento"></span>
                             </div>
-
                             <div class="pt-4 border-t border-gray-800 flex justify-between items-end">
                                 <span class="text-gray-500 font-black uppercase text-xs italic">Total Pago</span>
                                 <span class="text-4xl font-black text-white italic tracking-tighter font-mono"
@@ -377,25 +375,13 @@
             const form = document.getElementById('formCancelarMesa');
             const passInput = document.getElementById('pass_auth_cancel');
             const emailInput = document.getElementById('email_auth_cancel');
-
-            // Captura o botão que disparou a função
-            const btnSubmit = event.target;
-
             const emailFinal = emailInput ? emailInput.value : form.querySelector('input[name="supervisor_email"]').value;
-
             if (!passInput.value || !emailFinal) {
                 alert("⚠️ Autorização obrigatória.");
                 return;
             }
-
-            // 🔒 Proteção: Desabilita o botão para evitar cliques duplos
-            btnSubmit.disabled = true;
-            btnSubmit.innerText = "ANULANDO...";
-            btnSubmit.classList.add('opacity-50', 'cursor-not-allowed');
-
             form.querySelector('input[name="supervisor_email"]').value = emailFinal;
             form.querySelector('input[name="supervisor_password"]').value = passInput.value;
-
             form.submit();
         }
     </script>

@@ -336,68 +336,58 @@ class BarReportController extends Controller
     }
 
     public function getDetails($tipo, $id)
-    {
-        try {
-            $tipoLower = strtolower($tipo);
+{
+    try {
+        $tipoLower = strtolower($tipo);
 
-            // 1. Busca os dados conforme o tipo (Mesa ou Venda Direta)
-            if ($tipoLower === 'mesa' || $tipoLower === 'mesas') {
-                $venda = BarOrder::with(['items.product', 'user'])->findOrFail($id);
-            } else {
-                $venda = BarSale::with(['items.product', 'user'])->findOrFail($id);
-            }
-
-            // 2. Formatação dos Itens e Cálculo do Subtotal Bruto
-            $subtotalBruto = 0;
-            $itensFormatados = $venda->items->map(function ($item) use (&$subtotalBruto) {
-                $precoUnitario = $item->price_at_sale ?? $item->unit_price ?? 0;
-                $valorItem = $item->quantity * $precoUnitario;
-                $subtotalBruto += $valorItem;
-
-                return [
-                    'nome'     => $item->product->name ?? 'Produto',
-                    'qtd'      => $item->quantity,
-                    'subtotal' => number_format($valorItem, 2, ',', '.')
-                ];
-            });
-
-            // 3. Definição de Valores (Total e Desconto Real)
-            $valorPago = (float)$venda->total_value;
-
-            // Se a coluna discount_value existir, usamos ela. Caso contrário, calculamos a diferença.
-            $desconto = isset($venda->discount_value)
-                ? (float)$venda->discount_value
-                : ($subtotalBruto - $valorPago);
-
-            // 4. Tratativa do Meio de Pagamento / Status
-            $pagamentoInfo = $venda->payment_method;
-
-            if (!$pagamentoInfo) {
-                $pagamentoInfo = match ($venda->status) {
-                    'paid', 'pago' => 'PAGO',
-                    'cancelled', 'cancelado' => 'ANULADA',
-                    default => 'ABERTO',
-                };
-            }
-
-            // 5. Retorno do JSON para o Modal
-            return response()->json([
-                'id'        => $venda->id,
-                'tipo'      => strtoupper($tipo),
-                'data'      => $venda->created_at->format('d/m/Y H:i'),
-                'operador'  => $venda->user->name ?? 'N/A',
-                'cliente'   => $venda->customer_name ?? 'Não identificado', // Campo novo
-                'pagamento' => strtoupper($pagamentoInfo),
-                'total'     => number_format($valorPago, 2, ',', '.'),
-                'total_raw' => $valorPago,
-                'desconto'  => $desconto > 0.01 ? (float)$desconto : 0,
-                'itens'     => $itensFormatados
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'error'   => true,
-                'message' => $e->getMessage()
-            ], 404);
+        // Busca básica sem tentar cruzar dados externos
+        if ($tipoLower === 'mesa' || $tipoLower === 'mesas') {
+            $venda = \App\Models\BarOrder::with(['items.product', 'user'])->findOrFail($id);
+            // Se não tem coluna de pagamento, fixamos 'PAGO' para não bugar
+            $metodoPagamento = 'MESA FINALIZADA';
+        } else {
+            $venda = \App\Models\BarSale::with(['items.product', 'user'])->findOrFail($id);
+            $metodoPagamento = $venda->payment_method ?? 'DINHEIRO';
         }
+
+        $subtotalBruto = 0;
+        $itensFormatados = $venda->items->map(function ($item) use (&$subtotalBruto) {
+            $preco = $item->unit_price ?? 0;
+            $sub = $item->subtotal ?? ($item->quantity * $preco);
+            $subtotalBruto += $sub;
+
+            return [
+                'nome'     => $item->product->name ?? 'Produto',
+                'qtd'      => $item->quantity,
+                'preco'    => number_format($preco, 2, ',', '.'),
+                'subtotal' => number_format($sub, 2, ',', '.')
+            ];
+        });
+
+        $totalFinal = (float)$venda->total_value;
+        $desconto = $venda->discount_value ?? ($subtotalBruto - $totalFinal);
+
+        return response()->json([
+            'id'        => (string)$venda->id,
+            'data'      => $venda->created_at->format('d/m/Y H:i'),
+            'operador'  => $venda->user->name ?? 'N/A',
+            'pagamento' => strtoupper($metodoPagamento),
+            'total'     => number_format($totalFinal, 2, ',', '.'),
+            'total_raw' => $totalFinal,
+            'desconto'  => $desconto > 0.01 ? (float)$desconto : 0,
+            'itens'     => $itensFormatados
+        ]);
+
+    } catch (\Exception $e) {
+        // Log para você conferir o erro real no arquivo de log do Laravel
+        \Log::error("Erro getDetails: " . $e->getMessage());
+
+        return response()->json([
+            'id'        => $id,
+            'error'     => true,
+            'message'   => $e->getMessage(),
+            'itens'     => []
+        ], 500);
     }
+}
 }

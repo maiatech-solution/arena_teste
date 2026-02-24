@@ -336,68 +336,54 @@ class BarReportController extends Controller
     }
 
     public function getDetails($tipo, $id)
-    {
-        try {
-            $tipoLower = strtolower($tipo);
+{
+    try {
+        $tipoLower = strtolower($tipo);
 
-            // 1. Busca os dados conforme o tipo (Mesa ou Venda Direta)
-            if ($tipoLower === 'mesa' || $tipoLower === 'mesas') {
-                $venda = BarOrder::with(['items.product', 'user'])->findOrFail($id);
-            } else {
-                $venda = BarSale::with(['items.product', 'user'])->findOrFail($id);
-            }
-
-            // 2. Formatação dos Itens e Cálculo do Subtotal Bruto
-            $subtotalBruto = 0;
-            $itensFormatados = $venda->items->map(function ($item) use (&$subtotalBruto) {
-                $precoUnitario = $item->price_at_sale ?? $item->unit_price ?? 0;
-                $valorItem = $item->quantity * $precoUnitario;
-                $subtotalBruto += $valorItem;
-
-                return [
-                    'nome'     => $item->product->name ?? 'Produto',
-                    'qtd'      => $item->quantity,
-                    'subtotal' => number_format($valorItem, 2, ',', '.')
-                ];
-            });
-
-            // 3. Definição de Valores (Total e Desconto Real)
-            $valorPago = (float)$venda->total_value;
-
-            // Se a coluna discount_value existir, usamos ela. Caso contrário, calculamos a diferença.
-            $desconto = isset($venda->discount_value)
-                ? (float)$venda->discount_value
-                : ($subtotalBruto - $valorPago);
-
-            // 4. Tratativa do Meio de Pagamento / Status
-            $pagamentoInfo = $venda->payment_method;
-
-            if (!$pagamentoInfo) {
-                $pagamentoInfo = match ($venda->status) {
-                    'paid', 'pago' => 'PAGO',
-                    'cancelled', 'cancelado' => 'ANULADA',
-                    default => 'ABERTO',
-                };
-            }
-
-            // 5. Retorno do JSON para o Modal
-            return response()->json([
-                'id'        => $venda->id,
-                'tipo'      => strtoupper($tipo),
-                'data'      => $venda->created_at->format('d/m/Y H:i'),
-                'operador'  => $venda->user->name ?? 'N/A',
-                'cliente'   => $venda->customer_name ?? 'Não identificado', // Campo novo
-                'pagamento' => strtoupper($pagamentoInfo),
-                'total'     => number_format($valorPago, 2, ',', '.'),
-                'total_raw' => $valorPago,
-                'desconto'  => $desconto > 0.01 ? (float)$desconto : 0,
-                'itens'     => $itensFormatados
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'error'   => true,
-                'message' => $e->getMessage()
-            ], 404);
+        if ($tipoLower === 'mesa' || $tipoLower === 'mesas') {
+            $venda = BarOrder::with(['items.product', 'user'])->findOrFail($id);
+        } else {
+            $venda = BarSale::with(['items.product', 'user'])->findOrFail($id);
         }
+
+        // 🧮 CÁLCULO BRUTO (Soma manual para evitar o zero do banco)
+        $subtotalBruto = 0;
+        $itensFormatados = $venda->items->map(function ($item) use (&$subtotalBruto) {
+            $precoUnitario = $item->price_at_sale ?? $item->unit_price ?? 0;
+            $valorItem = $item->quantity * $precoUnitario;
+            $subtotalBruto += $valorItem;
+
+            return [
+                'nome'     => $item->product->name ?? 'Produto',
+                'qtd'      => $item->quantity,
+                'subtotal' => number_format($valorItem, 2, ',', '.')
+            ];
+        });
+
+        $valorPago = (float)$venda->total_value;
+        $descontoEncontrado = $subtotalBruto - $valorPago;
+
+        // 💳 TRATATIVA DO MEIO DE PAGAMENTO
+        // Se existir o método (PDV), usa ele.
+        // Se não existir (Mesa) e estiver paga, mostra "PAGO".
+        $statusPgto = $venda->payment_method;
+        if (!$statusPgto) {
+            $statusPgto = ($venda->status === 'paid' || $venda->status === 'pago') ? 'PAGO' : 'PENDENTE';
+        }
+
+        return response()->json([
+            'id'        => $venda->id,
+            'tipo'      => strtoupper($tipo),
+            'data'      => $venda->created_at->format('d/m/Y H:i'),
+            'operador'  => $venda->user->name ?? 'N/A',
+            'pagamento' => strtoupper($statusPgto),
+            'total'     => number_format($valorPago, 2, ',', '.'),
+            'total_raw' => $valorPago,
+            'desconto'  => $descontoEncontrado > 0.01 ? $descontoEncontrado : 0,
+            'itens'     => $itensFormatados
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()], 404);
     }
+}
 }

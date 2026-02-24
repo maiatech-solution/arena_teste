@@ -262,85 +262,99 @@ class BarTableController extends Controller
     }
 
     /**
-     * 🏁 FINALIZAR MESA
-     * Registra pagamentos, limpa a mesa e salva detalhes da venda na comanda.
+     * 🏁 FINALIZAR MESA (Com blindagem de data e integração ao caixa)
      */
     public function closeOrder(Request $request, $id)
     {
         return DB::transaction(function () use ($request, $id) {
             $table = BarTable::findOrFail($id);
+
+            // 1. BUSCA A SESSÃO DE CAIXA ATIVA
             $session = BarCashSession::where('status', 'open')->first();
 
-            // 🛡️ Validação de Segurança: Caixa
+            // 🛡️ VALIDAÇÃO DE CAIXA
             if (!$session) {
                 return redirect()->route('bar.tables.index')
                     ->with('error', '⚠️ Operação Bloqueada: Não há nenhum caixa aberto.');
             }
 
-            // 🛡️ Validação de Segurança: Comanda
-            $order = $table->orders()->where('status', 'open')->latest()->first();
-            if (!$order) {
-                return redirect()->route('bar.tables.index')->with('error', '⚠️ Nenhuma comanda ativa encontrada.');
+            // 🛡️ VALIDAÇÃO DE DATA
+            $dataAbertura = \Carbon\Carbon::parse($session->opened_at)->format('Y-m-d');
+            if ($dataAbertura !== date('Y-m-d')) {
+                return redirect()->route('bar.tables.index')
+                    ->with('error', '⚠️ CAIXA VENCIDO: Encerre o turno de ontem antes de receber hoje.');
             }
 
-            // 💰 Cálculos de Valores
-            $discountValue = (float)($request->discount_value ?? 0);
-            $finalValue = (float)$order->total_value - $discountValue;
+            // 2. BUSCA A COMANDA ATIVA
+            $order = $table->orders()->where('status', 'open')->latest()->first();
 
-            // --- 💳 PROCESSAMENTO DOS PAGAMENTOS ---
+            if (!$order) {
+                if ($table->status == 'occupied') {
+                    $table->update(['status' => 'available']);
+                    return redirect()->route('bar.tables.index')->with('success', 'Mesa liberada.');
+                }
+                return redirect()->route('bar.tables.index')->with('error', '⚠️ Nenhuma comanda ativa.');
+            }
+
+            // --- 💰 LÓGICA DE DESCONTO ---
+            $discountValue = $request->discount_value ?? 0;
+            $finalValue = $order->total_value - $discountValue;
+
+            // --- 💳 TRATAMENTO DOS NOMES DE PAGAMENTO PARA O HISTÓRICO ---
+            // Extraímos os nomes do JSON para salvar uma string legível na bar_orders
             $pagamentosArray = json_decode($request->pagamentos, true);
             $nomesMetodos = [];
 
             if (is_array($pagamentosArray)) {
                 foreach ($pagamentosArray as $pag) {
-                    $valorItem = floatval($pag['valor'] ?? 0);
+                    if (isset($pag['valor']) && $pag['valor'] > 0) {
+                        $nomesMetodos[] = strtoupper($pag['metodo']);
+                    }
+                }
+            }
+            // Transforma o array em string separada por vírgula (Ex: "PIX, DINHEIRO")
+            $metodosString = implode(', ', array_unique($nomesMetodos));
 
-                    if ($valorItem > 0) {
-                        // Formata o nome para salvar na string da comanda (Ex: DINHEIRO)
-                        $nomesMetodos[] = mb_strtoupper($pag['metodo'], 'UTF-8');
+            // 3. ATUALIZA A COMANDA PARA PAGA
+            $order->update([
+                'status'              => 'paid',
+                'customer_name'       => $request->customer_name,
+                'customer_phone'      => $request->customer_phone,
+                'payment_method'      => $metodosString ?: 'PAGO', // Salva a string limpa aqui
+                'discount_value'      => $discountValue,
+                'total_value'         => $finalValue,
+                'closed_at'           => now(),
+                'bar_cash_session_id' => $session->id,
+            ]);
 
-                        // 1. Registra cada movimentação no Caixa (Histórico de Movimentos)
+            // 🔥 ATUALIZAÇÃO DO FATURAMENTO
+            $session->increment('total_vendas_sistema', $finalValue);
+
+            // 💰 4. INTEGRAÇÃO COM O CAIXA (MOVIMENTAÇÕES INDIVIDUAIS)
+            if (is_array($pagamentosArray)) {
+                foreach ($pagamentosArray as $pag) {
+                    if ($pag['valor'] > 0) {
                         \App\Models\Bar\BarCashMovement::create([
                             'bar_cash_session_id' => $session->id,
                             'user_id'             => auth()->id(),
                             'bar_order_id'        => $order->id,
                             'type'                => 'venda',
                             'payment_method'      => $pag['metodo'],
-                            'amount'              => $valorItem,
-                            'description'         => "Venda Mesa #{$table->identifier}",
+                            'amount'              => $pag['valor'],
+                            'description'         => "Venda Mesa #{$table->identifier}" . ($discountValue > 0 ? " (c/ Desc)" : ""),
                         ]);
 
-                        // 2. Atualiza saldo esperado se for Dinheiro
-                        if (strtolower($pag['metodo']) == 'dinheiro') {
-                            $session->increment('expected_balance', $valorItem);
+                        if ($pag['metodo'] == 'dinheiro') {
+                            $session->increment('expected_balance', $pag['valor']);
                         }
                     }
                 }
             }
 
-            // Define a string que aparecerá no histórico (Ex: "PIX" ou "DINHEIRO, CARTÃO")
-            $metodosString = !empty($nomesMetodos) ? implode(', ', array_unique($nomesMetodos)) : 'PAGO';
-
-            // 📝 3. ATUALIZAÇÃO FINAL DA COMANDA (PERSISTÊNCIA)
-            $order->status = 'paid';
-            $order->payment_method = $metodosString;
-            $order->customer_name = $request->customer_name;
-            $order->customer_phone = $request->customer_phone;
-            $order->discount_value = $discountValue;
-            $order->total_value = $finalValue; // Salva o valor líquido (pago pelo cliente)
-            $order->closed_at = now();
-            $order->bar_cash_session_id = $session->id;
-
-            // Salva de forma explícita para garantir a gravação no banco
-            $order->save();
-
-            // 🔥 4. ATUALIZAÇÃO DO FATURAMENTO DA SESSÃO
-            $session->increment('total_vendas_sistema', $finalValue);
-
-            // ✅ 5. LIBERA A MESA PARA O PRÓXIMO CLIENTE
+            // ✅ 5. LIBERA A MESA
             $table->update(['status' => 'available']);
 
-            // 🖨️ 6. REDIRECIONAMENTO COM RECIBO (OPCIONAL)
+            // 6. TRATAMENTO DE CUPOM
             if ($request->print_coupon == "1") {
                 return redirect()->route('bar.tables.receipt', $order->id)
                     ->with('show_success_modal', true)
