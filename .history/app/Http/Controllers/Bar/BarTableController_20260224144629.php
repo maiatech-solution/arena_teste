@@ -356,21 +356,12 @@ class BarTableController extends Controller
     }
 
     /**
-     * 🖨️ EXIBIR RECIBO PARA IMPRESSÃO (Com suporte a descontos)
+     * 🖨️ EXIBIR RECIBO PARA IMPRESSÃO
      */
     public function printReceipt($orderId)
     {
-        // 1. Carrega a ordem com os itens e a mesa
         $order = BarOrder::with(['items.product', 'table'])->findOrFail($orderId);
-
-        // 2. Calcula o subtotal bruto (soma dos subtotais de cada item antes do desconto da ordem)
-        // Usamos floatval para garantir que o cálculo seja numérico
-        $subtotalBruto = $order->items->sum(function ($item) {
-            return floatval($item->subtotal);
-        });
-
-        // 3. Retorna a view enviando o subtotal calculado
-        return view('bar.tables.receipt', compact('order', 'subtotalBruto'));
+        return view('bar.tables.receipt', compact('order'));
     }
 
     public function painel()

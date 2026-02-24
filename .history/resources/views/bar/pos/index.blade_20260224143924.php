@@ -611,31 +611,8 @@
         // --- 🧾 RECIBO E FINALIZAÇÃO ---
 
         function showReceipt(totalPaid) {
-            // 1. Captura o valor do desconto direto do input de desconto
-            const discountVal = parseFloat(document.getElementById('cartDiscount').value) || 0;
-
-            // 2. Calcula o subtotal (o que seria o valor cheio sem o desconto)
-            const subtotalBruto = currentCartTotal + discountVal;
             const change = totalPaid - currentCartTotal;
-
             document.getElementById('receiptDate').innerText = new Date().toLocaleString('pt-BR');
-
-            // 3. Preenche os novos campos de Subtotal e Desconto no Modal
-            const subtotalElem = document.getElementById('receiptSubtotalValue');
-            const discountElem = document.getElementById('receiptDiscountValue');
-            const subtotalRow = document.getElementById('receiptSubtotalRow');
-            const discountRow = document.getElementById('receiptDiscountRow');
-
-            if (subtotalElem) subtotalElem.innerText =
-                `R$ ${subtotalBruto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
-            if (discountElem) discountElem.innerText =
-                `- R$ ${discountVal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
-
-            // Só mostra as linhas de subtotal e desconto se realmente houve desconto
-            if (subtotalRow) subtotalRow.style.display = discountVal > 0 ? 'flex' : 'none';
-            if (discountRow) discountRow.style.display = discountVal > 0 ? 'flex' : 'none';
-
-            // 4. Preenche os campos que você já tinha
             document.getElementById('receiptTotal').innerText =
                 `R$ ${currentCartTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
             document.getElementById('receiptReceived').innerText =
@@ -648,11 +625,11 @@
             document.getElementById('receiptPayment').innerText = methodsUsed;
 
             document.getElementById('receiptItems').innerHTML = cart.map(item => `
-        <div class="flex justify-between text-[11px]">
-            <span class="flex-1">${item.quantity}x ${item.name}</span>
-            <span class="ml-2">R$ ${(item.price * item.quantity).toFixed(2)}</span>
-        </div>
-    `).join('');
+            <div class="flex justify-between text-[11px]">
+                <span class="flex-1">${item.quantity}x ${item.name}</span>
+                <span class="ml-2">R$ ${(item.price * item.quantity).toFixed(2)}</span>
+            </div>
+        `).join('');
 
             document.getElementById('receiptModal').classList.remove('hidden');
         }
@@ -661,30 +638,12 @@
             let phone = prompt("Número do cliente (DDD + Número):", "");
             if (phone) phone = phone.replace(/\D/g, '');
 
-            // Captura os valores de desconto e totais
-            const discountVal = parseFloat(document.getElementById('cartDiscount').value) || 0;
-            const subtotalBruto = currentCartTotal + discountVal;
-
-            let text = `*{{ config('app.name') }} - RECIBO*\n`;
-            text += `_Data: ${new Date().toLocaleString('pt-BR')}_\n\n`;
-
-            // Lista de Itens
+            let text = `*{{ config('app.name') }} - RECIBO*\n_Data: ${new Date().toLocaleString('pt-BR')}_\n\n`;
             cart.forEach(item => {
                 text += `• ${item.quantity}x ${item.name} = R$ ${(item.price * item.quantity).toFixed(2)}\n`;
             });
-
-            text += `\n------------------------------\n`;
-
-            // Se houver desconto, detalha o financeiro na mensagem
-            if (discountVal > 0) {
-                text += `*SUBTOTAL:* R$ ${subtotalBruto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n`;
-                text += `*DESCONTO:* - R$ ${discountVal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n`;
-            }
-
-            text += `*TOTAL PAGO: ${document.getElementById('receiptTotal').innerText}*\n`;
-            text += `*PAGO EM: ${document.getElementById('receiptPayment').innerText.toUpperCase()}*\n`;
-            text += `------------------------------\n`;
-            text += `_Obrigado pela preferência!_`;
+            text += `\n*TOTAL: ${document.getElementById('receiptTotal').innerText}*`;
+            text += `\n*PAGO EM: ${document.getElementById('receiptPayment').innerText.toUpperCase()}*`;
 
             const waUrl = phone ? `https://api.whatsapp.com/send?phone=55${phone}` : `https://api.whatsapp.com/send`;
             window.open(`${waUrl}&text=${encodeURIComponent(text)}`, '_blank');

@@ -272,53 +272,52 @@ class BarTableController extends Controller
             // 1. BUSCA A SESSÃO DE CAIXA ATIVA
             $session = BarCashSession::where('status', 'open')->first();
 
-            // 🛡️ VALIDAÇÃO DE CAIXA
+            // 🛡️ VALIDAÇÃO DE CAIXA: Verifica se existe caixa aberto
             if (!$session) {
                 return redirect()->route('bar.tables.index')
-                    ->with('error', '⚠️ Operação Bloqueada: Não há nenhum caixa aberto.');
+                    ->with('error', '⚠️ Operação Bloqueada: Não há nenhum caixa aberto para processar o recebimento.');
             }
 
-            // 🛡️ VALIDAÇÃO DE DATA
+            // 🛡️ VALIDAÇÃO DE DATA: Impede receber pagamento em caixa do dia anterior
             $dataAbertura = \Carbon\Carbon::parse($session->opened_at)->format('Y-m-d');
-            if ($dataAbertura !== date('Y-m-d')) {
+            $hoje = date('Y-m-d');
+
+            if ($dataAbertura !== $hoje) {
                 return redirect()->route('bar.tables.index')
-                    ->with('error', '⚠️ CAIXA VENCIDO: Encerre o turno de ontem antes de receber hoje.');
+                    ->with('error', '⚠️ CAIXA VENCIDO: O caixa aberto é de ontem (' . \Carbon\Carbon::parse($session->opened_at)->format('d/m') . '). Você deve encerrar o turno antigo na Gestão de Caixa antes de receber pagamentos de mesas hoje.');
             }
 
             // 2. BUSCA A COMANDA ATIVA
-            $order = $table->orders()->where('status', 'open')->latest()->first();
+            $order = $table->orders()
+                ->where('status', 'open')
+                ->latest()
+                ->first();
 
             if (!$order) {
                 if ($table->status == 'occupied') {
                     $table->update(['status' => 'available']);
-                    return redirect()->route('bar.tables.index')->with('success', 'Mesa liberada.');
+                    return redirect()->route('bar.tables.index')
+                        ->with('success', 'Mesa liberada, mas nenhuma comanda ativa foi encontrada.');
                 }
-                return redirect()->route('bar.tables.index')->with('error', '⚠️ Nenhuma comanda ativa.');
+                return redirect()->route('bar.tables.index')
+                    ->with('error', '⚠️ Nenhuma comanda ativa encontrada para esta mesa.');
             }
 
-            // --- 💰 LÓGICA DE DESCONTO ---
-            // Pegamos o desconto enviado pelo formulário (ajuste o nome do campo se necessário)
-            $discountValue = $request->discount_value ?? 0;
-
-            // O valor final que o cliente realmente pagou
-            $finalValue = $order->total_value - $discountValue;
-
-            // 3. ATUALIZA A COMANDA PARA PAGA
+            // 3. ATUALIZA A COMANDA PARA PAGA (Carimbando o ID do caixa)
             $order->update([
                 'status'              => 'paid',
                 'customer_name'       => $request->customer_name,
                 'customer_phone'      => $request->customer_phone,
                 'payment_method'      => $request->pagamentos,
-                'discount_value'      => $discountValue, // Salva o desconto na comanda
-                'total_value'         => $finalValue,    // Atualiza para o valor líquido pago
                 'closed_at'           => now(),
                 'bar_cash_session_id' => $session->id,
             ]);
 
-            // 🔥 ATUALIZAÇÃO DO FATURAMENTO (Líquido: o que entrou de fato no bolso)
-            $session->increment('total_vendas_sistema', $finalValue);
+            // 🔥 ATUALIZAÇÃO DO FATURAMENTO TOTAL DO TURNO
+            // Isso garante que o relatório de conferência saiba o valor total vendido (independente do método)
+            $session->increment('total_vendas_sistema', $order->total_value);
 
-            // 💰 4. INTEGRAÇÃO COM O CAIXA
+            // 💰 4. INTEGRAÇÃO COM O CAIXA (Lançamento de Movimentações Financeiras)
             $pagamentosArray = json_decode($request->pagamentos, true);
 
             if (is_array($pagamentosArray)) {
@@ -331,9 +330,10 @@ class BarTableController extends Controller
                             'type'                => 'venda',
                             'payment_method'      => $pag['metodo'],
                             'amount'              => $pag['valor'],
-                            'description'         => "Venda Mesa #{$table->identifier}" . ($discountValue > 0 ? " (c/ Desc)" : ""),
+                            'description'         => "Venda Mesa #{$table->identifier}",
                         ]);
 
+                        // Atualiza o saldo esperado especificamente para DINHEIRO (conferência física)
                         if ($pag['metodo'] == 'dinheiro') {
                             $session->increment('expected_balance', $pag['valor']);
                         }
@@ -341,7 +341,7 @@ class BarTableController extends Controller
                 }
             }
 
-            // ✅ 5. LIBERA A MESA
+            // ✅ 5. LIBERA A MESA PARA O PRÓXIMO CLIENTE
             $table->update(['status' => 'available']);
 
             // 6. TRATAMENTO DE CUPOM
@@ -351,26 +351,18 @@ class BarTableController extends Controller
                     ->with('success', 'Venda finalizada com sucesso!');
             }
 
-            return redirect()->route('bar.tables.index')->with('success', 'Venda finalizada com sucesso!');
+            return redirect()->route('bar.tables.index')
+                ->with('success', 'Venda finalizada com sucesso!');
         });
     }
 
     /**
-     * 🖨️ EXIBIR RECIBO PARA IMPRESSÃO (Com suporte a descontos)
+     * 🖨️ EXIBIR RECIBO PARA IMPRESSÃO
      */
     public function printReceipt($orderId)
     {
-        // 1. Carrega a ordem com os itens e a mesa
         $order = BarOrder::with(['items.product', 'table'])->findOrFail($orderId);
-
-        // 2. Calcula o subtotal bruto (soma dos subtotais de cada item antes do desconto da ordem)
-        // Usamos floatval para garantir que o cálculo seja numérico
-        $subtotalBruto = $order->items->sum(function ($item) {
-            return floatval($item->subtotal);
-        });
-
-        // 3. Retorna a view enviando o subtotal calculado
-        return view('bar.tables.receipt', compact('order', 'subtotalBruto'));
+        return view('bar.tables.receipt', compact('order'));
     }
 
     public function painel()

@@ -343,7 +343,7 @@
             }
         }
 
-        // --- Lógica de Precificação Inteligente (Markup vs Margem) ---
+        // --- Lógica de Precificação Inteligente ---
         const inputCusto = document.getElementById('purchase_price');
         const inputVenda = document.getElementById('sale_price');
         const inputMarkup = document.getElementById('input_markup');
@@ -351,7 +351,6 @@
         function aplicarMarkup(porcentagem) {
             const custo = parseFloat(inputCusto.value) || 0;
             if (custo > 0) {
-                // Define o preço de venda baseado no acréscimo (Markup) sobre o custo
                 const novoPreco = custo * (1 + (porcentagem / 100));
                 inputVenda.value = novoPreco.toFixed(2);
                 atualizarResumo();
@@ -366,24 +365,18 @@
             const venda = parseFloat(inputVenda.value) || 0;
 
             let lucro = venda - custo;
-
-            // 1. Cálculo de MARKUP (Acréscimo sobre o custo)
-            let markup = custo > 0 ? (lucro / custo) * 100 : 0;
-
-            // 2. Cálculo de MARGEM (Porcentagem real que sobra da venda)
             let margem = venda > 0 ? (lucro / venda) * 100 : 0;
 
             // Atualiza os labels do Widget
-            document.getElementById('display_markup').innerText = markup.toFixed(1) + '%';
             document.getElementById('display_margem').innerText = margem.toFixed(1) + '%';
-            document.getElementById('display_lucro').innerText = 'R$ ' + lucro.toLocaleString('pt-BR', {
+            document.getElementById('display_lucro').innerText = 'Lucro: R$ ' + lucro.toLocaleString('pt-BR', {
                 minimumFractionDigits: 2
             });
 
             const bgStatus = document.getElementById('margem_status_bg');
             const emoji = document.getElementById('margem_emoji');
 
-            // Lógica visual baseada na MARGEM REAL (Saúde do negócio)
+            // Lógica de cores do indicador visual
             if (venda === 0) {
                 bgStatus.className =
                     'w-14 h-14 rounded-2xl bg-gray-950 border border-gray-800 flex items-center justify-center';
@@ -392,7 +385,7 @@
                 bgStatus.className =
                     'w-14 h-14 rounded-2xl bg-red-600/10 border border-red-500/40 flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.1)]';
                 emoji.innerText = '⚠️';
-            } else if (margem < 25) { // Alerta se a margem real for baixa
+            } else if (margem < 30) {
                 bgStatus.className =
                     'w-14 h-14 rounded-2xl bg-yellow-500/10 border border-yellow-500/40 flex items-center justify-center';
                 emoji.innerText = '🧐';
@@ -403,16 +396,16 @@
             }
         }
 
-        // Event Listeners para cálculos automáticos ao digitar
+        // Event Listeners para cálculos automáticos
         inputCusto.addEventListener('input', atualizarResumo);
         inputVenda.addEventListener('input', atualizarResumo);
 
-        // Calcula quando o usuário digita uma porcentagem personalizada
+        // Calcula quando o usuário digita uma margem personalizada no campo "Margem Alvo"
         inputMarkup.addEventListener('input', function() {
             if (this.value) aplicarMarkup(parseFloat(this.value));
         });
 
-        // Garante o cálculo inicial ao carregar a página
+        // Garante que o resumo seja calculado ao carregar (importante para a tela de EDIÇÃO)
         window.addEventListener('load', atualizarResumo);
     </script>
 </x-bar-layout>

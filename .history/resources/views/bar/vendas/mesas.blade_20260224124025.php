@@ -19,10 +19,10 @@
         {{-- 🛰️ CABEÇALHO --}}
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
             <div class="flex items-center gap-5">
-                {{-- 🔙 BOTÃO VOLTAR PARA O PAINEL DE MESAS --}}
-                <a href="{{ route('bar.tables.painel') }}"
+                {{-- 🔙 BOTÃO VOLTAR --}}
+                <a href="{{ route('bar.dashboard') }}"
                     class="bg-gray-900 hover:bg-gray-800 text-orange-500 p-4 rounded-3xl transition-all border border-gray-800 shadow-lg group"
-                    title="Voltar ao Painel de Mesas">
+                    title="Voltar ao Painel">
                     <span
                         class="group-hover:-translate-x-1 transition-transform duration-200 inline-block text-xl">◀</span>
                 </a>
@@ -175,7 +175,7 @@
             @endif
         </div>
 
-        {{-- 📋 MODAL DE DETALHES (ESTILO COMANDA DARK - ATUALIZADO) --}}
+        {{-- 📋 MODAL DE DETALHES (ESTILO COMANDA DARK) --}}
         <div x-show="modalDetalhes" x-transition.opacity
             class="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 backdrop-blur-sm p-4">
             <div @click.away="modalDetalhes = false"
@@ -196,17 +196,15 @@
                             class="text-gray-500 hover:text-white text-2xl">✕</button>
                     </div>
 
-                    <div x-show="carregando" class="py-20 text-center">
-                        <span class="animate-pulse text-orange-500 font-black uppercase text-xs tracking-[0.3em]">
-                            Buscando Comanda...
-                        </span>
-                    </div>
+                    <div x-show="carregando" class="py-20 text-center"><span
+                            class="animate-pulse text-orange-500 font-black uppercase text-xs tracking-[0.3em]">Buscando
+                            Comanda...</span></div>
 
                     <div x-show="!carregando" class="space-y-6">
                         <div class="bg-black/40 rounded-[2rem] p-6 border border-gray-800/50">
-                            <label class="text-[8px] font-black text-gray-600 uppercase tracking-widest block mb-4">
-                                Consumo Detalhado
-                            </label>
+                            <label
+                                class="text-[8px] font-black text-gray-600 uppercase tracking-widest block mb-4">Consumo
+                                Detalhado</label>
                             <div class="space-y-4 max-h-60 overflow-y-auto no-scrollbar">
                                 <template x-for="item in venda.itens">
                                     <div
@@ -226,26 +224,7 @@
                             </div>
                         </div>
 
-                        {{-- 💰 NOVO BLOCO DE DESCONTO (LÓGICA PADRONIZADA) --}}
-                        <div class="space-y-3 pt-4 border-t border-gray-800">
-
-                            <template x-if="parseFloat(venda.desconto) > 0">
-                                <div class="space-y-2 bg-black/20 p-4 rounded-2xl mb-4">
-                                    <div
-                                        class="flex justify-between items-center text-[10px] font-black uppercase italic text-gray-500">
-                                        <span>Subtotal Bruto</span>
-                                        <span
-                                            x-text="'R$ ' + (parseFloat(venda.total_raw) + parseFloat(venda.desconto)).toLocaleString('pt-BR', {minimumFractionDigits: 2})"></span>
-                                    </div>
-                                    <div
-                                        class="flex justify-between items-center text-[10px] font-black uppercase italic text-red-500">
-                                        <span>Desconto Especial</span>
-                                        <span
-                                            x-text="'- R$ ' + parseFloat(venda.desconto).toLocaleString('pt-BR', {minimumFractionDigits: 2})"></span>
-                                    </div>
-                                </div>
-                            </template>
-
+                        <div class="space-y-3 pt-4">
                             <div class="flex justify-between items-center text-[10px] font-black uppercase italic">
                                 <span class="text-gray-500">Garçom/Atendente</span>
                                 <span class="text-gray-300" x-text="venda.operador"></span>

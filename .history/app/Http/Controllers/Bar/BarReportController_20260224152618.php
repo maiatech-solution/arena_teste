@@ -337,64 +337,18 @@ class BarReportController extends Controller
 
     public function getDetails($tipo, $id)
     {
-        try {
-            // Normaliza o tipo para evitar erros de caixa (Mesa vs mesa)
-            $tipoLower = strtolower($tipo);
+        $tipoLower = strtolower($tipo);
+        $venda = ($tipoLower === 'mesa' || $tipoLower === 'mesas')
+            ? \App\Models\Bar\BarOrder::with(['items.product'])->findOrFail($id)
+            : \App\Models\Bar\BarSale::with(['items.product'])->findOrFail($id);
 
-            if ($tipoLower === 'mesa' || $tipoLower === 'mesas') {
-                // Busca na tabela de Comandas/Mesas
-                $venda = BarOrder::with(['items.product', 'user'])->findOrFail($id);
-            } else {
-                // Busca na tabela de PDV/Venda Direta
-                $venda = BarSale::with(['items.product', 'user'])->findOrFail($id);
-            }
-
-            // 🧮 CÁLCULO BRUTO E FORMATAÇÃO DE ITENS (Sem perdas)
-            $subtotalBrutoCalculado = 0;
-
-            $itensFormatados = $venda->items->map(function ($item) use (&$subtotalBrutoCalculado) {
-                // Tenta pegar o preço unitário de várias fontes para garantir precisão
-                $precoUnitario = $item->price_at_sale ?? $item->unit_price ?? 0;
-
-                // Tenta usar o subtotal pronto do banco ou calcula na hora
-                $valorTotalItem = $item->subtotal ?? ($item->quantity * $precoUnitario);
-
-                // Acumula para o desconto matemático
-                $subtotalBrutoCalculado += $valorTotalItem;
-
-                return [
-                    'nome'     => $item->product->name ?? 'Produto Removido',
-                    'qtd'      => $item->quantity,
-                    'preco'    => number_format($precoUnitario, 2, ',', '.'),
-                    'subtotal' => number_format($valorTotalItem, 2, ',', '.')
-                ];
-            });
-
-            $valorPagoFinal = (float)$venda->total_value;
-
-            // 💰 Lógica do Desconto: Se o banco tiver a coluna usa ela, se não, faz a conta
-            $desconto = $venda->discount_value ?? ($subtotalBrutoCalculado - $valorPagoFinal);
-
-            return response()->json([
-                'id'        => $venda->id,
-                'tipo'      => strtoupper($tipo),
-                'data'      => $venda->created_at->format('d/m/Y H:i'),
-                'operador'  => $venda->user->name ?? 'N/A',
-                'pagamento' => strtoupper($venda->payment_method ?? 'Não informado'),
-                'total'     => number_format($valorPagoFinal, 2, ',', '.'),
-
-                // Campos cruciais para o Modal Alpine.js
-                'total_raw' => $valorPagoFinal,
-                'desconto'  => $desconto > 0.01 ? (float)$desconto : 0,
-
-                'itens'     => $itensFormatados
-            ]);
-        } catch (\Exception $e) {
-            // Em caso de erro, retorna JSON para não travar o modal do Alpine.js
-            return response()->json([
-                'error'   => 'Venda não encontrada ou erro interno.',
-                'message' => $e->getMessage()
-            ], 404);
-        }
+        // 🕵️ DEBUG PARA ACHAR O DESCONTO
+        dd([
+            'ID_DA_VENDA' => $venda->id,
+            'VALOR_PAGO_NO_BANCO' => $venda->total_value,
+            'SOMA_REAL_DOS_ITENS' => $venda->items->sum('subtotal'),
+            'PAGAMENTOS_JSON' => json_decode($venda->payment_method, true),
+            'ATRIBUTOS_BRUTOS' => $venda->getAttributes()
+        ]);
     }
 }

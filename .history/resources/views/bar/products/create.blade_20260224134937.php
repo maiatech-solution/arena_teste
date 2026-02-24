@@ -185,8 +185,7 @@
                             Custo (R$)</label>
                         <input type="number" step="0.01" name="purchase_price" id="purchase_price"
                             value="{{ old('purchase_price') }}" required
-                            class="w-full bg-gray-950 border-gray-800 rounded-xl text-white p-3 focus:border-orange-500"
-                            placeholder="0.00">
+                            class="w-full bg-gray-950 border-gray-800 rounded-xl text-white p-3 focus:border-orange-500">
                     </div>
 
                     <div class="md:col-span-1">
@@ -204,12 +203,11 @@
                         </div>
                         <input type="number" step="0.01" name="sale_price" id="sale_price"
                             value="{{ old('sale_price') }}" required
-                            class="w-full bg-gray-950 border-gray-800 rounded-xl text-orange-500 p-3 font-bold"
-                            placeholder="0.00">
+                            class="w-full bg-gray-950 border-gray-800 rounded-xl text-orange-500 p-3 font-bold">
                     </div>
 
-                    {{-- 📊 WIDGET ANALÍTICO EVOLUÍDO --}}
-                    <div class="md:col-span-2 p-5 bg-black/40 border border-gray-800 rounded-[2rem] mt-2 shadow-inner">
+                    {{-- WIDGET ANALÍTICO --}}
+                    <div class="md:col-span-2 p-5 bg-black/40 border border-gray-800 rounded-[2rem] mt-2">
                         <div class="flex flex-col md:flex-row items-center justify-between gap-6">
                             <div class="flex items-center gap-4">
                                 <div id="margem_status_bg"
@@ -219,39 +217,23 @@
                                 <div>
                                     <p
                                         class="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1 italic">
-                                        Análise de Precificação</p>
-                                    <div class="flex flex-wrap items-center gap-y-1 gap-x-4">
-                                        <div class="flex flex-col">
-                                            <span class="text-[8px] text-gray-600 uppercase font-bold">Markup (Sobre
-                                                Custo)</span>
-                                            <span id="display_markup"
-                                                class="text-lg font-black text-orange-500 italic tracking-tighter leading-none">0%</span>
-                                        </div>
+                                        Resultado Operacional</p>
+                                    <div class="flex items-center gap-3">
+                                        <span id="display_margem"
+                                            class="text-2xl font-black text-white italic tracking-tighter">0%</span>
                                         <span class="text-gray-800 text-xl font-thin">/</span>
-                                        <div class="flex flex-col">
-                                            <span class="text-[8px] text-gray-600 uppercase font-bold">Margem (Sobre
-                                                Venda)</span>
-                                            <span id="display_margem"
-                                                class="text-lg font-black text-white italic tracking-tighter leading-none">0%</span>
-                                        </div>
-                                        <span class="text-gray-800 text-xl font-thin">/</span>
-                                        <div class="flex flex-col">
-                                            <span
-                                                class="text-[8px] text-gray-600 uppercase font-bold leading-none">Lucro
-                                                Líquido</span>
-                                            <span id="display_lucro"
-                                                class="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1 italic">R$
-                                                0,00</span>
-                                        </div>
+                                        <span id="display_lucro"
+                                            class="text-xs font-bold text-gray-500 uppercase tracking-widest">Lucro: R$
+                                            0,00</span>
                                     </div>
                                 </div>
                             </div>
                             <div class="w-full md:w-auto">
                                 <label
-                                    class="text-[8px] font-black text-gray-600 uppercase block mb-1 ml-2 tracking-widest">Markup
+                                    class="text-[8px] font-black text-gray-600 uppercase block mb-1 ml-2 tracking-widest">Margem
                                     Alvo (%)</label>
                                 <input type="number" id="input_markup" placeholder="Personalizar"
-                                    class="w-full md:w-32 bg-gray-950 border-gray-800 rounded-xl p-3 text-xs text-orange-500 font-black text-center outline-none focus:border-orange-500 transition-all">
+                                    class="w-full md:w-32 bg-gray-950 border-gray-800 rounded-xl p-3 text-xs text-orange-500 font-black text-center outline-none">
                             </div>
                         </div>
                     </div>
@@ -343,7 +325,7 @@
             }
         }
 
-        // --- Lógica de Precificação Inteligente (Markup vs Margem) ---
+        // --- Lógica de Precificação Inteligente ---
         const inputCusto = document.getElementById('purchase_price');
         const inputVenda = document.getElementById('sale_price');
         const inputMarkup = document.getElementById('input_markup');
@@ -351,7 +333,6 @@
         function aplicarMarkup(porcentagem) {
             const custo = parseFloat(inputCusto.value) || 0;
             if (custo > 0) {
-                // Define o preço de venda baseado no acréscimo (Markup) sobre o custo
                 const novoPreco = custo * (1 + (porcentagem / 100));
                 inputVenda.value = novoPreco.toFixed(2);
                 atualizarResumo();
@@ -366,24 +347,18 @@
             const venda = parseFloat(inputVenda.value) || 0;
 
             let lucro = venda - custo;
-
-            // 1. Cálculo de MARKUP (Acréscimo sobre o custo)
-            let markup = custo > 0 ? (lucro / custo) * 100 : 0;
-
-            // 2. Cálculo de MARGEM (Porcentagem real que sobra da venda)
             let margem = venda > 0 ? (lucro / venda) * 100 : 0;
 
             // Atualiza os labels do Widget
-            document.getElementById('display_markup').innerText = markup.toFixed(1) + '%';
             document.getElementById('display_margem').innerText = margem.toFixed(1) + '%';
-            document.getElementById('display_lucro').innerText = 'R$ ' + lucro.toLocaleString('pt-BR', {
+            document.getElementById('display_lucro').innerText = 'Lucro: R$ ' + lucro.toLocaleString('pt-BR', {
                 minimumFractionDigits: 2
             });
 
             const bgStatus = document.getElementById('margem_status_bg');
             const emoji = document.getElementById('margem_emoji');
 
-            // Lógica visual baseada na MARGEM REAL (Saúde do negócio)
+            // Lógica de cores do indicador visual
             if (venda === 0) {
                 bgStatus.className =
                     'w-14 h-14 rounded-2xl bg-gray-950 border border-gray-800 flex items-center justify-center';
@@ -392,7 +367,7 @@
                 bgStatus.className =
                     'w-14 h-14 rounded-2xl bg-red-600/10 border border-red-500/40 flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.1)]';
                 emoji.innerText = '⚠️';
-            } else if (margem < 25) { // Alerta se a margem real for baixa
+            } else if (margem < 30) {
                 bgStatus.className =
                     'w-14 h-14 rounded-2xl bg-yellow-500/10 border border-yellow-500/40 flex items-center justify-center';
                 emoji.innerText = '🧐';
@@ -403,16 +378,16 @@
             }
         }
 
-        // Event Listeners para cálculos automáticos ao digitar
+        // Event Listeners para cálculos automáticos
         inputCusto.addEventListener('input', atualizarResumo);
         inputVenda.addEventListener('input', atualizarResumo);
 
-        // Calcula quando o usuário digita uma porcentagem personalizada
+        // Calcula quando o usuário digita uma margem personalizada no campo "Margem Alvo"
         inputMarkup.addEventListener('input', function() {
             if (this.value) aplicarMarkup(parseFloat(this.value));
         });
 
-        // Garante o cálculo inicial ao carregar a página
+        // Garante que o resumo seja calculado ao carregar (importante para a tela de EDIÇÃO)
         window.addEventListener('load', atualizarResumo);
     </script>
 </x-bar-layout>

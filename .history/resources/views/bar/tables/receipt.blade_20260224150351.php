@@ -172,16 +172,11 @@
         @php
             $sugestaoFone = preg_replace('/[^0-9]/', '', $order->customer_phone);
 
-            // 1. Calculamos o Subtotal Bruto somando os itens na hora para comparar
+            // Montando a lista de itens para a mensagem
             $itensTexto = '';
-            $subtotalItensCalculado = 0;
             foreach ($order->items as $item) {
-                $subtotalItensCalculado += $item->subtotal;
                 $itensTexto .= "• {$item->quantity}x {$item->product->name}\n";
             }
-
-            // 2. Identificamos se houve desconto pela diferença
-            $descontoNoZap = $subtotalItensCalculado - $order->total_value;
 
             $msgBase = '*✨ ' . strtoupper(config('app.name')) . " ✨*\n";
             $msgBase .= "--------------------------------\n";
@@ -189,16 +184,7 @@
             $msgBase .= "Aqui está o resumo da sua comanda:\n\n";
             $msgBase .= "*ITENS PEDIDOS:*\n";
             $msgBase .= $itensTexto;
-
-            $msgBase .= "--------------------------------\n";
-
-            // 3. Se houver desconto (maior que 1 centavo), detalha na mensagem
-            if ($descontoNoZap > 0.01) {
-                $msgBase .= "*SUBTOTAL:* R$ " . number_format($subtotalItensCalculado, 2, ',', '.') . "\n";
-                $msgBase .= "*DESCONTO:* - R$ " . number_format($descontoNoZap, 2, ',', '.') . "\n";
-            }
-
-            $msgBase .= "*TOTAL PAGO: R$ " . number_format($order->total_value, 2, ',', '.') . "*\n";
+            $msgBase .= "\n*TOTAL: R$ " . number_format($order->total_value, 2, ',', '.') . "*\n";
             $msgBase .= "--------------------------------\n";
             $msgBase .=
                 'Mesa: ' . str_pad($order->table->identifier, 2, '0', STR_PAD_LEFT) . " | Pedido: #{$order->id}\n\n";

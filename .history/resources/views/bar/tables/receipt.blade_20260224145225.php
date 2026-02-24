@@ -9,15 +9,6 @@
         </div>
     </div>
 
-    @php
-        // DEBUG DE SEGURANÇA: Vamos ver se o desconto está escondido no caixa
-        $movimentacoes = \App\Models\Bar\BarCashMovement::where('bar_order_id', $order->id)->get();
-
-        // Se quiser ver os dados e parar a execução, descomente a linha abaixo:
-        // dd($movimentacoes->toArray());
-
-    @endphp
-
     <div id="printableReceipt" class="receipt-container">
         <style>
             /* Visualização na Tela do Sistema */
@@ -55,7 +46,10 @@
                 border-collapse: collapse;
             }
 
+            /* 🖨️ AJUSTE DE IMPRESSÃO UNIVERSAL (CENTRALIZADO E NO TOPO) */
             @media print {
+
+                /* Esconde tudo do sistema original */
                 body * {
                     visibility: hidden;
                 }
@@ -67,20 +61,25 @@
                     display: none !important;
                 }
 
+                /* Reset de página para evitar deslocamentos do navegador */
                 @page {
                     margin: 0;
                 }
 
+                /* Prepara o body para centralizar o conteúdo */
                 body {
                     visibility: hidden;
                     margin: 0 !important;
                     padding: 0 !important;
                     display: flex !important;
                     justify-content: center !important;
+                    /* Centraliza horizontalmente */
                     align-items: flex-start !important;
+                    /* Garante que fique no topo */
                     background: #fff !important;
                 }
 
+                /* Torna apenas o recibo visível e remove posicionamentos fixos/absolutos */
                 #printableReceipt,
                 #printableReceipt * {
                     visibility: visible !important;
@@ -89,8 +88,10 @@
                 #printableReceipt {
                     position: relative !important;
                     width: 80mm !important;
+                    /* Mantém a largura de cupom */
                     margin: 0 auto !important;
                     padding: 5mm !important;
+                    /* Margem interna para não cortar em impressoras laser */
                     box-shadow: none !important;
                     border: none !important;
                     left: auto !important;
@@ -121,43 +122,23 @@
 
         <table class="items-table">
             @foreach ($order->items as $item)
-                <tr>
-                    <td style="padding: 4px 0;">
-                        <span style="display:block;">{{ $item->quantity }}x {{ $item->product->name }}</span>
-                        <small style="color: #666;">R$ {{ number_format($item->unit_price, 2, ',', '.') }} un</small>
-                    </td>
-                    <td class="text-right" style="vertical-align: top; padding-top: 4px;">
-                        R$ {{ number_format($item->subtotal, 2, ',', '.') }}
-                    </td>
-                </tr>
+            <tr>
+                <td style="padding: 4px 0;">
+                    <span style="display:block;">{{ $item->quantity }}x {{ $item->product->name }}</span>
+                    <small style="color: #666;">R$ {{ number_format($item->unit_price, 2, ',', '.') }} un</small>
+                </td>
+                <td class="text-right" style="vertical-align: top; padding-top: 4px;">
+                    R$ {{ number_format($item->subtotal, 2, ',', '.') }}
+                </td>
+            </tr>
             @endforeach
         </table>
 
         <div class="line"></div>
 
-        @php
-            $subtotalItens = $order->items->sum('subtotal');
-            $descontoCalculado = $subtotalItens - $order->total_value;
-        @endphp
-
-        <div style="font-size: 12px;">
-            {{-- Exibe detalhamento apenas se houver diferença de preço (desconto) --}}
-            @if ($descontoCalculado > 0.01)
-                <div class="flex-between" style="opacity: 0.7; margin-bottom: 2px;">
-                    <span>SUBTOTAL:</span>
-                    <span>R$ {{ number_format($subtotalItens, 2, ',', '.') }}</span>
-                </div>
-                <div class="flex-between" style="font-weight: bold; margin-bottom: 5px;">
-                    <span>DESCONTO:</span>
-                    <span>- R$ {{ number_format($descontoCalculado, 2, ',', '.') }}</span>
-                </div>
-            @endif
-
-            <div class="flex-between"
-                style="font-weight: bold; font-size: 16px; margin-top: 5px; border-top: 1px solid #000; padding-top: 5px;">
-                <span>TOTAL PAGO:</span>
-                <span>R$ {{ number_format($order->total_value, 2, ',', '.') }}</span>
-            </div>
+        <div class="flex-between" style="font-weight: bold; font-size: 15px">
+            <span>TOTAL:</span>
+            <span>R$ {{ number_format($order->total_value, 2, ',', '.') }}</span>
         </div>
 
         <div class="line"></div>
@@ -170,39 +151,25 @@
 
     <div class="max-w-md mx-auto mt-8 no-print flex flex-col gap-4 pb-12">
         @php
-            $sugestaoFone = preg_replace('/[^0-9]/', '', $order->customer_phone);
+        $sugestaoFone = preg_replace('/[^0-9]/', '', $order->customer_phone);
 
-            // 1. Calculamos o Subtotal Bruto somando os itens na hora para comparar
-            $itensTexto = '';
-            $subtotalItensCalculado = 0;
-            foreach ($order->items as $item) {
-                $subtotalItensCalculado += $item->subtotal;
-                $itensTexto .= "• {$item->quantity}x {$item->product->name}\n";
-            }
+        // Montando a lista de itens para a mensagem
+        $itensTexto = '';
+        foreach ($order->items as $item) {
+        $itensTexto .= "• {$item->quantity}x {$item->product->name}\n";
+        }
 
-            // 2. Identificamos se houve desconto pela diferença
-            $descontoNoZap = $subtotalItensCalculado - $order->total_value;
-
-            $msgBase = '*✨ ' . strtoupper(config('app.name')) . " ✨*\n";
-            $msgBase .= "--------------------------------\n";
-            $msgBase .= 'Olá, ' . ($order->customer_name ?? 'Cliente') . "! 👋\n";
-            $msgBase .= "Aqui está o resumo da sua comanda:\n\n";
-            $msgBase .= "*ITENS PEDIDOS:*\n";
-            $msgBase .= $itensTexto;
-
-            $msgBase .= "--------------------------------\n";
-
-            // 3. Se houver desconto (maior que 1 centavo), detalha na mensagem
-            if ($descontoNoZap > 0.01) {
-                $msgBase .= "*SUBTOTAL:* R$ " . number_format($subtotalItensCalculado, 2, ',', '.') . "\n";
-                $msgBase .= "*DESCONTO:* - R$ " . number_format($descontoNoZap, 2, ',', '.') . "\n";
-            }
-
-            $msgBase .= "*TOTAL PAGO: R$ " . number_format($order->total_value, 2, ',', '.') . "*\n";
-            $msgBase .= "--------------------------------\n";
-            $msgBase .=
-                'Mesa: ' . str_pad($order->table->identifier, 2, '0', STR_PAD_LEFT) . " | Pedido: #{$order->id}\n\n";
-            $msgBase .= 'Agradecemos a preferência! Volte sempre! 😊';
+        $msgBase = '*✨ ' . strtoupper(config('app.name')) . " ✨*\n";
+        $msgBase .= "--------------------------------\n";
+        $msgBase .= 'Olá, ' . ($order->customer_name ?? 'Cliente') . "! 👋\n";
+        $msgBase .= "Aqui está o resumo da sua comanda:\n\n";
+        $msgBase .= "*ITENS PEDIDOS:*\n";
+        $msgBase .= $itensTexto;
+        $msgBase .= "\n*TOTAL: R$ " . number_format($order->total_value, 2, ',', '.') . "*\n";
+        $msgBase .= "--------------------------------\n";
+        $msgBase .=
+        'Mesa: ' . str_pad($order->table->identifier, 2, '0', STR_PAD_LEFT) . " | Pedido: #{$order->id}\n\n";
+        $msgBase .= 'Agradecemos a preferência! Volte sempre! 😊';
         @endphp
 
         <button onclick="enviarZapComPergunta()"
@@ -258,7 +225,7 @@
 
                 // 🚀 TRATAMENTO ESPECIAL: Convertendo a mensagem do Blade para String JS de forma segura
                 // Usamos JSON.parse para garantir que as quebras de linha (\n) do PHP não quebrem o JS
-                let textoMensagem = encodeURIComponent(`{!! str_replace(["\r", "\n"], ['', "\n"], $msgBase) !!}`);
+                let textoMensagem = encodeURIComponent(`{!! str_replace(["\r", "\n"], ["", "\n"], $msgBase) !!}`);
 
                 let urlZap = "https://api.whatsapp.com/send?phone=55" + foneLimpo + "&text=" + textoMensagem;
 
@@ -271,13 +238,13 @@
          */
         document.addEventListener('DOMContentLoaded', function() {
             // Verifica se existe a sessão de sucesso enviada pela Controller
-            @if (session('show_success_modal'))
-                const modal = document.getElementById('modalSucesso');
-                if (modal) {
-                    modal.classList.remove('hidden');
-                    // Garante que o modal fique acima de outros elementos de impressão
-                    modal.style.zIndex = "9999";
-                }
+            @if(session('show_success_modal'))
+            const modal = document.getElementById('modalSucesso');
+            if (modal) {
+                modal.classList.remove('hidden');
+                // Garante que o modal fique acima de outros elementos de impressão
+                modal.style.zIndex = "9999";
+            }
             @endif
         });
 

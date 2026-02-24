@@ -368,7 +368,6 @@
     </div>
 
     <script>
-        // --- Lógica de Categorias (Sua função original) ---
         function openCategoryModal() {
             document.getElementById('catModal').classList.remove('hidden');
             document.getElementById('new_cat_name').focus();
@@ -406,78 +405,5 @@
                 alert('Erro: Categoria já existe ou falha na conexão.');
             }
         }
-
-        // --- Lógica de Precificação Inteligente (Acréscimo para a Edição) ---
-        const inputCusto = document.getElementById('purchase_price');
-        const inputVenda = document.getElementById('sale_price');
-        const inputMarkup = document.getElementById('input_markup');
-
-        // Função para aplicar a porcentagem de Markup sobre o custo
-        function aplicarMarkup(porcentagem) {
-            const custo = parseFloat(inputCusto.value) || 0;
-            if (custo > 0) {
-                const novoPreco = custo * (1 + (porcentagem / 100));
-                inputVenda.value = novoPreco.toFixed(2);
-                atualizarResumo();
-            } else {
-                alert('⚠️ Insira o preço de custo primeiro!');
-                inputCusto.focus();
-            }
-        }
-
-        // Função que calcula e atualiza o widget analítico
-        function atualizarResumo() {
-            const custo = parseFloat(inputCusto.value) || 0;
-            const venda = parseFloat(inputVenda.value) || 0;
-
-            let lucro = venda - custo;
-
-            // Markup: Quanto foi somado ao custo
-            let markup = custo > 0 ? (lucro / custo) * 100 : 0;
-
-            // Margem: Quanto sobra do preço de venda
-            let margem = venda > 0 ? (lucro / venda) * 100 : 0;
-
-            // Atualiza os textos no Widget
-            document.getElementById('display_markup').innerText = markup.toFixed(1) + '%';
-            document.getElementById('display_margem').innerText = margem.toFixed(1) + '%';
-            document.getElementById('display_lucro').innerText = 'R$ ' + lucro.toLocaleString('pt-BR', {
-                minimumFractionDigits: 2
-            });
-
-            // Feedback Visual (Cores e Emojis)
-            const bgStatus = document.getElementById('margem_status_bg');
-            const emoji = document.getElementById('margem_emoji');
-
-            if (venda === 0) {
-                bgStatus.className =
-                    'w-14 h-14 rounded-2xl bg-gray-950 border border-gray-800 flex items-center justify-center transition-all';
-                emoji.innerText = '💰';
-            } else if (margem <= 0) {
-                bgStatus.className =
-                    'w-14 h-14 rounded-2xl bg-red-600/10 border border-red-500/40 flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.1)]';
-                emoji.innerText = '⚠️';
-            } else if (margem < 25) {
-                bgStatus.className =
-                    'w-14 h-14 rounded-2xl bg-yellow-500/10 border border-yellow-500/40 flex items-center justify-center';
-                emoji.innerText = '🧐';
-            } else {
-                bgStatus.className =
-                    'w-14 h-14 rounded-2xl bg-green-500/10 border border-green-500/40 flex items-center justify-center shadow-[0_0_20px_rgba(34,197,94,0.1)]';
-                emoji.innerText = '✅';
-            }
-        }
-
-        // Ouvintes de eventos para cálculos em tempo real
-        inputCusto.addEventListener('input', atualizarResumo);
-        inputVenda.addEventListener('input', atualizarResumo);
-
-        // Listener para o campo de porcentagem personalizada
-        inputMarkup.addEventListener('input', function() {
-            if (this.value) aplicarMarkup(parseFloat(this.value));
-        });
-
-        // CRUCIAL PARA O EDIT: Calcula a margem atual assim que a página abrir
-        window.addEventListener('load', atualizarResumo);
     </script>
 </x-bar-layout>

@@ -661,30 +661,12 @@
             let phone = prompt("Número do cliente (DDD + Número):", "");
             if (phone) phone = phone.replace(/\D/g, '');
 
-            // Captura os valores de desconto e totais
-            const discountVal = parseFloat(document.getElementById('cartDiscount').value) || 0;
-            const subtotalBruto = currentCartTotal + discountVal;
-
-            let text = `*{{ config('app.name') }} - RECIBO*\n`;
-            text += `_Data: ${new Date().toLocaleString('pt-BR')}_\n\n`;
-
-            // Lista de Itens
+            let text = `*{{ config('app.name') }} - RECIBO*\n_Data: ${new Date().toLocaleString('pt-BR')}_\n\n`;
             cart.forEach(item => {
                 text += `• ${item.quantity}x ${item.name} = R$ ${(item.price * item.quantity).toFixed(2)}\n`;
             });
-
-            text += `\n------------------------------\n`;
-
-            // Se houver desconto, detalha o financeiro na mensagem
-            if (discountVal > 0) {
-                text += `*SUBTOTAL:* R$ ${subtotalBruto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n`;
-                text += `*DESCONTO:* - R$ ${discountVal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n`;
-            }
-
-            text += `*TOTAL PAGO: ${document.getElementById('receiptTotal').innerText}*\n`;
-            text += `*PAGO EM: ${document.getElementById('receiptPayment').innerText.toUpperCase()}*\n`;
-            text += `------------------------------\n`;
-            text += `_Obrigado pela preferência!_`;
+            text += `\n*TOTAL: ${document.getElementById('receiptTotal').innerText}*`;
+            text += `\n*PAGO EM: ${document.getElementById('receiptPayment').innerText.toUpperCase()}*`;
 
             const waUrl = phone ? `https://api.whatsapp.com/send?phone=55${phone}` : `https://api.whatsapp.com/send`;
             window.open(`${waUrl}&text=${encodeURIComponent(text)}`, '_blank');

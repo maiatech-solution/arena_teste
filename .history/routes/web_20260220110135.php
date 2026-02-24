@@ -201,6 +201,7 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
     })->name('profile');
 
     // 🔥 O SEGREDO: Captura o redirecionamento do Controller
+    // Se o Laravel tentar levar para 'bar.profile.edit', ele cai aqui e fica no layout Dark
     Route::get('/profile-ajuste', function () {
         return redirect()->route('bar.profile');
     })->name('profile.edit');
@@ -238,10 +239,6 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
         Route::post('/mesas/{order}/cancelar', [BarOrderController::class, 'cancelarMesa'])->name('mesas.cancelar');
     });
 
-    // 🎯 ROTA DE DETALHES ACESSÍVEL (Mover para fora do middleware restrito de relatórios)
-    // Isso permite que o colaborador veja os itens no histórico sem erro 403
-    Route::get('/relatorios/venda-detalhes/{tipo}/{id}', [BarReportController::class, 'getDetails'])->name('reports.venda.detalhes');
-
     // 📦 Gestão de Estoque e Produtos
     Route::post('categorias/salvar-rapido', [BarProductController::class, 'storeCategory'])->name('categories.store_ajax');
     Route::get('estoque/entrada', [BarProductController::class, 'stockEntry'])->name('products.stock_entry');
@@ -278,7 +275,7 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
         Route::delete('/{user}', [BarUserController::class, 'destroy'])->name('destroy');
     });
 
-    // 📊 RELATÓRIOS FINANCEIROS (Acesso restrito apenas para Admin e Gestor)
+    // 📊 RELATÓRIOS FINANCEIROS
     Route::prefix('relatorios')->name('reports.')->middleware(['role:admin,gestor'])->group(function () {
         Route::get('/', [BarReportController::class, 'index'])->name('index');
         Route::get('/produtos', [BarReportController::class, 'products'])->name('products');

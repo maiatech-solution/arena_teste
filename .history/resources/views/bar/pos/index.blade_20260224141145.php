@@ -213,34 +213,19 @@
                 <p class="text-[10px]" id="receiptDate"></p>
             </div>
 
-            {{-- Itens vendidos --}}
             <div id="receiptItems" class="space-y-2 mb-4 border-b border-dashed border-gray-400 pb-4 italic">
             </div>
 
-            {{-- BLOCO FINANCEIRO DETALHADO --}}
             <div class="space-y-1 text-right mb-6 border-b border-dashed border-gray-400 pb-4">
-                {{-- NOVO: Subtotal Bruto (Soma dos itens antes do desconto) --}}
-                <div class="flex justify-between text-[11px] opacity-70" id="receiptSubtotalRow">
-                    <span>SUBTOTAL:</span>
-                    <span id="receiptSubtotalValue">R$ 0,00</span>
-                </div>
-
-                {{-- NOVO: Valor do Desconto (Só aparece se for > 0) --}}
-                <div class="flex justify-between text-[11px] text-red-600 font-bold" id="receiptDiscountRow">
-                    <span>DESCONTO:</span>
-                    <span id="receiptDiscountValue">- R$ 0,00</span>
-                </div>
-
-                <div class="flex justify-between font-bold text-lg pt-1">
-                    <span>TOTAL PAGO:</span>
+                <div class="flex justify-between font-bold text-lg">
+                    <span>TOTAL:</span>
                     <span id="receiptTotal"></span>
                 </div>
 
-                <div class="flex justify-between text-[11px] opacity-70 pt-2">
+                <div class="flex justify-between text-[11px] opacity-70">
                     <span>RECEBIDO:</span>
                     <span id="receiptReceived">R$ 0,00</span>
                 </div>
-
                 <div class="flex justify-between text-[11px] font-bold">
                     <span>TROCO:</span>
                     <span id="receiptChange">R$ 0,00</span>
@@ -276,51 +261,39 @@
 
     <script>
         let cart = [];
-        let payments = [];
+        let payments = []; // 🆕 Lista de pagamentos acumulados
         let paymentMethod = null;
         let currentCartTotal = 0;
 
-        // --- 🛡️ FUNÇÕES DE AUTORIZAÇÃO INTEGRATADAS (PDV) ---
-
-        // Libera o campo de desconto após a senha do gestor
-        function liberarCampoDescontoPDV() {
-            const input = document.getElementById('cartDiscount');
-            const btn = document.getElementById('btnAuthDiscountPDV');
-            if (input) {
-                input.disabled = false;
-                input.readOnly = false;
-                input.classList.remove('opacity-50', 'cursor-not-allowed');
-                input.classList.add('text-green-500');
-                input.focus();
-                input.select();
-            }
-            if (btn) {
-                btn.innerHTML = '✅';
-                btn.classList.replace('text-orange-500', 'text-green-500');
-            }
-        }
-
-        // --- 🔄 LÓGICA DO CARRINHO ---
-
+        // 🔄 ATUALIZA OS NÚMEROS DE ESTOQUE NO GRID EM TEMPO REAL (VISUAL)
         function updateVisualStock() {
             const productCards = document.querySelectorAll('.product-card');
+
             productCards.forEach(card => {
+                // Extraímos o ID e o estoque original do atributo onclick do botão
                 const onClickAttr = card.getAttribute('onclick');
+                // RegExp para pegar o 1º parâmetro (ID) e o 4º (Estoque Total)
                 const match = onClickAttr.match(/addToCart\((\d+),\s*'.*?',\s*[\d.]+,\s*(\d+)/);
 
                 if (match) {
                     const productId = parseInt(match[1]);
                     const originalStock = parseInt(match[2]);
+
+                    // Verifica quanto desse item já está ocupado no carrinho
                     const cartItem = cart.find(item => item.id === productId);
                     const qtyInCart = cartItem ? cartItem.quantity : 0;
-                    const remainingStock = originalStock - qtyInCart;
-                    const stockBadge = card.querySelector('span');
 
+                    const remainingStock = originalStock - qtyInCart;
+
+                    // Localiza o span que mostra o número do estoque
+                    const stockBadge = card.querySelector('span');
                     if (stockBadge) {
                         stockBadge.innerText = remainingStock;
+
+                        // Alerta visual de estoque zerado
                         if (remainingStock <= 0) {
                             stockBadge.classList.add('text-red-500', 'font-black');
-                            card.style.opacity = '0.6';
+                            card.style.opacity = '0.6'; // Card fica levemente transparente
                         } else {
                             stockBadge.classList.remove('text-red-500');
                             card.style.opacity = '1';
@@ -330,6 +303,7 @@
             });
         }
 
+        // 🟢 ADICIONAR AO CARRINHO
         function addToCart(id, name, price, stock, manageStock) {
             const existingItem = cart.find(item => item.id === id);
             if (existingItem) {
@@ -355,6 +329,7 @@
             renderCart();
         }
 
+        // 🔴 ALTERAR QUANTIDADE
         function changeQty(index, delta) {
             const item = cart[index];
             if (delta > 0) {
@@ -370,7 +345,7 @@
         }
 
         function removeFromCart(index) {
-            // 🛡️ Integrado com o seu requisitarAutorizacao das Mesas
+            // 🛡️ Antes de tirar o item do carrinho, o supervisor precisa autorizar
             requisitarAutorizacao(() => {
                 cart.splice(index, 1);
                 renderCart();
@@ -378,19 +353,16 @@
         }
 
         function clearCart() {
-            // 🛡️ Integrado com o seu requisitarAutorizacao das Mesas
+            // 🛡️ Substituímos o confirm pela senha do supervisor
             requisitarAutorizacao(() => {
                 resetSale();
             });
         }
 
+        // 🔄 RENDERIZAR CARRINHO
         function renderCart() {
             const container = document.getElementById('cartItems');
             const totalText = document.getElementById('cartTotalText');
-
-            // 💰 Captura o desconto para o cálculo
-            const discountInput = document.getElementById('cartDiscount');
-            const discountValue = parseFloat(discountInput.value) || 0;
 
             if (cart.length === 0) {
                 container.innerHTML =
@@ -398,7 +370,7 @@
                 totalText.innerText = 'R$ 0,00';
                 currentCartTotal = 0;
                 resetSale();
-                updateVisualStock();
+                updateVisualStock(); // Atualiza para devolver os números ao grid
                 return;
             }
 
@@ -417,14 +389,11 @@
             </div>
         `).join('');
 
-            // CÁLCULO FINAL: Subtotal - Desconto
-            const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-            currentCartTotal = Math.max(0, subtotal - discountValue);
-
+            currentCartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
             totalText.innerText = `R$ ${currentCartTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
 
             calculatePayment();
-            updateVisualStock();
+            updateVisualStock(); // 🔥 Sincroniza o estoque no grid com o carrinho
         }
 
         function liveSearch() {
@@ -438,8 +407,7 @@
             });
         }
 
-        // --- 💰 PAGAMENTOS ---
-
+        // 💰 LÓGICA DE PAGAMENTO MÚLTIPLO
         function setPaymentMethod(method) {
             paymentMethod = method;
             document.querySelectorAll('.pay-btn').forEach(btn => {
@@ -479,12 +447,12 @@
             feedbackDiv.classList.remove('hidden', 'bg-green-900/20', 'text-green-500', 'bg-orange-900/20',
                 'text-orange-500');
 
-            if (diff > 0.005) {
+            if (diff > 0) {
                 feedbackDiv.classList.add('bg-green-900/20', 'text-green-500');
                 label.innerText = "Troco:";
                 valueSpan.innerText = `R$ ${diff.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
                 addBtn.classList.add('hidden');
-            } else if (diff < -0.005) {
+            } else if (diff < 0) {
                 feedbackDiv.classList.add('bg-orange-900/20', 'text-orange-500');
                 label.innerText = "Falta Pagar:";
                 valueSpan.innerText = `R$ ${Math.abs(diff).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
@@ -505,9 +473,14 @@
                 method: paymentMethod,
                 value: val
             });
-            document.getElementById('paymentsList').classList.remove('hidden');
+
+            const listDiv = document.getElementById('paymentsList');
+            const appliedDiv = document.getElementById('paymentsApplied');
+            listDiv.classList.remove('hidden');
+
             renderPaymentsUI();
 
+            // Reset para o próximo
             paymentMethod = null;
             document.getElementById('amountReceived').value = "";
             document.getElementById('paymentCalculator').classList.add('hidden');
@@ -556,7 +529,6 @@
         async function checkout() {
             const amountInputVal = parseFloat(document.getElementById('amountReceived').value) || 0;
             const totalPaid = payments.reduce((acc, p) => acc + p.value, 0) + amountInputVal;
-            const discountVal = parseFloat(document.getElementById('cartDiscount').value) || 0;
 
             if (cart.length === 0 || totalPaid < (currentCartTotal - 0.01)) {
                 alert("Valor insuficiente para finalizar.");
@@ -587,8 +559,7 @@
                     body: JSON.stringify({
                         items: cart,
                         payments: finalPayments,
-                        total_value: currentCartTotal,
-                        discount_value: discountVal // Enviando o desconto para o banco
+                        total_value: currentCartTotal
                     })
                 });
 
@@ -597,45 +568,30 @@
                 if (data.success) {
                     showReceipt(totalPaid);
                 } else {
-                    alert('❌ ERRO: ' + data.message);
+                    if (data.message.includes("VENCIDO")) {
+                        const irParaCaixa = confirm(data.message +
+                            "\n\nDeseja ir para a tela de Gestão de Caixa agora?");
+                        if (irParaCaixa) {
+                            window.location.href = "{{ route('bar.cash.index') }}";
+                            return;
+                        }
+                    } else {
+                        alert('❌ ERRO: ' + data.message);
+                    }
                     btn.disabled = false;
                     btn.innerText = 'Finalizar Venda';
                 }
             } catch (e) {
+                console.error(e);
                 alert('Erro na conexão. Verifique se o servidor está online.');
                 btn.disabled = false;
                 btn.innerText = 'Finalizar Venda';
             }
         }
 
-        // --- 🧾 RECIBO E FINALIZAÇÃO ---
-
         function showReceipt(totalPaid) {
-            // 1. Captura o valor do desconto direto do input de desconto
-            const discountVal = parseFloat(document.getElementById('cartDiscount').value) || 0;
-
-            // 2. Calcula o subtotal (o que seria o valor cheio sem o desconto)
-            const subtotalBruto = currentCartTotal + discountVal;
             const change = totalPaid - currentCartTotal;
-
             document.getElementById('receiptDate').innerText = new Date().toLocaleString('pt-BR');
-
-            // 3. Preenche os novos campos de Subtotal e Desconto no Modal
-            const subtotalElem = document.getElementById('receiptSubtotalValue');
-            const discountElem = document.getElementById('receiptDiscountValue');
-            const subtotalRow = document.getElementById('receiptSubtotalRow');
-            const discountRow = document.getElementById('receiptDiscountRow');
-
-            if (subtotalElem) subtotalElem.innerText =
-                `R$ ${subtotalBruto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
-            if (discountElem) discountElem.innerText =
-                `- R$ ${discountVal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
-
-            // Só mostra as linhas de subtotal e desconto se realmente houve desconto
-            if (subtotalRow) subtotalRow.style.display = discountVal > 0 ? 'flex' : 'none';
-            if (discountRow) discountRow.style.display = discountVal > 0 ? 'flex' : 'none';
-
-            // 4. Preenche os campos que você já tinha
             document.getElementById('receiptTotal').innerText =
                 `R$ ${currentCartTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
             document.getElementById('receiptReceived').innerText =
@@ -643,16 +599,15 @@
             document.getElementById('receiptChange').innerText =
                 `R$ ${Math.max(0, change).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
 
-            const methodsUsed = payments.length > 0 ? payments.map(p => p.method).join(' + ') : (paymentMethod ||
-                'Dinheiro');
+            const methodsUsed = payments.length > 0 ? payments.map(p => p.method).join(' + ') : paymentMethod;
             document.getElementById('receiptPayment').innerText = methodsUsed;
 
             document.getElementById('receiptItems').innerHTML = cart.map(item => `
-        <div class="flex justify-between text-[11px]">
-            <span class="flex-1">${item.quantity}x ${item.name}</span>
-            <span class="ml-2">R$ ${(item.price * item.quantity).toFixed(2)}</span>
-        </div>
-    `).join('');
+            <div class="flex justify-between text-[11px]">
+                <span class="flex-1">${item.quantity}x ${item.name}</span>
+                <span class="ml-2">R$ ${(item.price * item.quantity).toFixed(2)}</span>
+            </div>
+        `).join('');
 
             document.getElementById('receiptModal').classList.remove('hidden');
         }
@@ -661,30 +616,12 @@
             let phone = prompt("Número do cliente (DDD + Número):", "");
             if (phone) phone = phone.replace(/\D/g, '');
 
-            // Captura os valores de desconto e totais
-            const discountVal = parseFloat(document.getElementById('cartDiscount').value) || 0;
-            const subtotalBruto = currentCartTotal + discountVal;
-
-            let text = `*{{ config('app.name') }} - RECIBO*\n`;
-            text += `_Data: ${new Date().toLocaleString('pt-BR')}_\n\n`;
-
-            // Lista de Itens
+            let text = `*{{ config('app.name') }} - RECIBO*\n_Data: ${new Date().toLocaleString('pt-BR')}_\n\n`;
             cart.forEach(item => {
                 text += `• ${item.quantity}x ${item.name} = R$ ${(item.price * item.quantity).toFixed(2)}\n`;
             });
-
-            text += `\n------------------------------\n`;
-
-            // Se houver desconto, detalha o financeiro na mensagem
-            if (discountVal > 0) {
-                text += `*SUBTOTAL:* R$ ${subtotalBruto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n`;
-                text += `*DESCONTO:* - R$ ${discountVal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n`;
-            }
-
-            text += `*TOTAL PAGO: ${document.getElementById('receiptTotal').innerText}*\n`;
-            text += `*PAGO EM: ${document.getElementById('receiptPayment').innerText.toUpperCase()}*\n`;
-            text += `------------------------------\n`;
-            text += `_Obrigado pela preferência!_`;
+            text += `\n*TOTAL: ${document.getElementById('receiptTotal').innerText}*`;
+            text += `\n*PAGO EM: ${document.getElementById('receiptPayment').innerText.toUpperCase()}*`;
 
             const waUrl = phone ? `https://api.whatsapp.com/send?phone=55${phone}` : `https://api.whatsapp.com/send`;
             window.open(`${waUrl}&text=${encodeURIComponent(text)}`, '_blank');
@@ -692,6 +629,7 @@
 
         function closeReceipt() {
             document.getElementById('receiptModal').classList.add('hidden');
+            // Usamos reload para garantir que o estoque novo venha do servidor
             window.location.reload();
         }
 
@@ -699,20 +637,6 @@
             cart = [];
             payments = [];
             paymentMethod = null;
-
-            // Reseta o estado do desconto
-            const discInput = document.getElementById('cartDiscount');
-            discInput.value = "0.00";
-            discInput.readOnly = true;
-            discInput.disabled = true;
-            discInput.classList.add('opacity-50', 'cursor-not-allowed');
-
-            const discBtn = document.getElementById('btnAuthDiscountPDV');
-            if (discBtn) {
-                discBtn.innerHTML = '🔒';
-                discBtn.classList.replace('text-green-500', 'text-orange-500');
-            }
-
             document.getElementById('paymentsList').classList.add('hidden');
             resetPaymentUI();
             renderCart();
