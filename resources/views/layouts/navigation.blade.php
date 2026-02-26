@@ -18,43 +18,49 @@
 
                 <div class="hidden space-x-4 sm:-my-px sm:ms-10 sm:flex items-center">
                     @if (Auth::check() && Auth::user()->has_admin_access)
-                        {{-- Filtro de Módulo: Oculta Arena se for estritamente PDV (2) --}}
-                        @if($site_info->modules_active != 2)
-                            <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')" class="px-3 py-2">
-                                {{ __('Home') }}
-                            </x-nav-link>
+                    {{-- Filtro de Módulo: Oculta Arena se for estritamente PDV (2) --}}
+                    @if($site_info->modules_active != 2)
+                    <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')" class="px-3 py-2">
+                        {{ __('Home') }}
+                    </x-nav-link>
 
-                            <x-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.*')" class="px-3 py-2 text-sm font-semibold">
-                                {{ __('Reservas') }}
-                            </x-nav-link>
+                    <x-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.*')" class="px-3 py-2 text-sm font-semibold">
+                        {{ __('Reservas') }}
+                    </x-nav-link>
 
-                            <x-nav-link :href="route('admin.arenas.index')" :active="request()->routeIs('admin.arenas.*')" class="px-3 py-2 text-sm font-semibold">
-                                {{ __('Gerenciar Quadras') }}
-                            </x-nav-link>
+                    {{-- 🛡️ TRAVA PARA COLABORADOR --}}
+                    @if(Auth::user()->is_admin || Auth::user()->is_gestor)
+                    <x-nav-link :href="route('admin.arenas.index')" :active="request()->routeIs('admin.arenas.*')" class="px-3 py-2 text-sm font-semibold">
+                        {{ __('Gerenciar Quadras') }}
+                    </x-nav-link>
 
-                            <x-nav-link :href="route('admin.users.index')" :active="request()->routeIs('admin.users.*')" class="px-3 py-2 text-sm font-semibold">
-                                {{ __('Usuários') }}
-                            </x-nav-link>
+                    <x-nav-link :href="route('admin.users.index')" :active="request()->routeIs('admin.users.*')" class="px-3 py-2 text-sm font-semibold">
+                        {{ __('Usuários') }}
+                    </x-nav-link>
+                    @endif
 
-                            <x-nav-link :href="route('admin.payment.index')" :active="request()->routeIs('admin.payment.*')" class="px-3 py-2 text-sm font-semibold">
-                                {{ __('Caixa') }}
-                            </x-nav-link>
+                    <x-nav-link :href="route('admin.payment.index')" :active="request()->routeIs('admin.payment.*')" class="px-3 py-2 text-sm font-semibold">
+                        {{ __('Caixa') }}
+                    </x-nav-link>
 
-                            <x-nav-link :href="route('admin.financeiro.dashboard')" :active="request()->routeIs('admin.financeiro.*')" class="px-3 py-2 text-sm font-semibold">
-                                {{ __('Relatórios') }}
-                            </x-nav-link>
-                        @else
-                            {{-- Se for só PDV, exibe apenas Home do Bar --}}
-                            <x-nav-link :href="route('bar.dashboard')" :active="request()->routeIs('bar.*')" class="px-3 py-2">
-                                {{ __('📦 PDV Sistema') }}
-                            </x-nav-link>
-                        @endif
+                    {{-- 🛡️ TRAVA PARA COLABORADOR --}}
+                    @if(Auth::user()->is_admin || Auth::user()->is_gestor)
+                    <x-nav-link :href="route('admin.financeiro.dashboard')" :active="request()->routeIs('admin.financeiro.*')" class="px-3 py-2 text-sm font-semibold">
+                        {{ __('Relatórios') }}
+                    </x-nav-link>
+                    @endif
+                    @else
+                    {{-- Se for só PDV, exibe apenas Home do Bar --}}
+                    <x-nav-link :href="route('bar.dashboard')" :active="request()->routeIs('bar.*')" class="px-3 py-2">
+                        {{ __('📦 PDV Sistema') }}
+                    </x-nav-link>
+                    @endif
                     @endif
 
                     @if (Auth::check() && Auth::user()->is_client)
-                        <x-nav-link :href="route('customer.reservations.history')" :active="request()->routeIs('customer.reservations.history')" class="px-3 py-2 text-sm font-bold text-indigo-700">
-                            {{ __('Minhas Reservas') }}
-                        </x-nav-link>
+                    <x-nav-link :href="route('customer.reservations.history')" :active="request()->routeIs('customer.reservations.history')" class="px-3 py-2 text-sm font-bold text-indigo-700">
+                        {{ __('Minhas Reservas') }}
+                    </x-nav-link>
                     @endif
                 </div>
             </div>
@@ -83,19 +89,19 @@
                     <x-slot name="content">
                         {{-- 🔄 ALTERNAR MÓDULO: Maia, Marcos e Gestores usam se for Combo (3) --}}
                         @if($site_info->modules_active == 3)
-                            <div class="block px-4 py-2 text-[10px] text-gray-400 font-black uppercase tracking-widest border-b border-gray-100">
-                                Mudar Ambiente
-                            </div>
-                            @if(request()->routeIs('bar.*'))
-                                <x-dropdown-link :href="route('modules.switch', 'arena')" class="bg-indigo-50 text-indigo-700 font-bold">
-                                    🏟️ Ir para Arena
-                                </x-dropdown-link>
-                            @else
-                                <x-dropdown-link :href="route('modules.switch', 'pdv')" class="bg-amber-50 text-amber-700 font-bold">
-                                    🍺 Ir para o Bar/PDV
-                                </x-dropdown-link>
-                            @endif
-                            <div class="border-t border-gray-200"></div>
+                        <div class="block px-4 py-2 text-[10px] text-gray-400 font-black uppercase tracking-widest border-b border-gray-100">
+                            Mudar Ambiente
+                        </div>
+                        @if(request()->routeIs('bar.*'))
+                        <x-dropdown-link :href="route('modules.switch', 'arena')" class="bg-indigo-50 text-indigo-700 font-bold">
+                            🏟️ Ir para Arena
+                        </x-dropdown-link>
+                        @else
+                        <x-dropdown-link :href="route('modules.switch', 'pdv')" class="bg-amber-50 text-amber-700 font-bold">
+                            🍺 Ir para o Bar/PDV
+                        </x-dropdown-link>
+                        @endif
+                        <div class="border-t border-gray-200"></div>
                         @endif
 
                         <x-dropdown-link :href="route('profile.edit')">
@@ -103,16 +109,19 @@
                         </x-dropdown-link>
 
                         @if (Auth::user()->has_admin_access)
-                            <x-dropdown-link :href="route('admin.company.edit')">
-                                {{ __('Dados do estabelecimento') }}
-                            </x-dropdown-link>
+                        {{-- 🛡️ TRAVA PARA COLABORADOR --}}
+                        @if(Auth::user()->is_admin || Auth::user()->is_gestor)
+                        <x-dropdown-link :href="route('admin.company.edit')">
+                            {{ __('Dados do estabelecimento') }}
+                        </x-dropdown-link>
+                        @endif
 
-                            {{-- 🛡️ EXCLUSIVO ADMIN (Maia e Marcos): ROTA TÉCNICA AJUSTADA --}}
-                            @if(Auth::user()->is_admin)
-                                <x-dropdown-link :href="route('admin.plans')" class="text-indigo-600 font-black border-t border-gray-100 bg-gray-50">
-                                    ⚙️ Gerenciar Plano/Módulos
-                                </x-dropdown-link>
-                            @endif
+                        {{-- 🛡️ EXCLUSIVO ADMIN (Maia e Marcos): ROTA TÉCNICA AJUSTADA --}}
+                        @if(Auth::user()->is_admin)
+                        <x-dropdown-link :href="route('admin.plans')" class="text-indigo-600 font-black border-t border-gray-100 bg-gray-50">
+                            ⚙️ Gerenciar Plano/Módulos
+                        </x-dropdown-link>
+                        @endif
                         @endif
 
                         <form method="POST" action="{{ route('logout') }}">
@@ -124,9 +133,9 @@
                     </x-slot>
                 </x-dropdown>
                 @else
-                    <a href="{{ route('customer.login') }}" class="px-3 py-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800">
-                        {{ __('Login Cliente') }}
-                    </a>
+                <a href="{{ route('customer.login') }}" class="px-3 py-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800">
+                    {{ __('Login Cliente') }}
+                </a>
                 @endif
             </div>
 
@@ -144,49 +153,61 @@
     <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden border-t border-gray-200">
         <div class="pt-2 pb-3 space-y-1">
             @if (Auth::check() && Auth::user()->has_admin_access)
-                @if($site_info->modules_active == 3)
-                    <x-responsive-nav-link :href="route('modules.switch', request()->routeIs('bar.*') ? 'arena' : 'pdv')" class="bg-indigo-50 text-indigo-700 font-bold border-l-4 border-indigo-700">
-                        {{ request()->routeIs('bar.*') ? '🏟️ Mudar para Arena' : '🍺 Mudar para Bar/PDV' }}
-                    </x-responsive-nav-link>
-                @endif
+            @if($site_info->modules_active == 3)
+            <x-responsive-nav-link :href="route('modules.switch', request()->routeIs('bar.*') ? 'arena' : 'pdv')" class="bg-indigo-50 text-indigo-700 font-bold border-l-4 border-indigo-700">
+                {{ request()->routeIs('bar.*') ? '🏟️ Mudar para Arena' : '🍺 Mudar para Bar/PDV' }}
+            </x-responsive-nav-link>
+            @endif
 
-                <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
-                    {{ __('Home') }}
-                </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.*')">
-                    {{ __('Reservas') }}
-                </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.arenas.index')" :active="request()->routeIs('admin.arenas.*')">
-                    {{ __('Gerenciar Quadras') }}
-                </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.users.index')" :active="request()->routeIs('admin.users.*')">
-                    {{ __('Usuários') }}
-                </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.payment.index')" :active="request()->routeIs('admin.payment.*')">
-                    {{ __('Caixa') }}
-                </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.financeiro.dashboard')" :active="request()->routeIs('admin.financeiro.*')">
-                    {{ __('Relatórios') }}
-                </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
+                {{ __('Home') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('admin.reservas.index')" :active="request()->routeIs('admin.reservas.*')">
+                {{ __('Reservas') }}
+            </x-responsive-nav-link>
 
-                <hr class="border-gray-200 my-2">
+            {{-- 🛡️ TRAVA PARA COLABORADOR --}}
+            @if(Auth::user()->is_admin || Auth::user()->is_gestor)
+            <x-responsive-nav-link :href="route('admin.arenas.index')" :active="request()->routeIs('admin.arenas.*')">
+                {{ __('Gerenciar Quadras') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('admin.users.index')" :active="request()->routeIs('admin.users.*')">
+                {{ __('Usuários') }}
+            </x-responsive-nav-link>
+            @endif
 
-                <x-responsive-nav-link :href="route('admin.company.edit')" :active="request()->routeIs('admin.company.edit')">
-                    {{ __('Dados do estabelecimento') }}
-                </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('admin.payment.index')" :active="request()->routeIs('admin.payment.*')">
+                {{ __('Caixa') }}
+            </x-responsive-nav-link>
 
-                @if(Auth::user()->is_admin)
-                    {{-- AJUSTADO PARA A ROTA DE PLANOS --}}
-                    <x-responsive-nav-link :href="route('admin.plans')" class="text-indigo-600 font-bold">
-                        ⚙️ Alterar Plano/Módulos
-                    </x-responsive-nav-link>
-                @endif
+            {{-- 🛡️ TRAVA PARA COLABORADOR --}}
+            @if(Auth::user()->is_admin || Auth::user()->is_gestor)
+            <x-responsive-nav-link :href="route('admin.financeiro.dashboard')" :active="request()->routeIs('admin.financeiro.*')">
+                {{ __('Relatórios') }}
+            </x-responsive-nav-link>
+            @endif
+
+            <hr class="border-gray-200 my-2">
+
+            {{-- 🛡️ TRAVA PARA COLABORADOR --}}
+            @if(Auth::user()->is_admin || Auth::user()->is_gestor)
+            <x-responsive-nav-link :href="route('admin.company.edit')" :active="request()->routeIs('admin.company.edit')">
+                {{ __('Dados do estabelecimento') }}
+            </x-responsive-nav-link>
+            @endif
+
+            @if(Auth::user()->is_admin)
+            {{-- AJUSTADO PARA A ROTA DE PLANOS --}}
+            <x-responsive-nav-link :href="route('admin.plans')" class="text-indigo-600 font-bold">
+                ⚙️ Alterar Plano/Módulos
+            </x-responsive-nav-link>
+            @endif
             @endif
 
             @if (Auth::check() && Auth::user()->is_client)
-                <x-responsive-nav-link :href="route('customer.reservations.history')" :active="request()->routeIs('customer.reservations.history')">
-                    {{ __('Minhas Reservas') }}
-                </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('customer.reservations.history')" :active="request()->routeIs('customer.reservations.history')">
+                {{ __('Minhas Reservas') }}
+            </x-responsive-nav-link>
             @endif
         </div>
 

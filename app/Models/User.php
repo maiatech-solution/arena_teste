@@ -23,7 +23,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'email',
         'whatsapp_contact',
         'password',
-        'role', // 'admin', 'gestor', 'cliente'
+        'role', // 'admin', 'gestor', 'colaborador', 'cliente'
         'no_show_count',
         'is_vip',
         'is_blocked',
@@ -77,12 +77,24 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Verifica se tem acesso ao painel administrativo (Admin ou Gestor).
+     * Verifica se é um Colaborador/Funcionário da Arena.
+     * Role: 'colaborador'
+     */
+    protected function isColaborador(): Attribute
+    {
+        return Attribute::make(
+            get: fn() => $this->role === 'colaborador'
+        );
+    }
+
+    /**
+     * Verifica se tem acesso ao painel administrativo.
+     * Inclui: Admin, Gestor e Colaborador.
      */
     protected function hasAdminAccess(): Attribute
     {
         return Attribute::make(
-            get: fn() => in_array($this->role, ['admin', 'gestor'])
+            get: fn() => in_array($this->role, ['admin', 'gestor', 'colaborador'])
         );
     }
 

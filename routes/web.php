@@ -146,18 +146,25 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::get('/{user}/reservas', [UserController::class, 'reservas'])->name('reservas');
         });
 
-        // 💰 5. MÓDULO FINANCEIRO (🔒 Restrito Gestor/Admin)
+        // 💰 5. MÓDULO FINANCEIRO
         Route::prefix('pagamentos')->name('payment.')->group(function () {
-            Route::middleware(['role:admin,gestor'])->group(function () {
-                Route::get('/', [PaymentController::class, 'index'])->name('index');
+
+            // 🔓 ACESSO OPERACIONAL: (Admin, Gestor e Colaborador podem ver e movimentar)
+            Route::middleware(['role:admin,gestor,colaborador'])->group(function () {
+                Route::get('/', [PaymentController::class, 'index'])->name('index'); // Ver o caixa
                 Route::get('/status-caixa', [FinanceiroController::class, 'getStatus'])->name('caixa.status');
+
+                // Finalizar pagamentos e entradas avulsas liberadas para o operacional
+                Route::post('/{reserva}/finalizar', [PaymentController::class, 'processPayment'])->name('finalize');
+                Route::post('/movimentacao-avulsa', [PaymentController::class, 'storeAvulsa'])->name('store_avulsa');
+            });
+
+            // 🔒 ACESSO RESTRITO: (Apenas Admin e Gestor podem abrir/fechar e criar dívidas)
+            Route::middleware(['role:admin,gestor'])->group(function () {
                 Route::post('/fechar-caixa', [PaymentController::class, 'closeCash'])->name('close_cash');
                 Route::post('/abrir-caixa', [PaymentController::class, 'reopenCash'])->name('open_cash');
                 Route::post('/{reserva}/pendenciar', [PaymentController::class, 'markAsPendingDebt'])->name('mark_debt');
             });
-            // Finalizar pagamento pode ser operacional
-            Route::post('/{reserva}/finalizar', [PaymentController::class, 'processPayment'])->name('finalize');
-            Route::post('/movimentacao-avulsa', [PaymentController::class, 'storeAvulsa'])->name('store_avulsa');
         });
 
         // 📊 6. RELATÓRIOS ANALÍTICOS (🔒 SÓ ADMIN/GESTOR)
