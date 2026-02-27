@@ -72,12 +72,15 @@ Route::name('customer.')->group(function () {
     });
 });
 
-// -----------------------------------------------------------------------------------
-// 🛡️ ÁREA ADMINISTRATIVA (ARENA / GESTOR)
-// -----------------------------------------------------------------------------------
-Route::middleware(['auth', 'gestor'])->group(function () {
 
-    // DASHBOARD E APIs DE STATUS (Liberado para todos os internos)
+// -----------------------------------------------------------------------------------
+// 🛡️ ÁREA ADMINISTRATIVA (ARENA / GESTOR / COLABORADOR)
+// -----------------------------------------------------------------------------------
+// 🚀 AJUSTE: Removido 'gestor' do grupo pai para permitir que colaboradores entrem no /admin
+// A segurança de cargos agora é feita individualmente nos subgrupos abaixo.
+Route::middleware(['auth'])->group(function () {
+
+    // DASHBOARD E APIs DE STATUS (Liberado para todos os internos: Admin, Gestor e Colaborador)
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
     Route::get('/api/reservas/pendentes', [ReservaController::class, 'countPending'])->name('api.reservas.pendentes.count');
     Route::get('/api/clientes/search', [UserController::class, 'searchClients'])->name('admin.api.search-clients');
@@ -120,7 +123,10 @@ Route::middleware(['auth', 'gestor'])->group(function () {
             Route::post('/{id}/sincronizar', [AdminController::class, 'sincronizarDadosUsuario'])->name('sincronizar');
             Route::patch('/confirmar/{reserva}', [ReservaController::class, 'confirmar'])->name('confirmar');
 
-            // Ações Críticas de Reserva (🔒 Restrito Gestor/Admin)
+            // 🚀 Rota de No-Show: Liberada (a trava manual está no Controller)
+            Route::post('/{reserva}/no-show', [PaymentController::class, 'registerNoShow'])->name('no_show');
+
+            // Ações Críticas de Reserva (🔒 Restrito EXCLUSIVAMENTE Gestor/Admin)
             Route::middleware(['role:admin,gestor'])->group(function () {
                 Route::patch('/rejeitar/{reserva}', [ReservaController::class, 'rejeitar'])->name('rejeitar');
                 Route::patch('/{reserva}/update-price', [AdminController::class, 'updatePrice'])->name('update_price');
@@ -131,11 +137,10 @@ Route::middleware(['auth', 'gestor'])->group(function () {
                 Route::patch('/{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('cancelar_pontual');
                 Route::delete('/{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('cancelar_serie');
                 Route::post('/cancel-client-series/{masterId}', [AdminController::class, 'cancelClientSeries'])->name('cancel_client_series');
-                Route::post('/{reserva}/no-show', [PaymentController::class, 'registerNoShow'])->name('no_show');
             });
         });
 
-        // 👥 4. GESTÃO DE USUÁRIOS (🔒 Somente Admin e Gestor podem gerenciar equipe)
+        // 👥 4. GESTÃO DE USUÁRIOS (🔒 Somente Admin e Gestor)
         Route::prefix('users')->name('users.')->middleware(['role:admin,gestor'])->group(function () {
             Route::get('/', [UserController::class, 'index'])->name('index');
             Route::get('/create', [UserController::class, 'create'])->name('create');
@@ -149,21 +154,25 @@ Route::middleware(['auth', 'gestor'])->group(function () {
         // 💰 5. MÓDULO FINANCEIRO
         Route::prefix('pagamentos')->name('payment.')->group(function () {
 
-            // 🔓 ACESSO OPERACIONAL: (Admin, Gestor e Colaborador podem ver e movimentar)
+            // 🔓 ACESSO OPERACIONAL: (Admin, Gestor e Colaborador)
             Route::middleware(['role:admin,gestor,colaborador'])->group(function () {
-                Route::get('/', [PaymentController::class, 'index'])->name('index'); // Ver o caixa
+                Route::get('/', [PaymentController::class, 'index'])->name('index');
                 Route::get('/status-caixa', [FinanceiroController::class, 'getStatus'])->name('caixa.status');
-
-                // Finalizar pagamentos e entradas avulsas liberadas para o operacional
                 Route::post('/{reserva}/finalizar', [PaymentController::class, 'processPayment'])->name('finalize');
                 Route::post('/movimentacao-avulsa', [PaymentController::class, 'storeAvulsa'])->name('store_avulsa');
-            });
+                Route::post('/{reserva}/pendenciar', [PaymentController::class, 'markAsPendingDebt'])->name('mark_debt');
 
-            // 🔒 ACESSO RESTRITO: (Apenas Admin e Gestor podem abrir/fechar e criar dívidas)
-            Route::middleware(['role:admin,gestor'])->group(function () {
+                // 🚀 NOVA ROTA: Relatório de Dívidas acessível via autorização por senha
+                Route::get('/relatorio-dividas', [FinanceiroController::class, 'relatorioDividas'])->name('dividas_acesso');
+
+                // 🚀 FECHAMENTO E REABERTURA
                 Route::post('/fechar-caixa', [PaymentController::class, 'closeCash'])->name('close_cash');
                 Route::post('/abrir-caixa', [PaymentController::class, 'reopenCash'])->name('open_cash');
-                Route::post('/{reserva}/pendenciar', [PaymentController::class, 'markAsPendingDebt'])->name('mark_debt');
+            });
+
+            // 🔒 ACESSO RESTRITO (Admin/Gestor)
+            Route::middleware(['role:admin,gestor'])->group(function () {
+                // Outras rotas restritas aqui...
             });
         });
 
@@ -290,7 +299,7 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
         Route::get('/', [BarReportController::class, 'index'])->name('index');
         Route::get('/produtos', [BarReportController::class, 'products'])->name('products');
         Route::get('/caixas', [BarReportController::class, 'cashier'])->name('cashier');
-        Route::get('/movimentacoes', [BarReportController::class, 'movements'])->name('movements');
+        Route::get('/movements', [BarReportController::class, 'movements'])->name('movements');
         Route::get('/pagamentos', [BarReportController::class, 'payments'])->name('payments');
         Route::get('/diario', [BarReportController::class, 'daily'])->name('daily');
         Route::get('/cancelamentos', [BarReportController::class, 'cancelations'])->name('cancelations');

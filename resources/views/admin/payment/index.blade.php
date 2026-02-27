@@ -108,7 +108,7 @@
                         </div>
 
                         {{-- Botão de redirecionamento interno no card --}}
-                        <a href="{{ route('admin.financeiro.relatorio_dividas') }}"
+                        <a href="javascript:void(0)" onclick="acessarDividasComSenha()"
                             class="mt-2 text-center block w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-black text-[9px] uppercase tracking-widest transition shadow-sm">
                             GERENCIAR PENDÊNCIAS
                         </a>
@@ -150,7 +150,11 @@
                     <input type="hidden" id="js_isFiltered" value="{{ request('arena_id') ? '1' : '0' }}">
                     <input type="hidden" id="js_cashierDate" value="{{ $selectedDate }}">
                     <input type="hidden" id="js_isActionDisabled" value="{{ $isActionDisabled ? '1' : '0' }}">
+
+                    {{-- Dados para composição do Modal de Fechamento --}}
                     <input type="hidden" id="js_valorLiquidoArenaRaw" value="{{ $totalRecebidoDiaLiquido }}">
+                    <input type="hidden" id="js_saldoFisicoGavetaRaw" value="{{ $financialTransactions->where('payment_method', 'money')->sum('amount') }}">
+                    <input type="hidden" id="js_saldoDigitalBancoRaw" value="{{ $financialTransactions->where('payment_method', 'pix')->sum('amount') }}">
                 </div>
 
                 {{-- 2. INTERFACE VISUAL --}}
@@ -181,49 +185,56 @@
                             </svg>
 
                             @if ($cashierStatus === 'closed')
-                            <span class="font-bold text-red-700 dark:text-red-300 uppercase">
-                                Caixa Fechado ({{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }})
-                            </span>
+                            <div class="flex flex-col">
+                                <span class="font-bold text-red-700 dark:text-red-300 uppercase leading-none">
+                                    Caixa Fechado
+                                </span>
+                                <span class="text-[10px] text-gray-500 font-bold uppercase mt-1">
+                                    Referente a: {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}
+                                </span>
+                            </div>
                             @else
-                            Status:
-                            @if (!request('arena_id'))
-                            <span class="ml-2 font-bold text-amber-500 italic">Selecione uma unidade...</span>
-                            @elseif($totalPending > 0)
-                            <span class="ml-2 font-bold text-red-500 animate-pulse">Aguardando Recebimentos (R$
-                                {{ number_format($totalPending, 2, ',', '.') }})</span>
-                            @else
-                            <span class="ml-2 font-bold text-green-600">✅ Arena pronta para fechar!</span>
-                            @endif
+                            <div class="flex items-baseline">
+                                <span class="text-xs font-black text-gray-400 uppercase mr-2 tracking-widest">Status:</span>
+                                @if (!request('arena_id'))
+                                <span class="font-bold text-amber-500 italic">Selecione uma unidade...</span>
+                                @elseif($totalPending > 0)
+                                <span class="font-bold text-red-500 animate-pulse">Aguardando Recebimentos (R$ {{ number_format($totalPending, 2, ',', '.') }})</span>
+                                @else
+                                <span class="font-bold text-green-600 uppercase tracking-tighter flex items-center">
+                                    ✅ Pronta para fechar
+                                </span>
+                                @endif
+                            </div>
                             @endif
                         </div>
 
                         {{-- Lado Direito: Botões --}}
                         <div class="w-full sm:w-auto">
                             @if ($cashierStatus === 'closed')
-                            <button type="button" onclick="requisitarAutorizacao(() => openCash('{{ $selectedDate }}'))"
-                                class="w-full sm:w-auto px-6 py-2 bg-red-600 text-white font-bold rounded-lg shadow-md hover:bg-red-700 transition duration-150 flex items-center justify-center uppercase tracking-wider text-xs">
+                            <button type="button" onclick="openCash('{{ $selectedDate }}')"
+                                class="w-full sm:w-auto px-6 py-2.5 bg-red-600 text-white font-black rounded-lg shadow-lg hover:bg-red-700 transition duration-150 flex items-center justify-center uppercase tracking-widest text-[10px]">
                                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path>
                                 </svg>
-                                Reabrir Caixa
+                                Reabrir Caixa Diário
                             </button>
                             @else
                             @if (request('arena_id'))
                             @if ($totalPending > 0)
                             <button type="button" disabled
-                                class="w-full sm:w-auto px-6 py-2 bg-gray-400 text-white font-bold rounded-lg shadow-md cursor-not-allowed opacity-70 text-xs">
+                                class="w-full sm:w-auto px-6 py-2.5 bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 font-black rounded-lg shadow-sm cursor-not-allowed opacity-70 text-[10px] uppercase tracking-widest border border-gray-200 dark:border-gray-500">
                                 ⚠️ Pendência: R$ {{ number_format($totalPending, 2, ',', '.') }}
                             </button>
                             @else
                             <button id="openCloseCashModalBtn" onclick="openCloseCashModal()"
-                                class="w-full sm:w-auto px-6 py-2 bg-green-600 text-white font-bold rounded-lg shadow-md hover:bg-green-700 transition duration-150 transform hover:scale-105 uppercase tracking-wider text-xs">
-                                Fechar Caixa:
-                                {{ $faturamentoPorArena->firstWhere('id', request('arena_id'))->name ?? '' }}
+                                class="w-full sm:w-auto px-6 py-2.5 bg-green-600 text-white font-black rounded-lg shadow-xl hover:bg-green-700 transition duration-150 transform hover:scale-105 uppercase tracking-widest text-[10px]">
+                                Encerrar Caixa: {{ $faturamentoPorArena->firstWhere('id', request('arena_id'))->name ?? '' }}
                             </button>
                             @endif
                             @else
                             <button disabled
-                                class="w-full sm:w-auto px-6 py-2 bg-indigo-300 text-white font-bold rounded-lg cursor-not-allowed text-xs uppercase">
+                                class="w-full sm:w-auto px-6 py-2.5 bg-indigo-200 dark:bg-gray-700 text-indigo-400 dark:text-gray-500 font-black rounded-lg cursor-not-allowed text-[10px] uppercase tracking-widest border border-indigo-100 dark:border-gray-600">
                                 Selecione uma Arena
                             </button>
                             @endif
@@ -597,9 +608,10 @@
 
                                         @if ($canBeDebt)
                                         <button type="button"
-                                            onclick="requisitarAutorizacao(() => openDebtModal({{ $reserva->id }}, '{{ addslashes($reserva->client_name) }}'))"
+                                            onclick="openDebtModal({{ $reserva->id }}, '{{ addslashes($reserva->client_name) }}')"
                                             class="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold px-2 py-1 rounded transition {{ $isActionDisabled ? 'opacity-50 cursor-not-allowed' : '' }}"
-                                            {{ $isActionDisabled ? 'disabled' : '' }}>
+                                            {{ $isActionDisabled ? 'disabled' : '' }}
+                                            title="O cliente vai pagar em outro dia">
                                             🕒 P. DEPOIS
                                         </button>
                                         @endif
@@ -1250,7 +1262,7 @@
         </div>
     </div>
 
-    {{-- MODAL 3: FECHAR CAIXA (CLOSE CASH) - ATUALIZADO COM COMPOSIÇÃO DE SALDO --}}
+    {{-- MODAL 3: FECHAR CAIXA (CLOSE CASH) - ATUALIZADO COM IDs PARA JAVASCRIPT --}}
     <div id="closeCashModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
         <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"
             onclick="closeCloseCashModal()"></div>
@@ -1291,19 +1303,17 @@
                                 Período: <span id="closeCashDateDisplay"></span>
                             </div>
 
-                            {{-- 🚀 MELHORIA: COMPOSIÇÃO DO SALDO (GAVETA VS BANCO) --}}
+                            {{-- 🚀 COMPOSIÇÃO DO SALDO (GAVETA VS BANCO) COM IDs PARA JS --}}
                             <div class="mt-4 grid grid-cols-2 gap-3">
                                 <div
                                     class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-xl">
                                     <span
                                         class="block text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Gaveta
                                         (Espécie)</span>
-                                    <span class="text-lg font-black text-amber-700 dark:text-amber-300">
-                                        {{-- Adicionado ?? 0 para evitar o Erro 500 --}}
+                                    <span id="displayGavetaModal" class="text-lg font-black text-amber-700 dark:text-amber-300">
                                         R$ {{ number_format($saldoFisicoGaveta ?? 0, 2, ',', '.') }}
                                     </span>
-                                    <p class="text-[9px] text-amber-600/70 leading-tight mt-1">Dinheiro físico contado.
-                                    </p>
+                                    <p class="text-[9px] text-amber-600/70 leading-tight mt-1">Dinheiro físico contado.</p>
                                 </div>
 
                                 <div
@@ -1311,12 +1321,10 @@
                                     <span
                                         class="block text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Banco
                                         (Digital)</span>
-                                    <span class="text-lg font-black text-blue-700 dark:text-blue-300">
-                                        {{-- Adicionado ?? 0 para evitar o Erro 500 --}}
+                                    <span id="displayBancoModal" class="text-lg font-black text-blue-700 dark:text-blue-300">
                                         R$ {{ number_format($saldoDigitalBanco ?? 0, 2, ',', '.') }}
                                     </span>
-                                    <p class="text-[9px] text-blue-600/70 leading-tight mt-1">PIX, Cartões e
-                                        Transferências.</p>
+                                    <p class="text-[9px] text-blue-600/70 leading-tight mt-1">PIX, Cartões e Transferências.</p>
                                 </div>
                             </div>
 
@@ -1348,7 +1356,8 @@
                                         <input type="number" step="0.01" id="actualCashAmount"
                                             name="actual_amount" required
                                             class="pl-10 block w-full rounded-md border-indigo-300 dark:border-indigo-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white font-black text-2xl"
-                                            placeholder="0,00">
+                                            placeholder="0,00"
+                                            oninput="calculateDifference()">
                                     </div>
                                 </div>
 
@@ -1834,28 +1843,61 @@
         }
 
         function openCloseCashModal() {
-            // 1. Pega os valores dos inputs ocultos (mais seguro que ler texto da tela)
-            const date = document.getElementById('js_cashierDate').value;
-            const systemValueRaw = document.getElementById('js_valorLiquidoArenaRaw').value;
+            try {
+                // 1. Captura de elementos e valores com fallback para "0"
+                const dateEl = document.getElementById('js_cashierDate');
+                const systemValueEl = document.getElementById('js_valorLiquidoArenaRaw');
+                const saldoGavetaEl = document.getElementById('js_saldoFisicoGavetaRaw');
+                const saldoDigitalEl = document.getElementById('js_saldoDigitalBancoRaw');
 
-            // 2. Formata o valor bruto para exibir no Modal (ex: 140.00 -> R$ 140,00)
-            const systemValueFormatted = parseFloat(systemValueRaw).toLocaleString('pt-br', {
-                style: 'currency',
-                currency: 'BRL'
-            });
+                const date = dateEl ? dateEl.value : '';
+                const systemValueRaw = systemValueEl ? systemValueEl.value : "0";
+                const saldoGavetaRaw = saldoGavetaEl ? saldoGavetaEl.value : "0";
+                const saldoDigitalRaw = saldoDigitalEl ? saldoDigitalEl.value : "0";
 
-            // 3. Alimenta os campos do Modal
-            document.getElementById('closeCashDate').value = date;
-            document.getElementById('closeCashDateDisplay').innerText = date.split('-').reverse().join('/');
+                // 2. Helper de formatação
+                const formatarBRL = (val) => {
+                    return parseFloat(val).toLocaleString('pt-br', {
+                        style: 'currency',
+                        currency: 'BRL'
+                    });
+                };
 
-            // Aqui usamos o valor formatado apenas para exibição visual
-            document.getElementById('calculatedLiquidAmount').innerText = systemValueFormatted;
+                // 3. Alimentação do Modal (Campos de exibição e Inputs)
+                if (document.getElementById('closeCashDate'))
+                    document.getElementById('closeCashDate').value = date;
 
-            // 4. Abre o Modal
-            document.getElementById('closeCashModal').classList.replace('hidden', 'flex');
+                if (document.getElementById('closeCashDateDisplay'))
+                    document.getElementById('closeCashDateDisplay').innerText = date.split('-').reverse().join('/');
 
-            // 5. Executa o cálculo da diferença
-            calculateDifference();
+                if (document.getElementById('calculatedLiquidAmount'))
+                    document.getElementById('calculatedLiquidAmount').innerText = formatarBRL(systemValueRaw);
+
+                // Cards Detalhados (Gaveta e Banco)
+                const displayGaveta = document.getElementById('displayGavetaModal');
+                const displayBanco = document.getElementById('displayBancoModal');
+
+                if (displayGaveta) displayGaveta.innerText = formatarBRL(saldoGavetaRaw);
+                if (displayBanco) displayBanco.innerText = formatarBRL(saldoDigitalRaw);
+
+                // 4. Reset do campo de entrada para forçar nova conferência cega
+                const actualInput = document.getElementById('actualCashAmount');
+                if (actualInput) actualInput.value = '';
+
+                // 5. Troca de visibilidade do Modal
+                const modal = document.getElementById('closeCashModal');
+                if (modal) {
+                    modal.classList.replace('hidden', 'flex');
+                    // Foca automaticamente no campo de digitar o valor
+                    setTimeout(() => actualInput?.focus(), 100);
+                }
+
+                // 6. Atualiza a mensagem de diferença (inicialmente mostrará a falta total)
+                calculateDifference();
+
+            } catch (error) {
+                console.error("Erro ao abrir o modal de fechamento:", error);
+            }
         }
 
         function openCash(date) {
@@ -2009,55 +2051,27 @@
 
             const userRole = "{{ Auth::user()->role ?? 'guest' }}";
 
-            // --- AJUSTE 1: Limpeza de Eventos ---
-            // Removemos qualquer listener anterior criando um clone do nó (padrão limpo de JS)
-            // Isso evita que o formulário seja enviado 2x, 3x se o modal for aberto várias vezes.
-            const newForm = form.cloneNode(true);
-            form.parentNode.replaceChild(newForm, form);
-
-            newForm.addEventListener('submit', function(e) {
+            // Mantemos sem o cloneNode para garantir que as referências dos modais fiquem intactas
+            form.addEventListener('submit', function(e) {
                 e.preventDefault();
-                e.stopPropagation();
 
-                const acoesCriticas = ['debtForm', 'openCashForm', 'transactionForm', 'noShowForm'];
-                let precisaSenha = acoesCriticas.includes(formId);
-
-                if (formId === 'transactionForm') {
-                    const type = newForm.querySelector('[name="type"]')?.value;
-                    if (type !== 'out') precisaSenha = false;
-                }
-
-                const executarEnvioAjax = (supervisorToken = null) => {
+                const enviarParaOServidor = (tokenRecebido = null) => {
                     const btn = document.getElementById(btnId);
                     const spinner = document.getElementById(spinnerId);
-                    const formData = new FormData(newForm); // Usar o formulário atualizado
 
-                    if (supervisorToken) {
-                        formData.append('supervisor_token', supervisorToken);
-                    } else if (precisaSenha && userRole === 'colaborador') {
-                        alert("Erro de segurança: A autorização do supervisor é obrigatória.");
-                        return;
+                    const formData = new FormData(form);
+
+                    // Injeta o e-mail do supervisor capturado no modal
+                    if (tokenRecebido) {
+                        formData.append('supervisor_token', tokenRecebido);
+                        console.log("✅ Token de supervisor anexado:", tokenRecebido);
                     }
 
-                    // --- AJUSTE 2: Busca Robusta de ID ---
-                    // Tenta pegar o ID de todas as formas possíveis que usamos nos modais
                     const reservaId = formData.get('reserva_id') ||
-                        formData.get('id') ||
-                        document.getElementById('modalReservaId')?.value ||
                         document.getElementById('noShowReservaId')?.value ||
                         document.getElementById('debtReservaId')?.value;
 
-                    const urlPrecisaDeId = urlTemplate.includes('{reserva}') || urlTemplate.includes('{id}');
-
-                    if (urlPrecisaDeId && !reservaId) {
-                        alert("Erro: ID da reserva não identificado.");
-                        return;
-                    }
-
-                    let targetUrl = urlTemplate;
-                    if (reservaId) {
-                        targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
-                    }
+                    let targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
 
                     if (btn) btn.disabled = true;
                     if (spinner) spinner.classList.remove('hidden');
@@ -2070,39 +2084,65 @@
                                 'Accept': 'application/json'
                             }
                         })
-                        .then(async response => {
-                            const text = await response.text();
-                            let json;
-                            try {
-                                json = JSON.parse(text);
-                            } catch (e) {
-                                throw new Error("Erro no servidor.");
+                        .then(res => res.json())
+                        .then(json => {
+                            if (json.success) {
+                                alert(json.message);
+                                window.location.reload();
+                            } else {
+                                alert(json.message || 'Erro ao processar.');
+                                if (btn) btn.disabled = false;
+                                if (spinner) spinner.classList.add('hidden');
                             }
-
-                            if (!response.ok) throw new Error(json.message || `Erro ${response.status}`);
-
-                            alert(json.message || 'Sucesso!');
-                            window.location.reload();
                         })
                         .catch(err => {
-                            // --- AJUSTE 3: Destravar Botão em caso de Erro ---
-                            alert('Erro: ' + err.message);
+                            console.error('Erro no Fetch:', err);
+                            alert('Erro na comunicação com o servidor.');
                             if (btn) btn.disabled = false;
                             if (spinner) spinner.classList.add('hidden');
                         });
                 };
 
-                // --- Lógica de Autorização ---
-                if (precisaSenha && userRole === 'colaborador') {
-                    if (typeof window.executarComAutorizacao === "function") {
-                        window.executarComAutorizacao((token) => {
-                            if (token) executarEnvioAjax(token);
-                        }, "Autorização Necessária");
+                // --- 🚀 REGRA 1: FECHAMENTO DE CAIXA ---
+                if (formId === 'closeCashForm') {
+                    const systemValueRaw = document.getElementById('js_valorLiquidoArenaRaw')?.value || "0";
+                    const actualInput = document.getElementById('actualCashAmount')?.value || "0";
+                    const diffCents = toCents(actualInput) - toCents(systemValueRaw);
+
+                    if (diffCents !== 0 && userRole === 'colaborador') {
+                        window.requisitarAutorizacao(function(token) {
+                            if (token) {
+                                enviarParaOServidor(token);
+                            } else {
+                                alert("Autorização inválida: supervisor não identificado.");
+                            }
+                        });
                     } else {
-                        alert("Erro: Sistema de autorização não carregado.");
+                        enviarParaOServidor();
                     }
+                    return;
+                }
+
+                // --- 🚀 REGRA 2: REABERTURA E OUTRAS AÇÕES CRÍTICAS ---
+                // Adicionamos 'openCashForm' explicitamente na lista de travas
+                const acoesCriticas = ['debtForm', 'noShowForm', 'transactionForm', 'openCashForm'];
+
+                if (acoesCriticas.includes(formId) && userRole === 'colaborador') {
+                    // Se for dívida, fecha o modal de pagamento para não sobrepor
+                    if (formId === 'debtForm') closeDebtModal();
+
+                    console.log("🔑 Ação crítica (" + formId + ") detectada. Exigindo senha do supervisor...");
+
+                    window.requisitarAutorizacao(function(token) {
+                        if (token) {
+                            enviarParaOServidor(token);
+                        } else {
+                            alert("A reabertura exige autorização de um supervisor.");
+                        }
+                    });
                 } else {
-                    executarEnvioAjax();
+                    // Se for gestor ou ação não crítica, envia direto
+                    enviarParaOServidor();
                 }
             });
         }
@@ -2148,6 +2188,20 @@
                 console.error('❌ Erro crítico ao registrar formulários:', e);
             }
         });
+
+        function acessarDividasComSenha() {
+            const userRole = "{{ Auth::user()->role ?? 'guest' }}";
+            // Usamos o nome da rota nova que o colaborador tem permissão de "atravessar"
+            const urlDestino = "{{ route('admin.payment.dividas_acesso') }}";
+
+            if (userRole === 'colaborador') {
+                window.requisitarAutorizacao(function(token) {
+                    if (token) window.location.href = urlDestino;
+                });
+            } else {
+                window.location.href = urlDestino;
+            }
+        }
     </script>
 
 </x-app-layout>

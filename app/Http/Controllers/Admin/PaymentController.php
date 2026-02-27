@@ -166,36 +166,38 @@ class PaymentController extends Controller
      */
     public function closeCash(Request $request)
     {
-        // 1. Validação rigorosa: arena_id é obrigatório para fechamento individualizado
         $validated = $request->validate([
             'date'          => 'required|date',
             'actual_amount' => 'required|numeric',
-            'arena_id'      => 'required|exists:arenas,id', // Garante que o fechamento pertence a uma arena válida
-        ], [
-            'arena_id.required' => 'É necessário selecionar uma arena para realizar o fechamento.',
+            'arena_id'      => 'required|exists:arenas,id',
         ]);
 
         try {
             $date = $validated['date'];
             $arenaId = $validated['arena_id'];
 
-            // 2. CÁLCULO DE SEGURANÇA (O servidor recalcula o saldo baseado apenas na arena selecionada)
             $calculatedSystem = FinancialTransaction::whereDate('paid_at', $date)
                 ->where('arena_id', $arenaId)
                 ->sum('amount');
 
-            // 3. Precisão decimal para evitar erros de ponto flutuante
             $calculated = round((float)$calculatedSystem, 2);
             $actual     = round((float)$validated['actual_amount'], 2);
             $difference = round($actual - $calculated, 2);
 
-            // 4. Persistência (Usa transação para garantir que o status e o registro sejam salvos juntos)
+            // 🚀 REGRA DE AUTORIZAÇÃO
+            if ($difference != 0 && Auth::user()->role === 'colaborador') {
+                // Usamos filled para garantir que o token não seja uma string vazia
+                if (!$request->filled('supervisor_token')) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Divergência de valores detectada. Requer autorização do supervisor.'
+                    ], 403);
+                }
+            }
+
             DB::transaction(function () use ($date, $arenaId, $calculated, $actual, $difference, $request) {
                 Cashier::updateOrCreate(
-                    [
-                        'date'     => $date,
-                        'arena_id' => $arenaId // Chave composta: data + arena
-                    ],
+                    ['date' => $date, 'arena_id' => $arenaId],
                     [
                         'user_id'           => Auth::id(),
                         'calculated_amount' => $calculated,
@@ -203,23 +205,15 @@ class PaymentController extends Controller
                         'difference'        => $difference,
                         'status'            => 'closed',
                         'closing_time'      => now(),
-                        'notes'             => $request->input('notes'),
+                        'notes'             => $request->input('notes') . ($request->filled('supervisor_token') ? " | [AUTORIZADO POR SUPERVISOR]" : ""),
                     ]
                 );
             });
 
-            return response()->json([
-                'success'    => true,
-                'message'    => 'Caixa da unidade fechado com sucesso!',
-                'difference' => $difference,
-                'system_sum' => $calculated
-            ]);
+            return response()->json(['success' => true, 'message' => 'Caixa fechado com sucesso!']);
         } catch (\Exception $e) {
-            \Log::error("Erro crítico ao fechar caixa da arena {$request->input('arena_id')}: " . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Erro ao processar o fechamento: ' . $e->getMessage()
-            ], 500);
+            \Log::error("Erro no fechamento: " . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Erro interno.'], 500);
         }
     }
 
@@ -228,6 +222,7 @@ class PaymentController extends Controller
      */
     public function reopenCash(Request $request)
     {
+        // 1. Validação dos campos do formulário
         $request->validate([
             'date'     => 'required|date',
             'reason'   => 'required|string|min:5',
@@ -235,25 +230,39 @@ class PaymentController extends Controller
         ]);
 
         try {
-            // 1. Log de Auditoria Técnica (Aparece no storage/logs/laravel.log)
+            // 🚀 2. TRAVA DE SEGURANÇA: Se for colaborador, EXIGE o supervisor_token
+            if (Auth::user()->role === 'colaborador') {
+                if (!$request->filled('supervisor_token')) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'A reabertura de caixa exige autorização de um supervisor.'
+                    ], 403);
+                }
+            }
+
             \Log::info("Tentando reabrir caixa: Data {$request->date} | Arena {$request->arena_id}");
 
-            // 2. Busca o registro. Removi o firstOrFail para tratar o erro amigavelmente
-            $cashier = Cashier::whereDate('date', $request->date) // Usando whereDate para garantir compatibilidade
+            // 3. Busca o registro
+            $cashier = Cashier::whereDate('date', $request->date)
                 ->where('arena_id', $request->arena_id)
                 ->first();
 
             if (!$cashier) {
                 return response()->json([
                     'success' => false,
-                    'message' => "Não existe um fechamento registrado para esta arena no dia " . \Carbon\Carbon::parse($request->date)->format('d/m/Y') . ". Verifique se você selecionou a unidade correta no filtro."
+                    'message' => "Não existe um fechamento registrado para esta arena no dia " . \Carbon\Carbon::parse($request->date)->format('d/m/Y') . "."
                 ], 404);
             }
 
-            // 3. Atualiza para reabrir
+            // 4. Monta a nota de quem autorizou
+            $autorizacaoTxt = $request->filled('supervisor_token')
+                ? " | [AUTORIZADO POR: {$request->supervisor_token}]"
+                : "";
+
+            // 5. Atualiza para reabrir
             $cashier->update([
                 'status'            => 'open',
-                'reopen_reason'     => $request->reason,
+                'reopen_reason'     => $request->reason . $autorizacaoTxt,
                 'reopened_at'       => now(),
                 'reopened_by'       => Auth::id(),
                 'actual_amount'     => 0,
@@ -263,13 +272,13 @@ class PaymentController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Caixa da unidade reaberto. Alterações financeiras liberadas.'
+                'message' => 'Caixa da unidade reaberto com sucesso!'
             ]);
         } catch (\Exception $e) {
-            \Log::error("Erro fatal ao reabrir caixa da arena {$request->arena_id}: " . $e->getMessage());
+            \Log::error("Erro fatal ao reabrir caixa: " . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Falha interna ao processar reabertura. Detalhes: ' . $e->getMessage()
+                'message' => 'Falha interna ao processar reabertura.'
             ], 500);
         }
     }
