@@ -153,8 +153,7 @@
 
                                     <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                         <div class="flex justify-center space-x-3 items-center">
-
-                                            {{-- 1. BOTÃO HISTÓRICO: Disponível para todos da equipe consultarem clientes --}}
+                                            {{-- Botão de Histórico (Essencial para rastreabilidade do cliente) --}}
                                             @if ($user->role === 'cliente')
                                                 <a href="{{ route('admin.users.reservas', $user) }}"
                                                     class="text-green-600 hover:bg-green-100 p-2 rounded-full transition flex items-center border border-green-200"
@@ -166,68 +165,40 @@
                                                             d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z">
                                                         </path>
                                                     </svg>
-                                                    <span class="text-[10px] font-bold uppercase">Histórico</span>
+                                                    <span class="text-[10px] font-bold">HISTÓRICO</span>
                                                 </a>
                                             @endif
 
-                                            {{-- 2. LÓGICA DE PERMISSÃO PARA EDITAR/EXCLUIR --}}
-                                            @php
-                                                $podeManipular = false;
-                                                $meuRole = Auth::user()->role;
+                                            <a href="{{ route('admin.users.edit', $user) }}"
+                                                class="text-indigo-600 hover:bg-indigo-100 p-2 rounded-full transition"
+                                                title="Editar Perfil">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2"
+                                                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z">
+                                                    </path>
+                                                </svg>
+                                            </a>
 
-                                                if ($meuRole === 'admin') {
-                                                    $podeManipular = true; // Admin manda em tudo
-                                                } elseif ($meuRole === 'gestor') {
-                                                    // Gestor edita clientes e outros gestores, mas NUNCA o Admin
-                                                    $podeManipular = $user->role !== 'admin';
-                                                }
-                                                // Colaborador cai no false por padrão (não manipula ninguém)
-                                            @endphp
-
-                                            @if ($podeManipular)
-                                                {{-- BOTÃO EDITAR --}}
-                                                <a href="{{ route('admin.users.edit', $user) }}"
-                                                    class="text-indigo-600 hover:bg-indigo-100 p-2 rounded-full transition"
-                                                    title="Editar Perfil">
-                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor"
-                                                        viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                                            stroke-width="2"
-                                                            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z">
-                                                        </path>
-                                                    </svg>
-                                                </a>
-
-                                                {{-- BOTÃO EXCLUIR (Bloqueado para o próprio usuário se excluir) --}}
-                                                @if (Auth::id() !== $user->id)
-                                                    <form action="{{ route('admin.users.destroy', $user) }}"
-                                                        method="POST" onsubmit="return false;" class="inline">
-                                                        @csrf @method('DELETE')
-                                                        <button type="button" onclick="showCustomConfirmation(this)"
-                                                            class="text-red-600 hover:bg-red-100 p-2 rounded-full transition"
-                                                            data-username="{{ $user->name }}"
-                                                            data-userid="{{ $user->id }}">
-                                                            <svg class="w-5 h-5" fill="none" stroke="currentColor"
-                                                                viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                                    stroke-width="2"
-                                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
-                                                                </path>
-                                                            </svg>
-                                                        </button>
-                                                    </form>
-                                                @endif
-                                            @else
-                                                {{-- Mostra um cadeado ou deixa vazio para quem não tem permissão --}}
-                                                <span class="text-gray-300 cursor-help" title="Acesso Restrito">
-                                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path fill-rule="evenodd"
-                                                            d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                                                            clip-rule="evenodd" />
-                                                    </svg>
-                                                </span>
+                                            @if (Auth::id() !== $user->id)
+                                                <form action="{{ route('admin.users.destroy', $user) }}" method="POST"
+                                                    onsubmit="return false;" class="inline">
+                                                    @csrf @method('DELETE')
+                                                    <button type="button" onclick="showCustomConfirmation(this)"
+                                                        class="text-red-600 hover:bg-red-100 p-2 rounded-full transition"
+                                                        data-username="{{ $user->name }}"
+                                                        data-userid="{{ $user->id }}">
+                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor"
+                                                            viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                                stroke-width="2"
+                                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                                                            </path>
+                                                        </svg>
+                                                    </button>
+                                                </form>
                                             @endif
-
                                         </div>
                                     </td>
                                 </tr>

@@ -140,21 +140,15 @@ Route::middleware(['auth'])->group(function () {
             });
         });
 
-        // 👥 4. GESTÃO DE USUÁRIOS (Hierarquia protegida no Controller e Middleware)
-        Route::prefix('users')->name('users.')->group(function () {
-
-            // O Index é liberado para todos (Colaborador vê a lista, mas com restrições na Blade)
+        // 👥 4. GESTÃO DE USUÁRIOS (🔒 Somente Admin e Gestor)
+        Route::prefix('users')->name('users.')->middleware(['role:admin,gestor'])->group(function () {
             Route::get('/', [UserController::class, 'index'])->name('index');
+            Route::get('/create', [UserController::class, 'create'])->name('create');
+            Route::post('/', [UserController::class, 'store'])->name('store');
+            Route::get('/{user}/edit', [UserController::class, 'edit'])->name('edit');
+            Route::put('/{user}', [UserController::class, 'update'])->name('update');
+            Route::delete('/{user}', [UserController::class, 'destroy'])->name('destroy');
             Route::get('/{user}/reservas', [UserController::class, 'reservas'])->name('reservas');
-
-            // As ações de escrita (Criar/Editar/Excluir) são blindadas por Middleware além do Controller
-            Route::middleware(['role:admin,gestor'])->group(function () {
-                Route::get('/create', [UserController::class, 'create'])->name('create');
-                Route::post('/', [UserController::class, 'store'])->name('store');
-                Route::get('/{user}/edit', [UserController::class, 'edit'])->name('edit');
-                Route::put('/{user}', [UserController::class, 'update'])->name('update');
-                Route::delete('/{user}', [UserController::class, 'destroy'])->name('destroy');
-            });
         });
 
         // 💰 5. MÓDULO FINANCEIRO

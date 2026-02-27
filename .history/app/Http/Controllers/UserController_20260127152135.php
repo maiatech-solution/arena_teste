@@ -68,35 +68,18 @@ class UserController extends Controller
     }
 
     // =========================================================================
-    // 🛠️ PARTE 2: CRUD (ATUALIZADO COM REGRAS DE HIERARQUIA)
+    // 🛠️ PARTE 2: CRUD (CORRIGIDO)
     // =========================================================================
 
     public function create()
     {
-        // 🔒 Trava: Colaborador não acessa tela de criação
-        if (auth()->user()->role === 'colaborador') {
-            return redirect()->route('admin.users.index')->with('error', 'Acesso negado: Colaboradores não podem criar usuários.');
-        }
-
         $arenas = Arena::all();
         return view('admin.users.create', compact('arenas'));
     }
 
     public function store(Request $request)
     {
-        $meuRole = auth()->user()->role;
-
-        // 🔒 Trava 1: Somente Admin ou Gestor podem criar
-        if (!in_array($meuRole, ['admin', 'gestor'])) {
-            return redirect()->route('admin.users.index')->with('error', 'Sem permissão para criar usuários.');
-        }
-
-        // 🔒 Trava 2: Gestor não pode criar Admin
-        if ($meuRole === 'gestor' && $request->role === 'admin') {
-            return redirect()->back()->with('error', 'Você não tem permissão para criar um Administrador.');
-        }
-
-        $isStaff = in_array($request->role, ['gestor', 'admin']);
+        $isGestor = in_array($request->role, ['gestor', 'admin']);
 
         $rules = [
             'name' => 'required|string|max:255',
@@ -106,7 +89,7 @@ class UserController extends Controller
             'arena_id' => 'nullable|exists:arenas,id',
         ];
 
-        if ($isStaff) {
+        if ($isGestor) {
             $rules['password'] = 'required|string|min:8|confirmed';
         }
 
@@ -116,10 +99,11 @@ class UserController extends Controller
             'name' => $validated['name'],
             'email' => $validated['email'],
             'whatsapp_contact' => $validated['whatsapp_contact'],
-            'password' => $isStaff ? Hash::make($validated['password']) : Hash::make(Str::random(16)),
+            'password' => $isGestor ? Hash::make($validated['password']) : Hash::make(Str::random(16)),
             'role' => $validated['role'],
             'arena_id' => $validated['arena_id'] ?? null,
             'is_vip' => $request->has('is_vip') ? 1 : 0,
+            // 🚀 CORREÇÃO: Usando o campo real is_blocked em vez de customer_qualification
             'is_blocked' => $request->has('is_blacklisted') ? 1 : 0,
         ]);
 
@@ -128,31 +112,12 @@ class UserController extends Controller
 
     public function edit(User $user)
     {
-        $meuRole = auth()->user()->role;
-
-        // 🔒 Trava 1: Colaborador não edita ninguém
-        if ($meuRole === 'colaborador') {
-            return redirect()->route('admin.users.index')->with('error', 'Acesso negado para edição.');
-        }
-
-        // 🔒 Trava 2: Gestor não edita Admin
-        if ($meuRole === 'gestor' && $user->role === 'admin') {
-            return redirect()->route('admin.users.index')->with('error', 'Você não pode editar um Administrador.');
-        }
-
         $arenas = Arena::all();
         return view('admin.users.edit', compact('user', 'arenas'));
     }
 
     public function update(Request $request, User $user)
     {
-        $meuRole = auth()->user()->role;
-
-        // 🔒 Bloqueio de segurança redundante (Servidor)
-        if ($meuRole === 'colaborador' || ($meuRole === 'gestor' && $user->role === 'admin')) {
-            return redirect()->route('admin.users.index')->with('error', 'Operação não permitida pela sua hierarquia.');
-        }
-
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
@@ -161,20 +126,28 @@ class UserController extends Controller
             'arena_id' => 'nullable|exists:arenas,id',
         ]);
 
+        // 1. Atualiza a senha se preenchida
         if ($request->filled('password')) {
             $user->password = Hash::make($request->password);
         }
 
+        // 2. Mapeamento manual dos campos
         $user->name = $validated['name'];
         $user->email = $validated['email'];
         $user->whatsapp_contact = $validated['whatsapp_contact'];
         $user->role = $validated['role'];
         $user->arena_id = $validated['arena_id'] ?? null;
+
+        // 3. Status VIP
         $user->is_vip = $request->has('is_vip') ? 1 : 0;
 
+        // 4. LÓGICA DA BLACKLIST (Ajustada conforme o Debug Real)
         if ($request->has('is_blacklisted')) {
+            // Se marcar o checkbox, ativamos o bloqueio
             $user->is_blocked = 1;
         } else {
+            // Se desmarcar, removemos o bloqueio e ZERAMOS as faltas
+            // Isso garante que o status 🚫 BLACKLIST suma da sua index
             $user->is_blocked = 0;
             $user->no_show_count = 0;
         }
@@ -186,13 +159,6 @@ class UserController extends Controller
 
     public function destroy(User $user)
     {
-        $meuRole = auth()->user()->role;
-
-        // 🔒 Trava: Colaborador não exclui ninguém, Gestor não exclui Admin
-        if ($meuRole === 'colaborador' || ($meuRole === 'gestor' && $user->role === 'admin')) {
-            return response()->json(['success' => false, 'message' => 'Sua hierarquia não permite excluir este usuário.'], 403);
-        }
-
         if (auth()->id() === $user->id) {
             return response()->json(['success' => false, 'message' => 'Você não pode se excluir!'], 403);
         }
