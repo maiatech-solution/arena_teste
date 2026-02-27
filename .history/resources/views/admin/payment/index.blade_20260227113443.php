@@ -2164,17 +2164,18 @@
                 form.onsubmit = function(e) {
                     e.preventDefault();
 
-                    // 🛑 TRAVA 1: Bloqueio físico imediato no envio
+                    // 🛑 BLOQUEIO DE CLIQUE DUPLO
                     if (window.caixaProcessandoGlobal[formId]) return false;
-                    window.caixaProcessandoGlobal[formId] = true;
 
                     const enviarParaOServidor = (tokenRecebido = null) => {
                         const btn = document.getElementById(btnId);
                         const spinner = document.getElementById(spinnerId);
 
+                        window.caixaProcessandoGlobal[formId] = true;
+
                         if (btn) {
                             btn.disabled = true;
-                            btn.innerText = "AGUARDE...";
+                            btn.innerText = "PROCESSANDO...";
                         }
                         if (spinner) spinner.classList.remove('hidden');
 
@@ -2196,57 +2197,49 @@
                             })
                             .then(res => res.json())
                             .then(json => {
-                                // --- 🛡️ FILTRO DE ALERTA AGRESSIVO ---
+                                // --- 🛡️ O SEGREDO ESTÁ AQUI: SOBRESCREVER O ALERT TEMPORARIAMENTE ---
                                 const originalAlert = window.alert;
-
-                                // Sobrescrevemos o alert APENAS para esta resposta
                                 window.alert = function(msg) {
                                     const m = msg.toLowerCase();
-
-                                    // Se já exibimos um sucesso ou é uma mensagem de duplicidade, CANCELA o alert
-                                    if (form.dataset.finalizado === "true" ||
-                                        m.includes("baixada anteriormente") ||
-                                        m.includes("ja foi fechado") ||
-                                        m.includes("duplicidade")) {
-                                        console.log("Mensagem duplicada bloqueada com sucesso.");
-                                        return; // O alert morre aqui, não aparece na tela
+                                    // Se a mensagem contiver qualquer um desses termos, o alert É DELETADO (não aparece)
+                                    if (m.includes("baixada anteriormente") || m.includes(
+                                            "ja foi baixada") || m.includes("duplicidade")) {
+                                        console.warn("Mensagem de erro bloqueada pelo sistema.");
+                                        window.location.reload(); // Apenas atualiza a tela em silêncio
+                                        return;
                                     }
-
-                                    if (json.success) form.dataset.finalizado = "true";
-                                    originalAlert(msg);
+                                    originalAlert(
+                                        msg); // Se for outra mensagem (sucesso ou erro real), mostra normal
                                 };
 
                                 if (json.success) {
-                                    alert(json.message);
+                                    alert(json.message); // Vai passar pelo filtro acima
                                     window.location.reload();
                                 } else {
-                                    alert(json.message || 'Erro ao processar.');
+                                    alert(json.message || 'Erro ao processar.'); // Vai passar pelo filtro acima
 
-                                    // Só libera se não for sucesso, para permitir correção
-                                    if (form.dataset.finalizado !== "true") {
-                                        window.caixaProcessandoGlobal[formId] = false;
-                                        if (btn) {
-                                            btn.disabled = false;
-                                            btn.innerText = "CONCLUIR";
-                                        }
-                                        if (spinner) spinner.classList.add('hidden');
+                                    // Se cair aqui e não for erro de duplicidade, libera o botão
+                                    window.caixaProcessandoGlobal[formId] = false;
+                                    if (btn) {
+                                        btn.disabled = false;
+                                        btn.innerText = btn.dataset.originalText || "CONCLUIR";
                                     }
+                                    if (spinner) spinner.classList.add('hidden');
                                 }
 
-                                // Devolve o alert original ao sistema após 1.5s
+                                // Restaura o alert original depois de 1 segundo para não afetar o resto do sistema
                                 setTimeout(() => {
                                     window.alert = originalAlert;
-                                }, 1500);
+                                }, 1000);
                             })
                             .catch(err => {
-                                console.error(err);
                                 window.caixaProcessandoGlobal[formId] = false;
                                 if (btn) btn.disabled = false;
+                                if (spinner) spinner.classList.add('hidden');
                             });
                     };
 
-                    const acoesCriticas = ['debtForm', 'noShowForm', 'transactionForm', 'openCashForm',
-                    'closeCashForm'];
+                    const acoesCriticas = ['debtForm', 'noShowForm', 'transactionForm', 'openCashForm'];
                     if (acoesCriticas.includes(formId) && userRole === 'colaborador') {
                         window.requisitarAutorizacao(token => {
                             if (token) enviarParaOServidor(token);

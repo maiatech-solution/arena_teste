@@ -289,10 +289,11 @@ class PaymentController extends Controller
      */
     public function processPayment(Request $request, $reservaId)
     {
-        // Carrega a reserva (sem lock aqui, o lock real acontece dentro da transaction)
+        // Carrega a reserva com lock para evitar que dois processos mexam nela ao mesmo tempo
         $reserva = Reserva::with('arena')->findOrFail($reservaId);
 
         // --- 1. LÓGICA DE DATA OPERACIONAL CORRIGIDA ---
+        // Capturamos a data vinda do JS. Se for dia 26, labelData será "26/02/2026"
         $dataOperacional = $request->input('payment_date') ?? now()->toDateString();
         $labelData = \Carbon\Carbon::parse($dataOperacional)->format('d/m/Y');
 
@@ -302,6 +303,16 @@ class PaymentController extends Controller
                 'success' => false,
                 'message' => "Ação bloqueada: O caixa do dia {$labelData} já está encerrado nesta unidade."
             ], 403);
+        }
+
+        // --- 3. TRAVA DE DUPLICIDADE (ANTI-CLIQUE DUPLO) ---
+        // Se a reserva já estiver paga e chegar um novo valor, assumimos que é o segundo clique do navegador
+        if ($reserva->payment_status === 'paid' && $request->input('amount_paid') > 0) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Esta reserva já foi baixada anteriormente.',
+                'status'  => 'paid'
+            ]);
         }
 
         $validated = $request->validate([
@@ -316,22 +327,16 @@ class PaymentController extends Controller
             $paymentStatus = 'pending';
 
             DB::transaction(function () use ($validated, $reserva, &$paymentStatus, $dataOperacional) {
-
-                // 🔒 LOCK REAL NO BANCO (aqui está a versão verdadeira da reserva)
+                // Forçamos o banco a nos dar a versão mais fresca da reserva antes de somar
                 $reservaFresh = Reserva::where('id', $reserva->id)->lockForUpdate()->first();
-
-                // ✅ TRAVA CORRETA DE DUPLICIDADE (idempotência real)
-                if ($reservaFresh->payment_status === 'paid' && $validated['amount_paid'] > 0) {
-                    throw new \Exception('ALREADY_PAID');
-                }
 
                 $finalPrice = round((float) $validated['final_price'], 2);
                 $amountReceivedNow = round((float) $validated['amount_paid'], 2);
 
-                // Soma do que já tinha com o novo pagamento
+                // Soma o que já tinha no banco com o que chegou agora
                 $newTotalPaid = round((float) $reservaFresh->total_paid + $amountReceivedNow, 2);
 
-                // Segurança contra pagar mais que o total
+                // Verificação de segurança: Tolerância de 0.01 para dízimas de arredondamento
                 if ($newTotalPaid > ($finalPrice + 0.01)) {
                     throw new \Exception("O valor total pago (R$ " . number_format($newTotalPaid, 2, ',', '.') . ") não pode ser maior que o preço final.");
                 }
@@ -354,7 +359,6 @@ class PaymentController extends Controller
                     'manager_id'     => Auth::id(),
                 ]);
 
-                // Atualiza série futura
                 if (!empty($validated['apply_to_series']) && $reservaFresh->recurrent_series_id) {
                     Reserva::where('recurrent_series_id', $reservaFresh->recurrent_series_id)
                         ->where('date', '>', $reservaFresh->date)
@@ -365,7 +369,7 @@ class PaymentController extends Controller
                         ]);
                 }
 
-                // --- AUDITORIA FINANCEIRA ---
+                // --- 3. AUDITORIA FINANCEIRA ---
                 if ($amountReceivedNow > 0) {
                     FinancialTransaction::create([
                         'reserva_id'     => $reservaFresh->id,
@@ -387,22 +391,8 @@ class PaymentController extends Controller
                 'status'  => $paymentStatus
             ]);
         } catch (\Exception $e) {
-
-            // 🎯 Tratamento limpo de duplicidade
-            if ($e->getMessage() === 'ALREADY_PAID') {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Esta reserva já foi baixada anteriormente.',
-                    'status'  => 'paid'
-                ]);
-            }
-
             Log::error("Erro pagamento #{$reservaId}: " . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 422);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
 
@@ -518,72 +508,68 @@ class PaymentController extends Controller
 
     /**
      * 🎯 LANÇAR COMO PENDÊNCIA (Pagar Depois):
-     * Blindado com Lock de banco e verificação de integridade.
+     * Finaliza a reserva operacionalmente mas exige um motivo para a dívida.
      */
     public function markAsPendingDebt(Request $request, $reservaId)
     {
-        // LOG DE ENTRADA: Monitoramento de auditoria
+        // LOG DE ENTRADA: Saber se o JS chegou aqui e o que enviou
         \Log::info("--- INÍCIO PROCESSO DÍVIDA ---", [
-            'reserva_id' => $reservaId,
+            'reserva_id_url' => $reservaId,
+            'reserva_id_body' => $request->reserva_id,
             'motivo' => $request->reason,
-            'usuario' => \Auth::user()->name ?? 'Desconhecido'
+            'usuario' => \Auth::user()->name ?? 'Não autenticado'
         ]);
 
         try {
-            // Buscamos a reserva com Lock para garantir que ninguém pague ela enquanto estamos pendenciando
-            $reserva = \App\Models\Reserva::where('id', $reservaId)->lockForUpdate()->firstOrFail();
+            $reserva = \App\Models\Reserva::findOrFail($reservaId);
 
-            // 1. Validação do Motivo (Mínimo 5 caracteres para evitar "abcde")
+            // 1. Validação do Motivo
             $validated = $request->validate([
                 'reason' => 'required|string|min:5|max:255',
             ]);
 
-            // 🛡️ TRAVA DE CAIXA OPERACIONAL
-            // Verificamos se o caixa da data do jogo já foi encerrado
+            // 🛡️ TRAVA DE CAIXA
             if (\App\Http\Controllers\FinanceiroController::isCashClosed($reserva->date, $reserva->arena_id)) {
+                \Log::warning("⚠️ Tentativa de pendenciar em caixa fechado. Reserva #{$reservaId}");
                 return response()->json([
                     'success' => false,
-                    'message' => 'Ação bloqueada: O caixa do dia ' . \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') . ' já está encerrado.'
+                    'message' => 'Ação bloqueada: O caixa desta unidade para o dia ' . \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') . ' já está encerrado.'
                 ], 403);
             }
 
-            // 2. Verificação de Saldo (Não pendenciar o que já está pago)
-            $totalDevido = round((float)($reserva->final_price ?? $reserva->price), 2);
-            $totalPago = round((float)$reserva->total_paid, 2);
-
-            if ($totalPago >= $totalDevido && $totalDevido > 0) {
+            // 2. Verificação de Saldo
+            $totalDevido = ($reserva->final_price ?? $reserva->price);
+            if ($reserva->total_paid >= $totalDevido && $totalDevido > 0) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Esta reserva já consta como totalmente paga.'
+                    'message' => 'Esta reserva já consta como paga no sistema.'
                 ], 422);
             }
 
             // 3. Execução da Transação
-            \DB::transaction(function () use ($reserva, $validated, $totalPago) {
-                // Define se é uma dívida total (unpaid) ou se o cara pagou uma parte e deve o resto (partial)
-                $novoStatusPagamento = ($totalPago > 0) ? 'partial' : 'unpaid';
+            \DB::transaction(function () use ($reserva, $validated) {
+                $novoStatusPagamento = ($reserva->total_paid > 0) ? 'partial' : 'unpaid';
 
-                // Atualiza o status para 'completed' (jogo aconteceu) mas mantém o financeiro aberto
                 $reserva->update([
                     'status' => 'completed',
                     'payment_status' => $novoStatusPagamento,
                     'manager_id' => \Auth::id(),
-                    // Histórico interno nas notas para auditoria futura
-                    'notes' => $reserva->notes . " | [DÍVIDA EM " . now()->format('d/m H:i') . "]: " . $validated['reason'] . " (Autorizado por: " . \Auth::user()->name . ")"
+                    'notes' => $reserva->notes . " | [DÍVIDA AUTORIZADA]: " . $validated['reason'] . " (por " . \Auth::user()->name . " em " . now()->format('d/m H:i') . ")"
                 ]);
             });
 
-            \Log::info("✅ Reserva #{$reservaId} movida para dívidas.");
+            \Log::info("✅ Reserva #{$reservaId} marcada como dívida com sucesso.");
 
             return response()->json([
                 'success' => true,
-                'message' => 'O jogo foi finalizado e o saldo devedor foi enviado para o Gerenciador de Pendências.'
+                'message' => 'Reserva marcada como pendência de pagamento com sucesso.'
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json(['success' => false, 'message' => 'O motivo da pendência é obrigatório (mín. 5 caracteres).'], 422);
+            \Log::error("❌ Erro de Validação: ", $e->errors());
+            return response()->json(['success' => false, 'message' => 'O motivo deve ter pelo menos 5 caracteres.'], 422);
         } catch (\Exception $e) {
             \Log::error("❌ Erro ao pendenciar reserva #{$reservaId}: " . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Erro interno: ' . $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Erro interno ao processar: ' . $e->getMessage()], 500);
         }
     }
 

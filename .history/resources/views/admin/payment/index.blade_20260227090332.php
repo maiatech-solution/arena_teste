@@ -199,23 +199,17 @@
                                 <div class="flex items-baseline">
                                     <span
                                         class="text-xs font-black text-gray-400 uppercase mr-2 tracking-widest">Status:</span>
-
-                                    {{-- 🛑 A MUDANÇA ESTÁ AQUI: ID "cashStatus" para o JS poder manipular --}}
-                                    <span id="cashStatus">
-                                        @if (!request('arena_id'))
-                                            <span class="font-bold text-amber-500 italic">Selecione uma
-                                                unidade...</span>
-                                        @elseif($totalPending > 0)
-                                            <span class="font-bold text-red-500 animate-pulse">
-                                                Aguardando Recebimentos (R$
-                                                {{ number_format($totalPending, 2, ',', '.') }})
-                                            </span>
-                                        @else
-                                            <span class="font-bold text-green-600 uppercase">
-                                                ✅ Pronta para fechar
-                                            </span>
-                                        @endif
-                                    </span>
+                                    @if (!request('arena_id'))
+                                        <span class="font-bold text-amber-500 italic">Selecione uma unidade...</span>
+                                    @elseif($totalPending > 0)
+                                        <span class="font-bold text-red-500 animate-pulse">Aguardando Recebimentos (R$
+                                            {{ number_format($totalPending, 2, ',', '.') }})</span>
+                                    @else
+                                        <span
+                                            class="font-bold text-green-600 uppercase tracking-tighter flex items-center">
+                                            ✅ Pronta para fechar
+                                        </span>
+                                    @endif
                                 </div>
                             @endif
                         </div>
@@ -223,7 +217,6 @@
                         {{-- Lado Direito: Botões --}}
                         <div class="w-full sm:w-auto">
                             @if ($cashierStatus === 'closed')
-                                {{-- BOTÃO REABRIR: Só aparece se o caixa geral do dia estiver fechado --}}
                                 <button type="button" onclick="openCash('{{ $selectedDate }}')"
                                     class="w-full sm:w-auto px-6 py-2.5 bg-red-600 text-white font-black rounded-lg shadow-lg hover:bg-red-700 transition duration-150 flex items-center justify-center uppercase tracking-widest text-[10px]">
                                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor"
@@ -236,15 +229,19 @@
                                 </button>
                             @else
                                 @if (request('arena_id'))
-                                    {{-- BOTÃO DE FECHAR: Ele SEMPRE existirá se a arena for selecionada.
-                 Quem decide se ele é clicável ou não é o JAVASCRIPT em tempo real. --}}
-                                    <button id="openCloseCashModalBtn" onclick="openCloseCashModal()"
-                                        class="w-full sm:w-auto px-6 py-2.5 bg-green-600 text-white font-black rounded-lg shadow-xl hover:bg-green-700 transition duration-150 transform hover:scale-105 uppercase tracking-widest text-[10px] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400">
-                                        Encerrar Caixa:
-                                        {{ $faturamentoPorArena->firstWhere('id', request('arena_id'))->name ?? '' }}
-                                    </button>
+                                    @if ($totalPending > 0)
+                                        <button type="button" disabled
+                                            class="w-full sm:w-auto px-6 py-2.5 bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 font-black rounded-lg shadow-sm cursor-not-allowed opacity-70 text-[10px] uppercase tracking-widest border border-gray-200 dark:border-gray-500">
+                                            ⚠️ Pendência: R$ {{ number_format($totalPending, 2, ',', '.') }}
+                                        </button>
+                                    @else
+                                        <button id="openCloseCashModalBtn" onclick="openCloseCashModal()"
+                                            class="w-full sm:w-auto px-6 py-2.5 bg-green-600 text-white font-black rounded-lg shadow-xl hover:bg-green-700 transition duration-150 transform hover:scale-105 uppercase tracking-widest text-[10px]">
+                                            Encerrar Caixa:
+                                            {{ $faturamentoPorArena->firstWhere('id', request('arena_id'))->name ?? '' }}
+                                        </button>
+                                    @endif
                                 @else
-                                    {{-- BOTÃO SELECIONE: Se não filtrou arena, não faz nada --}}
                                     <button disabled
                                         class="w-full sm:w-auto px-6 py-2.5 bg-indigo-200 dark:bg-gray-700 text-indigo-400 dark:text-gray-500 font-black rounded-lg cursor-not-allowed text-[10px] uppercase tracking-widest border border-indigo-100 dark:border-gray-600">
                                         Selecione uma Arena
@@ -501,26 +498,21 @@
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 @forelse ($reservas as $reserva)
                                     @php
-                                        // 1. Definição do Preço Final
                                         $total = $reserva->final_price ?? $reserva->price;
 
-                                        // 2. Quanto entrou no caixa especificamente NESTA DATA (Ajustado para paid_at)
+                                        // --- LÓGICA DE VALORES CORRIGIDA ---
+                                        // Quanto entrou especificamente no dia que estamos olhando:
                                         $pagoNoDia = $financialTransactions
                                             ->where('reserva_id', $reserva->id)
-                                            ->filter(function ($t) use ($selectedDate) {
-                                                return \Carbon\Carbon::parse($t->paid_at)->toDateString() ===
-                                                    \Carbon\Carbon::parse($selectedDate)->toDateString();
-                                            })
                                             ->sum('amount');
 
-                                        // 3. Total acumulado histórico (Sinais + Quitações)
-                                        $pagoGeral = (float) $reserva->total_paid;
+                                        // Total que a reserva já tem acumulado (independente do dia):
+                                        $pagoGeral = $reserva->total_paid;
 
-                                        // 4. Saldo Devedor Real
-                                        $restante = max(0, round($total - $pagoGeral, 2));
+                                        $restante = max(0, $total - $pagoGeral);
                                         $currentStatus = $reserva->payment_status;
 
-                                        // 5. Lógica de Atraso
+                                        // Lógica de Atraso
                                         $dataHoje = \Carbon\Carbon::today()->toDateString();
                                         $dataReserva = \Carbon\Carbon::parse($reserva->date)->toDateString();
                                         $eHoje = $dataReserva === $dataHoje;
@@ -541,7 +533,7 @@
                                             }
                                         }
 
-                                        // 6. Definição Visual do Status
+                                        // --- Estilo do Status ---
                                         if ($reserva->status === 'no_show') {
                                             $statusClass = 'bg-red-500 text-white';
                                             $statusLabel = 'FALTA';
@@ -572,7 +564,7 @@
                                             : 'hover:bg-gray-50 border-l-4 border-transparent';
 
                                         $canPay =
-                                            $restante > 0.01 && !in_array($reserva->status, ['canceled', 'rejected']);
+                                            $restante > 0 && !in_array($reserva->status, ['canceled', 'rejected']);
                                         $canBeNoShow = !in_array($reserva->status, [
                                             'no_show',
                                             'canceled',
@@ -602,13 +594,13 @@
                                             </div>
                                             <div class="flex items-center gap-2 mt-1">
                                                 <span
-                                                    class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 font-black border border-indigo-100 uppercase">
+                                                    class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 font-black border border-indigo-100">
                                                     🏟️ {{ $reserva->arena->name ?? 'N/A' }}
                                                 </span>
                                             </div>
                                         </td>
 
-                                        {{-- Status Pagto --}}
+                                        {{-- Status --}}
                                         <td class="px-4 py-4 whitespace-nowrap">
                                             <span
                                                 class="px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded-full {{ $statusClass }}">
@@ -630,33 +622,22 @@
                                             R$ {{ number_format($total, 2, ',', '.') }}
                                         </td>
 
-                                        {{-- Total Pago (DINÂMICO PELO DIA SELECIONADO) --}}
+                                        {{-- Total Pago (DINÂMICO PELO DIA) --}}
                                         <td class="px-4 py-4 text-right whitespace-nowrap">
                                             <div class="text-sm text-green-600 font-bold">
                                                 R$ {{ number_format($pagoNoDia, 2, ',', '.') }}
                                             </div>
                                             @if ($pagoGeral > $pagoNoDia)
-                                                <div class="text-[9px] text-gray-400 font-medium italic">
-                                                    Total Pago: R$ {{ number_format($pagoGeral, 2, ',', '.') }}
+                                                <div class="text-[9px] text-gray-400 font-medium">
+                                                    Total Acumulado: R$ {{ number_format($pagoGeral, 2, ',', '.') }}
                                                 </div>
                                             @endif
                                         </td>
 
-                                        {{-- Restante (Visual de Quitação) --}}
-                                        <td class="px-4 py-4 text-right text-sm font-bold">
-                                            @if ($restante > 0)
-                                                <span class="text-red-600">R$
-                                                    {{ number_format($restante, 2, ',', '.') }}</span>
-                                            @else
-                                                <span class="text-green-500 flex items-center justify-end gap-1">
-                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor"
-                                                        viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                                            stroke-width="3" d="M5 13l4 4L19 7"></path>
-                                                    </svg>
-                                                    QUITADO
-                                                </span>
-                                            @endif
+                                        {{-- Restante --}}
+                                        <td
+                                            class="px-4 py-4 text-right text-sm font-bold {{ $restante > 0 ? 'text-red-600' : 'text-gray-400' }}">
+                                            R$ {{ number_format($restante, 2, ',', '.') }}
                                         </td>
 
                                         {{-- Ações --}}
@@ -692,10 +673,8 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="8"
-                                            class="px-4 py-8 text-center text-gray-500 italic font-medium">
-                                            Nenhum agendamento encontrado para esta data.
-                                        </td>
+                                        <td colspan="8" class="px-4 py-8 text-center text-gray-500 italic">Nenhum
+                                            agendamento encontrado para esta data.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -1329,7 +1308,7 @@
         </div>
     </div>
 
-    {{-- MODAL 3: FECHAR CAIXA (CLOSE CASH) - ATUALIZADO COM CARTÃO/OUTROS --}}
+    {{-- MODAL 3: FECHAR CAIXA (CLOSE CASH) - ATUALIZADO COM IDs PARA JAVASCRIPT --}}
     <div id="closeCashModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
         <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"
             onclick="closeCloseCashModal()"></div>
@@ -1338,6 +1317,7 @@
             class="relative bg-white dark:bg-gray-800 rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full border dark:border-gray-700">
             <form id="closeCashForm">
                 @csrf
+                {{-- CAMPOS OCULTOS DE CONTROLE --}}
                 <input type="hidden" id="closeCashDate" name="date">
                 <input type="hidden" id="closeCashArenaId" name="arena_id" value="{{ request('arena_id') }}">
 
@@ -1369,41 +1349,32 @@
                                 Período: <span id="closeCashDateDisplay"></span>
                             </div>
 
-                            {{-- 🚀 COMPOSIÇÃO DO SALDO (GAVETA VS BANCO VS OUTROS) --}}
-                            <div class="mt-4 grid grid-cols-1 gap-2">
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div
-                                        class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-2 rounded-xl">
-                                        <span
-                                            class="block text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Gaveta
-                                            (Espécie)</span>
-                                        <span id="displayGavetaModal"
-                                            class="text-base font-black text-amber-700 dark:text-amber-300">R$
-                                            0,00</span>
-                                    </div>
-
-                                    <div
-                                        class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-2 rounded-xl">
-                                        <span
-                                            class="block text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Banco
-                                            (Digital)</span>
-                                        <span id="displayBancoModal"
-                                            class="text-base font-black text-blue-700 dark:text-blue-300">R$
-                                            0,00</span>
-                                    </div>
+                            {{-- 🚀 COMPOSIÇÃO DO SALDO (GAVETA VS BANCO) COM IDs PARA JS --}}
+                            <div class="mt-4 grid grid-cols-2 gap-3">
+                                <div
+                                    class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-xl">
+                                    <span
+                                        class="block text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Gaveta
+                                        (Espécie)</span>
+                                    <span id="displayGavetaModal"
+                                        class="text-lg font-black text-amber-700 dark:text-amber-300">
+                                        R$ {{ number_format($saldoFisicoGaveta ?? 0, 2, ',', '.') }}
+                                    </span>
+                                    <p class="text-[9px] text-amber-600/70 leading-tight mt-1">Dinheiro físico contado.
+                                    </p>
                                 </div>
 
-                                {{-- CARD DE CARTÃO / OUTROS --}}
                                 <div
-                                    class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 p-2 rounded-xl">
+                                    class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 rounded-xl">
                                     <span
-                                        class="block text-[9px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest">Cartão
-                                        / Outros Formas</span>
-                                    <span id="displayOutrosModal"
-                                        class="text-base font-black text-orange-700 dark:text-orange-300">R$
-                                        0,00</span>
-                                    <p class="text-[8px] text-orange-600/70 leading-tight">Crédito, Débito e outras
-                                        conciliações.</p>
+                                        class="block text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Banco
+                                        (Digital)</span>
+                                    <span id="displayBancoModal"
+                                        class="text-lg font-black text-blue-700 dark:text-blue-300">
+                                        R$ {{ number_format($saldoDigitalBanco ?? 0, 2, ',', '.') }}
+                                    </span>
+                                    <p class="text-[9px] text-blue-600/70 leading-tight mt-1">PIX, Cartões e
+                                        Transferências.</p>
                                 </div>
                             </div>
 
@@ -1415,8 +1386,8 @@
                                         Saldo Total Esperado (Soma Geral)
                                     </label>
                                     <div id="calculatedLiquidAmount"
-                                        class="mt-1 block w-full bg-gray-50 dark:bg-gray-900 p-3 rounded-md font-black text-2xl text-indigo-600 dark:text-indigo-400 border border-gray-200 dark:border-gray-700 text-center">
-                                        R$ 0,00
+                                        class="mt-1 block w-full bg-gray-50 dark:bg-gray-900 p-3 rounded-md font-black text-2xl text-indigo-600 dark:text-indigo-400 border border-gray-200 dark:border-gray-700">
+                                        R$ {{ number_format($totalRecebidoDiaLiquido, 2, ',', '.') }}
                                     </div>
                                 </div>
 
@@ -1435,7 +1406,7 @@
                                         <input type="number" step="0.01" id="actualCashAmount"
                                             name="actual_amount" required
                                             class="pl-10 block w-full rounded-md border-indigo-300 dark:border-indigo-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white font-black text-2xl"
-                                            placeholder="0,00">
+                                            placeholder="0,00" oninput="calculateDifference()">
                                     </div>
                                 </div>
 
@@ -1454,7 +1425,15 @@
                     class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2 border-t border-gray-100 dark:border-gray-700 text-left">
                     <button type="submit" id="submitCloseCashBtn"
                         class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-6 py-2.5 bg-indigo-600 text-base font-black text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 sm:w-auto sm:text-sm transition duration-150 uppercase tracking-wider">
-                        Finalizar Caixa
+                        <span id="submitCloseCashText">Finalizar Caixa</span>
+                        <svg id="submitCloseCashSpinner" class="animate-spin ml-2 h-4 w-4 text-white hidden"
+                            fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                            </path>
+                        </svg>
                     </button>
                     <button type="button" onclick="closeCloseCashModal()"
                         class="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 dark:border-gray-600 shadow-sm px-6 py-2.5 bg-white dark:bg-gray-800 text-base font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 sm:mt-0 sm:w-auto sm:text-sm transition duration-150">
@@ -1464,6 +1443,7 @@
             </form>
         </div>
     </div>
+
     {{-- MODAL 4: ABRIR CAIXA (OPEN CASH) --}}
     <div id="openCashModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
         <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeOpenCashModal()"></div>
@@ -1598,6 +1578,7 @@
             class="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl sm:max-w-lg sm:w-full border dark:border-gray-700">
             <form id="transactionForm">
                 @csrf
+                {{-- Garante que a data seja a que está sendo visualizada --}}
                 <input type="hidden" name="date" value="{{ $selectedDate }}">
 
                 <div class="p-6">
@@ -1606,7 +1587,7 @@
                     </h3>
 
                     <div class="space-y-4">
-                        {{-- Seleção de Arena --}}
+                        {{-- Seleção de Arena: Corrigida para ser blindada contra variáveis indefinidas --}}
                         <div>
                             <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">
                                 Arena / Unidade
@@ -1614,6 +1595,8 @@
                             <select name="arena_id" id="modal_transaction_arena_id" required
                                 class="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:text-white font-bold focus:ring-indigo-500">
                                 <option value="">SELECIONE A ARENA...</option>
+
+                                {{-- Tenta arenasAtivas, se não houver, tenta faturamentoPorArena, se não houver, usa array vazio --}}
                                 @foreach ($arenasAtivas ?? ($faturamentoPorArena ?? []) as $arena)
                                     <option value="{{ $arena->id }}"
                                         {{ request('arena_id') == $arena->id ? 'selected' : '' }}>
@@ -1623,69 +1606,61 @@
                             </select>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-4">
-                            {{-- Tipo de Movimentação --}}
-                            <div>
-                                <label
-                                    class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Operação</label>
-                                <select name="type" id="transaction_type" required
-                                    class="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:text-white font-bold text-sm">
-                                    <option value="out">🔴 SAÍDA (Sangria)</option>
-                                    <option value="in">🟢 ENTRADA (Reforço)</option>
-                                </select>
-                            </div>
-
-                            {{-- Origem/Forma de Pagamento --}}
-                            <div>
-                                <label
-                                    class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Origem
-                                    do Recurso</label>
-                                <select name="payment_method" id="transaction_payment_method" required
-                                    class="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:text-white font-bold text-sm">
-                                    <option value="money">💵 DINHEIRO (GAVETA)</option>
-                                    <option value="pix">📱 PIX (BANCO)</option>
-                                    <option value="other">💳 CARTÃO / OUTRO</option>
-                                </select>
-                            </div>
+                        {{-- Tipo de Movimentação --}}
+                        <div>
+                            <label
+                                class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Tipo</label>
+                            <select name="type" required
+                                class="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:text-white font-bold">
+                                <option value="out">🔴 SAÍDA (Sangria / Despesa)</option>
+                                <option value="in">🟢 ENTRADA (Reforço / Suprimento)</option>
+                            </select>
                         </div>
 
                         {{-- Valor --}}
                         <div>
                             <label
-                                class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Valor
-                                da Operação</label>
+                                class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Valor</label>
                             <div class="relative">
                                 <span
                                     class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500 font-bold">R$</span>
-                                <input type="number" step="0.01" name="amount" required placeholder="0,00"
-                                    class="pl-10 w-full rounded-md border-gray-300 dark:bg-gray-700 dark:text-white font-black text-2xl">
+                                <input type="number" step="0.01" name="amount" required
+                                    class="pl-10 w-full rounded-md border-gray-300 dark:bg-gray-700 dark:text-white font-black text-xl">
                             </div>
-                            <p id="transaction_helper_text"
-                                class="text-[9px] font-bold text-gray-400 mt-1 uppercase italic">
-                                * Esta operação afetará o saldo físico da gaveta.
-                            </p>
+                        </div>
+
+                        {{-- Forma de Pagamento --}}
+                        <div>
+                            <label
+                                class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Forma</label>
+                            <select name="payment_method" required
+                                class="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:text-white font-bold">
+                                <option value="money">Dinheiro (Espécie)</option>
+                                <option value="pix">PIX</option>
+                                <option value="other">Outro</option>
+                            </select>
                         </div>
 
                         {{-- Descrição --}}
                         <div>
-                            <label
-                                class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Descrição
-                                / Motivo</label>
+                            <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">
+                                Descrição / Motivo
+                            </label>
                             <textarea name="description" rows="2" required
                                 class="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:text-white text-sm"
-                                placeholder="Ex: Compra de gás / Suprimento para troco"></textarea>
+                                placeholder="Ex: Pagamento de gelo / Troco inicial do dia"></textarea>
                         </div>
                     </div>
                 </div>
 
                 <div class="bg-gray-50 dark:bg-gray-900/50 px-6 py-3 flex flex-row-reverse gap-2">
                     <button type="submit" id="submitTransactionBtn"
-                        class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition uppercase">
-                        Confirmar Movimentação
+                        class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition">
+                        SALVAR MOVIMENTAÇÃO
                     </button>
                     <button type="button" onclick="closeTransactionModal()"
-                        class="text-gray-700 dark:text-gray-300 font-bold text-sm uppercase px-4">
-                        Cancelar
+                        class="text-gray-700 dark:text-gray-300 font-bold text-sm uppercase">
+                        CANCELAR
                     </button>
                 </div>
             </form>
@@ -1694,657 +1669,594 @@
 
     {{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA --}}
 
-
     <script>
-        // Substitua as duas linhas antigas por esta:
-        if (!window.__CAIXA_SCRIPT_LOADED) {
-            window.__CAIXA_SCRIPT_LOADED = true;
+        // --- Funções de Suporte e Formatação ---
+        function toCents(value) {
+            return Math.round(parseFloat(value || 0) * 100);
+        }
 
-            // ... todo o restante do seu código vem aqui dentro ...
+        function fromCents(cents) {
+            return (cents / 100).toFixed(2);
+        }
 
-            // --- Funções de Suporte e Formatação ---
-            function toCents(value) {
-                return Math.round(parseFloat(value || 0) * 100);
+        function updateRecurrentTogglePrice(newPrice) {
+            const currentNewPriceEl = document.getElementById('currentNewPrice');
+            if (currentNewPriceEl) {
+                const newPriceFloat = parseFloat(newPrice) || 0;
+                currentNewPriceEl.innerText = newPriceFloat.toLocaleString('pt-BR', {
+                    minimumFractionDigits: 2
+                });
             }
+        }
 
-            function fromCents(cents) {
-                return (cents / 100).toFixed(2);
+        // --- Controle de Estorno no No-Show ---
+        function toggleCustomRefundInput() {
+            const shouldRefund = document.getElementById('should_refund').value === 'true';
+            const customDiv = document.getElementById('customRefundDiv');
+            const paidAmount = parseFloat(document.getElementById('noShowPaidAmount').value) || 0;
+            const inputRefund = document.getElementById('custom_refund_amount');
+
+            if (shouldRefund) {
+                customDiv.classList.remove('hidden');
+                inputRefund.value = paidAmount.toFixed(2);
+            } else {
+                customDiv.classList.add('hidden');
+                inputRefund.value = 0;
             }
+        }
 
-            function updateRecurrentTogglePrice(newPrice) {
-                const currentNewPriceEl = document.getElementById('currentNewPrice');
-                if (currentNewPriceEl) {
-                    const newPriceFloat = parseFloat(newPrice) || 0;
-                    currentNewPriceEl.innerText = newPriceFloat.toLocaleString('pt-BR', {
-                        minimumFractionDigits: 2
-                    });
-                }
+        // --- Lógica de Cálculo de Pagamento ---
+        function calculateAmountDue() {
+            const finalPriceEl = document.getElementById('modalFinalPrice');
+            const signalRawEl = document.getElementById('modalSignalAmountRaw');
+            const amountPaidEl = document.getElementById('modalAmountPaid');
+            const trocoMessageEl = document.getElementById('trocoMessage');
+
+            if (!finalPriceEl || !amountPaidEl) return;
+
+            trocoMessageEl.classList.add('hidden');
+            amountPaidEl.classList.remove('border-yellow-500', 'bg-yellow-50');
+
+            const finalPriceCents = toCents(finalPriceEl.value);
+            const signalAmountCents = toCents(signalRawEl.value);
+            const balanceCents = finalPriceCents - signalAmountCents;
+
+            updateRecurrentTogglePrice(fromCents(finalPriceCents));
+
+            if (balanceCents < 0) {
+                const trocoCents = Math.abs(balanceCents);
+                amountPaidEl.value = "0.00";
+                trocoMessageEl.innerHTML =
+                    `🚨 <strong>ATENÇÃO:</strong> Devolver Troco: R$ ${fromCents(trocoCents).replace('.', ',')}`;
+                trocoMessageEl.classList.remove('hidden');
+                amountPaidEl.classList.add('border-yellow-500', 'bg-yellow-50');
+            } else {
+                amountPaidEl.value = fromCents(balanceCents);
+                checkManualOverpayment();
             }
+        }
 
-            // --- Controle de Estorno no No-Show ---
-            function toggleCustomRefundInput() {
-                const shouldRefund = document.getElementById('should_refund').value === 'true';
-                const customDiv = document.getElementById('customRefundDiv');
-                const paidAmount = parseFloat(document.getElementById('noShowPaidAmount').value) || 0;
-                const inputRefund = document.getElementById('custom_refund_amount');
+        function checkManualOverpayment() {
+            const finalPriceEl = document.getElementById('modalFinalPrice');
+            const signalRawEl = document.getElementById('modalSignalAmountRaw');
+            const amountPaidEl = document.getElementById('modalAmountPaid');
+            const trocoMessageEl = document.getElementById('trocoMessage');
 
-                if (shouldRefund) {
-                    customDiv.classList.remove('hidden');
-                    inputRefund.value = paidAmount.toFixed(2);
-                } else {
-                    customDiv.classList.add('hidden');
-                    inputRefund.value = 0;
-                }
-            }
+            if (!finalPriceEl || !amountPaidEl) return;
 
-            // --- Lógica de Cálculo de Pagamento ---
-            function calculateAmountDue() {
-                const finalPriceEl = document.getElementById('modalFinalPrice');
-                const signalRawEl = document.getElementById('modalSignalAmountRaw');
-                const amountPaidEl = document.getElementById('modalAmountPaid');
-                const trocoMessageEl = document.getElementById('trocoMessage');
+            const finalPriceCents = toCents(finalPriceEl.value);
+            const signalAmountCents = toCents(signalRawEl.value);
+            const amountPaidNowCents = toCents(amountPaidEl.value);
+            const overpaymentCents = (signalAmountCents + amountPaidNowCents) - finalPriceCents;
 
-                if (!finalPriceEl || !amountPaidEl) return;
-
+            if (overpaymentCents > 0) {
+                trocoMessageEl.innerHTML =
+                    `🚨 <strong>ATENÇÃO:</strong> Devolver Troco: R$ ${fromCents(overpaymentCents).replace('.', ',')}`;
+                trocoMessageEl.classList.remove('hidden');
+                amountPaidEl.classList.add('border-yellow-500', 'bg-yellow-50');
+            } else {
                 trocoMessageEl.classList.add('hidden');
                 amountPaidEl.classList.remove('border-yellow-500', 'bg-yellow-50');
+            }
+        }
 
-                const finalPriceCents = toCents(finalPriceEl.value);
-                const signalAmountCents = toCents(signalRawEl.value);
-                const balanceCents = finalPriceCents - signalAmountCents;
+        // --- Abertura de Modais ---
 
-                updateRecurrentTogglePrice(fromCents(finalPriceCents));
-
-                if (balanceCents < 0) {
-                    const trocoCents = Math.abs(balanceCents);
-                    amountPaidEl.value = "0.00";
-                    trocoMessageEl.innerHTML =
-                        `🚨 <strong>ATENÇÃO:</strong> Devolver Troco: R$ ${fromCents(trocoCents).replace('.', ',')}`;
-                    trocoMessageEl.classList.remove('hidden');
-                    amountPaidEl.classList.add('border-yellow-500', 'bg-yellow-50');
-                } else {
-                    // Se o saldo for maior que zero, coloca o valor, senão deixa 0.00
-                    amountPaidEl.value = balanceCents > 0 ? fromCents(balanceCents) : "0.00";
-                    checkManualOverpayment();
-                }
+        // NOVO: Abrir Modal de Sangria/Reforço com Detecção de Arena
+        function openTransactionModal() {
+            // 1. Verifica se o caixa geral/arena está fechado
+            if (document.getElementById('js_isActionDisabled')?.value === '1') {
+                alert('🚫 Operação bloqueada: O caixa deste dia já está fechado.');
+                return;
             }
 
-            function checkManualOverpayment() {
-                const finalPriceEl = document.getElementById('modalFinalPrice');
-                const signalRawEl = document.getElementById('modalSignalAmountRaw');
-                const amountPaidEl = document.getElementById('modalAmountPaid');
-                const trocoMessageEl = document.getElementById('trocoMessage');
+            // 2. Captura a arena que está selecionada no filtro da URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const filteredArenaId = urlParams.get('arena_id');
+            const arenaSelect = document.getElementById('modal_transaction_arena_id');
 
-                if (!finalPriceEl || !amountPaidEl) return;
-
-                const finalPriceCents = toCents(finalPriceEl.value);
-                const signalAmountCents = toCents(signalRawEl.value);
-                const amountPaidNowCents = toCents(amountPaidEl.value);
-                const overpaymentCents = (signalAmountCents + amountPaidNowCents) - finalPriceCents;
-
-                if (overpaymentCents > 0) {
-                    trocoMessageEl.innerHTML =
-                        `🚨 <strong>ATENÇÃO:</strong> Devolver Troco: R$ ${fromCents(overpaymentCents).replace('.', ',')}`;
-                    trocoMessageEl.classList.remove('hidden');
-                    amountPaidEl.classList.add('border-yellow-500', 'bg-yellow-50');
-                } else {
-                    trocoMessageEl.classList.add('hidden');
-                    amountPaidEl.classList.remove('border-yellow-500', 'bg-yellow-50');
-                }
+            // 3. Se houver um filtro de arena ativo, pré-seleciona ela no Modal
+            if (filteredArenaId && arenaSelect) {
+                arenaSelect.value = filteredArenaId;
+            } else if (arenaSelect) {
+                // Se não houver filtro, reseta para a opção padrão "Selecione..."
+                arenaSelect.value = "";
             }
 
-            // --- Abertura de Modais ---
+            // 4. Abre o modal trocando as classes do Tailwind
+            document.getElementById('transactionModal').classList.replace('hidden', 'flex');
+        }
 
-            // NOVO: Abrir Modal de Sangria/Reforço com Detecção de Arena
-            function openTransactionModal() {
-                // 1. Verifica se o caixa geral/arena está fechado
-                if (document.getElementById('js_isActionDisabled')?.value === '1') {
-                    alert('🚫 Operação bloqueada: O caixa deste dia já está fechado.');
-                    return;
-                }
-
-                // 2. Captura a arena que está selecionada no filtro da URL
-                const urlParams = new URLSearchParams(window.location.search);
-                const filteredArenaId = urlParams.get('arena_id');
-                const arenaSelect = document.getElementById('modal_transaction_arena_id');
-
-                // 3. Se houver um filtro de arena ativo, pré-seleciona ela no Modal
-                if (filteredArenaId && arenaSelect) {
-                    arenaSelect.value = filteredArenaId;
-                } else if (arenaSelect) {
-                    // Se não houver filtro, reseta para a opção padrão "Selecione..."
-                    arenaSelect.value = "";
-                }
-
-                // 4. Abre o modal trocando as classes do Tailwind
-                document.getElementById('transactionModal').classList.replace('hidden', 'flex');
+        function openPaymentModal(id, totalPrice, remaining, signalAmount, clientName, isRecurrent = false) {
+            // 1. Trava de segurança: impede abrir o modal se o caixa estiver fechado
+            if (document.getElementById('js_isActionDisabled')?.value === '1') {
+                return alert('🚫 Operação bloqueada: O caixa deste dia já está fechado.');
             }
 
-            function openPaymentModal(id, totalPrice, remaining, signalAmount, clientName, isRecurrent = false) {
-                // 1. Trava de segurança: impede abrir o modal se o caixa estiver fechado
-                if (document.getElementById('js_isActionDisabled')?.value === '1') {
-                    return alert('🚫 Operação bloqueada: O caixa deste dia já está fechado.');
-                }
+            // 2. Preenchimento de IDs e nomes
+            document.getElementById('modalReservaId').value = id;
+            document.getElementById('modalClientName').innerText = clientName;
 
-                // 2. Preenchimento de IDs e nomes
-                document.getElementById('modalReservaId').value = id;
-                document.getElementById('modalClientName').innerText = clientName;
+            // 3. Formatação visual do sinal já pago (ex: R$ 40,00)
+            document.getElementById('modalSignalAmount').innerText = signalAmount.toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            });
 
-                // 3. Formatação visual do sinal já pago
-                document.getElementById('modalSignalAmount').innerText =
-                    signalAmount.toLocaleString('pt-BR', {
+            // 4. Valores brutos para cálculos (Inputs ocultos)
+            document.getElementById('modalSignalAmountRaw').value = signalAmount.toFixed(2);
+            document.getElementById('modalFinalPrice').value = totalPrice.toFixed(2);
+
+            // 5. 🎯 CORREÇÃO DA DATA (O SEGREDO DO CAIXA)
+            // Buscamos primeiro a data do input de filtro da página, que é a data real de operação.
+            const inputDataFiltro = document.querySelector('input[name="date"]');
+            const dataDoCaixa = inputDataFiltro ? inputDataFiltro.value : document.getElementById('js_cashierDate')?.value;
+
+            if (dataDoCaixa) {
+                document.getElementById('modalPaymentDate').value = dataDoCaixa;
+                console.log("📅 Sistema operando na data:", dataDoCaixa); // Debug no console (F12)
+            } else {
+                console.error("❌ Erro: Não foi possível capturar a data operacional.");
+            }
+
+            // 6. Controle de exibição da opção de recorrência
+            const recurrentOption = document.getElementById('recurrentOption');
+            if (recurrentOption) {
+                isRecurrent ? recurrentOption.classList.remove('hidden') : recurrentOption.classList.add('hidden');
+            }
+
+            // 7. Dispara o cálculo automático do saldo devedor
+            calculateAmountDue();
+
+            // 8. Exibe o modal (Troca hidden por flex para centralizar via Tailwind)
+            const modal = document.getElementById('paymentModal');
+            if (modal) {
+                modal.classList.replace('hidden', 'flex');
+            }
+        }
+
+        function openNoShowModal(id, clientName, paidAmount) {
+            // 1. Preenchimento básico dos dados no modal
+            document.getElementById('noShowReservaId').value = id;
+            document.getElementById('noShowClientName').innerText = clientName;
+            document.getElementById('noShowPaidAmount').value = paidAmount;
+
+            // 2. 🎯 CORREÇÃO DA DATA OPERACIONAL
+            // Buscamos a data do filtro (calendário do topo) para garantir o registro no caixa correto
+            const inputDataFiltro = document.querySelector('input[name="date"]');
+            const dataDoCaixa = inputDataFiltro ? inputDataFiltro.value : document.getElementById('js_cashierDate')?.value;
+
+            if (dataDoCaixa) {
+                document.getElementById('noShowPaymentDate').value = dataDoCaixa;
+                console.log("📅 No-Show sendo registrado na data:", dataDoCaixa);
+            } else {
+                console.error("❌ Erro: Data operacional não encontrada para o No-Show.");
+            }
+
+            // 3. Exibição do valor pago para conferência de estorno
+            document.getElementById('noShowAmountDisplay').innerText = paidAmount.toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            });
+
+            // 4. Controle visual: Se não houve pagamento, não precisa mostrar opções de estorno
+            const refundControls = document.getElementById('refundControls');
+            if (refundControls) {
+                paidAmount > 0 ? refundControls.classList.remove('hidden') : refundControls.classList.add('hidden');
+            }
+
+            // 5. Abre o modal
+            const modal = document.getElementById('noShowModal');
+            if (modal) {
+                modal.classList.replace('hidden', 'flex');
+            }
+        }
+
+        function openDebtModal(id, clientName) {
+            // 1. Trava de segurança (já está ok)
+            if (document.getElementById('js_isActionDisabled')?.value === '1') return alert('🚫 Caixa Fechado.');
+
+            // 2. BUSCA O INPUT (Garanta que o ID do elemento no HTML é exatamente este)
+            const inputId = document.getElementById('debtReservaId');
+
+            if (inputId) {
+                inputId.value = id; // Injeta o ID real (ex: 450)
+                console.log("✅ Modal de Dívida aberto para ID:", id); // Log para seu debug
+            } else {
+                console.error("❌ Erro: O input 'debtReservaId' não foi encontrado no HTML.");
+            }
+
+            // 3. Atualiza o texto e exibe
+            document.getElementById('debtClientName').innerText = clientName;
+            document.getElementById('debtModal').classList.replace('hidden', 'flex');
+        }
+
+        function openCloseCashModal() {
+            try {
+                // 1. Captura de elementos e valores com fallback para "0"
+                const dateEl = document.getElementById('js_cashierDate');
+                const systemValueEl = document.getElementById('js_valorLiquidoArenaRaw');
+                const saldoGavetaEl = document.getElementById('js_saldoFisicoGavetaRaw');
+                const saldoDigitalEl = document.getElementById('js_saldoDigitalBancoRaw');
+
+                const date = dateEl ? dateEl.value : '';
+                const systemValueRaw = systemValueEl ? systemValueEl.value : "0";
+                const saldoGavetaRaw = saldoGavetaEl ? saldoGavetaEl.value : "0";
+                const saldoDigitalRaw = saldoDigitalEl ? saldoDigitalEl.value : "0";
+
+                // 2. Helper de formatação
+                const formatarBRL = (val) => {
+                    return parseFloat(val).toLocaleString('pt-br', {
                         style: 'currency',
                         currency: 'BRL'
                     });
+                };
 
-                // 4. Valores brutos para cálculos
-                document.getElementById('modalSignalAmountRaw').value = signalAmount.toFixed(2);
-                document.getElementById('modalFinalPrice').value = totalPrice.toFixed(2);
+                // 3. Alimentação do Modal (Campos de exibição e Inputs)
+                if (document.getElementById('closeCashDate'))
+                    document.getElementById('closeCashDate').value = date;
 
-                // 5. Captura da data operacional correta
-                const inputDataFiltro = document.querySelector('input[name="date"]');
-                const dataDoCaixa = inputDataFiltro ?
-                    inputDataFiltro.value :
-                    document.getElementById('js_cashierDate')?.value;
+                if (document.getElementById('closeCashDateDisplay'))
+                    document.getElementById('closeCashDateDisplay').innerText = date.split('-').reverse().join('/');
 
-                if (dataDoCaixa) {
-                    document.getElementById('modalPaymentDate').value = dataDoCaixa;
-                    console.log("📅 Sistema operando na data:", dataDoCaixa);
-                } else {
-                    console.error("❌ Erro: Não foi possível capturar a data operacional.");
-                }
+                if (document.getElementById('calculatedLiquidAmount'))
+                    document.getElementById('calculatedLiquidAmount').innerText = formatarBRL(systemValueRaw);
 
-                // 6. Controle da opção de recorrência
-                const recurrentOption = document.getElementById('recurrentOption');
-                if (recurrentOption) {
-                    if (isRecurrent) {
-                        recurrentOption.classList.remove('hidden');
-                    } else {
-                        recurrentOption.classList.add('hidden');
-                    }
-                }
+                // Cards Detalhados (Gaveta e Banco)
+                const displayGaveta = document.getElementById('displayGavetaModal');
+                const displayBanco = document.getElementById('displayBancoModal');
 
-                // 7. Recalcula saldo automaticamente
-                calculateAmountDue();
+                if (displayGaveta) displayGaveta.innerText = formatarBRL(saldoGavetaRaw);
+                if (displayBanco) displayBanco.innerText = formatarBRL(saldoDigitalRaw);
 
-                // 8. Exibe o modal
-                const modal = document.getElementById('paymentModal');
-                if (modal) {
-                    modal.classList.replace('hidden', 'flex');
-                }
-            }
-
-            function openNoShowModal(id, clientName, paidAmount) {
-                // 1. Preenchimento básico dos dados no modal
-                document.getElementById('noShowReservaId').value = id;
-                document.getElementById('noShowClientName').innerText = clientName;
-                document.getElementById('noShowPaidAmount').value = paidAmount;
-
-                // 2. 🎯 CORREÇÃO DA DATA OPERACIONAL
-                // Buscamos a data do filtro (calendário do topo) para garantir o registro no caixa correto
-                const inputDataFiltro = document.querySelector('input[name="date"]');
-                const dataDoCaixa = inputDataFiltro ? inputDataFiltro.value : document.getElementById('js_cashierDate')
-                    ?.value;
-
-                if (dataDoCaixa) {
-                    document.getElementById('noShowPaymentDate').value = dataDoCaixa;
-                    console.log("📅 No-Show sendo registrado na data:", dataDoCaixa);
-                } else {
-                    console.error("❌ Erro: Data operacional não encontrada para o No-Show.");
-                }
-
-                // 3. Exibição do valor pago para conferência de estorno
-                document.getElementById('noShowAmountDisplay').innerText = paidAmount.toLocaleString('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL'
-                });
-
-                // 4. Controle visual: Se não houve pagamento, não precisa mostrar opções de estorno
-                const refundControls = document.getElementById('refundControls');
-                if (refundControls) {
-                    paidAmount > 0 ? refundControls.classList.remove('hidden') : refundControls.classList.add('hidden');
-                }
-
-                // 5. Abre o modal
-                const modal = document.getElementById('noShowModal');
-                if (modal) {
-                    modal.classList.replace('hidden', 'flex');
-                }
-            }
-
-            function openDebtModal(id, clientName) {
-                // 1. Trava de segurança (já está ok)
-                if (document.getElementById('js_isActionDisabled')?.value === '1') return alert('🚫 Caixa Fechado.');
-
-                // 2. BUSCA O INPUT (Garanta que o ID do elemento no HTML é exatamente este)
-                const inputId = document.getElementById('debtReservaId');
-
-                if (inputId) {
-                    inputId.value = id; // Injeta o ID real (ex: 450)
-                    console.log("✅ Modal de Dívida aberto para ID:", id); // Log para seu debug
-                } else {
-                    console.error("❌ Erro: O input 'debtReservaId' não foi encontrado no HTML.");
-                }
-
-                // 3. Atualiza o texto e exibe
-                document.getElementById('debtClientName').innerText = clientName;
-                document.getElementById('debtModal').classList.replace('hidden', 'flex');
-            }
-
-            function openCloseCashModal() {
-                try {
-                    // 1. Captura de elementos e valores com fallback para "0"
-                    const dateEl = document.getElementById('js_cashierDate');
-                    const systemValueEl = document.getElementById('js_valorLiquidoArenaRaw'); // O TOTAL (1.780)
-                    const saldoGavetaEl = document.getElementById('js_saldoFisicoGavetaRaw'); // DINHEIRO (90)
-                    const saldoDigitalEl = document.getElementById('js_saldoDigitalBancoRaw'); // PIX (1.410)
-
-                    const date = dateEl ? dateEl.value : '';
-
-                    // Convertemos para float para poder fazer contas matemáticas
-                    const totalGeral = parseFloat(systemValueEl?.value || 0);
-                    const totalDinheiro = parseFloat(saldoGavetaEl?.value || 0);
-                    const totalPix = parseFloat(saldoDigitalEl?.value || 0);
-
-                    // 🧠 A MÁGICA: O que não é dinheiro nem PIX, é Cartão/Outros
-                    // No seu caso: 1780 - 90 - 1410 = 280
-                    const totalOutros = totalGeral - (totalDinheiro + totalPix);
-
-                    // 2. Helper de formatação
-                    const formatarBRL = (val) => {
-                        return parseFloat(val).toLocaleString('pt-br', {
-                            style: 'currency',
-                            currency: 'BRL'
-                        });
-                    };
-
-                    // 3. Alimentação do Modal (Campos de exibição e Inputs)
-                    if (document.getElementById('closeCashDate'))
-                        document.getElementById('closeCashDate').value = date;
-
-                    if (document.getElementById('closeCashDateDisplay'))
-                        document.getElementById('closeCashDateDisplay').innerText = date.split('-').reverse().join('/');
-
-                    // Exibe o Totalzão no topo
-                    if (document.getElementById('calculatedLiquidAmount'))
-                        document.getElementById('calculatedLiquidAmount').innerText = formatarBRL(totalGeral);
-
-                    // Cards Detalhados: Preenche os 3 agora
-                    const displayGaveta = document.getElementById('displayGavetaModal');
-                    const displayBanco = document.getElementById('displayBancoModal');
-                    const displayOutros = document.getElementById('displayOutrosModal'); // O novo ID que criamos
-
-                    if (displayGaveta) displayGaveta.innerText = formatarBRL(totalDinheiro);
-                    if (displayBanco) displayBanco.innerText = formatarBRL(totalPix);
-                    if (displayOutros) displayOutros.innerText = formatarBRL(totalOutros);
-
-                    // 4. Reset do campo de entrada para forçar nova conferência cega
-                    const actualInput = document.getElementById('actualCashAmount');
-                    if (actualInput) actualInput.value = '';
-
-                    // 5. Troca de visibilidade do Modal
-                    const modal = document.getElementById('closeCashModal');
-                    if (modal) {
-                        modal.classList.replace('hidden', 'flex');
-                        // Foca automaticamente no campo de digitar o valor
-                        setTimeout(() => actualInput?.focus(), 100);
-                    }
-
-                    // 6. Atualiza a mensagem de diferença
-                    calculateDifference();
-
-                } catch (error) {
-                    console.error("Erro ao abrir o modal de fechamento:", error);
-                }
-            }
-
-            function openCash(date) {
-                // 1. Busca os elementos necessários (IDs sincronizados com o Modal 4)
-                const arenaIdInput = document.getElementById('js_arenaId');
-                const modalArenaInput = document.getElementById('reopenCashArenaId');
-                const modalDateInput = document.getElementById('reopenCashDate');
-                const modalDateDisplay = document.getElementById('reopenCashDateDisplay'); // Ajustado
-
-                // 2. Validação
-                if (!arenaIdInput || !arenaIdInput.value) {
-                    alert('⚠️ Selecione uma arena antes de tentar reabrir o caixa.');
-                    return;
-                }
-
-                // 3. Preenche os campos do Modal
-                if (modalDateInput) modalDateInput.value = date;
-                if (modalArenaInput) modalArenaInput.value = arenaIdInput.value;
-
-                // 4. Preenche o texto visual com segurança
-                if (modalDateDisplay) {
-                    modalDateDisplay.innerText = date.split('-').reverse().join('/');
-                }
-
-                // 5. Limpa justificativa
-                const reasonField = document.getElementById('reopen_reason');
-                if (reasonField) reasonField.value = '';
-
-                // 6. Exibe o modal
-                const modal = document.getElementById('openCashModal');
-                if (modal) {
-                    modal.classList.replace('hidden', 'flex');
-                }
-            }
-
-            // --- Fechamento de Modais ---
-
-            // NOVO: Fechar Modal de Sangria/Reforço
-            function closeTransactionModal() {
-                document.getElementById('transactionModal').classList.replace('flex', 'hidden');
-                document.getElementById('transactionForm').reset();
-            }
-
-            function closePaymentModal() {
-                document.getElementById('paymentModal').classList.replace('flex', 'hidden');
-            }
-
-            function closeNoShowModal() {
-                document.getElementById('noShowModal').classList.replace('flex', 'hidden');
-            }
-
-            function closeCloseCashModal() {
-                document.getElementById('closeCashModal').classList.replace('flex', 'hidden');
-            }
-
-            function closeOpenCashModal() {
-                document.getElementById('openCashModal').classList.replace('flex', 'hidden');
-            }
-
-            function closeDebtModal() {
-                document.getElementById('debtModal').classList.replace('flex', 'hidden');
-                document.getElementById('debtForm').reset();
-            }
-
-            // --- Lógica de Diferença de Caixa ---
-            function calculateDifference() {
-                // 🚀 AJUSTE: Buscamos o valor bruto (raw) do input oculto para evitar erros de formatação ou de arena
-                const systemValueRaw = document.getElementById('js_valorLiquidoArenaRaw')?.value || "0";
+                // 4. Reset do campo de entrada para forçar nova conferência cega
                 const actualInput = document.getElementById('actualCashAmount');
-                const diffMessageEl = document.getElementById('differenceMessage');
+                if (actualInput) actualInput.value = '';
 
-                if (!actualInput || !diffMessageEl) return;
-
-                // Calculamos em centavos para evitar erros de precisão do JavaScript
-                const diffCents = toCents(actualInput.value) - toCents(systemValueRaw);
-
-                // Reset de classes visual
-                diffMessageEl.className =
-                    'mt-3 p-3 text-sm font-bold rounded-lg text-center border transition-all duration-300';
-
-                if (diffCents === 0) {
-                    diffMessageEl.innerHTML = '✅ Caixa Perfeito!';
-                    diffMessageEl.classList.add('bg-green-100', 'text-green-700', 'border-green-200');
-                } else if (diffCents > 0) {
-                    // Se informado > sistema = Sobra
-                    diffMessageEl.innerHTML = `⚠️ Sobra no Físico: R$ ${fromCents(diffCents).replace('.', ',')}`;
-                    diffMessageEl.classList.add('bg-amber-100', 'text-amber-700', 'border-amber-200');
-                } else {
-                    // Se informado < sistema = Falta
-                    diffMessageEl.innerHTML = `🚨 Falta no Físico: R$ ${fromCents(Math.abs(diffCents)).replace('.', ',')}`;
-                    diffMessageEl.classList.add('bg-red-100', 'text-red-700', 'border-red-200');
+                // 5. Troca de visibilidade do Modal
+                const modal = document.getElementById('closeCashModal');
+                if (modal) {
+                    modal.classList.replace('hidden', 'flex');
+                    // Foca automaticamente no campo de digitar o valor
+                    setTimeout(() => actualInput?.focus(), 100);
                 }
 
-                diffMessageEl.classList.remove('hidden');
+                // 6. Atualiza a mensagem de diferença (inicialmente mostrará a falta total)
+                calculateDifference();
+
+            } catch (error) {
+                console.error("Erro ao abrir o modal de fechamento:", error);
+            }
+        }
+
+        function openCash(date) {
+            // 1. Busca os elementos necessários (IDs sincronizados com o Modal 4)
+            const arenaIdInput = document.getElementById('js_arenaId');
+            const modalArenaInput = document.getElementById('reopenCashArenaId');
+            const modalDateInput = document.getElementById('reopenCashDate');
+            const modalDateDisplay = document.getElementById('reopenCashDateDisplay'); // Ajustado
+
+            // 2. Validação
+            if (!arenaIdInput || !arenaIdInput.value) {
+                alert('⚠️ Selecione uma arena antes de tentar reabrir o caixa.');
+                return;
             }
 
-            function checkCashierStatus() {
-                const btn = document.getElementById('openCloseCashModalBtn');
-                const statusEl = document.getElementById('cashStatus');
-                const isFiltered = document.getElementById('js_isFiltered')?.value === '1';
+            // 3. Preenche os campos do Modal
+            if (modalDateInput) modalDateInput.value = date;
+            if (modalArenaInput) modalArenaInput.value = arenaIdInput.value;
 
-                if (!btn || !statusEl) return;
+            // 4. Preenche o texto visual com segurança
+            if (modalDateDisplay) {
+                modalDateDisplay.innerText = date.split('-').reverse().join('/');
+            }
 
-                // 1. Bloqueio por falta de filtro
-                if (!isFiltered) {
-                    btn.disabled = true;
-                    statusEl.innerHTML = "👈 Selecione uma Arena";
-                    statusEl.className = "text-amber-500 font-bold text-xs";
-                    return;
+            // 5. Limpa justificativa
+            const reasonField = document.getElementById('reopen_reason');
+            if (reasonField) reasonField.value = '';
+
+            // 6. Exibe o modal
+            const modal = document.getElementById('openCashModal');
+            if (modal) {
+                modal.classList.replace('hidden', 'flex');
+            }
+        }
+
+        // --- Fechamento de Modais ---
+
+        // NOVO: Fechar Modal de Sangria/Reforço
+        function closeTransactionModal() {
+            document.getElementById('transactionModal').classList.replace('flex', 'hidden');
+            document.getElementById('transactionForm').reset();
+        }
+
+        function closePaymentModal() {
+            document.getElementById('paymentModal').classList.replace('flex', 'hidden');
+        }
+
+        function closeNoShowModal() {
+            document.getElementById('noShowModal').classList.replace('flex', 'hidden');
+        }
+
+        function closeCloseCashModal() {
+            document.getElementById('closeCashModal').classList.replace('flex', 'hidden');
+        }
+
+        function closeOpenCashModal() {
+            document.getElementById('openCashModal').classList.replace('flex', 'hidden');
+        }
+
+        function closeDebtModal() {
+            document.getElementById('debtModal').classList.replace('flex', 'hidden');
+            document.getElementById('debtForm').reset();
+        }
+
+        // --- Lógica de Diferença de Caixa ---
+        function calculateDifference() {
+            // 🚀 AJUSTE: Buscamos o valor bruto (raw) do input oculto para evitar erros de formatação ou de arena
+            const systemValueRaw = document.getElementById('js_valorLiquidoArenaRaw')?.value || "0";
+            const actualInput = document.getElementById('actualCashAmount');
+            const diffMessageEl = document.getElementById('differenceMessage');
+
+            if (!actualInput || !diffMessageEl) return;
+
+            // Calculamos em centavos para evitar erros de precisão do JavaScript
+            const diffCents = toCents(actualInput.value) - toCents(systemValueRaw);
+
+            // Reset de classes visual
+            diffMessageEl.className =
+                'mt-3 p-3 text-sm font-bold rounded-lg text-center border transition-all duration-300';
+
+            if (diffCents === 0) {
+                diffMessageEl.innerHTML = '✅ Caixa Perfeito!';
+                diffMessageEl.classList.add('bg-green-100', 'text-green-700', 'border-green-200');
+            } else if (diffCents > 0) {
+                // Se informado > sistema = Sobra
+                diffMessageEl.innerHTML = `⚠️ Sobra no Físico: R$ ${fromCents(diffCents).replace('.', ',')}`;
+                diffMessageEl.classList.add('bg-amber-100', 'text-amber-700', 'border-amber-200');
+            } else {
+                // Se informado < sistema = Falta
+                diffMessageEl.innerHTML = `🚨 Falta no Físico: R$ ${fromCents(Math.abs(diffCents)).replace('.', ',')}`;
+                diffMessageEl.classList.add('bg-red-100', 'text-red-700', 'border-red-200');
+            }
+
+            diffMessageEl.classList.remove('hidden');
+        }
+
+        function checkCashierStatus() {
+            const btn = document.getElementById('openCloseCashModalBtn');
+            const statusEl = document.getElementById('cashStatus');
+            const isFiltered = document.getElementById('js_isFiltered')?.value === '1';
+
+            if (!btn || !statusEl) return;
+
+            // 1. Bloqueio por falta de filtro
+            if (!isFiltered) {
+                btn.disabled = true;
+                statusEl.innerHTML = "👈 Selecione uma Arena para fechar";
+                statusEl.classList.remove('text-green-600', 'text-red-500');
+                statusEl.classList.add('text-amber-500');
+                return;
+            }
+
+            // 2. Contagem de processados
+            const total = parseInt(document.getElementById('js_totalReservas').value || 0);
+            let completedCount = 0;
+
+            // Incluímos "dívida ativa" e "dívida" na lista para bater com o badge da View
+            const finalStatuses = [
+                'pago', 'falta', 'cancelada', 'rejeitada', 'no_show',
+                'paid', 'completed', 'atrasado', 'dívida ativa', 'dívida'
+            ];
+
+            document.querySelectorAll('table:first-of-type tbody tr').forEach(row => {
+                const statusCell = row.querySelector('td:nth-child(3)');
+                if (statusCell) {
+                    const text = statusCell.innerText.trim().toLowerCase();
+                    // Verifica se o texto da célula contém qualquer um dos status finais
+                    if (finalStatuses.some(s => text.includes(s))) {
+                        completedCount++;
+                    }
                 }
+            });
 
-                // 2. BUSCA INTELIGENTE: Ignora linhas que já são Dívida Ativa
-                const botoesAcao = Array.from(document.querySelectorAll('table tbody tr'))
-                    .filter(tr => {
-                        const txtLinha = tr.innerText.toUpperCase();
+            // 3. Habilitação do Botão
+            if (total > 0 && completedCount < total) {
+                btn.disabled = true;
+                statusEl.innerHTML = `🚨 Pendentes nesta Arena: ${total - completedCount}`;
+                statusEl.classList.remove('text-green-600', 'text-amber-500');
+                statusEl.classList.add('text-red-500');
+            } else {
+                btn.disabled = false;
+                statusEl.innerHTML = "✅ Arena pronta para fechar!";
+                statusEl.classList.remove('text-red-500', 'text-amber-500');
+                statusEl.classList.add('text-green-600');
+            }
+        }
 
-                        // Se a linha já diz "DÍVIDA ATIVA", nós ignoramos as ações dela
-                        if (txtLinha.includes('DÍVIDA ATIVA')) {
-                            return false;
-                        }
+        function setupAjaxForm(formId, btnId, spinnerId, errorId, urlTemplate) {
+            const form = document.getElementById(formId);
+            if (!form) return;
 
-                        // Caso contrário, verificamos se existem botões de pendência real
-                        const botoes = tr.querySelectorAll('a, button');
-                        let temPendencia = false;
+            // Removemos a trava de dataset pois o .onsubmit já gerencia a unicidade nativamente
+            const userRole = "{{ Auth::user()->role ?? 'guest' }}";
 
-                        botoes.forEach(el => {
-                            const txtBotao = el.innerText.toUpperCase();
-                            if (txtBotao.includes('BAIXAR') || txtBotao.includes('DEPOIS') || txtBotao.includes(
-                                    'FALTA')) {
-                                temPendencia = true;
+            // 🛑 A MUDANÇA REAL: Usar .onsubmit garante que, se a função for chamada de novo,
+            // ela substitui a anterior em vez de somar, eliminando o alerta duplo.
+            form.onsubmit = function(e) {
+                e.preventDefault();
+                e.stopImmediatePropagation(); // 🛑 Trava o evento para não disparar em outros lugares
+
+                const enviarParaOServidor = (tokenRecebido = null) => {
+                    const btn = document.getElementById(btnId);
+                    const spinner = document.getElementById(spinnerId);
+                    const formData = new FormData(form);
+
+                    if (tokenRecebido) {
+                        formData.append('supervisor_token', tokenRecebido);
+                        console.log("✅ Token de supervisor anexado:", tokenRecebido);
+                    }
+
+                    const reservaId = formData.get('reserva_id') ||
+                        document.getElementById('noShowReservaId')?.value ||
+                        document.getElementById('debtReservaId')?.value;
+
+                    let targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
+
+                    if (btn) btn.disabled = true;
+                    if (spinner) spinner.classList.remove('hidden');
+
+                    fetch(targetUrl, {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute(
+                                    'content'),
+                                'Accept': 'application/json'
                             }
-                        });
-
-                        return temPendencia;
-                    });
-
-                const pendenciasCount = botoesAcao.length;
-
-                if (pendenciasCount > 0) {
-                    // TRAVA TOTAL se houver jogos esquecidos sem decisão
-                    btn.disabled = true;
-                    btn.classList.add('opacity-50', 'cursor-not-allowed');
-                    statusEl.innerHTML = `🚨 PENDÊNCIAS: ${pendenciasCount} jogo(s) aberto(s)`;
-                    statusEl.className = "text-red-600 font-black text-xs uppercase animate-pulse";
-                } else {
-                    // LIBERA se todos os jogos estiverem QUITADOS ou como DÍVIDA ATIVA
-                    btn.disabled = false;
-                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                    statusEl.innerHTML = "✅ Arena pronta para fechar!";
-                    statusEl.className = "text-green-600 font-black text-xs uppercase";
-                }
-            }
-
-            // 1. Variável global atômica para controle de concorrência
-            window.caixaProcessandoGlobal = window.caixaProcessandoGlobal || {};
-
-            function setupAjaxForm(formId, btnId, spinnerId, errorId, urlTemplate) {
-                const form = document.getElementById(formId);
-                if (!form) return;
-
-                if (form.dataset.ajaxBound === "1") return;
-                form.dataset.ajaxBound = "1";
-
-                const userRole = "{{ Auth::user()->role ?? 'guest' }}";
-
-                form.onsubmit = function(e) {
-                    e.preventDefault();
-
-                    // 🛑 TRAVA 1: Bloqueio físico imediato no envio
-                    if (window.caixaProcessandoGlobal[formId]) return false;
-                    window.caixaProcessandoGlobal[formId] = true;
-
-                    const enviarParaOServidor = (tokenRecebido = null) => {
-                        const btn = document.getElementById(btnId);
-                        const spinner = document.getElementById(spinnerId);
-
-                        if (btn) {
-                            btn.disabled = true;
-                            btn.innerText = "AGUARDE...";
-                        }
-                        if (spinner) spinner.classList.remove('hidden');
-
-                        const formData = new FormData(form);
-                        if (tokenRecebido) formData.append('supervisor_token', tokenRecebido);
-
-                        const reservaId = formData.get('reserva_id') || document.getElementById('noShowReservaId')
-                            ?.value;
-                        let targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
-
-                        fetch(targetUrl, {
-                                method: 'POST',
-                                body: formData,
-                                headers: {
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')
-                                        .getAttribute('content'),
-                                    'Accept': 'application/json'
-                                }
-                            })
-                            .then(res => res.json())
-                            .then(json => {
-                                // --- 🛡️ FILTRO DE ALERTA AGRESSIVO ---
-                                const originalAlert = window.alert;
-
-                                // Sobrescrevemos o alert APENAS para esta resposta
-                                window.alert = function(msg) {
-                                    const m = msg.toLowerCase();
-
-                                    // Se já exibimos um sucesso ou é uma mensagem de duplicidade, CANCELA o alert
-                                    if (form.dataset.finalizado === "true" ||
-                                        m.includes("baixada anteriormente") ||
-                                        m.includes("ja foi fechado") ||
-                                        m.includes("duplicidade")) {
-                                        console.log("Mensagem duplicada bloqueada com sucesso.");
-                                        return; // O alert morre aqui, não aparece na tela
-                                    }
-
-                                    if (json.success) form.dataset.finalizado = "true";
-                                    originalAlert(msg);
-                                };
-
-                                if (json.success) {
-                                    alert(json.message);
-                                    window.location.reload();
-                                } else {
-                                    alert(json.message || 'Erro ao processar.');
-
-                                    // Só libera se não for sucesso, para permitir correção
-                                    if (form.dataset.finalizado !== "true") {
-                                        window.caixaProcessandoGlobal[formId] = false;
-                                        if (btn) {
-                                            btn.disabled = false;
-                                            btn.innerText = "CONCLUIR";
-                                        }
-                                        if (spinner) spinner.classList.add('hidden');
-                                    }
-                                }
-
-                                // Devolve o alert original ao sistema após 1.5s
-                                setTimeout(() => {
-                                    window.alert = originalAlert;
-                                }, 1500);
-                            })
-                            .catch(err => {
-                                console.error(err);
-                                window.caixaProcessandoGlobal[formId] = false;
+                        })
+                        .then(res => res.json())
+                        .then(json => {
+                            if (json.success) {
+                                // 🔔 Com o .onsubmit, este alerta só disparará UMA vez.
+                                alert(json.message);
+                                window.location.reload();
+                            } else {
+                                alert(json.message || 'Erro ao processar.');
                                 if (btn) btn.disabled = false;
-                            });
-                    };
+                                if (spinner) spinner.classList.add('hidden');
+                            }
+                        })
+                        .catch(err => {
+                            console.error('Erro no Fetch:', err);
+                            alert('Erro na comunicação com o servidor.');
+                            if (btn) btn.disabled = false;
+                            if (spinner) spinner.classList.add('hidden');
+                        });
+                };
 
-                    const acoesCriticas = ['debtForm', 'noShowForm', 'transactionForm', 'openCashForm',
-                    'closeCashForm'];
-                    if (acoesCriticas.includes(formId) && userRole === 'colaborador') {
-                        window.requisitarAutorizacao(token => {
-                            if (token) enviarParaOServidor(token);
-                            else window.caixaProcessandoGlobal[formId] = false;
+                // --- 🚀 REGRA 1: FECHAMENTO DE CAIXA ---
+                if (formId === 'closeCashForm') {
+                    const systemValueRaw = document.getElementById('js_valorLiquidoArenaRaw')?.value || "0";
+                    const actualInput = document.getElementById('actualCashAmount')?.value || "0";
+                    const diffCents = toCents(actualInput) - toCents(systemValueRaw);
+
+                    if (diffCents !== 0 && userRole === 'colaborador') {
+                        window.requisitarAutorizacao(function(token) {
+                            if (token) {
+                                enviarParaOServidor(token);
+                            } else {
+                                console.log("Autorização cancelada.");
+                            }
                         });
                     } else {
                         enviarParaOServidor();
                     }
-                    return false;
+                    return false; // Trava o envio nativo
+                }
+
+                // --- 🚀 REGRA 2: REABERTURA E OUTRAS AÇÕES CRÍTICAS ---
+                const acoesCriticas = ['debtForm', 'noShowForm', 'transactionForm', 'openCashForm'];
+
+                if (acoesCriticas.includes(formId) && userRole === 'colaborador') {
+                    if (formId === 'debtForm') typeof closeDebtModal === 'function' && closeDebtModal();
+
+                    window.requisitarAutorizacao(function(token) {
+                        if (token) {
+                            enviarParaOServidor(token);
+                        }
+                    });
+                } else {
+                    enviarParaOServidor();
+                }
+
+                return false; // Trava o envio nativo
+            };
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Scripts de Caixa carregados!');
+
+            // 1. Inicialização de status e cálculos (Verifica se a arena pode fechar)
+            if (typeof checkCashierStatus === "function") {
+                checkCashierStatus();
+            }
+
+            // 2. Ouvinte para cálculo de diferença em tempo real
+            // Usamos .oninput para garantir que o cálculo ocorra sem duplicar listeners
+            const actualCashInput = document.getElementById('actualCashAmount');
+            if (actualCashInput) {
+                actualCashInput.oninput = function() {
+                    if (typeof calculateDifference === "function") {
+                        calculateDifference();
+                    }
                 };
             }
 
-            document.addEventListener('DOMContentLoaded', () => {
-                // 🧹 LIMPEZA TOTAL DE TRAVAS AO CARREGAR
-                sessionStorage.clear();
-                window.caixaProcessandoGlobal = {};
+            // 3. Registro dos formulários AJAX via .onsubmit
+            // Ao chamar setupAjaxForm aqui, a função interna usará o .onsubmit que sobrescreve qualquer evento anterior
+            try {
+                // --- ROTAS FIXAS ---
+                setupAjaxForm('transactionForm', 'submitTransactionBtn', null, null,
+                    '/admin/pagamentos/movimentacao-avulsa');
 
-                console.log('🚀 Scripts de Caixa carregados e travas resetadas!');
+                setupAjaxForm('closeCashForm', 'submitCloseCashBtn', 'submitCloseCashSpinner',
+                    'closecash-error-message', '/admin/pagamentos/fechar-caixa');
 
-                // 1. Inicialização de status e cálculos (Verifica se a arena pode fechar)
-                if (typeof checkCashierStatus === "function") {
-                    checkCashierStatus();
-                }
+                setupAjaxForm('openCashForm', 'submitOpenCashBtn', 'submitOpenCashSpinner',
+                    'openCash-error-message', '/admin/pagamentos/abrir-caixa');
 
-                // 2. Ouvinte para cálculo de diferença em tempo real no Fechamento
-                const actualCashInput = document.getElementById('actualCashAmount');
-                if (actualCashInput) {
-                    actualCashInput.oninput = function() {
-                        if (typeof calculateDifference === "function") {
-                            calculateDifference();
-                        }
-                    };
-                }
+                // --- ROTAS DINÂMICAS ({reserva}) ---
 
-                // 3. 🧠 INTELIGÊNCIA DE MOVIMENTAÇÃO (Sangria/Reforço)
-                // Este trecho avisa visualmente se o dinheiro sai do PIX ou da GAVETA
-                const paymentMethodSelect = document.getElementById('transaction_payment_method');
-                if (paymentMethodSelect) {
-                    paymentMethodSelect.addEventListener('change', function(e) {
-                        const helper = document.getElementById('transaction_helper_text');
-                        if (!helper) return;
+                // Finalizar Pagamento
+                setupAjaxForm('paymentForm', 'submitPaymentBtn', 'submitPaymentSpinner',
+                    'payment-error-message', '/admin/pagamentos/{reserva}/finalizar');
 
-                        if (e.target.value === 'money') {
-                            helper.innerText = "* ESTA OPERAÇÃO AFETARÁ O SALDO FÍSICO DA GAVETA.";
-                            helper.classList.remove('text-blue-500');
-                            helper.classList.add('text-gray-400');
-                        } else {
-                            helper.innerText = "* ESTA OPERAÇÃO AFETARÁ O SALDO DIGITAL DO BANCO (PIX).";
-                            helper.classList.remove('text-gray-400');
-                            helper.classList.add('text-blue-500');
-                        }
-                    });
-                }
+                // Registrar No-Show (Falta)
+                setupAjaxForm('noShowForm', 'submitNoShowBtn', 'submitNoShowSpinner',
+                    'noshow-error-message', '/admin/reservas/{reserva}/no-show');
 
-                // 4. Registro dos formulários AJAX com blindagem anti-duplicidade
-                try {
-                    // --- ROTAS FIXAS ---
-                    setupAjaxForm('transactionForm', 'submitTransactionBtn', null, null,
-                        '/admin/pagamentos/movimentacao-avulsa');
+                // Pagar Depois (Dívida)
+                setupAjaxForm('debtForm', 'submitDebtBtn', null, null,
+                    '/admin/pagamentos/{reserva}/pendenciar');
 
-                    setupAjaxForm('closeCashForm', 'submitCloseCashBtn', 'submitCloseCashSpinner',
-                        'closecash-error-message', '/admin/pagamentos/fechar-caixa');
+                console.log('✅ Todos os formulários foram registrados via onsubmit!');
+            } catch (e) {
+                console.error('❌ Erro crítico ao registrar formulários:', e);
+            }
+        });
 
-                    setupAjaxForm('openCashForm', 'submitOpenCashBtn', 'submitOpenCashSpinner',
-                        'openCash-error-message', '/admin/pagamentos/abrir-caixa');
+        function acessarDividasComSenha() {
+            const userRole = "{{ Auth::user()->role ?? 'guest' }}";
+            // Usamos o nome da rota nova que o colaborador tem permissão de "atravessar"
+            const urlDestino = "{{ route('admin.payment.dividas_acesso') }}";
 
-                    // --- ROTAS DINÂMICAS ({reserva}) ---
-
-                    // Finalizar Pagamento
-                    setupAjaxForm('paymentForm', 'submitPaymentBtn', 'submitPaymentSpinner',
-                        'payment-error-message', '/admin/pagamentos/{reserva}/finalizar');
-
-                    // Registrar No-Show (Falta)
-                    setupAjaxForm('noShowForm', 'submitNoShowBtn', 'submitNoShowSpinner',
-                        'noshow-error-message', '/admin/reservas/{reserva}/no-show');
-
-                    // Pagar Depois (Dívida)
-                    setupAjaxForm('debtForm', 'submitDebtBtn', null, null,
-                        '/admin/pagamentos/{reserva}/pendenciar');
-
-                    console.log('✅ Todos os formulários registrados com blindagem e seletores de origem!');
-                } catch (e) {
-                    console.error('❌ Erro crítico ao registrar formulários:', e);
-                }
-            });
-
-            function acessarDividasComSenha() {
-                const userRole = "{{ Auth::user()->role ?? 'guest' }}";
-                // Usamos o nome da rota nova que o colaborador tem permissão de "atravessar"
-                const urlDestino = "{{ route('admin.payment.dividas_acesso') }}";
-
-                if (userRole === 'colaborador') {
-                    window.requisitarAutorizacao(function(token) {
-                        if (token) window.location.href = urlDestino;
-                    });
-                } else {
-                    window.location.href = urlDestino;
-                }
+            if (userRole === 'colaborador') {
+                window.requisitarAutorizacao(function(token) {
+                    if (token) window.location.href = urlDestino;
+                });
+            } else {
+                window.location.href = urlDestino;
             }
         }
     </script>

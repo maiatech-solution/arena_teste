@@ -2164,17 +2164,19 @@
                 form.onsubmit = function(e) {
                     e.preventDefault();
 
-                    // 🛑 TRAVA 1: Bloqueio físico imediato no envio
+                    // 🛑 BLOQUEIO DE CLIQUE DUPLO (TRAVA DE ENVIO)
                     if (window.caixaProcessandoGlobal[formId]) return false;
-                    window.caixaProcessandoGlobal[formId] = true;
 
                     const enviarParaOServidor = (tokenRecebido = null) => {
                         const btn = document.getElementById(btnId);
                         const spinner = document.getElementById(spinnerId);
 
+                        window.caixaProcessandoGlobal[formId] = true;
+
                         if (btn) {
                             btn.disabled = true;
-                            btn.innerText = "AGUARDE...";
+                            btn.dataset.originalText = btn.innerText;
+                            btn.innerText = "PROCESSANDO...";
                         }
                         if (spinner) spinner.classList.remove('hidden');
 
@@ -2196,57 +2198,60 @@
                             })
                             .then(res => res.json())
                             .then(json => {
-                                // --- 🛡️ FILTRO DE ALERTA AGRESSIVO ---
-                                const originalAlert = window.alert;
+                                // --- 🛡️ FILTRO DE ALERTA E TRAVA DE SUCESSO ---
+                                if (form.dataset.sucessoPendente === "true")
+                            return; // Ignora se já deu sucesso uma vez
 
-                                // Sobrescrevemos o alert APENAS para esta resposta
+                                const originalAlert = window.alert;
                                 window.alert = function(msg) {
                                     const m = msg.toLowerCase();
 
-                                    // Se já exibimos um sucesso ou é uma mensagem de duplicidade, CANCELA o alert
-                                    if (form.dataset.finalizado === "true" ||
-                                        m.includes("baixada anteriormente") ||
-                                        m.includes("ja foi fechado") ||
-                                        m.includes("duplicidade")) {
-                                        console.log("Mensagem duplicada bloqueada com sucesso.");
-                                        return; // O alert morre aqui, não aparece na tela
+                                    // Silenciador de erros de duplicidade
+                                    if (m.includes("baixada anteriormente") || m.includes(
+                                        "ja foi baixada") || m.includes("duplicidade") || m.includes(
+                                            "já foi fechado")) {
+                                        console.warn("Mensagem redundante bloqueada.");
+                                        window.location.reload();
+                                        return;
                                     }
-
-                                    if (json.success) form.dataset.finalizado = "true";
                                     originalAlert(msg);
                                 };
 
                                 if (json.success) {
-                                    alert(json.message);
+                                    form.dataset.sucessoPendente = "true"; // Levanta a bandeira de sucesso
+
+                                    if (btn) btn.innerText = "✅ CONCLUÍDO";
+
+                                    alert(json.message); // Mostra o sucesso (apenas uma vez devido à flag)
                                     window.location.reload();
                                 } else {
                                     alert(json.message || 'Erro ao processar.');
 
-                                    // Só libera se não for sucesso, para permitir correção
-                                    if (form.dataset.finalizado !== "true") {
-                                        window.caixaProcessandoGlobal[formId] = false;
-                                        if (btn) {
-                                            btn.disabled = false;
-                                            btn.innerText = "CONCLUIR";
-                                        }
-                                        if (spinner) spinner.classList.add('hidden');
+                                    // Libera apenas em caso de erro real para permitir correção
+                                    window.caixaProcessandoGlobal[formId] = false;
+                                    if (btn) {
+                                        btn.disabled = false;
+                                        btn.innerText = btn.dataset.originalText || "CONCLUIR";
                                     }
+                                    if (spinner) spinner.classList.add('hidden');
                                 }
 
-                                // Devolve o alert original ao sistema após 1.5s
                                 setTimeout(() => {
                                     window.alert = originalAlert;
-                                }, 1500);
+                                }, 1000);
                             })
                             .catch(err => {
                                 console.error(err);
                                 window.caixaProcessandoGlobal[formId] = false;
-                                if (btn) btn.disabled = false;
+                                if (btn) {
+                                    btn.disabled = false;
+                                    btn.innerText = "TENTAR NOVAMENTE";
+                                }
+                                if (spinner) spinner.classList.add('hidden');
                             });
                     };
 
-                    const acoesCriticas = ['debtForm', 'noShowForm', 'transactionForm', 'openCashForm',
-                    'closeCashForm'];
+                    const acoesCriticas = ['debtForm', 'noShowForm', 'transactionForm', 'openCashForm'];
                     if (acoesCriticas.includes(formId) && userRole === 'colaborador') {
                         window.requisitarAutorizacao(token => {
                             if (token) enviarParaOServidor(token);

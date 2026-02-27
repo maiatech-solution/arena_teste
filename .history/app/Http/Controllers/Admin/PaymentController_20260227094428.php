@@ -289,10 +289,11 @@ class PaymentController extends Controller
      */
     public function processPayment(Request $request, $reservaId)
     {
-        // Carrega a reserva (sem lock aqui, o lock real acontece dentro da transaction)
+        // Carrega a reserva com lock para evitar que dois processos mexam nela ao mesmo tempo
         $reserva = Reserva::with('arena')->findOrFail($reservaId);
 
         // --- 1. LÓGICA DE DATA OPERACIONAL CORRIGIDA ---
+        // Capturamos a data vinda do JS. Se for dia 26, labelData será "26/02/2026"
         $dataOperacional = $request->input('payment_date') ?? now()->toDateString();
         $labelData = \Carbon\Carbon::parse($dataOperacional)->format('d/m/Y');
 
@@ -302,6 +303,16 @@ class PaymentController extends Controller
                 'success' => false,
                 'message' => "Ação bloqueada: O caixa do dia {$labelData} já está encerrado nesta unidade."
             ], 403);
+        }
+
+        // --- 3. TRAVA DE DUPLICIDADE (ANTI-CLIQUE DUPLO) ---
+        // Se a reserva já estiver paga e chegar um novo valor, assumimos que é o segundo clique do navegador
+        if ($reserva->payment_status === 'paid' && $request->input('amount_paid') > 0) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Esta reserva já foi baixada anteriormente.',
+                'status'  => 'paid'
+            ]);
         }
 
         $validated = $request->validate([
@@ -316,22 +327,16 @@ class PaymentController extends Controller
             $paymentStatus = 'pending';
 
             DB::transaction(function () use ($validated, $reserva, &$paymentStatus, $dataOperacional) {
-
-                // 🔒 LOCK REAL NO BANCO (aqui está a versão verdadeira da reserva)
+                // Forçamos o banco a nos dar a versão mais fresca da reserva antes de somar
                 $reservaFresh = Reserva::where('id', $reserva->id)->lockForUpdate()->first();
-
-                // ✅ TRAVA CORRETA DE DUPLICIDADE (idempotência real)
-                if ($reservaFresh->payment_status === 'paid' && $validated['amount_paid'] > 0) {
-                    throw new \Exception('ALREADY_PAID');
-                }
 
                 $finalPrice = round((float) $validated['final_price'], 2);
                 $amountReceivedNow = round((float) $validated['amount_paid'], 2);
 
-                // Soma do que já tinha com o novo pagamento
+                // Soma o que já tinha no banco com o que chegou agora
                 $newTotalPaid = round((float) $reservaFresh->total_paid + $amountReceivedNow, 2);
 
-                // Segurança contra pagar mais que o total
+                // Verificação de segurança: Tolerância de 0.01 para dízimas de arredondamento
                 if ($newTotalPaid > ($finalPrice + 0.01)) {
                     throw new \Exception("O valor total pago (R$ " . number_format($newTotalPaid, 2, ',', '.') . ") não pode ser maior que o preço final.");
                 }
@@ -354,7 +359,6 @@ class PaymentController extends Controller
                     'manager_id'     => Auth::id(),
                 ]);
 
-                // Atualiza série futura
                 if (!empty($validated['apply_to_series']) && $reservaFresh->recurrent_series_id) {
                     Reserva::where('recurrent_series_id', $reservaFresh->recurrent_series_id)
                         ->where('date', '>', $reservaFresh->date)
@@ -365,7 +369,7 @@ class PaymentController extends Controller
                         ]);
                 }
 
-                // --- AUDITORIA FINANCEIRA ---
+                // --- 3. AUDITORIA FINANCEIRA ---
                 if ($amountReceivedNow > 0) {
                     FinancialTransaction::create([
                         'reserva_id'     => $reservaFresh->id,
@@ -387,22 +391,8 @@ class PaymentController extends Controller
                 'status'  => $paymentStatus
             ]);
         } catch (\Exception $e) {
-
-            // 🎯 Tratamento limpo de duplicidade
-            if ($e->getMessage() === 'ALREADY_PAID') {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Esta reserva já foi baixada anteriormente.',
-                    'status'  => 'paid'
-                ]);
-            }
-
             Log::error("Erro pagamento #{$reservaId}: " . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 422);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
 

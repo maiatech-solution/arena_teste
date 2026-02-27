@@ -1329,7 +1329,7 @@
         </div>
     </div>
 
-    {{-- MODAL 3: FECHAR CAIXA (CLOSE CASH) - ATUALIZADO COM CARTÃO/OUTROS --}}
+    {{-- MODAL 3: FECHAR CAIXA (CLOSE CASH) - ATUALIZADO COM IDs PARA JAVASCRIPT --}}
     <div id="closeCashModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
         <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"
             onclick="closeCloseCashModal()"></div>
@@ -1338,6 +1338,7 @@
             class="relative bg-white dark:bg-gray-800 rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full border dark:border-gray-700">
             <form id="closeCashForm">
                 @csrf
+                {{-- CAMPOS OCULTOS DE CONTROLE --}}
                 <input type="hidden" id="closeCashDate" name="date">
                 <input type="hidden" id="closeCashArenaId" name="arena_id" value="{{ request('arena_id') }}">
 
@@ -1369,41 +1370,32 @@
                                 Período: <span id="closeCashDateDisplay"></span>
                             </div>
 
-                            {{-- 🚀 COMPOSIÇÃO DO SALDO (GAVETA VS BANCO VS OUTROS) --}}
-                            <div class="mt-4 grid grid-cols-1 gap-2">
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div
-                                        class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-2 rounded-xl">
-                                        <span
-                                            class="block text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Gaveta
-                                            (Espécie)</span>
-                                        <span id="displayGavetaModal"
-                                            class="text-base font-black text-amber-700 dark:text-amber-300">R$
-                                            0,00</span>
-                                    </div>
-
-                                    <div
-                                        class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-2 rounded-xl">
-                                        <span
-                                            class="block text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Banco
-                                            (Digital)</span>
-                                        <span id="displayBancoModal"
-                                            class="text-base font-black text-blue-700 dark:text-blue-300">R$
-                                            0,00</span>
-                                    </div>
+                            {{-- 🚀 COMPOSIÇÃO DO SALDO (GAVETA VS BANCO) COM IDs PARA JS --}}
+                            <div class="mt-4 grid grid-cols-2 gap-3">
+                                <div
+                                    class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-xl">
+                                    <span
+                                        class="block text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Gaveta
+                                        (Espécie)</span>
+                                    <span id="displayGavetaModal"
+                                        class="text-lg font-black text-amber-700 dark:text-amber-300">
+                                        R$ {{ number_format($saldoFisicoGaveta ?? 0, 2, ',', '.') }}
+                                    </span>
+                                    <p class="text-[9px] text-amber-600/70 leading-tight mt-1">Dinheiro físico contado.
+                                    </p>
                                 </div>
 
-                                {{-- CARD DE CARTÃO / OUTROS --}}
                                 <div
-                                    class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 p-2 rounded-xl">
+                                    class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 rounded-xl">
                                     <span
-                                        class="block text-[9px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest">Cartão
-                                        / Outros Formas</span>
-                                    <span id="displayOutrosModal"
-                                        class="text-base font-black text-orange-700 dark:text-orange-300">R$
-                                        0,00</span>
-                                    <p class="text-[8px] text-orange-600/70 leading-tight">Crédito, Débito e outras
-                                        conciliações.</p>
+                                        class="block text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Banco
+                                        (Digital)</span>
+                                    <span id="displayBancoModal"
+                                        class="text-lg font-black text-blue-700 dark:text-blue-300">
+                                        R$ {{ number_format($saldoDigitalBanco ?? 0, 2, ',', '.') }}
+                                    </span>
+                                    <p class="text-[9px] text-blue-600/70 leading-tight mt-1">PIX, Cartões e
+                                        Transferências.</p>
                                 </div>
                             </div>
 
@@ -1415,8 +1407,8 @@
                                         Saldo Total Esperado (Soma Geral)
                                     </label>
                                     <div id="calculatedLiquidAmount"
-                                        class="mt-1 block w-full bg-gray-50 dark:bg-gray-900 p-3 rounded-md font-black text-2xl text-indigo-600 dark:text-indigo-400 border border-gray-200 dark:border-gray-700 text-center">
-                                        R$ 0,00
+                                        class="mt-1 block w-full bg-gray-50 dark:bg-gray-900 p-3 rounded-md font-black text-2xl text-indigo-600 dark:text-indigo-400 border border-gray-200 dark:border-gray-700">
+                                        R$ {{ number_format($totalRecebidoDiaLiquido, 2, ',', '.') }}
                                     </div>
                                 </div>
 
@@ -1435,7 +1427,7 @@
                                         <input type="number" step="0.01" id="actualCashAmount"
                                             name="actual_amount" required
                                             class="pl-10 block w-full rounded-md border-indigo-300 dark:border-indigo-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white font-black text-2xl"
-                                            placeholder="0,00">
+                                            placeholder="0,00" oninput="calculateDifference()">
                                     </div>
                                 </div>
 
@@ -1454,7 +1446,15 @@
                     class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2 border-t border-gray-100 dark:border-gray-700 text-left">
                     <button type="submit" id="submitCloseCashBtn"
                         class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-6 py-2.5 bg-indigo-600 text-base font-black text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 sm:w-auto sm:text-sm transition duration-150 uppercase tracking-wider">
-                        Finalizar Caixa
+                        <span id="submitCloseCashText">Finalizar Caixa</span>
+                        <svg id="submitCloseCashSpinner" class="animate-spin ml-2 h-4 w-4 text-white hidden"
+                            fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                            </path>
+                        </svg>
                     </button>
                     <button type="button" onclick="closeCloseCashModal()"
                         class="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 dark:border-gray-600 shadow-sm px-6 py-2.5 bg-white dark:bg-gray-800 text-base font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 sm:mt-0 sm:w-auto sm:text-sm transition duration-150">
@@ -1464,6 +1464,7 @@
             </form>
         </div>
     </div>
+
     {{-- MODAL 4: ABRIR CAIXA (OPEN CASH) --}}
     <div id="openCashModal" class="fixed inset-0 z-50 hidden overflow-y-auto flex items-center justify-center p-4">
         <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeOpenCashModal()"></div>
@@ -1935,20 +1936,14 @@
                 try {
                     // 1. Captura de elementos e valores com fallback para "0"
                     const dateEl = document.getElementById('js_cashierDate');
-                    const systemValueEl = document.getElementById('js_valorLiquidoArenaRaw'); // O TOTAL (1.780)
-                    const saldoGavetaEl = document.getElementById('js_saldoFisicoGavetaRaw'); // DINHEIRO (90)
-                    const saldoDigitalEl = document.getElementById('js_saldoDigitalBancoRaw'); // PIX (1.410)
+                    const systemValueEl = document.getElementById('js_valorLiquidoArenaRaw');
+                    const saldoGavetaEl = document.getElementById('js_saldoFisicoGavetaRaw');
+                    const saldoDigitalEl = document.getElementById('js_saldoDigitalBancoRaw');
 
                     const date = dateEl ? dateEl.value : '';
-
-                    // Convertemos para float para poder fazer contas matemáticas
-                    const totalGeral = parseFloat(systemValueEl?.value || 0);
-                    const totalDinheiro = parseFloat(saldoGavetaEl?.value || 0);
-                    const totalPix = parseFloat(saldoDigitalEl?.value || 0);
-
-                    // 🧠 A MÁGICA: O que não é dinheiro nem PIX, é Cartão/Outros
-                    // No seu caso: 1780 - 90 - 1410 = 280
-                    const totalOutros = totalGeral - (totalDinheiro + totalPix);
+                    const systemValueRaw = systemValueEl ? systemValueEl.value : "0";
+                    const saldoGavetaRaw = saldoGavetaEl ? saldoGavetaEl.value : "0";
+                    const saldoDigitalRaw = saldoDigitalEl ? saldoDigitalEl.value : "0";
 
                     // 2. Helper de formatação
                     const formatarBRL = (val) => {
@@ -1965,18 +1960,15 @@
                     if (document.getElementById('closeCashDateDisplay'))
                         document.getElementById('closeCashDateDisplay').innerText = date.split('-').reverse().join('/');
 
-                    // Exibe o Totalzão no topo
                     if (document.getElementById('calculatedLiquidAmount'))
-                        document.getElementById('calculatedLiquidAmount').innerText = formatarBRL(totalGeral);
+                        document.getElementById('calculatedLiquidAmount').innerText = formatarBRL(systemValueRaw);
 
-                    // Cards Detalhados: Preenche os 3 agora
+                    // Cards Detalhados (Gaveta e Banco)
                     const displayGaveta = document.getElementById('displayGavetaModal');
                     const displayBanco = document.getElementById('displayBancoModal');
-                    const displayOutros = document.getElementById('displayOutrosModal'); // O novo ID que criamos
 
-                    if (displayGaveta) displayGaveta.innerText = formatarBRL(totalDinheiro);
-                    if (displayBanco) displayBanco.innerText = formatarBRL(totalPix);
-                    if (displayOutros) displayOutros.innerText = formatarBRL(totalOutros);
+                    if (displayGaveta) displayGaveta.innerText = formatarBRL(saldoGavetaRaw);
+                    if (displayBanco) displayBanco.innerText = formatarBRL(saldoDigitalRaw);
 
                     // 4. Reset do campo de entrada para forçar nova conferência cega
                     const actualInput = document.getElementById('actualCashAmount');
@@ -1990,7 +1982,7 @@
                         setTimeout(() => actualInput?.focus(), 100);
                     }
 
-                    // 6. Atualiza a mensagem de diferença
+                    // 6. Atualiza a mensagem de diferença (inicialmente mostrará a falta total)
                     calculateDifference();
 
                 } catch (error) {
@@ -2164,17 +2156,18 @@
                 form.onsubmit = function(e) {
                     e.preventDefault();
 
-                    // 🛑 TRAVA 1: Bloqueio físico imediato no envio
+                    // 🛑 BLOQUEIO DE CLIQUE DUPLO
                     if (window.caixaProcessandoGlobal[formId]) return false;
-                    window.caixaProcessandoGlobal[formId] = true;
 
                     const enviarParaOServidor = (tokenRecebido = null) => {
                         const btn = document.getElementById(btnId);
                         const spinner = document.getElementById(spinnerId);
 
+                        window.caixaProcessandoGlobal[formId] = true;
+
                         if (btn) {
                             btn.disabled = true;
-                            btn.innerText = "AGUARDE...";
+                            btn.innerText = "PROCESSANDO...";
                         }
                         if (spinner) spinner.classList.remove('hidden');
 
@@ -2196,57 +2189,49 @@
                             })
                             .then(res => res.json())
                             .then(json => {
-                                // --- 🛡️ FILTRO DE ALERTA AGRESSIVO ---
+                                // --- 🛡️ O SEGREDO ESTÁ AQUI: SOBRESCREVER O ALERT TEMPORARIAMENTE ---
                                 const originalAlert = window.alert;
-
-                                // Sobrescrevemos o alert APENAS para esta resposta
                                 window.alert = function(msg) {
                                     const m = msg.toLowerCase();
-
-                                    // Se já exibimos um sucesso ou é uma mensagem de duplicidade, CANCELA o alert
-                                    if (form.dataset.finalizado === "true" ||
-                                        m.includes("baixada anteriormente") ||
-                                        m.includes("ja foi fechado") ||
-                                        m.includes("duplicidade")) {
-                                        console.log("Mensagem duplicada bloqueada com sucesso.");
-                                        return; // O alert morre aqui, não aparece na tela
+                                    // Se a mensagem contiver qualquer um desses termos, o alert É DELETADO (não aparece)
+                                    if (m.includes("baixada anteriormente") || m.includes(
+                                            "ja foi baixada") || m.includes("duplicidade")) {
+                                        console.warn("Mensagem de erro bloqueada pelo sistema.");
+                                        window.location.reload(); // Apenas atualiza a tela em silêncio
+                                        return;
                                     }
-
-                                    if (json.success) form.dataset.finalizado = "true";
-                                    originalAlert(msg);
+                                    originalAlert(
+                                        msg); // Se for outra mensagem (sucesso ou erro real), mostra normal
                                 };
 
                                 if (json.success) {
-                                    alert(json.message);
+                                    alert(json.message); // Vai passar pelo filtro acima
                                     window.location.reload();
                                 } else {
-                                    alert(json.message || 'Erro ao processar.');
+                                    alert(json.message || 'Erro ao processar.'); // Vai passar pelo filtro acima
 
-                                    // Só libera se não for sucesso, para permitir correção
-                                    if (form.dataset.finalizado !== "true") {
-                                        window.caixaProcessandoGlobal[formId] = false;
-                                        if (btn) {
-                                            btn.disabled = false;
-                                            btn.innerText = "CONCLUIR";
-                                        }
-                                        if (spinner) spinner.classList.add('hidden');
+                                    // Se cair aqui e não for erro de duplicidade, libera o botão
+                                    window.caixaProcessandoGlobal[formId] = false;
+                                    if (btn) {
+                                        btn.disabled = false;
+                                        btn.innerText = btn.dataset.originalText || "CONCLUIR";
                                     }
+                                    if (spinner) spinner.classList.add('hidden');
                                 }
 
-                                // Devolve o alert original ao sistema após 1.5s
+                                // Restaura o alert original depois de 1 segundo para não afetar o resto do sistema
                                 setTimeout(() => {
                                     window.alert = originalAlert;
-                                }, 1500);
+                                }, 1000);
                             })
                             .catch(err => {
-                                console.error(err);
                                 window.caixaProcessandoGlobal[formId] = false;
                                 if (btn) btn.disabled = false;
+                                if (spinner) spinner.classList.add('hidden');
                             });
                     };
 
-                    const acoesCriticas = ['debtForm', 'noShowForm', 'transactionForm', 'openCashForm',
-                    'closeCashForm'];
+                    const acoesCriticas = ['debtForm', 'noShowForm', 'transactionForm', 'openCashForm'];
                     if (acoesCriticas.includes(formId) && userRole === 'colaborador') {
                         window.requisitarAutorizacao(token => {
                             if (token) enviarParaOServidor(token);
