@@ -123,12 +123,11 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/{id}/sincronizar', [AdminController::class, 'sincronizarDadosUsuario'])->name('sincronizar');
             Route::patch('/confirmar/{reserva}', [ReservaController::class, 'confirmar'])->name('confirmar');
 
-            // 🚀 Rota de No-Show: Já estava liberada
+            // 🚀 Rota de No-Show: Liberada (a trava manual está no Controller)
             Route::post('/{reserva}/no-show', [PaymentController::class, 'registerNoShow'])->name('no_show');
 
-            // 🛡️ Ações Protegidas (Liberadas no Middleware para permitir o Modal de Autorização)
-            // A segurança agora é garantida pela validação de senha do gestor no fluxo da ação.
-            Route::middleware(['role:admin,gestor,colaborador'])->group(function () {
+            // Ações Críticas de Reserva (🔒 Restrito EXCLUSIVAMENTE Gestor/Admin)
+            Route::middleware(['role:admin,gestor'])->group(function () {
                 Route::patch('/rejeitar/{reserva}', [ReservaController::class, 'rejeitar'])->name('rejeitar');
                 Route::patch('/{reserva}/update-price', [AdminController::class, 'updatePrice'])->name('update_price');
                 Route::patch('/{reserva}/reativar', [AdminController::class, 'reativar'])->name('reativar');
@@ -140,6 +139,7 @@ Route::middleware(['auth'])->group(function () {
                 Route::post('/cancel-client-series/{masterId}', [AdminController::class, 'cancelClientSeries'])->name('cancel_client_series');
             });
         });
+
         // 👥 4. GESTÃO DE USUÁRIOS (Hierarquia protegida no Controller e Middleware)
         Route::prefix('users')->name('users.')->group(function () {
 
