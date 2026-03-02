@@ -22,9 +22,7 @@ Route::middleware('guest')->group(function () {
     Route::get('login', [AuthenticatedSessionController::class, 'create'])
         ->name('login');
 
-    // 🛡️ CAMADA DE SEGURANÇA: HONEYPOT APLICADA NO LOGIN
-    Route::post('login', [AuthenticatedSessionController::class, 'store'])
-        ->middleware(\Spatie\Honeypot\ProtectAgainstSpam::class);
+    Route::post('login', [AuthenticatedSessionController::class, 'store']);
 
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');

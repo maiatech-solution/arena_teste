@@ -29,7 +29,6 @@ class LoginRequest extends FormRequest
         return [
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
-            'captcha' => ['required', 'captcha'], // 🛡️ Validação crucial do Captcha
         ];
     }
 
@@ -43,8 +42,7 @@ class LoginRequest extends FormRequest
         $this->ensureIsNotRateLimited();
 
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
-            // O segundo parâmetro '300' define o tempo de bloqueio em segundos (5 min)
-            RateLimiter::hit($this->throttleKey(), 300);
+            RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
                 'email' => trans('auth.failed'),
@@ -59,19 +57,22 @@ class LoginRequest extends FormRequest
      *
      * @throws \Illuminate\Validation\ValidationException
      */
-    public function ensureIsNotRateLimited(): void
+    public function authenticate(): void
     {
-        if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
-            return;
+        $this->ensureIsNotRateLimited();
+
+        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+
+            // O segundo parâmetro aqui é o tempo de bloqueio em SEGUNDOS.
+            // O padrão é 60. Vamos colocar 300 (5 minutos) para ser mais rigoroso.
+            RateLimiter::hit($this->throttleKey(), 300);
+
+            throw ValidationException::withMessages([
+                'email' => trans('auth.failed'),
+            ]);
         }
 
-        event(new Lockout($this));
-
-        $seconds = RateLimiter::availableIn($this->throttleKey());
-
-        throw ValidationException::withMessages([
-            'email' => "Segurança: Muitas tentativas inválidas. Acesso bloqueado por {$seconds} segundos para proteção de dados.",
-        ]);
+        RateLimiter::clear($this->throttleKey());
     }
 
     /**

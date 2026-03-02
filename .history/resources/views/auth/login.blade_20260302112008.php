@@ -43,7 +43,7 @@ style="background-image: linear-gradient(135deg, #1f2937 0%, #0f172a 100%);">
 
                 <div class="flex items-center justify-center space-x-4 mb-3">
                     <div class="rounded-lg overflow-hidden border-2 border-white shadow-sm bg-white">
-                       {!! \Mews\Captcha\Facades\Captcha::img('flat') !!}
+                        {!! captcha_img('flat') !!}
                     </div>
                     {{-- Botão para atualizar o Captcha via JS simples --}}
                     <button type="button"
