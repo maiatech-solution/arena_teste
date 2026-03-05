@@ -408,7 +408,6 @@
             </div>
         </div>
     </div>
-
     {{-- 2. MODAL REATIVAÇÃO (FINALIZAR MANUTENÇÃO) --}}
     <div id="reactivateDecisionModal" class="fixed inset-0 z-[60] hidden overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen px-4 py-6">
@@ -427,13 +426,11 @@
                     <p class="text-sm text-gray-500 mt-2">Como deseja liberar este horário?</p>
                 </div>
 
-                <form id="reactivateForm" method="POST"
-                    action="{{ route('admin.reservas.reativar_manutencao', $reserva->id) }}" class="space-y-3">
+                <form method="POST" action="{{ route('admin.reservas.reativar_manutencao', $reserva->id) }}"
+                    class="space-y-3">
                     @csrf
                     @method('PATCH')
 
-                    {{-- Campo para armazenar o token de autorização do gerente --}}
-                    <input type="hidden" id="reactivate_auth_token" name="auth_token">
                     <input type="hidden" name="status" value="maintenance">
 
                     {{-- Opção 1: Restaurar o agendamento anterior --}}
@@ -479,8 +476,6 @@
     <script>
         let currentCancellationUrl = '';
         window.currentReservaMaintenanceId = "{{ $reserva->id }}";
-        // Variável global para armazenar o token obtido no modal de autorização
-        window.currentAuthToken = '';
 
         // Dados da reserva (Constantes para mensagens e alertas)
         const clienteNome = "{{ $reserva->client_name }}".replace('🛠️ MANUTENÇÃO (', '').replace(')', '');
@@ -535,7 +530,6 @@
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': csrfToken,
-                        'X-AUTHORIZATION-TOKEN': window.currentAuthToken || '', // Envia o token se houver
                         'Accept': 'application/json'
                     },
                     body: JSON.stringify({
@@ -549,7 +543,7 @@
                     alert(data.message);
                     goBackAndReload();
                 })
-                .catch(error => alert('Erro ao processar: ' + error.message));
+                .catch(error => alert('Erro ao cancelar: ' + error.message));
         });
 
         // =========================================================================
@@ -604,7 +598,6 @@
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': csrfToken,
-                        'X-AUTHORIZATION-TOKEN': window.currentAuthToken || '', // Envia o token se houver
                         'Accept': 'application/json'
                     },
                     body: JSON.stringify({
@@ -646,6 +639,7 @@
             btn.addEventListener('click', function(e) {
                 let subtituloFinanceiro = "";
 
+                // Se a reserva atual não tem valor pago (foi movido ou estornado)
                 if (jaPagoNoAto <= 0) {
                     subtituloFinanceiro =
                         `\n\n⚠️ NOTA FINANCEIRA:\nComo o valor original foi transferido para outro horário ou estornado, esta reserva voltará com SALDO DEVEDOR TOTAL de R$ ${valorTotal}.`;
@@ -653,14 +647,11 @@
 
                 const confirmar = confirm(
                     `Deseja restaurar o horário das ${reservaHora}h para ${clienteNome}?` +
-                    subtituloFinanceiro);
+                    subtituloFinanceiro
+                );
 
                 if (!confirmar) {
                     e.preventDefault();
-                } else {
-                    // Se for um formulário POST comum (não fetch), injeta o token no campo hidden
-                    const tokenInput = document.getElementById('reactivate_auth_token');
-                    if (tokenInput) tokenInput.value = window.currentAuthToken;
                 }
             });
         });

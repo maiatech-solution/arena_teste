@@ -66,7 +66,7 @@
                                         {{ $reserva->client_name }}
                                     </h3>
 
-                                    {{-- Botão de Sincronizar --}}
+                                    {{-- Botão de Sincronizar (Aparece apenas se houver um usuário vinculado) --}}
                                     @if ($reserva->user_id)
                                         <form action="{{ route('admin.reservas.sincronizar', $reserva->id) }}"
                                             method="POST" class="inline">
@@ -104,7 +104,8 @@
                                 <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Data e
                                     Horário</label>
                                 <p class="text-xl font-bold dark:text-gray-200">
-                                    {{ \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') }}</p>
+                                    {{ \Carbon\Carbon::parse($reserva->date)->format('d/m/Y') }}
+                                </p>
                                 <p class="text-indigo-600 font-black">
                                     {{ \Carbon\Carbon::parse($reserva->start_time)->format('H:i') }}h -
                                     {{ \Carbon\Carbon::parse($reserva->end_time)->format('H:i') }}h
@@ -184,10 +185,10 @@
                             <div class="flex flex-col">
                                 <span class="text-[10px] font-black uppercase tracking-widest opacity-50">Saldo a
                                     Pagar</span>
-                                @php $saldoFinalCalculado = $reserva->price - ($reserva->total_paid ?? 0); @endphp
+                                @php $saldo = $reserva->price - ($reserva->total_paid ?? 0); @endphp
                                 <span
-                                    class="text-4xl font-black font-mono mt-1 {{ $saldoFinalCalculado > 0 ? 'text-orange-400' : 'text-emerald-400' }}">
-                                    R$ {{ number_format(max(0, $saldoFinalCalculado), 2, ',', '.') }}
+                                    class="text-4xl font-black font-mono mt-1 {{ $saldo > 0 ? 'text-orange-400' : 'text-emerald-400' }}">
+                                    R$ {{ number_format(max(0, $saldo), 2, ',', '.') }}
                                 </span>
                             </div>
                         </div>
@@ -196,15 +197,8 @@
                     {{-- CARD DE AÇÕES DA RESERVA --}}
                     <div
                         class="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 space-y-3">
-                        @php
-                            $isColab = auth()->user()->role === 'colaborador';
-                            $totalPaidVal = $reserva->total_paid ?? 0;
-                            $isClosedCashier = \App\Models\Cashier::where('date', $reserva->date)
-                                ->where('status', 'closed')
-                                ->exists();
-                        @endphp
 
-                        {{-- 📱 NOTIFICAÇÕES WHATSAPP --}}
+                        {{-- 📱 NOTIFICAÇÃO WHATSAPP --}}
                         @if (session('whatsapp_link'))
                             <div id="waNotificationCard"
                                 class="p-4 bg-emerald-50 dark:bg-emerald-900/20 border-2 border-emerald-100 dark:border-emerald-800 rounded-2xl mb-2 flex items-center justify-between group">
@@ -222,6 +216,7 @@
                             </div>
                         @endif
 
+                        {{-- Adicione este bloco oculto LOGO ABAIXO do @endif acima para servir de "reserva" caso a session falhe --}}
                         <div id="waNotificationCardManual"
                             class="hidden p-4 bg-emerald-50 dark:bg-emerald-900/20 border-2 border-emerald-100 dark:border-emerald-800 rounded-2xl mb-2 flex items-center justify-between group">
                             <div class="flex items-center gap-3">
@@ -237,6 +232,8 @@
                                 class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all shadow-md">Enviar</a>
                         </div>
 
+                        @php $isClosed = \App\Models\Cashier::where('date', $reserva->date)->where('status', 'closed')->exists(); @endphp
+
                         {{-- 🛠️ AÇÃO SE FOR MANUTENÇÃO --}}
                         @if ($reserva->status === 'maintenance')
                             <div class="space-y-3">
@@ -245,8 +242,7 @@
                                     <p class="text-xs font-bold text-pink-700 dark:text-pink-300 uppercase">Horário em
                                         Manutenção</p>
                                 </div>
-                                <button type="button"
-                                    onclick="{{ $isColab ? 'window.requisitarAutorizacao(token => { if(token) openReactivateModal() })' : 'openReactivateModal()' }}"
+                                <button type="button" onclick="openReactivateModal()"
                                     class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase hover:bg-indigo-700 transition shadow-lg">
                                     🔄 Finalizar Manutenção / Liberar
                                 </button>
@@ -267,13 +263,13 @@
                         {{-- 2️⃣ STATUS CONFIRMADO OU CONCLUÍDO --}}
                         @if (in_array($reserva->status, ['confirmed', 'completed']))
                             <div class="space-y-3">
-                                @php $saldoRestanteAcoes = $reserva->price - $totalPaidVal; @endphp
+                                @php $saldoRestante = $reserva->price - ($reserva->total_paid ?? 0); @endphp
 
-                                @if ($saldoRestanteAcoes > 0)
+                                @if ($saldoRestante > 0)
                                     <a href="{{ route('admin.payment.index', ['reserva_id' => $reserva->id, 'date' => \Carbon\Carbon::parse($reserva->date)->format('Y-m-d'), 'arena_id' => $reserva->arena_id]) }}"
                                         class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase hover:bg-indigo-700 transition shadow-lg flex items-center justify-center gap-2 block text-center">
                                         <span>💶 Receber Saldo (R$
-                                            {{ number_format($saldoRestanteAcoes, 2, ',', '.') }})</span>
+                                            {{ number_format($saldoRestante, 2, ',', '.') }})</span>
                                     </a>
                                 @else
                                     <div
@@ -282,25 +278,13 @@
                                     </div>
                                 @endif
 
-                                @if (!$isClosedCashier)
+                                @if (!$isClosed)
                                     <button type="button"
-                                        onclick="{{ $isColab ? "window.requisitarAutorizacao(token => { if(token) openMaintenanceModal('{$reserva->id}', '{$totalPaidVal}') })" : "openMaintenanceModal('{$reserva->id}', '{$totalPaidVal}')" }}"
+                                        onclick="openMaintenanceModal('{{ $reserva->id }}', '{{ $reserva->total_paid ?? 0 }}')"
                                         class="w-full bg-pink-50 text-pink-600 py-3 rounded-2xl font-black text-[10px] uppercase hover:bg-pink-600 hover:text-white transition border border-pink-100 mt-2">
                                         🛠️ Bloquear p/ Manutenção
                                     </button>
                                 @endif
-                            </div>
-
-                            {{-- 🚩 ZONA DE RISCO: Cancelar --}}
-                            <div class="pt-4 mt-4 border-t border-gray-100 dark:border-gray-700 space-y-2 text-center">
-                                <p class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Ações
-                                    Sensíveis</p>
-
-                                <button type="button"
-                                    onclick="{{ $isColab ? "window.requisitarAutorizacao(token => { if(token) openCancellationModal('{$reserva->client_name}', '{$reserva->id}', '" . route('admin.reservas.cancelar_pontual', $reserva) . "', 'CANCELAR RESERVA') })" : "openCancellationModal('{$reserva->client_name}', '{$reserva->id}', '" . route('admin.reservas.cancelar_pontual', $reserva) . "', 'CANCELAR RESERVA')" }}"
-                                    class="w-full py-2 text-[10px] font-black uppercase text-red-400 hover:text-red-600 transition">
-                                    🗑️ Cancelar Agendamento
-                                </button>
                             </div>
                         @endif
 
@@ -311,8 +295,7 @@
                                 <label class="text-[9px] font-black text-red-500 uppercase block mb-1">Motivo da
                                     Inatividade</label>
                                 <p class="text-xs text-red-700 dark:text-red-300 italic">
-                                    "{{ $reserva->cancellation_reason ?? 'Não informado' }}"
-                                </p>
+                                    "{{ $reserva->cancellation_reason ?? 'Não informado' }}"</p>
                             </div>
                         @endif
                     </div>
@@ -342,9 +325,6 @@
                 </div>
 
                 <form id="maintenanceForm">
-                    {{-- Campo para armazenar o token de autorização do gerente --}}
-                    <input type="hidden" id="maintenance_auth_token" name="auth_token">
-
                     <div id="financeActionSection" class="mb-6 space-y-4">
                         <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block px-1">
                             Ação Financeira
@@ -371,6 +351,7 @@
                                 <label
                                     class="relative flex flex-col p-4 border-2 border-gray-100 rounded-2xl cursor-pointer hover:bg-gray-50 transition has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50/30">
                                     <div class="flex items-center gap-3">
+                                        {{-- 🟢 AJUSTADO: value="credit" para alinhar com o Controller e Log --}}
                                         <input type="radio" name="finance_action" value="credit"
                                             class="text-indigo-600 focus:ring-indigo-500">
                                         <span class="font-black text-xs uppercase text-gray-700 dark:text-gray-300">
@@ -427,13 +408,11 @@
                     <p class="text-sm text-gray-500 mt-2">Como deseja liberar este horário?</p>
                 </div>
 
-                <form id="reactivateForm" method="POST"
-                    action="{{ route('admin.reservas.reativar_manutencao', $reserva->id) }}" class="space-y-3">
+                <form method="POST" action="{{ route('admin.reservas.reativar_manutencao', $reserva->id) }}"
+                    class="space-y-3">
                     @csrf
                     @method('PATCH')
 
-                    {{-- Campo para armazenar o token de autorização do gerente --}}
-                    <input type="hidden" id="reactivate_auth_token" name="auth_token">
                     <input type="hidden" name="status" value="maintenance">
 
                     {{-- Opção 1: Restaurar o agendamento anterior --}}
@@ -479,8 +458,6 @@
     <script>
         let currentCancellationUrl = '';
         window.currentReservaMaintenanceId = "{{ $reserva->id }}";
-        // Variável global para armazenar o token obtido no modal de autorização
-        window.currentAuthToken = '';
 
         // Dados da reserva (Constantes para mensagens e alertas)
         const clienteNome = "{{ $reserva->client_name }}".replace('🛠️ MANUTENÇÃO (', '').replace(')', '');
@@ -535,7 +512,6 @@
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': csrfToken,
-                        'X-AUTHORIZATION-TOKEN': window.currentAuthToken || '', // Envia o token se houver
                         'Accept': 'application/json'
                     },
                     body: JSON.stringify({
@@ -549,7 +525,7 @@
                     alert(data.message);
                     goBackAndReload();
                 })
-                .catch(error => alert('Erro ao processar: ' + error.message));
+                .catch(error => alert('Erro ao cancelar: ' + error.message));
         });
 
         // =========================================================================
@@ -604,7 +580,6 @@
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': csrfToken,
-                        'X-AUTHORIZATION-TOKEN': window.currentAuthToken || '', // Envia o token se houver
                         'Accept': 'application/json'
                     },
                     body: JSON.stringify({
@@ -646,6 +621,7 @@
             btn.addEventListener('click', function(e) {
                 let subtituloFinanceiro = "";
 
+                // Se a reserva atual não tem valor pago (foi movido ou estornado)
                 if (jaPagoNoAto <= 0) {
                     subtituloFinanceiro =
                         `\n\n⚠️ NOTA FINANCEIRA:\nComo o valor original foi transferido para outro horário ou estornado, esta reserva voltará com SALDO DEVEDOR TOTAL de R$ ${valorTotal}.`;
@@ -653,14 +629,11 @@
 
                 const confirmar = confirm(
                     `Deseja restaurar o horário das ${reservaHora}h para ${clienteNome}?` +
-                    subtituloFinanceiro);
+                    subtituloFinanceiro
+                );
 
                 if (!confirmar) {
                     e.preventDefault();
-                } else {
-                    // Se for um formulário POST comum (não fetch), injeta o token no campo hidden
-                    const tokenInput = document.getElementById('reactivate_auth_token');
-                    if (tokenInput) tokenInput.value = window.currentAuthToken;
                 }
             });
         });

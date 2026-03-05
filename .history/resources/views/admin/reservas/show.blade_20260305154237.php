@@ -505,6 +505,15 @@
         }
 
         // =========================================================================
+        // 🚫 LÓGICA DE NO-SHOW (FALTA)
+        // =========================================================================
+        function openNoShowModal() {
+            const url = "{{ route('admin.reservas.noshow', $reserva->id) }}";
+            // Reaproveita o modal de cancelamento mudando apenas o título/rótulo
+            openCancellationModal("{{ $reserva->client_name }}", "{{ $reserva->id }}", url, "REGISTRAR FALTA (NO-SHOW)");
+        }
+
+        // =========================================================================
         // ❌ LÓGICA DE CANCELAMENTO
         // =========================================================================
         function openCancellationModal(clientName, reservaId, url, actionLabel) {
