@@ -136,8 +136,8 @@ Route::middleware(['auth'])->group(function () {
                 Route::patch('/{reserva}/reativar-manutencao', [AdminController::class, 'reativarManutencao'])->name('reativar_manutencao');
                 Route::patch('/{reserva}/cancelar', [AdminController::class, 'cancelarReserva'])->name('cancelar');
                 Route::patch('/{reserva}/cancelar-pontual', [AdminController::class, 'cancelarReservaRecorrente'])->name('cancelar_pontual');
-                // Agora, tanto o Dashboard quanto a lista de usuários usarão a mesma lógica segura
-                Route::delete('/cancelar-serie/{reserva}', [AdminController::class, 'cancelarSerieRecorrente'])->name('cancelar_serie');
+                Route::delete('/{reserva}/cancelar-serie', [AdminController::class, 'cancelarSerieRecorrente'])->name('cancelar_serie');
+                Route::delete('/cancel-client-series/{masterId}', [AdminController::class, 'cancelClientSeries'])->name('cancel_client_series');
             });
         });
         // 👥 4. GESTÃO DE USUÁRIOS (Hierarquia protegida no Controller e Middleware)

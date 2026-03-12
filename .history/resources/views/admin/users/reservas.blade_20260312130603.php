@@ -280,6 +280,7 @@
             submitBtn.disabled = true;
             submitBtn.textContent = 'CANCELANDO...';
 
+            // --- SUBMISSÃO DO FORMULÁRIO (VERSÃO FINAL BLINDADA) ---
             try {
                 const response = await fetch(url, {
                     method: 'POST',
@@ -290,13 +291,9 @@
                         'Accept': 'application/json',
                     },
                     body: JSON.stringify({
-                        // ✅ Sincronizado com o validate do Controller
                         cancellation_reason: justificativa,
-
-                        // ✅ Campos obrigatórios enviados como padrão
                         should_refund: false,
                         paid_amount_ref: 0,
-
                         _method: 'DELETE'
                     })
                 });
@@ -304,43 +301,50 @@
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    // 1. Mostra a mensagem de sucesso
-                    displayAjaxMessage(result.message, 'success');
+                    // 1. Feedback visual imediato
+                    displayAjaxMessage(result.message || "Série cancelada com sucesso!", 'success');
 
-                    // 2. Fecha o modal com a animação
+                    // 2. Fecha o modal
                     closeSeriesCancellationModal();
 
-                    // 3. Efeito visual de remoção do container da série
-                    const container = document.getElementById(`series-container-${masterId}`);
-                    if (container) {
-                        container.style.transition = 'all 0.5s ease';
-                        container.style.opacity = '0';
-                        container.style.transform = 'translateY(20px)';
+                    // 3. Efeito visual de remoção (envolvido em try/catch para não travar o reload)
+                    try {
+                        const container = document.getElementById(`series-container-${masterId}`);
+                        if (container) {
+                            container.style.transition = 'all 0.4s ease';
+                            container.style.opacity = '0';
+                            container.style.transform = 'scale(0.95)';
 
-                        // Remove do DOM após a transição
-                        setTimeout(() => {
-                            container.remove();
-                            // Se não houver mais séries, recarrega para mostrar o "Empty State"
-                            if (document.querySelectorAll('[id^="series-container-"]').length === 0) {
-                                window.location.reload();
-                            }
-                        }, 500);
+                            setTimeout(() => {
+                                container.remove();
+                            }, 400);
+                        }
+                    } catch (e) {
+                        console.warn("Erro visual ao remover container, mas o processo continua...");
                     }
 
-                    // 4. Recarrega a página após 1 segundo para atualizar saldos e status
+                    // 4. 🚀 REFRESH INFALÍVEL
+                    // O setTimeout garante que o usuário veja a mensagem antes da página piscar
                     setTimeout(() => {
-                        window.location.reload();
-                    }, 500);
+                        console.log('Executando atualização de página...');
+                        // Força o navegador a recarregar a URL atual ignorando cache
+                        window.location.href = window.location.href;
+                    }, 700);
 
                 } else {
-                    // Caso o Controller retorne erro de validação ou lógica
-                    const errorMsg = result.errors ? Object.values(result.errors).flat().join(' ') : (result
-                        .message || 'Erro ao processar requisição.');
+                    // Tratamento de erros vindo do PHP (ex: validação)
+                    let errorMsg = 'Erro ao processar requisição.';
+                    if (result.errors) {
+                        errorMsg = Object.values(result.errors).flat().join(' ');
+                    } else if (result.message) {
+                        errorMsg = result.message;
+                    }
                     displayAjaxMessage(errorMsg, 'error');
                 }
             } catch (error) {
-                console.error('Erro:', error);
-                displayAjaxMessage("Falha crítica de comunicação com o servidor.", 'error');
+                console.error('Erro Crítico:', error);
+                displayAjaxMessage("Falha na comunicação com o servidor. Tente atualizar a página manualmente.",
+                    'error');
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Confirmar Cancelamento';

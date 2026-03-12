@@ -658,11 +658,12 @@ class AdminController extends Controller
      */
     public function cancelarSerieRecorrente(Request $request, $reserva)
     {
-        // 1. 🛡️ GARANTIA DE OBJETO
+        // 1. 🛡️ GARANTIA DE OBJETO: Se vier o ID (string) do atalho, buscamos a Reserva.
         if (!$reserva instanceof \App\Models\Reserva) {
             $reserva = \App\Models\Reserva::find($reserva);
         }
 
+        // Se não encontrar a reserva, aborta com erro amigável
         if (!$reserva) {
             return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404);
         }
@@ -672,7 +673,7 @@ class AdminController extends Controller
             return response()->json(['success' => false, 'message' => 'A reserva não pertence a uma série recorrente.'], 400);
         }
 
-        // 3. 🛡️ TRAVA DE SEGURANÇA
+        // 3. 🛡️ TRAVA DE SEGURANÇA: Evita processar algo que já está cancelado
         $statusJaCancelados = [
             \App\Models\Reserva::STATUS_CANCELADA,
             \App\Models\Reserva::STATUS_REJEITADA,
@@ -683,11 +684,11 @@ class AdminController extends Controller
         if (in_array($reserva->status, $statusJaCancelados)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Esta reserva individual já está cancelada.'
+                'message' => 'Esta reserva individual já está cancelada. Para cancelar o restante da série, selecione uma reserva que ainda esteja ATIVA.'
             ], 400);
         }
 
-        // 4. ✅ STATUS PERMITIDOS
+        // 4. ✅ STATUS PERMITIDOS: Adicionado STATUS_PENDENTE e variações de string
         $statusPermitidos = [
             \App\Models\Reserva::STATUS_CONFIRMADA,
             \App\Models\Reserva::STATUS_CONCLUIDA,
@@ -696,8 +697,8 @@ class AdminController extends Controller
             'concluida',
             'pending',
             'confirmed',
-            'no_show',
-            'awaiting_payment'
+            'no_show',          // 👈 Adicionado para resolver seu erro atual
+            'awaiting_payment'  // 👈 Adicionado por segurança
         ];
 
         if (!in_array($reserva->status, $statusPermitidos)) {
@@ -707,7 +708,9 @@ class AdminController extends Controller
             ], 400);
         }
 
-        // 5. 📝 VALIDAÇÃO DOS DADOS
+        // 5. 📝 VALIDAÇÃO DOS DADOS DO MODAL
+        // Se os campos não vierem na requisição (ex: clique direto na lista),
+        // nós injetamos valores padrão para passar na validação abaixo.
         if (!$request->has('cancellation_reason')) {
             $request->merge([
                 'cancellation_reason' => 'Cancelamento de série via painel administrativo',
@@ -726,26 +729,23 @@ class AdminController extends Controller
 
         DB::beginTransaction();
         try {
-            // 💰 AJUSTE FINANCEIRO
+            // 💰 AJUSTE FINANCEIRO DA RESERVA ATUAL (A que disparou o cancelamento)
             $pagoHoje = (float)($reserva->total_paid ?? 0);
 
+            // Se o gestor marcou estorno, o preço final da reserva atual vira 0
             if ($validated['should_refund']) {
                 $reserva->final_price = 0;
             } else {
+                // Se não estornar, o preço final vira o que o cliente já pagou até agora
                 $reserva->final_price = $pagoHoje;
             }
 
             $reserva->cancellation_reason = '[Gestor - Cancelamento Série] ' . $validated['cancellation_reason'];
+            // Garante que a reserva atual também fique com status cancelado
             $reserva->status = \App\Models\Reserva::STATUS_CANCELADA;
             $reserva->save();
 
-            // ✨ O SEGREDO PARA FICAR VERDE:
-            // Recria o slot vazio para o dia de hoje (dia 18) para que outro cliente possa agendar.
-            if (!$reserva->is_fixed) {
-                $this->reservaController->recreateFixedSlot($reserva);
-            }
-
-            // 🛑 DELEGAÇÃO: Remove/Limpa as reservas FUTURAS (dia 25 em diante)
+            // 🛑 DELEGAÇÃO: Chama o método do Controller de Reservas que limpa as FUTURAS
             $result = $this->reservaController->cancelSeries(
                 $masterId,
                 $reserva->cancellation_reason,
@@ -756,7 +756,7 @@ class AdminController extends Controller
             DB::commit();
 
             $message = "Série cancelada ({$result['cancelled_count']} slots liberados). " .
-                "Saldos ajustados. " .
+                "Saldos ajustados para evitar pendências no caixa. " .
                 ($result['message_finance'] ?? '');
 
             return response()->json(['success' => true, 'message' => $message], 200);

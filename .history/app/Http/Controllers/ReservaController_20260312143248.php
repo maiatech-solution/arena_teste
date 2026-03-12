@@ -749,65 +749,68 @@ class ReservaController extends Controller
         }
 
         $validated = $validator->validated();
+
+        // 🛡️ DEBUG & PROTEÇÃO: Validação de Caixa ANTES de processar
+        $financeiroController = app(\App\Http\Controllers\FinanceiroController::class);
         $arenaId = $validated['arena_id'];
         $dataReserva = $validated['date'];
-        $startTimeRaw = $validated['start_time'];
 
-        // 🛡️ DEBUG & PROTEÇÃO: Validação de Caixa
-        $financeiroController = app(\App\Http\Controllers\FinanceiroController::class);
         if ($financeiroController->isCashClosed($dataReserva, $arenaId)) {
             return response()->json([
                 'success' => false,
-                'message' => "Bloqueio de Segurança: O caixa desta arena para o dia " . date('d/m/Y', strtotime($dataReserva)) . " já está encerrado."
+                'message' => "Bloqueio de Segurança: O caixa desta arena para o dia " . date('d/m/Y', strtotime($dataReserva)) . " já está encerrado. Reabra-o para agendar."
             ], 422);
         }
 
-        // 2. Redirecionamento de Lógica
+        // 2. Redirecionamento de Lógica: Se for recorrente, delega para o método de série
         if ($request->boolean('is_recurrent')) {
             return $this->storeRecurrentReservaApi($request);
         }
 
-        // --- 🕒 NORMALIZAÇÃO ---
-        $startTimeNormalized = \Carbon\Carbon::parse($startTimeRaw)->format('H:i:s');
-        if ($startTimeRaw === '23:00' && ($validated['end_time'] === '0:00' || $validated['end_time'] === '00:00')) {
+        $reservaIdToUpdate = $validated['reserva_id_to_update'];
+        $startTimeRaw = $validated['start_time'];
+        $endTimeRaw = $validated['end_time'];
+
+        if ($startTimeRaw === '23:00' && ($endTimeRaw === '0:00' || $endTimeRaw === '00:00')) {
             $validated['end_time'] = '23:59';
         }
 
-        // ----------------------------------------------------------------------
-        // 🚀 AÇÃO AUTOSSUFICIENTE: LIMPEZA DE TRILHO (PONTUAL)
-        // ----------------------------------------------------------------------
-        // Se houver algum registro de "lixo" (cancelado, livre ou fixo) nesse horário exato,
-        // nós o removemos agora para garantir que a criação não encontre duplicidade.
-        Reserva::where('arena_id', $arenaId)
-            ->whereDate('date', $dataReserva)
-            ->where('start_time', $startTimeNormalized)
-            ->where(function ($q) {
-                $q->whereIn('status', ['cancelled', 'cancelada', 'rejected', 'free', 'no-show', 'falta'])
-                    ->orWhere('is_fixed', true);
-            })->delete();
+        // 3. Verificação do Slot Fixo
+        $oldReserva = Reserva::find($reservaIdToUpdate);
+        if (!$oldReserva || !$oldReserva->is_fixed || $oldReserva->status !== Reserva::STATUS_FREE) {
+            return response()->json(['success' => false, 'message' => 'O slot selecionado não está mais disponível.'], 409);
+        }
 
-        // 3. Verificação do Slot (Não precisamos mais do ID exato, usamos a data/hora limpa)
-        // Mas buscamos o cliente para prosseguir
+        // 4. Tratamento do valor do sinal
+        if (!empty($validated['signal_value'])) {
+            $validated['signal_value'] = (float) str_replace(',', '.', str_replace('.', '', $validated['signal_value']));
+        }
+
+        // 5. Processamento/Busca do Cliente
         $clientUser = $this->findOrCreateClient([
             'name' => $validated['client_name'],
             'whatsapp_contact' => $validated['client_contact'],
             'email' => null,
         ]);
 
-        if (!$clientUser || $clientUser->is_blocked) {
-            return response()->json(['success' => false, 'message' => '🚫 Cliente inexistente ou bloqueado.'], 403);
+        if (!$clientUser) {
+            return response()->json(['success' => false, 'message' => 'Erro ao processar dados do cliente.'], 500);
         }
 
-        if (!empty($validated['signal_value'])) {
-            $validated['signal_value'] = (float) str_replace(',', '.', str_replace('.', '', $validated['signal_value']));
+        // 🚀 5.1 TRAVA DE BLACKLIST (is_blocked): Adicionado para respeitar a punição de faltas
+        if ($clientUser->is_blocked) {
+            return response()->json([
+                'success' => false,
+                'message' => '🚫 Bloqueio de Blacklist: Este cliente está impedido de realizar novos agendamentos.'
+            ], 403);
         }
 
         $validated['price'] = $validated['fixed_price'];
 
         DB::beginTransaction();
         try {
-            // 6. DELEGA A LÓGICA DE CRIAÇÃO (Agora com o banco limpo)
-            $newReserva = $this->createConfirmedReserva($validated, $clientUser, null);
+            // 6. DELEGA A LÓGICA DE CRIAÇÃO
+            $newReserva = $this->createConfirmedReserva($validated, $clientUser, $reservaIdToUpdate);
 
             // 🏟️ GARANTIA: Força a Arena correta
             $newReserva->update(['arena_id' => $arenaId]);
@@ -823,6 +826,12 @@ class ReservaController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro no Agendamento Rápido: " . $e->getMessage());
+
+            if (str_contains($e->getMessage(), 'caixa')) {
+                return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+            }
+
+            $this->recreateFixedSlot($oldReserva);
             return response()->json(['success' => false, 'message' => 'Erro ao salvar reserva: ' . $e->getMessage()], 500);
         }
     }
@@ -833,7 +842,7 @@ class ReservaController extends Controller
      */
     public function storeRecurrentReservaApi(Request $request)
     {
-        // 1. Validação (Garante que os dados básicos estão corretos)
+        // 1. Validação
         $validator = Validator::make($request->all(), [
             'date' => 'required|date_format:Y-m-d',
             'start_time' => 'required|date_format:H:i',
@@ -842,11 +851,16 @@ class ReservaController extends Controller
                 'date_format:H:i',
                 function ($attribute, $value, $fail) use ($request) {
                     $startTime = $request->input('start_time');
-                    if (($value === '0:00' || $value === '00:00') && $startTime === '23:00') return;
+                    if (($value === '0:00' || $value === '00:00') && $startTime === '23:00') {
+                        return;
+                    }
                     try {
                         $startTimeCarbon = \Carbon\Carbon::createFromFormat('H:i', $startTime);
                         $endTimeCarbon = \Carbon\Carbon::createFromFormat('H:i', $value);
-                        if ($endTimeCarbon->lte($startTimeCarbon)) $fail('O horário final deve ser posterior ao horário inicial.');
+
+                        if ($endTimeCarbon->lte($startTimeCarbon)) {
+                            $fail('O horário final deve ser posterior ao horário inicial.');
+                        }
                     } catch (\Exception $e) {
                         $fail('Formato de horário inválido.');
                     }
@@ -860,6 +874,9 @@ class ReservaController extends Controller
             'signal_value' => 'nullable',
             'payment_method' => 'required|string',
             'notes' => 'nullable|string',
+        ], [
+            'reserva_id_to_update.exists' => 'O slot de horário selecionado não existe ou não está disponível.',
+            'client_contact.digits' => 'O WhatsApp deve conter exatamente 11 dígitos (DDD + Número).',
         ]);
 
         if ($validator->fails()) {
@@ -867,39 +884,74 @@ class ReservaController extends Controller
         }
 
         $validated = $validator->validated();
-        $arenaId = $validated['arena_id'];
-        $initialDate = Carbon::parse($validated['date']);
-        $endDate = $initialDate->copy()->addMonths(6);
-        $startTimeNormalized = Carbon::createFromFormat('H:i', $validated['start_time'])->format('H:i:s');
 
-        // Ajuste meia-noite
-        $endTimeNormalized = ($validated['start_time'] === '23:00' && ($validated['end_time'] === '0:00' || $validated['end_time'] === '00:00'))
-            ? '23:59:59'
-            : Carbon::createFromFormat('H:i', $validated['end_time'])->format('H:i:s');
+        // 2. Normalização de Valores e Horários
+        $price = (float) $validated['fixed_price'];
+        $signalValueRaw = $validated['signal_value'] ?? '0,00';
+        $signalValue = is_string($signalValueRaw)
+            ? (float) str_replace(',', '.', str_replace('.', '', $signalValueRaw))
+            : (float) $signalValueRaw;
+
+        $isMidnight = false;
+        if ($validated['start_time'] === '23:00' && ($validated['end_time'] === '0:00' || $validated['end_time'] === '00:00')) {
+            $validated['end_time'] = '23:59';
+            $isMidnight = true;
+        }
+
+        $initialDate = Carbon::parse($validated['date']);
+        $dayOfWeek = $initialDate->dayOfWeek;
+        $startTimeNormalized = Carbon::createFromFormat('H:i', $validated['start_time'])->format('H:i:s');
+        $endTimeNormalized = $isMidnight ? '23:59:59' : Carbon::createFromFormat('H:i', $validated['end_time'])->format('H:i:s');
+
+        $scheduleId = $validated['reserva_id_to_update'];
+        $arenaId = $validated['arena_id'];
+        $endDate = $initialDate->copy()->addMonths(6);
 
         // 3. Processamento do Cliente
         $clientUser = $this->findOrCreateClient([
             'name' => $validated['client_name'],
             'whatsapp_contact' => $validated['client_contact'],
             'email' => null,
+            'data_nascimento' => null,
         ]);
 
-        // ----------------------------------------------------------------------
-        // 🚀 AÇÃO AUTOSSUFICIENTE: LIMPEZA DE TRILHO
-        // ----------------------------------------------------------------------
-        // Antes de qualquer coisa, limpamos registros que NÃO são reservas ativas
-        // (Cancelados, Rejeitados, Slots Livres) no horário exato para os próximos 6 meses.
-        // Isso garante que o sistema não "tropece" em lixo de testes anteriores.
+        if (!$clientUser) {
+            return response()->json(['success' => false, 'message' => 'Erro interno ao identificar ou criar o cliente.'], 500);
+        }
+
+        if ($clientUser->is_blocked) {
+            return response()->json([
+                'success' => false,
+                'message' => '🚫 Bloqueio de Blacklist: Este cliente possui restrições para novos agendamentos mensais.'
+            ], 403);
+        }
+
+        // 🛡️ TRAVA DE CONFLITO DE MENSALISTA FUTURO
+        $futureMensalista = Reserva::where('arena_id', $arenaId)
+            ->where('day_of_week', $dayOfWeek)
+            ->where('start_time', $startTimeNormalized)
+            ->where('is_recurrent', true)
+            ->where('is_fixed', false)
+            ->whereIn('status', [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA])
+            ->where('date', '>', $initialDate->toDateString())
+            ->first();
+
+        if ($futureMensalista) {
+            $dataConflito = \Carbon\Carbon::parse($futureMensalista->date)->format('d/m/Y');
+            return response()->json([
+                'success' => false,
+                'message' => "⚠️ BLOQUEIO: O cliente '{$futureMensalista->client_name}' já é mensalista deste horário a partir do dia {$dataConflito}."
+            ], 422);
+        }
+
+        // 🚀 4. LIMPEZA PRÉVIA (O PULO DO GATO)
+        // Remove lixo (cancelados/livres) do slot inicial para evitar que o loop pule a primeira data
         Reserva::where('arena_id', $arenaId)
             ->where('start_time', $startTimeNormalized)
-            ->whereBetween('date', [$initialDate->toDateString(), $endDate->toDateString()])
-            ->where(function ($q) {
-                $q->whereIn('status', ['cancelled', 'cancelada', 'rejected', 'rejeitada', 'free', 'no-show', 'falta'])
-                    ->orWhere('is_fixed', true);
-            })
+            ->whereDate('date', $initialDate->toDateString())
+            ->whereIn('status', ['cancelled', 'cancelada', 'rejected', 'free'])
             ->delete();
 
-        // 4. Coleta datas futuras (Uma por semana)
         $datesToSchedule = [];
         $dateIterate = $initialDate->copy();
         while ($dateIterate->lte($endDate)) {
@@ -908,19 +960,21 @@ class ReservaController extends Controller
         }
 
         $reservasToCreate = [];
+        $fixedSlotsToDelete = [];
         $conflictCount = 0;
 
-        // 5. Verificação de Disponibilidade REAL e Montagem do Lote
+        // 5. Verificação de Disponibilidade na Série
         foreach ($datesToSchedule as $dateString) {
+            $isFirstDate = $dateString === $initialDate->toDateString();
 
-            // O sistema só considera conflito se houver uma reserva ATIVA (Confirmada/Paga/Pendente)
-            // Como limpamos os cancelados acima, aqui só sobrará o que é bloqueio real.
-            $hasRealConflict = Reserva::whereDate('date', $dateString)
+            // Só considera overlap se houver reserva ATIVA (ignora cancelados)
+            $overlapWithReal = Reserva::whereDate('date', $dateString)
                 ->where('arena_id', $arenaId)
+                ->where('is_fixed', false)
                 ->whereIn('status', [
                     Reserva::STATUS_CONFIRMADA,
-                    Reserva::STATUS_CONCLUIDA,
                     Reserva::STATUS_PENDENTE,
+                    Reserva::STATUS_CONCLUIDA,
                     Reserva::STATUS_LANCADA_CAIXA
                 ])
                 ->where(function ($q) use ($startTimeNormalized, $endTimeNormalized) {
@@ -928,17 +982,43 @@ class ReservaController extends Controller
                         ->where('end_time', '>', $startTimeNormalized);
                 })->exists();
 
-            if ($hasRealConflict) {
+            // Busca slot fixo ou livre
+            $fixedSlotQuery = Reserva::where('arena_id', $arenaId)
+                ->whereDate('date', $dateString)
+                ->where('start_time', $startTimeNormalized)
+                ->where(function ($q) {
+                    $q->where('is_fixed', true)
+                        ->orWhere('status', Reserva::STATUS_FREE);
+                });
+
+            if ($startTimeNormalized === '23:00:00') {
+                $fixedSlotQuery->where(function ($q) {
+                    $q->where('end_time', '00:00:00')->orWhere('end_time', 'LIKE', '23:59%');
+                });
+            } else {
+                $fixedSlotQuery->where('end_time', $endTimeNormalized);
+            }
+
+            $fixedSlot = $fixedSlotQuery->first();
+
+            // Se for a primeira data e acabamos de limpar, criamos um "slot virtual" para não pular
+            if ($isFirstDate && !$fixedSlot && !$overlapWithReal) {
+                $fixedSlot = (object)['id' => null];
+            }
+
+            if ($overlapWithReal || (!$fixedSlot && !$isFirstDate)) {
                 $conflictCount++;
+                if ($isFirstDate) {
+                    return response()->json(['success' => false, 'message' => "O slot inicial já possui um agendamento ativo."], 409);
+                }
                 continue;
             }
 
-            // Define valor do sinal apenas para a primeira reserva da série
-            $slotSignal = ($dateString === $initialDate->toDateString())
-                ? (float)str_replace(',', '.', str_replace('.', '', $validated['signal_value'] ?? '0'))
-                : 0;
+            if ($fixedSlot && isset($fixedSlot->id)) {
+                $fixedSlotsToDelete[] = $fixedSlot->id;
+            }
 
-            $price = (float)$validated['fixed_price'];
+            $slotSignal = $isFirstDate ? $signalValue : 0.00;
             $isPaid = (abs($slotSignal - $price) < 0.01 || $slotSignal > $price);
 
             $reservasToCreate[] = [
@@ -946,7 +1026,7 @@ class ReservaController extends Controller
                 'arena_id' => $arenaId,
                 'manager_id' => Auth::id(),
                 'date' => $dateString,
-                'day_of_week' => Carbon::parse($dateString)->dayOfWeek,
+                'day_of_week' => $dayOfWeek,
                 'start_time' => $startTimeNormalized,
                 'end_time' => $endTimeNormalized,
                 'price' => $price,
@@ -957,7 +1037,7 @@ class ReservaController extends Controller
                 'status' => $isPaid ? Reserva::STATUS_CONCLUIDA : Reserva::STATUS_CONFIRMADA,
                 'client_name' => $clientUser->name,
                 'client_contact' => $clientUser->whatsapp_contact,
-                'notes' => $validated['notes'] ?? null,
+                'notes' => $validated['notes'],
                 'is_fixed' => false,
                 'is_recurrent' => true,
                 'created_at' => Carbon::now(),
@@ -965,53 +1045,51 @@ class ReservaController extends Controller
             ];
         }
 
-        // 6. Gravação Final
+        // 6. Persistência
         DB::beginTransaction();
         try {
-            if (empty($reservasToCreate)) {
-                throw new \Exception("Todas as datas deste período estão ocupadas por reservas ativas.");
+            if (!empty($fixedSlotsToDelete)) {
+                Reserva::whereIn('id', $fixedSlotsToDelete)->delete();
             }
 
-            // Grava a primeira e gera o ID da série (master)
-            $firstData = array_shift($reservasToCreate);
-            $master = Reserva::create($firstData);
-            $master->update(['recurrent_series_id' => $master->id]);
+            $firstReservaData = array_shift($reservasToCreate);
+            $masterReserva = Reserva::create($firstReservaData);
+            $masterReserva->update(['recurrent_series_id' => $masterReserva->id]);
 
-            // Grava o restante em lote vinculando ao ID da primeira
-            if (!empty($reservasToCreate)) {
-                $batch = array_map(function ($item) use ($master) {
-                    $item['recurrent_series_id'] = $master->id;
-                    return $item;
-                }, $reservasToCreate);
-                Reserva::insert($batch);
+            $batchReservas = array_map(function ($item) use ($masterReserva) {
+                $item['recurrent_series_id'] = $masterReserva->id;
+                return $item;
+            }, $reservasToCreate);
+
+            if (!empty($batchReservas)) {
+                Reserva::insert($batchReservas);
             }
 
-            // Registra sinal financeiro se houver
-            if ($master->signal_value > 0) {
-                \App\Models\FinancialTransaction::create([
-                    'reserva_id' => $master->id,
-                    'arena_id' => $arenaId,
-                    'user_id' => $clientUser->id,
+            if ($signalValue > 0) {
+                FinancialTransaction::create([
+                    'reserva_id' => $masterReserva->id,
+                    'arena_id'   => $masterReserva->arena_id,
+                    'user_id'    => $clientUser->id,
                     'manager_id' => Auth::id(),
-                    'amount' => $master->signal_value,
-                    'type' => \App\Models\FinancialTransaction::TYPE_SIGNAL,
+                    'amount'     => $signalValue,
+                    'type'       => FinancialTransaction::TYPE_SIGNAL,
                     'payment_method' => $validated['payment_method'],
-                    'description' => 'Sinal de série mensal (Dashboard)',
-                    'paid_at' => Carbon::now(),
+                    'description' => 'Sinal de série recorrente (Dashboard)',
+                    'paid_at'    => Carbon::now(),
                 ]);
             }
 
             DB::commit();
 
-            $totalSérie = count($reservasToCreate) + 1;
+            $total = count($batchReservas) + 1;
             return response()->json([
                 'success' => true,
-                'message' => "Série de {$totalSérie} reservas criada com sucesso!" . ($conflictCount > 0 ? " ({$conflictCount} conflitos REAIS foram pulados)." : "")
+                'message' => "Série de {$total} reservas criada com sucesso!" . ($conflictCount > 0 ? " ({$conflictCount} conflitos pulados)." : "")
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Erro Série Recorrente: " . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Erro ao processar série: ' . $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Erro: ' . $e->getMessage()], 500);
         }
     }
 

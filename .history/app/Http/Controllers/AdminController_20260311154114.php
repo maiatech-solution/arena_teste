@@ -319,6 +319,53 @@ class AdminController extends Controller
         return $this->reservaController->rejeitar($request, $reserva);
     }
 
+    /**
+     * ✅ CORRIGIDO: Registra a falta do cliente (No-Show) - DELEGADO.
+     * Delega a manipulação de status e transações financeiras.
+
+
+     *public function registerNoShow(Request $request, Reserva $reserva)
+     *{
+     *if ($reserva->status !== Reserva::STATUS_CONFIRMADA) {
+     *    return response()->json(['success' => false, 'message' => 'A reserva deve estar confirmada para ser marcada como falta.'], 400);
+     *}
+
+     *$validated = $request->validate([
+     *    'no_show_reason' => 'required|string|min:5|max:255',
+     *    'should_refund' => 'required|boolean',
+     *    'paid_amount' => 'required|numeric|min:0',
+     *]);
+
+     *DB::beginTransaction();
+     *try {
+     *    // 🛑 DELEGA A LÓGICA CENTRALIZADA
+     *    $result = $this->reservaController->finalizeStatus(
+     *        $reserva,
+     *        Reserva::STATUS_NO_SHOW,
+     *        '[Gestor] ' . $validated['no_show_reason'],
+     *        $validated['should_refund'],
+     *        (float) $validated['paid_amount']
+     *    );
+
+     *    DB::commit();
+     *    $message = "Reserva marcada como Falta." . $result['message_finance'];
+     *    return response()->json(['success' => true, 'message' => $message], 200);
+     *} catch (ValidationException $e) {
+     *    // Garante que erros de validação sejam tratados corretamente
+     *    DB::rollBack();
+     *    return response()->json(['success' => false, 'errors' => $e->errors()], 422);
+     *} catch (\Exception $e) {
+     *    DB::rollBack();
+     *    Log::error("Erro ao registrar No-Show para reserva ID: {$reserva->id}.", ['exception' => $e]);
+     *    return response()->json([
+     *        'success' => false,
+     *        'message' => 'Erro interno ao registrar a falta. Detalhe: ' . $e->getMessage()
+     *    ], 500);
+     *}
+     *}
+     */
+
+
 
     /**
      * ✅ REVISADO: Reativa uma reserva garantindo compatibilidade de data e timezone.
@@ -514,6 +561,11 @@ class AdminController extends Controller
         }
     }
 
+
+    /**
+     * ✅ CORRIGIDO: Cancela uma reserva PONTUAL confirmada - DELEGADO.
+     * Delega a manipulação de status e transações financeiras.
+     */
     /**
      * ✅ CORRIGIDO: Cancela uma reserva PONTUAL confirmada - DELEGADO.
      * Inclui trava de segurança para autorização de supervisor caso o usuário seja colaborador.
@@ -656,79 +708,41 @@ class AdminController extends Controller
     /**
      * ✅ CORRIGIDO: Cancela TODAS as reservas futuras de uma série recorrente com trava de duplicidade.
      */
-    public function cancelarSerieRecorrente(Request $request, $reserva)
+    public function cancelarSerieRecorrente(Request $request, Reserva $reserva)
     {
-        // 1. 🛡️ GARANTIA DE OBJETO
-        if (!$reserva instanceof \App\Models\Reserva) {
-            $reserva = \App\Models\Reserva::find($reserva);
-        }
-
-        if (!$reserva) {
-            return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404);
-        }
-
-        // 2. 🛡️ VERIFICAÇÃO DE RECORRÊNCIA
         if (!$reserva->is_recurrent) {
             return response()->json(['success' => false, 'message' => 'A reserva não pertence a uma série recorrente.'], 400);
         }
 
-        // 3. 🛡️ TRAVA DE SEGURANÇA
-        $statusJaCancelados = [
-            \App\Models\Reserva::STATUS_CANCELADA,
-            \App\Models\Reserva::STATUS_REJEITADA,
-            'cancelled',
-            'rejected'
-        ];
-
-        if (in_array($reserva->status, $statusJaCancelados)) {
+        // 🛡️ TRAVA DE SEGURANÇA: Se a reserva já foi cancelada/rejeitada individualmente,
+        // não permitimos que ela dispare um novo estorno financeiro pela série.
+        if (in_array($reserva->status, [Reserva::STATUS_CANCELADA, Reserva::STATUS_REJEITADA, 'cancelled', 'rejected'])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Esta reserva individual já está cancelada.'
+                'message' => 'Esta reserva individual já está cancelada. Para cancelar o restante da série, selecione uma reserva que ainda esteja ATIVA.'
             ], 400);
         }
 
-        // 4. ✅ STATUS PERMITIDOS
-        $statusPermitidos = [
-            \App\Models\Reserva::STATUS_CONFIRMADA,
-            \App\Models\Reserva::STATUS_CONCLUIDA,
-            \App\Models\Reserva::STATUS_PENDENTE,
-            'completed',
-            'concluida',
-            'pending',
-            'confirmed',
-            'no_show',
-            'awaiting_payment'
-        ];
+        $statusPermitidos = [Reserva::STATUS_CONFIRMADA, Reserva::STATUS_CONCLUIDA, 'completed', 'concluida'];
 
         if (!in_array($reserva->status, $statusPermitidos)) {
-            return response()->json([
-                'success' => false,
-                'message' => "O status atual ({$reserva->status}) não permite o cancelamento da série."
-            ], 400);
-        }
-
-        // 5. 📝 VALIDAÇÃO DOS DADOS
-        if (!$request->has('cancellation_reason')) {
-            $request->merge([
-                'cancellation_reason' => 'Cancelamento de série via painel administrativo',
-                'should_refund'       => false,
-                'paid_amount_ref'     => (float)($reserva->total_paid ?? 0)
-            ]);
+            return response()->json(['success' => false, 'message' => 'O status atual não permite o cancelamento da série.'], 400);
         }
 
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|min:5|max:255',
-            'should_refund'       => 'required|boolean',
-            'paid_amount_ref'     => 'required|numeric|min:0',
+            'should_refund' => 'required|boolean',
+            'paid_amount_ref' => 'required|numeric|min:0',
         ]);
 
         $masterId = $reserva->recurrent_series_id ?? $reserva->id;
 
         DB::beginTransaction();
         try {
-            // 💰 AJUSTE FINANCEIRO
+            // 💰 AJUSTE FINANCEIRO DA RESERVA ATUAL
             $pagoHoje = (float)($reserva->total_paid ?? 0);
 
+            // Só ajustamos o final_price se houver saldo pago para evitar bagunça no caixa
             if ($validated['should_refund']) {
                 $reserva->final_price = 0;
             } else {
@@ -736,16 +750,9 @@ class AdminController extends Controller
             }
 
             $reserva->cancellation_reason = '[Gestor - Cancelamento Série] ' . $validated['cancellation_reason'];
-            $reserva->status = \App\Models\Reserva::STATUS_CANCELADA;
             $reserva->save();
 
-            // ✨ O SEGREDO PARA FICAR VERDE:
-            // Recria o slot vazio para o dia de hoje (dia 18) para que outro cliente possa agendar.
-            if (!$reserva->is_fixed) {
-                $this->reservaController->recreateFixedSlot($reserva);
-            }
-
-            // 🛑 DELEGAÇÃO: Remove/Limpa as reservas FUTURAS (dia 25 em diante)
+            // 🛑 DELEGAÇÃO: Chama o método que limpa as reservas FUTURAS
             $result = $this->reservaController->cancelSeries(
                 $masterId,
                 $reserva->cancellation_reason,
@@ -756,27 +763,15 @@ class AdminController extends Controller
             DB::commit();
 
             $message = "Série cancelada ({$result['cancelled_count']} slots liberados). " .
-                "Saldos ajustados. " .
+                "Saldos ajustados para evitar pendências no caixa. " .
                 ($result['message_finance'] ?? '');
 
             return response()->json(['success' => true, 'message' => $message], 200);
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error("Erro ao cancelar série recorrente ID: {$masterId}.", ['exception' => $e]);
+            Log::error("Erro ao cancelar série recorrente ID: {$masterId}.", ['exception' => $e]);
             return response()->json(['success' => false, 'message' => 'Erro interno: ' . $e->getMessage()], 500);
         }
-    }
-
-    /**
-     * Atalho para unificar chamadas do Dashboard e da Lista de Usuários
-     */
-    public function cancelClientSeries(Request $request, $reservaId)
-    {
-        // 🔍 O SEGREDO: Precisamos buscar a reserva no banco primeiro
-        $reserva = \App\Models\Reserva::findOrFail($reservaId);
-
-        // Agora passamos o OBJETO $reserva, e não apenas o ID
-        return $this->cancelarSerieRecorrente($request, $reserva);
     }
 
 
@@ -1198,19 +1193,13 @@ class AdminController extends Controller
         }
 
         $total = max(0, $total);
+
         $reserva->total_paid = $total;
 
-        // 💰 Lógica de Status de Pagamento
         if ($total <= 0) {
             $reserva->payment_status = 'unpaid';
         } elseif ($total >= $reserva->price) {
             $reserva->payment_status = 'paid';
-
-            // ✨ A CORREÇÃO: Se pagou tudo, o ciclo do jogo fechou.
-            // Mudamos para 'completed' para remover o "ATRASADO" (vermelho) do calendário.
-            if ($reserva->status === 'confirmed') {
-                $reserva->status = 'completed';
-            }
         } else {
             $reserva->payment_status = 'partial';
         }

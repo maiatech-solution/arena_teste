@@ -330,7 +330,7 @@
                     // 4. Recarrega a página após 1 segundo para atualizar saldos e status
                     setTimeout(() => {
                         window.location.reload();
-                    }, 500);
+                    }, 1200);
 
                 } else {
                     // Caso o Controller retorne erro de validação ou lógica

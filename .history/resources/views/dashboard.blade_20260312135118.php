@@ -1533,7 +1533,7 @@
                 }, 300);
             }
 
-            // ✅ VERSÃO ATUALIZADA E CORRIGIDA PARA ATUALIZAÇÃO AUTOMÁTICA
+            // ✅ ADICIONADO: Parâmetro supervisorToken para auditoria e segurança
             async function sendCancellationRequest(reservaId, method, urlBase, reason, supervisorToken = null) {
                 const url = urlBase.replace(':id', reservaId);
                 const refundChoice = document.querySelector('input[name="refund_choice"]:checked');
@@ -1550,7 +1550,6 @@
 
                 const submitBtn = document.getElementById('confirm-cancellation-btn');
                 submitBtn.disabled = true;
-                submitBtn.textContent = 'Processando...';
 
                 try {
                     const response = await fetch(url, {
@@ -1564,41 +1563,30 @@
                     });
 
                     const result = await response.json();
-
-                    // 1. Fecha o modal
                     closeCancellationModal();
 
                     if (response.ok && result.success) {
                         showDashboardMessage(result.message, 'success');
 
-                        if (window.calendar) {
-                            // 🚀 PASSO 1: REMOÇÃO OTIMISTA (Sumi com ele da tela agora!)
-                            const event = window.calendar.getEventById(reservaId);
-                            if (event) {
-                                event.remove();
-                            }
+                        if (calendar) {
+                            // 🚀 O PULO DO GATO:
+                            // Primeiro removemos todos os eventos da tela para forçar o vazio
+                            calendar.removeAllEvents();
 
-                            // 🚀 PASSO 2: LIMPEZA TOTAL E RECARGA ATRASADA
-                            // Removemos tudo e esperamos 1 segundo antes de buscar do servidor
-                            // para dar tempo do banco de dados terminar de liberar os slots.
-                            window.calendar.removeAllEvents();
-
+                            // Pedimos novos dados com um pequeno delay
                             setTimeout(() => {
-                                window.calendar.refetchEvents();
-                                console.log("Agenda sincronizada após deleção confirmada.");
-                            }, 1000); // 1 segundo é o tempo de segurança para o banco processar
+                                calendar.refetchEvents();
+                                console.log("Slots recarregados forçadamente.");
+                            }, 500);
                         }
                     } else {
                         showDashboardMessage(result.message || "Erro ao cancelar.", 'error');
-                        if (window.calendar) window.calendar.refetchEvents();
                     }
                 } catch (error) {
                     console.error('Erro:', error);
                     closeCancellationModal();
-                    if (window.calendar) window.calendar.refetchEvents();
                 } finally {
                     submitBtn.disabled = false;
-                    submitBtn.textContent = 'Confirmar Ação';
                 }
             }
 
@@ -1698,7 +1686,7 @@
             document.getElementById('no-show-form').addEventListener('submit', async function(e) {
                 e.preventDefault();
 
-                // 1. Captura de elementos e valores
+                // 1. Captura de elementos e valores (Igual ao seu)
                 const reasonInput = document.getElementById('no-show-reason-input');
                 const reason = reasonInput.value.trim();
                 const reasonErrorSpan = document.getElementById('no-show-reason-error-span');
@@ -1709,7 +1697,7 @@
                 const refundAmount = parseFloat(refundAmountInput.value) || 0;
                 const valueErrorSpan = document.getElementById('no-show-error-span');
 
-                // 2. Reset de estados de erro
+                // 2. Reset de estados de erro (Igual ao seu)
                 reasonErrorSpan.classList.add('hidden');
                 reasonInput.classList.remove('border-red-600', 'bg-red-50');
                 valueErrorSpan.classList.add('hidden');
@@ -1735,7 +1723,7 @@
                     const url = NO_SHOW_URL.replace(':id', reservaId);
                     const submitBtn = document.getElementById('confirm-no-show-btn');
 
-                    // Preparação dos dados
+                    // Preparação dos dados incluindo o token de quem autorizou
                     const bodyData = {
                         _token: csrfToken,
                         no_show_reason: reason,
@@ -1743,7 +1731,7 @@
                         should_refund: shouldRefund,
                         refund_amount: refundAmount,
                         paid_amount: paidAmount,
-                        supervisor_token: supervisorEmail
+                        supervisor_token: supervisorEmail // ⬅️ Envia o e-mail do gestor
                     };
 
                     // 4. Estado de carregamento
@@ -1765,25 +1753,10 @@
                         const result = await response.json();
 
                         if (response.ok && result.success) {
-                            // 🎯 PASSO 1: Fecha o modal imediatamente
                             closeNoShowModal();
                             showDashboardMessage(result.message || "Falta registrada com sucesso.",
                                 'success');
-
-                            // 🎯 PASSO 2: Atualização Otimista da Agenda
-                            if (window.calendar) {
-                                // Remove o quadradinho da reserva na hora
-                                const event = window.calendar.getEventById(reservaId);
-                                if (event) event.remove();
-
-                                // Limpa e força a busca de dados frescos após 1 segundo
-                                window.calendar.removeAllEvents();
-                                setTimeout(() => {
-                                    window.calendar.refetchEvents();
-                                    console.log(
-                                    "[DASHBOARD] Agenda sincronizada após No-Show.");
-                                }, 1000);
-                            }
+                            if (window.calendar) window.calendar.refetchEvents();
                         } else {
                             showDashboardMessage(result.message || "Erro ao processar falta.", 'error');
                             if (window.calendar) window.calendar.refetchEvents();
@@ -2117,8 +2090,8 @@
             <div class="grid grid-cols-1 gap-2">
                 ${!isFinalized && status !== 'cancelled' ?
                     `<button onclick="openPaymentModal('${reservaId}')" class="w-full px-4 py-3 bg-green-600 text-white font-black rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                                                                                                                                                                                                                                                                <span>💰 IR PARA O CAIXA</span>
-                                                                                                                                                                                                                                                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
+                                                                                                                                                                                                                                <span>💰 IR PARA O CAIXA</span>
+                                                                                                                                                                                                                            </button>` : `<div class="p-2 bg-green-50 border border-green-200 text-green-700 text-center rounded-lg font-bold text-sm">✅ PAGO / FINALIZADA</div>`}
 
                 <div class="grid grid-cols-2 gap-2 mt-1">
                     <button onclick="cancelarPontual('${reservaId}', ${isRecurrent}, '${paidAmountString}', ${isFinalized})"
@@ -2133,14 +2106,14 @@
 
                 ${!isFinalized && status !== 'no_show' ?
                     `<button onclick="openNoShowModal('${reservaId}', '${clientNameRaw.replace(/'/g, "\\'")}', '${paidAmountString}', ${isFinalized}, '${totalPriceString}')"
-                                                                                                                                                                                                                                                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
-                                                                                                                                                                                                                                                                FALTA (NO-SHOW)
-                                                                                                                                                                                                                                                            </button>` : ''}
+                                                                                                                                                                                                                                class="w-full py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition uppercase">
+                                                                                                                                                                                                                                FALTA (NO-SHOW)
+                                                                                                                                                                                                                            </button>` : ''}
 
                 ${isRecurrent ?
                     `<button onclick="cancelarSerie('${reservaId}', '${paidAmountString}', ${isFinalized})" class="w-full mt-1 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-800 transition uppercase">
-                                                                                                                                                                                                                                                                CANCELAR SÉRIE
-                                                                                                                                                                                                                                                            </button>` : ''}
+                                                                                                                                                                                                                                CANCELAR SÉRIE
+                                                                                                                                                                                                                            </button>` : ''}
 
                 <button onclick="closeEventModal()" class="w-full mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold">
                     Fechar
@@ -2292,7 +2265,7 @@
 
                                     console.log(
                                         `[DEBUG CALENDÁRIO] Buscando novos slots para Arena: ${arenaId}`
-                                    );
+                                        );
 
                                     fetch(url, {
                                             method: 'GET',
@@ -2320,7 +2293,7 @@
 
                                             console.log(
                                                 `[DEBUG] Recebidos ${filtered.length} slots atualizados.`
-                                            );
+                                                );
                                             successCallback(filtered);
                                         })
                                         .catch(err => {

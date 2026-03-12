@@ -46,7 +46,7 @@ class UserController extends Controller
     {
         $reservas = $user->reservas()
             ->with('arena')
-            ->orderBy('date', 'asc')
+            ->orderBy('date', 'desc')
             ->paginate(20);
 
         $seriesFutureCounts = $user->reservas()
