@@ -199,7 +199,6 @@ class BarCashController extends Controller
 
     /**
      * 🔓 REABRIR TURNO (AUDITORIA DE GESTOR)
-     * Melhorado para garantir isolamento e prevenir erros de ID
      */
     public function reopen(Request $request)
     {
@@ -214,56 +213,41 @@ class BarCashController extends Controller
             return back()->with('error', '⚠️ Falha na autorização: Senha do gestor incorreta.');
         }
 
-        // Garante que quem está autorizando tem permissão de gestão
         if (!in_array($supervisor->role, ['admin', 'gestor'])) {
             return back()->with('error', '⚠️ Acesso negado: Somente gestores podem reabrir turnos.');
         }
 
-        // 2. Busca a Sessão e valida a existência
-        $session = BarCashSession::where('id', $request->session_id)->first();
-
-        if (!$session) {
-            return back()->with('error', '⚠️ Erro: Sessão de caixa não encontrada.');
-        }
-
-        // Trava extra: Só pode reabrir o que já foi fechado
-        if ($session->status !== 'closed') {
-            return back()->with('error', '⚠️ Atenção: Esta sessão já consta como aberta no sistema.');
-        }
+        // 2. Busca a Sessão pelo ID vindo do Modal (Campo oculto session_id)
+        $session = BarCashSession::findOrFail($request->session_id);
 
         // 3. Trava de Segurança Multi-Caixa:
-        // Verifica se o DONO da sessão (ex: Renato) já não abriu um novo caixa hoje.
+        // O operador dono desta sessão já abriu um novo caixa "atropelando" este?
         $hasOtherOpen = BarCashSession::where('user_id', $session->user_id)
             ->where('status', 'open')
             ->exists();
 
         if ($hasOtherOpen) {
-            $operador = $session->user->name ?? 'operador';
-            return back()->with('error', "⚠️ Bloqueio: O colaborador {$operador} já possui um novo turno aberto. Encerre o turno atual dele antes de reabrir este antigo.");
+            return back()->with('error', '⚠️ Bloqueio: Este operador já possui um novo turno aberto hoje. Feche o atual antes de reabrir o anterior.');
         }
 
-        // 4. Executa a Reabertura (Resetando os dados de fechamento)
-        return DB::transaction(function () use ($session, $supervisor) {
-            $session->update([
-                'status' => 'open',
-                'closed_at' => null,
-                'closing_balance' => null, // Limpa o valor contado anteriormente
-                // 'total_vendas_sistema' não é zerado para manter o rastro do que já foi vendido
-            ]);
+        // 4. Executa a Reabertura dos Dados
+        $session->update([
+            'status' => 'open',
+            'closed_at' => null,
+            'closing_balance' => null, // Reseta a contagem manual feita no fechamento
+        ]);
 
-            // 5. Log de Auditoria (Marcando QUEM reabriu o caixa no histórico)
-            // Usamos 'reforco' com valor 0 para que apareça na lista sem alterar o saldo
-            BarCashMovement::create([
-                'bar_cash_session_id' => $session->id,
-                'user_id' => auth()->id(), // Quem clicou no botão (Gestor logado)
-                'type' => 'reforco',
-                'amount' => 0.00,
-                'description' => "🔓 TURNO REABERTO | AUTORIZADO POR: {$supervisor->name}",
-                'payment_method' => 'SISTEMA'
-            ]);
+        // 5. Log de Movimentação (Para registro no histórico do turno)
+        BarCashMovement::create([
+            'bar_cash_session_id' => $session->id,
+            'user_id' => auth()->id(),
+            'type' => 'reforco', // Usamos tipo reforço com valor 0 para marcar o evento
+            'amount' => 0,
+            'description' => "SESSÃO REABERTA POR GESTOR | POR: {$supervisor->name}",
+            'payment_method' => 'SISTEMA'
+        ]);
 
-            return back()->with('success', "O turno de {$session->user->name} foi reaberto e está pronto para novos lançamentos.");
-        });
+        return back()->with('success', "O turno de {$session->user->name} foi reaberto com sucesso!");
     }
 
     /**
