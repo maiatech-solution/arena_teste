@@ -135,16 +135,7 @@
 
                         {{-- 📊 DISPLAY DE DIFERENÇA EM TEMPO REAL --}}
                         <div id="display_diferenca" class="mt-2 text-center h-4">
-                            @if (in_array(auth()->user()->role, ['admin', 'gestor']))
-                                {{-- O ID "msg_diferenca" só existe para o Gestor, então o JS só escreve para ele --}}
-                                <span id="msg_diferenca"
-                                    class="text-[10px] font-black uppercase tracking-widest"></span>
-                            @else
-                                {{-- Para o colaborador, mostramos apenas uma instrução neutra --}}
-                                <span class="text-[9px] font-black uppercase tracking-widest text-gray-700 italic">
-                                    Aguardando finalização do turno...
-                                </span>
-                            @endif
+                            <span id="msg_diferenca" class="text-[10px] font-black uppercase tracking-widest"></span>
                         </div>
                     </div>
 
@@ -157,7 +148,6 @@
                             class="w-full bg-gray-800 border-none rounded-2xl p-4 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-600 outline-none text-xs h-[100px]"></textarea>
                     </div>
                 </div>
-
                 {{-- 🛡️ CAMPO DE AUTORIZAÇÃO (AJUSTADO PARA ABERTURA DIRETA) --}}
                 <div class="mb-6 p-4 bg-gray-800/50 border border-gray-800 rounded-3xl text-center">
                     @if (auth()->user()->role === 'admin' || auth()->user()->role === 'gestor')

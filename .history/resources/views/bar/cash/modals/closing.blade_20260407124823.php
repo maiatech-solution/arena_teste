@@ -23,93 +23,76 @@
             {{-- 📊 DASHBOARD DE FECHAMENTO DETALHADO --}}
             <div class="space-y-4 mb-8">
 
-                {{-- 📊 MATEMÁTICA DO CAIXA GERAL (VersÃO PROTEGIDA) --}}
+                {{-- 📊 MATEMÁTICA DO CAIXA GERAL (Versão Compacta) --}}
                 <div class="bg-black/40 p-5 rounded-3xl border border-gray-800 shadow-inner">
                     <span
                         class="text-[9px] font-black text-gray-500 uppercase block mb-3 tracking-[0.2em] border-b border-gray-800 pb-2">
                         🧮 CONFERÊNCIA UNIFICADA
                     </span>
 
-                    @if (in_array(auth()->user()->role, ['admin', 'gestor']))
-                        {{-- Linhas secundárias visíveis apenas para Gestores --}}
-                        <div class="grid grid-cols-2 gap-x-4 gap-y-1 mb-4 pb-3 border-b border-gray-800/50">
-                            <div class="flex justify-between text-[10px]">
-                                <span class="text-gray-500 uppercase italic">Abertura:</span>
-                                <span class="text-white font-mono">R$
-                                    {{ number_format($currentSession->opening_balance ?? 0, 2, ',', '.') }}</span>
-                            </div>
-                            <div class="flex justify-between text-[10px]">
-                                <span class="text-gray-500 uppercase italic">Reforços:</span>
-                                <span class="text-blue-500 font-mono">+
-                                    {{ number_format($reforcos ?? 0, 2, ',', '.') }}</span>
-                            </div>
-                            <div class="flex justify-between text-[10px]">
-                                <span class="text-emerald-500 uppercase italic font-bold">Dinheiro:</span>
-                                <span class="text-emerald-500 font-mono">+
-                                    {{ number_format($vendasDinheiro ?? 0, 2, ',', '.') }}</span>
-                            </div>
-                            <div class="flex justify-between text-[10px]">
-                                <span class="text-red-500 uppercase italic font-bold">Sangrias:</span>
-                                <span class="text-red-500 font-mono">-
-                                    {{ number_format($sangrias ?? 0, 2, ',', '.') }}</span>
-                            </div>
-                            <div
-                                class="flex justify-between text-[10px] col-span-2 mt-1 pt-1 border-t border-gray-800/30">
-                                <span class="text-cyan-400 uppercase italic font-bold">Digital (PIX/Cartão):</span>
-                                <span class="text-cyan-400 font-mono">+ R$
-                                    {{ number_format($faturamentoDigital ?? 0, 2, ',', '.') }}</span>
-                            </div>
+                    {{-- Linhas secundárias em grid para economizar altura --}}
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 mb-4 pb-3 border-b border-gray-800/50">
+                        <div class="flex justify-between text-[10px]">
+                            <span class="text-gray-500 uppercase italic">Abertura:</span>
+                            <span class="text-white font-mono">R$
+                                {{ number_format($currentSession->opening_balance ?? 0, 2, ',', '.') }}</span>
                         </div>
+                        <div class="flex justify-between text-[10px]">
+                            <span class="text-gray-500 uppercase italic">Reforços:</span>
+                            <span class="text-blue-500 font-mono">+
+                                {{ number_format($reforcos ?? 0, 2, ',', '.') }}</span>
+                        </div>
+                        <div class="flex justify-between text-[10px]">
+                            <span class="text-emerald-500 uppercase italic font-bold">Dinheiro:</span>
+                            <span class="text-emerald-500 font-mono">+
+                                {{ number_format($vendasDinheiro ?? 0, 2, ',', '.') }}</span>
+                        </div>
+                        <div class="flex justify-between text-[10px]">
+                            <span class="text-red-500 uppercase italic font-bold">Sangrias:</span>
+                            <span class="text-red-500 font-mono">-
+                                {{ number_format($sangrias ?? 0, 2, ',', '.') }}</span>
+                        </div>
+                        <div class="flex justify-between text-[10px] col-span-2 mt-1 pt-1 border-t border-gray-800/30">
+                            <span class="text-cyan-400 uppercase italic font-bold">Digital (PIX/Cartão):</span>
+                            <span class="text-cyan-400 font-mono">+ R$
+                                {{ number_format($faturamentoDigital ?? 0, 2, ',', '.') }}</span>
+                        </div>
+                    </div>
 
-                        {{-- Totalizador visível apenas para Gestores --}}
-                        <div class="flex justify-between items-center">
-                            <span class="text-[8px] font-black text-orange-500 uppercase tracking-widest leading-tight">
-                                TOTAL ESPERADO<br>(GERAL)
-                            </span>
-                            <span class="text-white font-black text-3xl italic font-mono tracking-tighter">
-                                R$
-                                {{ number_format(($currentSession->opening_balance ?? 0) + ($vendasDinheiro ?? 0) + ($faturamentoDigital ?? 0) + ($reforcos ?? 0) - ($sangrias ?? 0), 2, ',', '.') }}
-                            </span>
-                        </div>
-                    @else
-                        {{-- O que o colaborador vê --}}
-                        <div class="py-4 text-center">
-                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest italic">
-                                🔒 Valores protegidos para conferência cega
-                            </span>
-                        </div>
-                    @endif
+                    {{-- Totalizador --}}
+                    <div class="flex justify-between items-center">
+                        <span class="text-[8px] font-black text-orange-500 uppercase tracking-widest leading-tight">
+                            TOTAL ESPERADO<br>(GERAL)
+                        </span>
+                        <span class="text-white font-black text-3xl italic font-mono tracking-tighter">
+                            R$
+                            {{ number_format(($currentSession->opening_balance ?? 0) + ($vendasDinheiro ?? 0) + ($faturamentoDigital ?? 0) + ($reforcos ?? 0) - ($sangrias ?? 0), 2, ',', '.') }}
+                        </span>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
-                    {{-- CARD 1: DIGITAL --}}
+                    {{-- CARD 1: DIGITAL (Dinheiro que já caiu na conta) --}}
                     <div class="bg-black/40 p-5 rounded-3xl border border-gray-800">
                         <span
                             class="text-[9px] font-black text-cyan-400 uppercase block mb-1 tracking-widest leading-tight">
                             PIX / CARTÕES<br>(CONFERIR NO EXTRATO)
                         </span>
                         <span class="text-blue-400 font-black text-2xl italic font-mono">
-                            @if (in_array(auth()->user()->role, ['admin', 'gestor']))
-                                R$ {{ number_format($faturamentoDigital ?? 0, 2, ',', '.') }}
-                            @else
-                                <span class="text-gray-700 text-sm uppercase tracking-tighter">Valor Oculto</span>
-                            @endif
+                            R$ {{ number_format($faturamentoDigital ?? 0, 2, ',', '.') }}
                         </span>
                     </div>
 
-                    {{-- CARD 2: FÍSICO --}}
+                    {{-- CARD 2: FÍSICO (Dinheiro que tem que estar na gaveta agora) --}}
                     <div class="bg-orange-600/10 p-5 rounded-3xl border border-orange-600/20">
                         <span
                             class="text-[9px] font-black text-orange-500 uppercase block mb-1 tracking-widest leading-tight">
                             GAVETA FÍSICA<br>(NOTAS E MOEDAS)
                         </span>
                         <span class="text-green-500 font-black text-2xl italic font-mono">
-                            @if (in_array(auth()->user()->role, ['admin', 'gestor']))
-                                R$
-                                {{ number_format(($currentSession->opening_balance ?? 0) + ($vendasDinheiro ?? 0) + ($reforcos ?? 0) - ($sangrias ?? 0), 2, ',', '.') }}
-                            @else
-                                <span class="text-gray-700 text-sm uppercase tracking-tighter">Valor Oculto</span>
-                            @endif
+                            {{-- Fórmula da Gaveta: Abertura + Vendas Cash + Reforços - Sangrias --}}
+                            R$
+                            {{ number_format(($currentSession->opening_balance ?? 0) + ($vendasDinheiro ?? 0) + ($reforcos ?? 0) - ($sangrias ?? 0), 2, ',', '.') }}
                         </span>
                     </div>
                 </div>
@@ -135,16 +118,7 @@
 
                         {{-- 📊 DISPLAY DE DIFERENÇA EM TEMPO REAL --}}
                         <div id="display_diferenca" class="mt-2 text-center h-4">
-                            @if (in_array(auth()->user()->role, ['admin', 'gestor']))
-                                {{-- O ID "msg_diferenca" só existe para o Gestor, então o JS só escreve para ele --}}
-                                <span id="msg_diferenca"
-                                    class="text-[10px] font-black uppercase tracking-widest"></span>
-                            @else
-                                {{-- Para o colaborador, mostramos apenas uma instrução neutra --}}
-                                <span class="text-[9px] font-black uppercase tracking-widest text-gray-700 italic">
-                                    Aguardando finalização do turno...
-                                </span>
-                            @endif
+                            <span id="msg_diferenca" class="text-[10px] font-black uppercase tracking-widest"></span>
                         </div>
                     </div>
 
@@ -157,7 +131,6 @@
                             class="w-full bg-gray-800 border-none rounded-2xl p-4 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-600 outline-none text-xs h-[100px]"></textarea>
                     </div>
                 </div>
-
                 {{-- 🛡️ CAMPO DE AUTORIZAÇÃO (AJUSTADO PARA ABERTURA DIRETA) --}}
                 <div class="mb-6 p-4 bg-gray-800/50 border border-gray-800 rounded-3xl text-center">
                     @if (auth()->user()->role === 'admin' || auth()->user()->role === 'gestor')

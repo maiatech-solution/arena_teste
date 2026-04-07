@@ -5,10 +5,8 @@
         @if (session('success') && (session('total_esperado_print') || str_contains(session('success'), 'Turno encerrado')))
             <div id="thermal-receipt"
                 class="mb-10 bg-white p-8 rounded-[2.5rem] border-4 border-dashed border-gray-200 max-w-sm mx-auto text-black shadow-2xl no-print animate-in zoom-in duration-500">
-
                 <div class="text-center border-b-2 border-gray-100 pb-4 mb-6">
-                    {{-- Nome dinâmico da Arena vindo da Session --}}
-                    <h2 class="font-black uppercase text-xl tracking-tighter">{{ session('arena_nome_print') }}</h2>
+                    <h2 class="font-black uppercase text-xl tracking-tighter">MAIATECH ARENA</h2>
                     <p class="text-[9px] uppercase font-bold text-gray-500 tracking-[0.3em]">Resumo de Fechamento</p>
                 </div>
 
@@ -50,7 +48,7 @@
                 </div>
 
                 <button onclick="window.print()"
-                    class="w-full mt-8 py-4 bg-black text-white font-black rounded-2xl uppercase text-[10px] tracking-[0.2em] hover:bg-gray-800 transition-all shadow-lg active:scale-95 no-print">
+                    class="w-full mt-8 py-4 bg-black text-white font-black rounded-2xl uppercase text-[10px] tracking-[0.2em] hover:bg-gray-800 transition-all shadow-lg active:scale-95">
                     🖨️ Imprimir Conferência
                 </button>
                 <p class="text-[8px] text-center text-gray-400 mt-4 uppercase font-bold">Documento para uso interno</p>
@@ -59,53 +57,49 @@
             <style>
                 @media print {
 
-                    /* 1. Esconde tudo da página */
-                    body * {
-                        visibility: hidden;
+                    /* 1. Esconde as DIVs principais e o layout do sistema */
+                    nav,
+                    header,
+                    footer,
+                    x-bar-layout,
+                    .no-print,
+                    button {
+                        display: none !important;
                     }
 
-                    /* 2. Configurações de Página e Centralização do Body */
-                    @page {
-                        margin: 0;
-                        size: auto;
-                    }
-
-                    body {
+                    /* 2. Garante que o body e o container do recibo fiquem visíveis */
+                    body,
+                    html {
                         background: white !important;
                         margin: 0 !important;
                         padding: 0 !important;
-                        display: block !important;
                     }
 
-                    /* 3. Mostra apenas o recibo e força a centralização absoluta */
-                    #thermal-receipt,
-                    #thermal-receipt * {
-                        visibility: visible;
-                        display: block !important;
-                        color: black !important;
-                        background: white !important;
-                    }
-
+                    /* 3. Estilo do Cupom Térmico */
                     #thermal-receipt {
-                        position: fixed !important;
-                        left: 50% !important;
-                        top: 0 !important;
-                        transform: translateX(-50%) !important;
-                        /* Centraliza na bobina */
-                        width: 72mm !important;
-                        /* Ajustado para bobinas de 80mm */
-                        margin: 0 !important;
-                        padding: 10px !important;
+                        display: block !important;
+                        visibility: visible !important;
+                        position: static !important;
+                        /* Static ajuda a renderizar no topo do papel */
+                        width: 100% !important;
+                        max-width: 80mm !important;
+                        margin: 0 auto !important;
+                        padding: 5mm !important;
                         border: none !important;
                         box-shadow: none !important;
+                        color: black !important;
                     }
 
-                    /* 4. Remove elementos indesejados da impressão */
-                    .no-print,
-                    button,
-                    .alert,
-                    .fixed {
-                        display: none !important;
+                    /* 4. Força o texto a aparecer mesmo se o navegador tentar economizar tinta */
+                    #thermal-receipt * {
+                        color: black !important;
+                        display: block !important;
+                    }
+
+                    /* 5. Remove margens de página do navegador */
+                    @page {
+                        margin: 0;
+                        size: auto;
                     }
                 }
             </style>

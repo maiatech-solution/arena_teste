@@ -1,115 +1,112 @@
 <x-bar-layout>
     <div class="max-w-[1600px] mx-auto px-6 py-8">
 
-        {{-- 📄 RECIBO DE FECHAMENTO (IMPRESSORA TÉRMICA) --}}
-        @if (session('success') && (session('total_esperado_print') || str_contains(session('success'), 'Turno encerrado')))
-            <div id="thermal-receipt"
-                class="mb-10 bg-white p-8 rounded-[2.5rem] border-4 border-dashed border-gray-200 max-w-sm mx-auto text-black shadow-2xl no-print animate-in zoom-in duration-500">
+      {{-- 📄 RECIBO DE FECHAMENTO (IMPRESSORA TÉRMICA) --}}
+@if (session('success') && (session('total_esperado_print') || str_contains(session('success'), 'Turno encerrado')))
+    <div id="thermal-receipt"
+        class="mb-10 bg-white p-8 rounded-[2.5rem] border-4 border-dashed border-gray-200 max-w-sm mx-auto text-black shadow-2xl no-print animate-in zoom-in duration-500">
 
-                <div class="text-center border-b-2 border-gray-100 pb-4 mb-6">
-                    {{-- Nome dinâmico da Arena vindo da Session --}}
-                    <h2 class="font-black uppercase text-xl tracking-tighter">{{ session('arena_nome_print') }}</h2>
-                    <p class="text-[9px] uppercase font-bold text-gray-500 tracking-[0.3em]">Resumo de Fechamento</p>
-                </div>
+        <div class="text-center border-b-2 border-gray-100 pb-4 mb-6">
+            {{-- Nome dinâmico da Arena vindo da Session --}}
+            <h2 class="font-black uppercase text-xl tracking-tighter">{{ session('arena_nome_print') }}</h2>
+            <p class="text-[9px] uppercase font-bold text-gray-500 tracking-[0.3em]">Resumo de Fechamento</p>
+        </div>
 
-                <div class="space-y-3 font-mono text-[11px]">
-                    <div class="flex justify-between"><span>OPERADOR:</span> <span
-                            class="font-bold">{{ auth()->user()->name }}</span></div>
-                    <div class="flex justify-between"><span>DATA/HORA:</span>
-                        <span>{{ now()->format('d/m/Y H:i') }}</span>
-                    </div>
-
-                    <div class="border-b border-gray-100 my-4"></div>
-
-                    <div class="flex justify-between"><span>(+) ABERTURA:</span> <span>R$
-                            {{ session('opening_balance_print') }}</span></div>
-                    <div class="flex justify-between"><span>(+) VENDAS DINH:</span> <span>R$
-                            {{ session('vendas_dinheiro_print') }}</span></div>
-                    <div class="flex justify-between"><span>(+) VENDAS DIGI:</span> <span>R$
-                            {{ session('vendas_digital_print') }}</span></div>
-                    <div class="flex justify-between"><span>(+) REFORCOS:</span> <span>R$
-                            {{ session('reforcos_print') }}</span></div>
-                    <div class="flex justify-between"><span>(-) SANGRIAS:</span> <span>R$
-                            {{ session('sangrias_print') }}</span></div>
-
-                    <div class="border-b-2 border-black my-4"></div>
-
-                    <div class="flex justify-between font-black text-sm uppercase"><span>ESPERADO:</span> <span>R$
-                            {{ session('total_esperado_print') }}</span></div>
-                    <div class="flex justify-between font-black text-sm uppercase"><span>INFORMADO:</span> <span>R$
-                            {{ session('valor_informado_print') }}</span></div>
-
-                    @php
-                        $diff = (float) str_replace(['.', ','], ['', '.'], session('diferenca_print'));
-                    @endphp
-                    <div
-                        class="flex justify-between font-black italic {{ $diff < 0 ? 'text-red-600' : ($diff > 0 ? 'text-blue-600' : 'text-green-600') }}">
-                        <span>DIFERENÇA:</span>
-                        <span>R$ {{ session('diferenca_print') }}</span>
-                    </div>
-                </div>
-
-                <button onclick="window.print()"
-                    class="w-full mt-8 py-4 bg-black text-white font-black rounded-2xl uppercase text-[10px] tracking-[0.2em] hover:bg-gray-800 transition-all shadow-lg active:scale-95 no-print">
-                    🖨️ Imprimir Conferência
-                </button>
-                <p class="text-[8px] text-center text-gray-400 mt-4 uppercase font-bold">Documento para uso interno</p>
+        <div class="space-y-3 font-mono text-[11px]">
+            <div class="flex justify-between"><span>OPERADOR:</span> <span
+                    class="font-bold">{{ auth()->user()->name }}</span></div>
+            <div class="flex justify-between"><span>DATA/HORA:</span>
+                <span>{{ now()->format('d/m/Y H:i') }}</span>
             </div>
 
-            <style>
-                @media print {
+            <div class="border-b border-gray-100 my-4"></div>
 
-                    /* 1. Esconde tudo da página */
-                    body * {
-                        visibility: hidden;
-                    }
+            <div class="flex justify-between"><span>(+) ABERTURA:</span> <span>R$
+                    {{ session('opening_balance_print') }}</span></div>
+            <div class="flex justify-between"><span>(+) VENDAS DINH:</span> <span>R$
+                    {{ session('vendas_dinheiro_print') }}</span></div>
+            <div class="flex justify-between"><span>(+) VENDAS DIGI:</span> <span>R$
+                    {{ session('vendas_digital_print') }}</span></div>
+            <div class="flex justify-between"><span>(+) REFORCOS:</span> <span>R$
+                    {{ session('reforcos_print') }}</span></div>
+            <div class="flex justify-between"><span>(-) SANGRIAS:</span> <span>R$
+                    {{ session('sangrias_print') }}</span></div>
 
-                    /* 2. Configurações de Página e Centralização do Body */
-                    @page {
-                        margin: 0;
-                        size: auto;
-                    }
+            <div class="border-b-2 border-black my-4"></div>
 
-                    body {
-                        background: white !important;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                        display: block !important;
-                    }
+            <div class="flex justify-between font-black text-sm uppercase"><span>ESPERADO:</span> <span>R$
+                    {{ session('total_esperado_print') }}</span></div>
+            <div class="flex justify-between font-black text-sm uppercase"><span>INFORMADO:</span> <span>R$
+                    {{ session('valor_informado_print') }}</span></div>
 
-                    /* 3. Mostra apenas o recibo e força a centralização absoluta */
-                    #thermal-receipt,
-                    #thermal-receipt * {
-                        visibility: visible;
-                        display: block !important;
-                        color: black !important;
-                        background: white !important;
-                    }
+            @php
+                $diff = (float) str_replace(['.', ','], ['', '.'], session('diferenca_print'));
+            @endphp
+            <div
+                class="flex justify-between font-black italic {{ $diff < 0 ? 'text-red-600' : ($diff > 0 ? 'text-blue-600' : 'text-green-600') }}">
+                <span>DIFERENÇA:</span>
+                <span>R$ {{ session('diferenca_print') }}</span>
+            </div>
+        </div>
 
-                    #thermal-receipt {
-                        position: fixed !important;
-                        left: 50% !important;
-                        top: 0 !important;
-                        transform: translateX(-50%) !important;
-                        /* Centraliza na bobina */
-                        width: 72mm !important;
-                        /* Ajustado para bobinas de 80mm */
-                        margin: 0 !important;
-                        padding: 10px !important;
-                        border: none !important;
-                        box-shadow: none !important;
-                    }
+        <button onclick="window.print()"
+            class="w-full mt-8 py-4 bg-black text-white font-black rounded-2xl uppercase text-[10px] tracking-[0.2em] hover:bg-gray-800 transition-all shadow-lg active:scale-95 no-print">
+            🖨️ Imprimir Conferência
+        </button>
+        <p class="text-[8px] text-center text-gray-400 mt-4 uppercase font-bold">Documento para uso interno</p>
+    </div>
 
-                    /* 4. Remove elementos indesejados da impressão */
-                    .no-print,
-                    button,
-                    .alert,
-                    .fixed {
-                        display: none !important;
-                    }
-                }
-            </style>
-        @endif
+    <style>
+        @media print {
+            /* 1. Esconde tudo da página */
+            body * {
+                visibility: hidden;
+            }
+
+            /* 2. Configurações de Página e Centralização do Body */
+            @page {
+                margin: 0;
+                size: auto;
+            }
+
+            body {
+                background: white !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                display: block !important;
+            }
+
+            /* 3. Mostra apenas o recibo e força a centralização absoluta */
+            #thermal-receipt,
+            #thermal-receipt * {
+                visibility: visible;
+                display: block !important;
+                color: black !important;
+                background: white !important;
+            }
+
+            #thermal-receipt {
+                position: fixed !important;
+                left: 50% !important;
+                top: 0 !important;
+                transform: translateX(-50%) !important; /* Centraliza na bobina */
+                width: 72mm !important; /* Ajustado para bobinas de 80mm */
+                margin: 0 !important;
+                padding: 10px !important;
+                border: none !important;
+                box-shadow: none !important;
+            }
+
+            /* 4. Remove elementos indesejados da impressão */
+            .no-print,
+            button,
+            .alert,
+            .fixed {
+                display: none !important;
+            }
+        }
+    </style>
+@endif
 
         @if (isset($caixaVencido) && $caixaVencido)
             <div

@@ -347,7 +347,7 @@ class BarCashController extends Controller
             $autorizadorNome = $supervisor->name;
         }
 
-        // 2. Trava de Mesas Abertas
+        // 2. Trava de Mesas Abertas (Mantido)
         $mesasAbertas = \App\Models\Bar\BarTable::where('status', 'occupied')->count();
         if ($mesasAbertas > 0) {
             return back()->with('error', "⚠️ Bloqueio: Existem mesas ocupadas no sistema.");
@@ -358,8 +358,8 @@ class BarCashController extends Controller
             'notes' => 'nullable|string|max:500'
         ]);
 
-        // 🚀 AJUSTE AQUI: Busca os dados da arena direto da tabela que vimos nos seus LOGS
-        $company = \Illuminate\Support\Facades\DB::table('company_infos')->first();
+        // Busca os dados da empresa para o nome no cupom
+        $company = \App\Models\Bar\BarCompany::first();
 
         // 3. Processamento do Fechamento
         return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $autorizadorNome, $company) {
@@ -372,9 +372,11 @@ class BarCashController extends Controller
                 return back()->with('error', 'Erro: Você não tem um turno aberto.');
             }
 
+            // 🎯 BUSCA TODAS AS MOVIMENTAÇÕES DO TURNO
             $movs = \App\Models\Bar\BarCashMovement::where('bar_cash_session_id', $session->id)->get();
             $metodosDigitais = ['pix', 'debito', 'credito', 'cartao', 'misto', 'crédito', 'débito'];
 
+            // --- CÁLCULOS ---
             $vCash = $movs->where('type', 'venda')->filter(fn($m) => strtolower($m->payment_method) === 'dinheiro')->sum('amount');
             $ref = $movs->where('type', 'reforco')->sum('amount');
             $san = $movs->where('type', 'sangria')->sum('amount');
@@ -389,6 +391,7 @@ class BarCashController extends Controller
             $actual = $request->actual_balance;
             $difference = $actual - $totalEsperadoUnificado;
 
+            // 💾 ATUALIZAR SESSÃO NO BANCO
             $session->update([
                 'closing_balance' => $actual,
                 'expected_balance' => $totalEsperadoUnificado,
@@ -398,6 +401,7 @@ class BarCashController extends Controller
                 'notes' => ($request->notes ? $request->notes . " | " : "") . "Fechamento realizado por: {$autorizadorNome}"
             ]);
 
+            // Feedback
             $msg = "Turno encerrado!";
             if (abs($difference) < 0.01) {
                 $msg .= " ✅ O Caixa bateu perfeitamente!";
@@ -407,7 +411,7 @@ class BarCashController extends Controller
                     : " ⚠️ Diferença detectada! Sobrou: R$ " . number_format(abs($difference), 2, ',', '.');
             }
 
-            // 🚀 RETORNO AJUSTADO COM O NOME DA ARENA
+            // Retorno com todos os dados para a impressão térmica
             return redirect()->route('bar.cash.index')->with([
                 'success' => $msg,
                 'arena_nome_print' => $company->nome_fantasia ?? 'ARENA',
