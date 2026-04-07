@@ -421,39 +421,4 @@ class BarReportController extends Controller
             ], 404);
         }
     }
-
-    public function operators(Request $request)
-    {
-        // 📅 Filtros de Data (Início e Fim do mês por padrão)
-        $start = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
-        $end = $request->get('end_date', now()->endOfMonth()->format('Y-m-d'));
-        $search = $request->get('search');
-
-        $query = \App\Models\Bar\BarCashMovement::with('user')
-            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59'])
-            ->whereIn('type', ['venda', 'estorno']);
-
-        // 🔍 Filtro por Nome do Operador
-        if ($search) {
-            $query->whereHas('user', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%");
-            });
-        }
-
-        $vendasPorOperador = $query->select(
-            'user_id',
-            \DB::raw("SUM(CASE WHEN type = 'venda' THEN amount ELSE 0 END) as total_bruto"),
-            \DB::raw("SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END) as total_estornado"),
-            \DB::raw("COUNT(CASE WHEN type = 'venda' THEN 1 END) as qtd_vendas")
-        )
-            ->groupBy('user_id')
-            ->get()
-            ->map(function ($item) {
-                $item->faturamento_liquido = $item->total_bruto - $item->total_estornado;
-                return $item;
-            })
-            ->sortByDesc('faturamento_liquido');
-
-        return view('bar.reports.operators', compact('vendasPorOperador', 'start', 'end', 'search'));
-    }
 }

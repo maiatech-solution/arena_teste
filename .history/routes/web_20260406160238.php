@@ -303,7 +303,6 @@ Route::middleware(['auth', 'gestor'])->prefix('bar')->name('bar.')->group(functi
     // 📊 RELATÓRIOS FINANCEIROS (Acesso restrito apenas para Admin e Gestor)
     Route::prefix('relatorios')->name('reports.')->middleware(['role:admin,gestor'])->group(function () {
         Route::get('/', [BarReportController::class, 'index'])->name('index');
-        Route::get('/operadores', [BarReportController::class, 'operators'])->name('operators'); // 👈 ADICIONE ESTA LINHA
         Route::get('/produtos', [BarReportController::class, 'products'])->name('products');
         Route::get('/caixas', [BarReportController::class, 'cashier'])->name('cashier');
         Route::get('/movements', [BarReportController::class, 'movements'])->name('movements');

@@ -424,28 +424,21 @@ class BarReportController extends Controller
 
     public function operators(Request $request)
     {
-        // 📅 Filtros de Data (Início e Fim do mês por padrão)
-        $start = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
-        $end = $request->get('end_date', now()->endOfMonth()->format('Y-m-d'));
-        $search = $request->get('search');
+        // Captura o mês do filtro ou usa o atual
+        $mesReferencia = $request->get('mes_referencia', now()->format('Y-m'));
+        $ano = date('Y', strtotime($mesReferencia));
+        $mes = date('m', strtotime($mesReferencia));
 
-        $query = \App\Models\Bar\BarCashMovement::with('user')
-            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59'])
-            ->whereIn('type', ['venda', 'estorno']);
-
-        // 🔍 Filtro por Nome do Operador
-        if ($search) {
-            $query->whereHas('user', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%");
-            });
-        }
-
-        $vendasPorOperador = $query->select(
-            'user_id',
-            \DB::raw("SUM(CASE WHEN type = 'venda' THEN amount ELSE 0 END) as total_bruto"),
-            \DB::raw("SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END) as total_estornado"),
-            \DB::raw("COUNT(CASE WHEN type = 'venda' THEN 1 END) as qtd_vendas")
-        )
+        // Busca vendas agrupadas por operador
+        $vendasPorOperador = \App\Models\Bar\BarCashMovement::with('user')
+            ->whereYear('created_at', $ano)
+            ->whereMonth('created_at', $mes)
+            ->select(
+                'user_id',
+                DB::raw("SUM(CASE WHEN type = 'venda' THEN amount ELSE 0 END) as total_bruto"),
+                DB::raw("SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END) as total_estornado"),
+                DB::raw("COUNT(CASE WHEN type = 'venda' THEN 1 END) as qtd_vendas")
+            )
             ->groupBy('user_id')
             ->get()
             ->map(function ($item) {
@@ -454,6 +447,6 @@ class BarReportController extends Controller
             })
             ->sortByDesc('faturamento_liquido');
 
-        return view('bar.reports.operators', compact('vendasPorOperador', 'start', 'end', 'search'));
+        return view('bar.reports.operators', compact('vendasPorOperador', 'mesReferencia'));
     }
 }

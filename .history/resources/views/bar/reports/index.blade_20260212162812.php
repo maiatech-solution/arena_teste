@@ -11,14 +11,14 @@
             </div>
 
             {{-- 📅 Filtro de Período (Mês/Ano) --}}
-            <div
-                class="bg-gray-900/40 border-2 border-gray-800 p-2 rounded-3xl flex items-center gap-4 px-6 shadow-inner">
+            <div class="bg-gray-900/40 border-2 border-gray-800 p-2 rounded-3xl flex items-center gap-4 px-6 shadow-inner">
                 <form action="{{ route('bar.reports.index') }}" method="GET" class="flex items-center gap-4">
                     <div class="text-right">
-                        <label
-                            class="text-[9px] font-black text-gray-500 uppercase tracking-widest block leading-none">Período</label>
-                        <input type="month" name="mes_referencia"
-                            value="{{ request('mes_referencia', now()->format('Y-m')) }}" onchange="this.form.submit()"
+                        <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block leading-none">Período</label>
+                        <input type="month"
+                            name="mes_referencia"
+                            value="{{ request('mes_referencia', now()->format('Y-m')) }}"
+                            onchange="this.form.submit()"
                             class="bg-transparent border-none p-0 font-black text-orange-500 uppercase text-sm focus:ring-0 cursor-pointer">
                     </div>
                     <span class="text-gray-700 text-xl">|</span>
@@ -31,8 +31,7 @@
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
 
             {{-- Faturamento Consolidado --}}
-            <div
-                class="p-8 rounded-[2.5rem] bg-orange-600/10 border-2 border-orange-600/20 shadow-lg shadow-orange-600/5 relative overflow-hidden group">
+            <div class="p-8 rounded-[2.5rem] bg-orange-600/10 border-2 border-orange-600/20 shadow-lg shadow-orange-600/5 relative overflow-hidden group">
                 <div class="absolute -right-4 -top-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
                     <span class="text-9xl text-orange-500 font-black">💰</span>
                 </div>
@@ -40,15 +39,13 @@
                 <p class="text-4xl font-black text-white italic tracking-tighter">
                     R$ {{ number_format($faturamentoMensal, 2, ',', '.') }}
                 </p>
-                <p
-                    class="text-[9px] text-gray-500 font-bold uppercase italic mt-4 px-3 py-1 bg-black/40 rounded-full inline-block">
+                <p class="text-[9px] text-gray-500 font-bold uppercase italic mt-4 px-3 py-1 bg-black/40 rounded-full inline-block">
                     Mesas + Balcão
                 </p>
             </div>
 
             {{-- Volume de Itens --}}
-            <div
-                class="p-8 rounded-[2.5rem] bg-gray-900/40 border-2 border-gray-800 hover:border-gray-700 transition-all">
+            <div class="p-8 rounded-[2.5rem] bg-gray-900/40 border-2 border-gray-800 hover:border-gray-700 transition-all">
                 <h4 class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Volume de Saída</h4>
                 <p class="text-4xl font-black text-white italic tracking-tighter">
                     {{ number_format($totalItensMes, 0, ',', '.') }}
@@ -57,8 +54,7 @@
             </div>
 
             {{-- Ticket Médio --}}
-            <div
-                class="p-8 rounded-[2.5rem] bg-gray-900/40 border-2 border-gray-800 hover:border-blue-900/30 transition-all">
+            <div class="p-8 rounded-[2.5rem] bg-gray-900/40 border-2 border-gray-800 hover:border-blue-900/30 transition-all">
                 <h4 class="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2">Ticket Médio</h4>
                 <p class="text-4xl font-black text-blue-500 italic tracking-tighter">
                     R$ {{ number_format($ticketMedio, 2, ',', '.') }}
@@ -67,8 +63,7 @@
             </div>
 
             {{-- Sangrias --}}
-            <div
-                class="p-8 rounded-[2.5rem] bg-gray-900/40 border-2 border-gray-800 hover:border-red-900/30 transition-all">
+            <div class="p-8 rounded-[2.5rem] bg-gray-900/40 border-2 border-gray-800 hover:border-red-900/30 transition-all">
                 <h4 class="text-[10px] font-black text-red-500 uppercase tracking-widest mb-2">Total Sangrias</h4>
                 <p class="text-4xl font-black text-red-500 italic tracking-tighter">
                     R$ {{ number_format($totalSangriasMes, 2, ',', '.') }}
@@ -88,23 +83,20 @@
 
             {{-- Ranking de Produtos (Contém Margem de Lucro) --}}
             <a href="{{ route('bar.reports.products') }}"
-                class="group p-6 bg-gray-900/40 border-2 border-gray-800 rounded-[2rem] hover:border-orange-600 transition-all flex flex-col gap-4 shadow-xl">
-                <div
-                    class="w-12 h-12 bg-orange-600/10 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+               class="group p-6 bg-gray-900/40 border-2 border-gray-800 rounded-[2rem] hover:border-orange-600 transition-all flex flex-col gap-4 shadow-xl">
+                <div class="w-12 h-12 bg-orange-600/10 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
                     🔥
                 </div>
                 <div>
                     <h4 class="text-white font-black uppercase italic text-md leading-tight">Produtos & Margem</h4>
-                    <p class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Mais vendidos e
-                        Lucratividade</p>
+                    <p class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Mais vendidos e Lucratividade</p>
                 </div>
             </a>
 
             {{-- Auditoria de Caixas (Fechamento) --}}
             <a href="{{ route('bar.reports.cashier') }}"
-                class="group p-6 bg-gray-900/40 border-2 border-gray-800 rounded-[2rem] hover:border-emerald-500 transition-all flex flex-col gap-4 shadow-xl">
-                <div
-                    class="w-12 h-12 bg-emerald-600/10 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+               class="group p-6 bg-gray-900/40 border-2 border-gray-800 rounded-[2rem] hover:border-emerald-500 transition-all flex flex-col gap-4 shadow-xl">
+                <div class="w-12 h-12 bg-emerald-600/10 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
                     📟
                 </div>
                 <div>
@@ -115,9 +107,8 @@
 
             {{-- Controle de Estoque --}}
             <a href="{{ route('bar.reports.movements') }}"
-                class="group p-6 bg-gray-900/40 border-2 border-gray-800 rounded-[2rem] hover:border-blue-500 transition-all flex flex-col gap-4 shadow-xl">
-                <div
-                    class="w-12 h-12 bg-blue-600/10 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+               class="group p-6 bg-gray-900/40 border-2 border-gray-800 rounded-[2rem] hover:border-blue-500 transition-all flex flex-col gap-4 shadow-xl">
+                <div class="w-12 h-12 bg-blue-600/10 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
                     📦
                 </div>
                 <div>
@@ -128,9 +119,8 @@
 
             {{-- Meios de Pagamento --}}
             <a href="{{ route('bar.reports.payments') }}"
-                class="group p-6 bg-gray-900/40 border-2 border-gray-800 rounded-[2rem] hover:border-indigo-500 transition-all flex flex-col gap-4 shadow-xl">
-                <div
-                    class="w-12 h-12 bg-indigo-600/10 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+               class="group p-6 bg-gray-900/40 border-2 border-gray-800 rounded-[2rem] hover:border-indigo-500 transition-all flex flex-col gap-4 shadow-xl">
+                <div class="w-12 h-12 bg-indigo-600/10 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
                     💳
                 </div>
                 <div>
@@ -141,9 +131,8 @@
 
             {{-- Resumo Diário --}}
             <a href="{{ route('bar.reports.daily') }}"
-                class="group p-6 bg-gray-900/40 border-2 border-gray-800 rounded-[2rem] hover:border-amber-500 transition-all flex flex-col gap-4 shadow-xl">
-                <div
-                    class="w-12 h-12 bg-amber-600/10 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+               class="group p-6 bg-gray-900/40 border-2 border-gray-800 rounded-[2rem] hover:border-amber-500 transition-all flex flex-col gap-4 shadow-xl">
+                <div class="w-12 h-12 bg-amber-600/10 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
                     🗓️
                 </div>
                 <div>
@@ -154,27 +143,13 @@
 
             {{-- Descontos e Cancelamentos --}}
             <a href="{{ route('bar.reports.cancelations') }}"
-                class="group p-6 bg-gray-900/40 border-2 border-gray-800 rounded-[2rem] hover:border-red-600 transition-all flex flex-col gap-4 shadow-xl">
-                <div
-                    class="w-12 h-12 bg-red-600/10 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+               class="group p-6 bg-gray-900/40 border-2 border-gray-800 rounded-[2rem] hover:border-red-600 transition-all flex flex-col gap-4 shadow-xl">
+                <div class="w-12 h-12 bg-red-600/10 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
                     🚫
                 </div>
                 <div>
                     <h4 class="text-white font-black uppercase italic text-md leading-tight">Cancelamentos</h4>
                     <p class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Estornos e Descontos</p>
-                </div>
-            </a>
-
-            {{-- Desempenho por Operador --}}
-            <a href="{{ route('bar.reports.operators') }}"
-                class="group p-6 bg-gray-900/40 border-2 border-gray-800 rounded-[2rem] hover:border-orange-500 transition-all flex flex-col gap-4 shadow-xl">
-                <div
-                    class="w-12 h-12 bg-orange-600/10 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-                    👤
-                </div>
-                <div>
-                    <h4 class="text-white font-black uppercase italic text-md leading-tight">Vendas por Operador</h4>
-                    <p class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Ranking e Produtividade</p>
                 </div>
             </a>
 
