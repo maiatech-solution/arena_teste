@@ -175,9 +175,9 @@
                     {{-- 5. Métodos de Pagamento Padronizados (MAIATECH PDV) --}}
                     <div class="grid grid-cols-2 gap-2">
                         @foreach (\App\Models\Bar\BarCashMovement::getPaymentMethods() as $key => $label)
+                            {{-- Extraímos o emoji e o texto para manter o layout dos botões --}}
                             @php
-                                // 1. Identifica o ícone
-                                $icon = '💰';
+                                $icon = '💰'; // Ícone padrão
                                 if (str_contains($label, '📱')) {
                                     $icon = '📱';
                                 }
@@ -194,28 +194,15 @@
                                     $icon = '🏦';
                                 }
 
+                                // Removemos o emoji do label para não repetir no texto do botão
                                 $cleanLabel = trim(str_replace($icon, '', $label));
-
-                                // 2. REGRA DE SEGURANÇA MAIATECH:
-                                // Se for Voucher E o usuário logado NÃO for admin nem gestor, exige autorização.
-                                $needsAuth = $key === 'voucher' && !in_array(auth()->user()->role, ['admin', 'gestor']);
-
-                                // Define a ação do clique
-                                $clickAction = $needsAuth
-                                    ? "requisitarAutorizacao(() => setPaymentMethod('{$key}'))"
-                                    : "setPaymentMethod('{$key}')";
                             @endphp
 
-                            <button type="button" onclick="{!! $clickAction !!}"
+                            <button type="button" onclick="setPaymentMethod('{{ $key }}')"
                                 class="pay-btn flex items-center gap-2 p-3 rounded-2xl border border-gray-800 bg-gray-900 text-gray-500 transition-all font-black text-[10px] uppercase hover:border-orange-500/50"
                                 id="btn-{{ $key }}">
                                 <span>{{ $icon }}</span>
-                                <span class="truncate">{{ $cleanLabel }}</span>
-
-                                {{-- Adiciona um cadeado visual se precisar de senha --}}
-                                @if ($needsAuth)
-                                    <span class="ml-auto text-[8px] opacity-40">🔒</span>
-                                @endif
+                                {{ $cleanLabel }}
                             </button>
                         @endforeach
                     </div>

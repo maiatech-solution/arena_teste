@@ -297,32 +297,30 @@ class BarTableController extends Controller
             $discountValue = (float)($request->discount_value ?? 0);
             $finalValue = (float)$order->total_value - $discountValue;
 
-            // --- 💳 PROCESSAMENTO DOS PAGAMENTOS (Ajustado para Voucher/Cortesia) ---
+            // --- 💳 PROCESSAMENTO DOS PAGAMENTOS ---
             $pagamentosArray = json_decode($request->pagamentos, true);
             $nomesMetodos = [];
 
             if (is_array($pagamentosArray)) {
                 foreach ($pagamentosArray as $pag) {
                     $valorItem = floatval($pag['valor'] ?? 0);
-                    $metodoKey = strtolower($pag['metodo']);
 
-                    // ALTERAÇÃO AQUI: Registra se tiver valor OU se for voucher (mesmo com valor 0)
-                    if ($valorItem > 0 || $metodoKey === 'voucher') {
+                    if ($valorItem > 0) {
                         $nomesMetodos[] = mb_strtoupper($pag['metodo'], 'UTF-8');
 
-                        // 1. Registra cada movimentação no Caixa (aparecerá no histórico)
+                        // 1. Registra cada movimentação no Caixa do Usuário Logado
                         \App\Models\Bar\BarCashMovement::create([
-                            'bar_cash_session_id' => $session->id,
+                            'bar_cash_session_id' => $session->id, // Caixa específico do operador
                             'user_id'             => auth()->id(),
                             'bar_order_id'        => $order->id,
                             'type'                => 'venda',
                             'payment_method'      => $pag['metodo'],
-                            'amount'              => $valorItem, // Será 0.00 para Voucher
+                            'amount'              => $valorItem,
                             'description'         => "Venda Mesa #{$table->identifier} (Finalizada por: " . auth()->user()->name . ")",
                         ]);
 
-                        // 2. Atualiza saldo esperado na gaveta APENAS se for dinheiro real
-                        if ($metodoKey === 'dinheiro' && $valorItem > 0) {
+                        // 2. Atualiza saldo esperado na gaveta se for Dinheiro
+                        if (strtolower($pag['metodo']) == 'dinheiro') {
                             $session->increment('expected_balance', $valorItem);
                         }
                     }

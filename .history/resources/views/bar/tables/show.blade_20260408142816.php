@@ -387,38 +387,19 @@
             inputValor.classList.add('opacity-50');
         }
 
-        // 5. Adicionar Pagamento à Lista Temporária (Ajustado para Voucher/Cortesia)
+        // 5. Adicionar Pagamento à Lista Temporária
         function addPagamento() {
             const valorInput = document.getElementById('inputValorPago');
             const valor = parseFloat(valorInput.value);
             const metodo = document.getElementById('selectMetodo').value;
 
-            const isVoucher = (metodo === 'voucher');
-
-            // REGRA: Se for voucher, aceitamos mesmo sendo 0. Se não for, tem que ser > 0.
-            if (isVoucher || valor > 0) {
-
-                // No banco de dados e no financeiro, Voucher registra R$ 0,00
-                // Mas na lógica da lista, ele "mata" a pendência da mesa.
+            if (valor > 0) {
                 pagamentos.push({
                     metodo: metodo,
-                    valor: isVoucher ? 0 : valor
+                    valor: valor
                 });
-
                 atualizarTelaPagamento();
-
-                // Limpa o input e foca para o próximo lançamento (se houver)
-                valorInput.value = "";
                 valorInput.focus();
-
-                // Se foi voucher, já podemos fechar o calculator ou resetar o select
-                if (isVoucher) {
-                    document.getElementById('selectMetodo').value = 'dinheiro';
-                    valorInput.readOnly = false;
-                    valorInput.classList.remove('opacity-50');
-                }
-            } else {
-                alert("Por favor, insira um valor válido.");
             }
         }
 
@@ -437,72 +418,55 @@
             }
         }
 
+        // 6. Atualizar Cálculos de Restante e Troco na Tela (INCLUINDO DESCONTO)
         function atualizarTelaPagamento() {
-            // 1. Pega o desconto e calcula o novo total líquido
+            // Pega o desconto e calcula o novo total líquido
             const desconto = parseFloat(document.getElementById('inputDesconto').value) || 0;
             const novoTotalMesa = totalMesa - desconto;
 
-            // 2. CORREÇÃO: Calcula quanto já foi pago (usando .valor, que é o padrão que definimos no addPagamento)
-            pagoAcumulado = pagamentos.reduce((acc, p) => acc + (parseFloat(p.valor) || 0), 0);
-
-            // 3. Verifica se existe Voucher na lista de pagamentos OU se é o método selecionado agora
-            const metodoAtual = document.getElementById('selectMetodo').value;
-            const isVoucherAgora = (metodoAtual === 'voucher');
-            const jaTemVoucherNaLista = pagamentos.some(p => p.metodo === 'voucher');
-
+            pagoAcumulado = pagamentos.reduce((acc, p) => acc + p.valor, 0);
             const lista = document.getElementById('listaPagamentos');
+
             lista.innerHTML = pagamentos.map((p, i) => `
-        <div class="flex justify-between items-center bg-gray-950 p-4 rounded-2xl border border-gray-800 text-[10px] font-black uppercase text-white animate-slide-in">
-            <span>${p.metodo === 'voucher' ? '🎟️ VOUCHER' : p.metodo}</span>
-            <div class="flex items-center gap-4">
-                <span class="text-orange-500 font-bold">R$ ${p.valor.toFixed(2)}</span>
-                <button type="button" onclick="removerPagamento(${i})" class="text-red-500 hover:text-red-400">✕</button>
+            <div class="flex justify-between items-center bg-gray-950 p-4 rounded-2xl border border-gray-800 text-[10px] font-black uppercase text-white animate-slide-in">
+                <span>${p.metodo}</span>
+                <div class="flex items-center gap-4">
+                    <span class="text-orange-500 font-bold">R$ ${p.valor.toFixed(2)}</span>
+                    <button onclick="removerPagamento(${i})" class="text-red-500 hover:text-red-400">✕</button>
+                </div>
             </div>
-        </div>
-    `).join('');
+        `).join('');
 
             const faltante = novoTotalMesa - pagoAcumulado;
             const troco = pagoAcumulado > novoTotalMesa ? pagoAcumulado - novoTotalMesa : 0;
 
-            // 4. Atualiza elementos visuais (Restante e Troco)
-            // Se selecionou voucher agora ou já adicionou um, o restante visual é 0
-            const displayFaltante = (isVoucherAgora || jaTemVoucherNaLista) ? 0 : (faltante > 0 ? faltante : 0);
-
-            document.getElementById('textRestante').innerText = 'R$ ' + displayFaltante.toLocaleString('pt-br', {
-                minimumFractionDigits: 2
-            });
-
+            // Atualiza elementos visuais
+            document.getElementById('textRestante').innerText = 'R$ ' + (faltante > 0 ? faltante : 0).toLocaleString(
+                'pt-br', {
+                    minimumFractionDigits: 2
+                });
             document.getElementById('textTroco').innerText = 'R$ ' + troco.toLocaleString('pt-br', {
                 minimumFractionDigits: 2
             });
 
-            // 5. Validação do botão Finalizar (CORRIGIDO)
+            // Validação do botão Finalizar
             const btn = document.getElementById('btnFinalizarGeral');
-
-            // Libera se: (Valor pago bate) OU (Já tem voucher na lista) OU (Voucher selecionado agora)
-            if (jaTemVoucherNaLista || isVoucherAgora || pagoAcumulado >= (novoTotalMesa - 0.01)) {
+            if (pagoAcumulado >= (novoTotalMesa - 0.01)) {
                 btn.disabled = false;
                 btn.classList.remove('opacity-30', 'cursor-not-allowed');
-                btn.classList.add('bg-green-600');
             } else {
                 btn.disabled = true;
                 btn.classList.add('opacity-30', 'cursor-not-allowed');
-                btn.classList.remove('bg-green-600');
             }
 
-            // 6. Alimenta valor sugerido para pagamento
-            const inputValor = document.getElementById('inputValorPago');
-            if (isVoucherAgora) {
-                inputValor.value = '0.00';
-                inputValor.readOnly = true;
-                inputValor.classList.add('opacity-50');
+            // Alimenta valor sugerido para pagamento
+            if (faltante > 0) {
+                document.getElementById('inputValorPago').value = faltante.toFixed(2);
             } else {
-                inputValor.readOnly = false;
-                inputValor.classList.remove('opacity-50');
-                inputValor.value = faltante > 0 ? faltante.toFixed(2) : '0.00';
+                document.getElementById('inputValorPago').value = '0.00';
             }
 
-            // 7. Atualiza campo oculto do desconto
+            // Atualiza campo oculto do formulário para o PHP
             const hiddenDiscount = document.getElementById('hidden_discount_value');
             if (hiddenDiscount) hiddenDiscount.value = desconto;
         }
