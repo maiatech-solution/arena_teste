@@ -1633,85 +1633,64 @@
         </div>
     </div>
 
-    {{-- MODAL 7: RESUMO DE ENCERRAMENTO MELHORADO --}}
+    {{-- MODAL 7: RESUMO DE ENCERRAMENTO (PÓS-FINALIZAÇÃO) --}}
     <div id="modalResumoFinal"
         class="fixed inset-0 z-[60] hidden overflow-y-auto flex items-center justify-center p-4">
         <div class="fixed inset-0 bg-gray-900 bg-opacity-80 transition-opacity"></div>
 
         <div
-            class="relative bg-white dark:bg-gray-800 rounded-2xl overflow-hidden shadow-2xl max-w-md w-full border border-green-500 flex flex-col max-h-[90vh]">
-
-            <div class="p-6 overflow-y-auto" id="printableArea">
-                {{-- CABEÇALHO IMPRESSÃO --}}
-                <div class="text-center mb-4">
-                    <div class="bg-green-100 p-3 rounded-full inline-block mb-2 print:hidden">
+            class="relative bg-white dark:bg-gray-800 rounded-2xl overflow-hidden shadow-2xl max-w-md w-full border border-green-500">
+            <div class="p-6">
+                <div class="flex items-center justify-center mb-4">
+                    <div class="bg-green-100 p-3 rounded-full">
                         <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
                             </path>
                         </svg>
                     </div>
-                    <h3 class="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Fechamento
-                        de Caixa</h3>
-                    <p class="text-gray-500 text-xs uppercase font-bold" id="resumoDataInfo"></p>
                 </div>
 
-                {{-- 1. DETALHAMENTO DE HORÁRIOS (O que você pediu) --}}
-                <div class="mb-4">
-                    <h4 class="text-[10px] font-black text-gray-400 uppercase mb-2 border-b pb-1">Agendamentos do
-                        Período</h4>
-                    <div id="resumoListaAgendamentos"
-                        class="space-y-1 font-mono text-[11px] text-gray-700 dark:text-gray-300">
-                        {{-- Preenchido via JS --}}
-                    </div>
-                </div>
+                <h3 class="text-center text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
+                    Caixa Encerrado com Sucesso!
+                </h3>
+                <p class="text-center text-gray-500 text-sm mb-6">Confira o resumo dos valores reservados nesta
+                    unidade:</p>
 
-                {{-- 2. RESUMO FINANCEIRO --}}
                 <div
-                    class="space-y-2 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-200 dark:border-gray-600">
-                    <div class="flex justify-between items-center text-xs">
-                        <span class="font-bold text-gray-500 uppercase">📱 PIX:</span>
-                        <span id="resumoPix" class="font-black text-blue-600">R$ 0,00</span>
+                    class="space-y-3 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-200 dark:border-gray-600">
+                    <div class="flex justify-between items-center pb-2 border-b border-dashed border-gray-300">
+                        <span class="text-xs font-bold text-gray-500 uppercase">📱 Total via PIX:</span>
+                        <span id="resumoPix" class="font-black text-blue-600 text-lg">R$ 0,00</span>
                     </div>
-                    <div class="flex justify-between items-center text-xs">
-                        <span class="font-bold text-gray-500 uppercase">💵 Dinheiro:</span>
-                        <span id="resumoDinheiro" class="font-black text-amber-600">R$ 0,00</span>
+                    <div class="flex justify-between items-center pb-2 border-b border-dashed border-gray-300">
+                        <span class="text-xs font-bold text-gray-500 uppercase">💵 Total Dinheiro:</span>
+                        <span id="resumoDinheiro" class="font-black text-amber-600 text-lg">R$ 0,00</span>
                     </div>
-                    <div class="flex justify-between items-center text-xs">
-                        <span class="font-bold text-gray-500 uppercase">💳 Cartão:</span>
-                        <span id="resumoCartao" class="font-black text-orange-600">R$ 0,00</span>
+                    <div class="flex justify-between items-center pb-2 border-b border-dashed border-gray-300">
+                        <span class="text-xs font-bold text-gray-500 uppercase">💳 Cartão (C/D):</span>
+                        <span id="resumoCartao" class="font-black text-orange-600 text-lg">R$ 0,00</span>
                     </div>
-                    <div class="flex justify-between items-center pt-2 border-t border-dashed border-gray-400">
-                        <span class="text-xs font-black text-gray-800 dark:text-gray-100 uppercase">💰 TOTAL:</span>
-                        <span id="resumoTotal" class="font-black text-green-700 text-lg underline">R$ 0,00</span>
+                    <div class="flex justify-between items-center pt-2">
+                        <span class="text-xs font-black text-gray-700 dark:text-gray-200 uppercase">💰 TOTAL
+                            GERAL:</span>
+                        <span id="resumoTotal" class="font-black text-green-700 text-xl underline">R$ 0,00</span>
                     </div>
-                </div>
-
-                <div class="mt-4 text-[9px] text-center text-gray-400 italic uppercase">
-                    Gerado por MAIATECH SOLUTION em {{ date('d/m/Y H:i') }}
                 </div>
             </div>
 
-            {{-- BOTÕES --}}
-            <div class="bg-gray-100 dark:bg-gray-900 px-6 py-4 grid grid-cols-2 gap-3">
-                <button type="button" onclick="imprimirResumoTermico()"
-                    class="bg-gray-700 hover:bg-gray-800 text-white font-black py-3 rounded-xl transition uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z">
-                        </path>
-                    </svg>
-                    Imprimir
-                </button>
+            <div class="bg-gray-100 dark:bg-gray-900 px-6 py-4 flex flex-col gap-2">
                 <button type="button" onclick="window.location.reload()"
-                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl transition uppercase tracking-widest text-[10px]">
-                    Concluir
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl transition uppercase tracking-widest text-xs">
+                    OK, CONCLUÍDO
                 </button>
             </div>
         </div>
     </div>
 
     {{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA --}}
+
+
     <script>
         // Substitua as duas linhas antigas por esta:
         if (!window.__CAIXA_SCRIPT_LOADED) {
@@ -2210,7 +2189,9 @@
                         const btn = document.getElementById(btnId);
                         const spinner = document.getElementById(spinnerId);
 
-                        if (typeof window.fecharModalAutorizacao === 'function') window.fecharModalAutorizacao();
+                        if (typeof window.fecharModalAutorizacao === 'function') {
+                            window.fecharModalAutorizacao();
+                        }
 
                         const modais = document.querySelectorAll(
                             '.modal, .modal-backdrop, #modalSenha, [id*="Autorizacao"]');
@@ -2244,129 +2225,54 @@
                             .then(res => res.json())
                             .then(json => {
                                 if (json.success) {
+                                    form.dataset.finalizado = "true";
+
+                                    if (json.print_url) {
+                                        imprimirCupomArena(json.print_url);
+                                    }
+
+                                    // 🎯 LÓGICA EXCLUSIVA PARA O FECHAMENTO DE CAIXA
                                     if (formId === 'closeCashForm') {
-                                        if (typeof closeCloseCashModal === 'function') closeCloseCashModal();
+                                        closeCloseCashModal();
 
-                                        // 1. Preenchimento dos Cards de Resumo
+                                        // Alimenta o modal de resumo com os valores já calculados na tela
                                         document.getElementById('resumoPix').innerText = document
-                                            .getElementById('displayBancoModal')?.innerText || 'R$ 0,00';
+                                            .getElementById('displayBancoModal').innerText;
                                         document.getElementById('resumoDinheiro').innerText = document
-                                            .getElementById('displayGavetaModal')?.innerText || 'R$ 0,00';
+                                            .getElementById('displayGavetaModal').innerText;
                                         document.getElementById('resumoCartao').innerText = document
-                                            .getElementById('displayOutrosModal')?.innerText || 'R$ 0,00';
+                                            .getElementById('displayOutrosModal').innerText;
                                         document.getElementById('resumoTotal').innerText = document
-                                            .getElementById('calculatedLiquidAmount')?.innerText || 'R$ 0,00';
+                                            .getElementById('calculatedLiquidAmount').innerText;
 
-                                        // 2. Cabeçalho
-                                        const arenaNome = document.querySelector('h2')?.innerText.replace('💰',
-                                            '').trim() || 'Arena';
-                                        const dataSel = document.getElementById('date')?.value.split('-')
-                                            .reverse().join('/') || '';
-                                        if (document.getElementById('resumoDataInfo')) {
-                                            document.getElementById('resumoDataInfo').innerText =
-                                                `${arenaNome} - ${dataSel}`;
-                                        }
-
-                                        // 3. 📝 VARREDURA DA TABELA DE MOVIMENTAÇÃO (DIFERENCIANDO CRÉDITO/DÉBITO)
-                                        let htmlMovimentacao = "";
-                                        const tabelas = document.querySelectorAll('table');
-                                        let tabelaFinanceira = null;
-
-                                        tabelas.forEach((t) => {
-                                            const txt = t.innerText.toUpperCase();
-                                            if (txt.includes('TIPO | FORMA') || txt.includes(
-                                                    'DESCRIÇÃO')) {
-                                                tabelaFinanceira = t;
-                                            }
-                                        });
-
-                                        if (!tabelaFinanceira && tabelas.length > 0) {
-                                            tabelaFinanceira = tabelas[tabelas.length - 1];
-                                        }
-
-                                        if (tabelaFinanceira) {
-                                            const linhas = tabelaFinanceira.querySelectorAll('tbody tr');
-
-                                            linhas.forEach((linha) => {
-                                                // Filtro de segurança para pegar apenas linhas de dados (6 colunas)
-                                                if (linha.cells.length < 6 || linha.innerText.includes(
-                                                        'Nenhuma')) return;
-
-                                                const cols = linha.cells;
-                                                const hora = cols[0].innerText.trim();
-                                                const pagador = cols[2].innerText.split('\n')[0].trim();
-
-                                                // --- LÓGICA DE DIFERENCIAÇÃO APRIMORADA ---
-                                                let formaOriginal = cols[3].innerText.trim()
-                                                    .toUpperCase();
-                                                let formaExibicao = "";
-
-                                                // 1. Identifica o método principal limpando textos secundários
-                                                if (formaOriginal.includes('PIX')) {
-                                                    formaExibicao = 'PIX';
-                                                } else if (formaOriginal.includes('DINHEIRO') ||
-                                                    formaOriginal.includes('CASH') || formaOriginal
-                                                    .includes('ESPECIE')) {
-                                                    formaExibicao = 'DINHEIRO';
-                                                } else if (formaOriginal.includes('CRÉDITO') ||
-                                                    formaOriginal.includes('CREDIT')) {
-                                                    formaExibicao = 'CARTÃO CRÉDITO';
-                                                } else if (formaOriginal.includes('DÉBITO') ||
-                                                    formaOriginal.includes('DEBIT')) {
-                                                    formaExibicao = 'CARTÃO DÉBITO';
-                                                } else if (formaOriginal.includes('CARTÃO') ||
-                                                    formaOriginal.includes('CARD')) {
-                                                    // Se caiu aqui, é um cartão mas o texto não diz qual.
-                                                    // Mantemos 'CARTÃO' mas limpamos o resto (ex: removemos 'SINAL/ENTRADA')
-                                                    formaExibicao = 'CARTÃO';
-                                                } else {
-                                                    // Caso seja algo como 'Transferência' ou 'Outro'
-                                                    formaExibicao = formaOriginal.replace(/\s+/g, ' ');
-                                                }
-                                                // ------------------------------------------
-                                                // ------------------------------------------
-
-                                                const valor = cols[5].innerText.trim();
-
-                                                if (valor && valor !== "R$ 0,00") {
-                                                    htmlMovimentacao += `
-                <div class="flex border-b" style="display: flex; justify-content: space-between; margin-bottom: 3px; border-bottom: 1px dashed #000; padding: 2px 0; font-family: monospace;">
-                    <div style="text-align: left; max-width: 72%;">
-                        <span style="font-weight: bold; font-size: 10px;">${hora} - ${pagador}</span><br>
-                        <span style="font-size: 9px; color: #333; font-weight: bold;">[${formaExibicao}]</span>
-                    </div>
-                    <span style="font-weight: bold; font-size: 10px; align-self: center;">${valor}</span>
-                </div>`;
-                                                }
-                                            });
-                                        }
-
-                                        const container = document.getElementById('resumoListaAgendamentos');
-                                        if (container) {
-                                            container.innerHTML = htmlMovimentacao || "SEM MOVIMENTAÇÕES.";
-                                        }
-
-                                        document.getElementById('resumoListaAgendamentos').innerHTML =
-                                            htmlMovimentacao || "SEM MOVIMENTAÇÕES REGISTRADAS.";
-
-                                        const modalResumo = document.getElementById('modalResumoFinal');
-                                        if (modalResumo) modalResumo.classList.replace('hidden', 'flex');
+                                        // Mostra o modal de resumo final
+                                        document.getElementById('modalResumoFinal').classList.replace('hidden',
+                                            'flex');
 
                                         window.caixaProcessandoGlobal[formId] = false;
-                                        return;
+                                        return; // 🛑 SAI DA FUNÇÃO AQUI. Ignora o alert debaixo.
                                     }
-                                    window.location.reload();
+
+                                    // ✅ Só mostra alert para as outras telas (Pagamento, Falta, etc)
+                                    setTimeout(() => {
+                                        if (json.message) alert(json.message);
+                                        window.location.reload();
+                                    }, 400);
+
                                 } else {
-                                    alert("Erro: " + (json.message || 'Falha no processamento.'));
-                                    window.caixaProcessandoGlobal[formId] = false;
-                                    if (btn) {
-                                        btn.disabled = false;
-                                        btn.innerText = "CONCLUIR";
-                                    }
+                                    // Erro: Mostra a mensagem de erro (Divergência, etc)
+                                    setTimeout(() => {
+                                        alert(json.message || 'Erro ao processar.');
+                                        window.caixaProcessandoGlobal[formId] = false;
+                                        if (btn) {
+                                            btn.disabled = false;
+                                            btn.innerText = "CONCLUIR";
+                                        }
+                                        if (spinner) spinner.classList.add('hidden');
+                                    }, 400);
                                 }
                             })
                             .catch(err => {
-                                console.error(err);
                                 window.caixaProcessandoGlobal[formId] = false;
                                 if (btn) {
                                     btn.disabled = false;
@@ -2374,6 +2280,11 @@
                                 }
                             });
                     };
+
+                    if (formId === 'debtForm') {
+                        enviarParaOServidor();
+                        return false;
+                    }
 
                     const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
                     if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
@@ -2386,79 +2297,6 @@
                     }
                     return false;
                 };
-            }
-
-            // --- 🖨️ FUNÇÃO DE IMPRESSÃO TÉRMICA CENTRALIZADA ---
-            function imprimirResumoTermico() {
-                const printableElement = document.getElementById('printableArea');
-                if (!printableElement) return alert("Erro: Área de impressão não encontrada.");
-
-                // Captura o conteúdo atualizado do modal de resumo
-                const conteudo = printableElement.innerHTML;
-                const win = window.open('', '_blank', 'width=300,height=600');
-
-                if (!win) return alert("Por favor, permita pop-ups para imprimir.");
-
-                win.document.write(`
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <title>Impressão de Resumo</title>
-                <style>
-                    /* Configurações para impressora térmica de 58mm ou 80mm */
-                    @page { margin: 0; }
-                    body {
-                        font-family: 'Courier New', monospace;
-                        width: 72mm; /* Ajuste comum para papel de 80mm */
-                        margin: 0 auto;
-                        padding: 10px;
-                        font-size: 11px;
-                        line-height: 1.3;
-                        color: #000;
-                    }
-                    .font-black { font-weight: bold; text-transform: uppercase; }
-                    .flex {
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: flex-start;
-                        margin-bottom: 4px;
-                    }
-                    .border-b {
-                        border-bottom: 1px dashed #000;
-                        margin-bottom: 6px;
-                        padding-bottom: 4px;
-                    }
-                    .mb-4 { margin-bottom: 12px; }
-                    .text-center { text-align: center; }
-
-                    /* Ocultar elementos desnecessários na impressão */
-                    svg, button, .print\\:hidden, .hidden {
-                        display: none !important;
-                    }
-
-                    /* Garante que o texto dentro da flex não quebre o layout */
-                    .flex > div { text-align: left; }
-                    .flex > span:last-child { text-align: right; min-width: 60px; }
-                </style>
-            </head>
-            <body>
-                <div class="text-center">
-                    ${conteudo}
-                </div>
-                <script>
-                    window.onload = function() {
-                        // Pequeno delay para garantir renderização de fontes
-                        setTimeout(function() {
-                            window.print();
-                            window.close();
-                        }, 250);
-                    };
-                <\/script>
-            </body>
-        </html>
-    `);
-
-                win.document.close();
             }
 
             /**

@@ -2296,34 +2296,28 @@
                                                 const hora = cols[0].innerText.trim();
                                                 const pagador = cols[2].innerText.split('\n')[0].trim();
 
-                                                // --- LÓGICA DE DIFERENCIAÇÃO APRIMORADA ---
-                                                let formaOriginal = cols[3].innerText.trim()
-                                                    .toUpperCase();
-                                                let formaExibicao = "";
+                                                // --- LÓGICA DE DIFERENCIAÇÃO DE CARTÃO ---
+                                                let formaOriginal = cols[3].innerText.trim();
 
-                                                // 1. Identifica o método principal limpando textos secundários
-                                                if (formaOriginal.includes('PIX')) {
+                                                // Remove quebras de linha e espaços duplos
+                                                let formaLimpa = formaOriginal.replace(/\s+/g, ' ');
+
+                                                // Padronização visual para o papel térmico (Ex: "Pagamento (Cartão de Crédito)" -> "CREDITO")
+                                                let formaExibicao = formaLimpa.toUpperCase();
+
+                                                if (formaExibicao.includes('CRÉDITO') || formaExibicao
+                                                    .includes('CREDIT')) {
+                                                    formaExibicao = 'CARTÃO CRÉDITO';
+                                                } else if (formaExibicao.includes('DÉBITO') ||
+                                                    formaExibicao.includes('DEBIT')) {
+                                                    formaExibicao = 'CARTÃO DÉBITO';
+                                                } else if (formaExibicao.includes('PIX')) {
                                                     formaExibicao = 'PIX';
-                                                } else if (formaOriginal.includes('DINHEIRO') ||
-                                                    formaOriginal.includes('CASH') || formaOriginal
+                                                } else if (formaExibicao.includes('DINHEIRO') ||
+                                                    formaExibicao.includes('CASH') || formaExibicao
                                                     .includes('ESPECIE')) {
                                                     formaExibicao = 'DINHEIRO';
-                                                } else if (formaOriginal.includes('CRÉDITO') ||
-                                                    formaOriginal.includes('CREDIT')) {
-                                                    formaExibicao = 'CARTÃO CRÉDITO';
-                                                } else if (formaOriginal.includes('DÉBITO') ||
-                                                    formaOriginal.includes('DEBIT')) {
-                                                    formaExibicao = 'CARTÃO DÉBITO';
-                                                } else if (formaOriginal.includes('CARTÃO') ||
-                                                    formaOriginal.includes('CARD')) {
-                                                    // Se caiu aqui, é um cartão mas o texto não diz qual.
-                                                    // Mantemos 'CARTÃO' mas limpamos o resto (ex: removemos 'SINAL/ENTRADA')
-                                                    formaExibicao = 'CARTÃO';
-                                                } else {
-                                                    // Caso seja algo como 'Transferência' ou 'Outro'
-                                                    formaExibicao = formaOriginal.replace(/\s+/g, ' ');
                                                 }
-                                                // ------------------------------------------
                                                 // ------------------------------------------
 
                                                 const valor = cols[5].innerText.trim();

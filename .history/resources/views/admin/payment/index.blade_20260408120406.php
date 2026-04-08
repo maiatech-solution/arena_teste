@@ -2267,83 +2267,48 @@
                                                 `${arenaNome} - ${dataSel}`;
                                         }
 
-                                        // 3. 📝 VARREDURA DA TABELA DE MOVIMENTAÇÃO (DIFERENCIANDO CRÉDITO/DÉBITO)
+                                        // 3. 📝 VARREDURA DA TABELA DE MOVIMENTAÇÃO (SEÇÃO 7 DO HTML)
                                         let htmlMovimentacao = "";
+
+                                        // Buscamos todas as tabelas e filtramos pela que tem o cabeçalho "Pagador / Gestor"
                                         const tabelas = document.querySelectorAll('table');
                                         let tabelaFinanceira = null;
 
-                                        tabelas.forEach((t) => {
-                                            const txt = t.innerText.toUpperCase();
-                                            if (txt.includes('TIPO | FORMA') || txt.includes(
-                                                    'DESCRIÇÃO')) {
+                                        tabelas.forEach(t => {
+                                            if (t.innerText.includes('Pagador / Gestor')) {
                                                 tabelaFinanceira = t;
                                             }
                                         });
 
-                                        if (!tabelaFinanceira && tabelas.length > 0) {
-                                            tabelaFinanceira = tabelas[tabelas.length - 1];
-                                        }
-
                                         if (tabelaFinanceira) {
                                             const linhas = tabelaFinanceira.querySelectorAll('tbody tr');
 
-                                            linhas.forEach((linha) => {
-                                                // Filtro de segurança para pegar apenas linhas de dados (6 colunas)
-                                                if (linha.cells.length < 6 || linha.innerText.includes(
-                                                        'Nenhuma')) return;
+                                            linhas.forEach(linha => {
+                                                // Ignora linhas de título de grupo (Reserva ID) ou mensagens de "Nenhuma transação"
+                                                if (linha.classList.contains('bg-gray-100') || linha
+                                                    .innerText.includes('Nenhuma')) return;
 
                                                 const cols = linha.cells;
-                                                const hora = cols[0].innerText.trim();
-                                                const pagador = cols[2].innerText.split('\n')[0].trim();
+                                                if (cols.length >= 5) {
+                                                    const hora = cols[0].innerText.trim();
+                                                    // Pega o nome do pagador (está no primeiro div da coluna 2)
+                                                    const pagador = cols[2].querySelector('div')
+                                                        ?.innerText.trim() || "N/D";
+                                                    // Pega o tipo e forma (estão na coluna 3)
+                                                    const tipoForma = cols[3].innerText.trim().replace(
+                                                        /\s+/g, ' ');
+                                                    const valor = cols[5].innerText.trim();
 
-                                                // --- LÓGICA DE DIFERENCIAÇÃO APRIMORADA ---
-                                                let formaOriginal = cols[3].innerText.trim()
-                                                    .toUpperCase();
-                                                let formaExibicao = "";
-
-                                                // 1. Identifica o método principal limpando textos secundários
-                                                if (formaOriginal.includes('PIX')) {
-                                                    formaExibicao = 'PIX';
-                                                } else if (formaOriginal.includes('DINHEIRO') ||
-                                                    formaOriginal.includes('CASH') || formaOriginal
-                                                    .includes('ESPECIE')) {
-                                                    formaExibicao = 'DINHEIRO';
-                                                } else if (formaOriginal.includes('CRÉDITO') ||
-                                                    formaOriginal.includes('CREDIT')) {
-                                                    formaExibicao = 'CARTÃO CRÉDITO';
-                                                } else if (formaOriginal.includes('DÉBITO') ||
-                                                    formaOriginal.includes('DEBIT')) {
-                                                    formaExibicao = 'CARTÃO DÉBITO';
-                                                } else if (formaOriginal.includes('CARTÃO') ||
-                                                    formaOriginal.includes('CARD')) {
-                                                    // Se caiu aqui, é um cartão mas o texto não diz qual.
-                                                    // Mantemos 'CARTÃO' mas limpamos o resto (ex: removemos 'SINAL/ENTRADA')
-                                                    formaExibicao = 'CARTÃO';
-                                                } else {
-                                                    // Caso seja algo como 'Transferência' ou 'Outro'
-                                                    formaExibicao = formaOriginal.replace(/\s+/g, ' ');
-                                                }
-                                                // ------------------------------------------
-                                                // ------------------------------------------
-
-                                                const valor = cols[5].innerText.trim();
-
-                                                if (valor && valor !== "R$ 0,00") {
                                                     htmlMovimentacao += `
-                <div class="flex border-b" style="display: flex; justify-content: space-between; margin-bottom: 3px; border-bottom: 1px dashed #000; padding: 2px 0; font-family: monospace;">
-                    <div style="text-align: left; max-width: 72%;">
-                        <span style="font-weight: bold; font-size: 10px;">${hora} - ${pagador}</span><br>
-                        <span style="font-size: 9px; color: #333; font-weight: bold;">[${formaExibicao}]</span>
-                    </div>
-                    <span style="font-weight: bold; font-size: 10px; align-self: center;">${valor}</span>
-                </div>`;
+                                        <div class="flex border-b" style="display: flex; justify-content: space-between; margin-bottom: 2px; border-bottom: 1px dashed #ccc; padding: 2px 0;">
+                                            <div style="text-align: left;">
+                                                <span style="font-weight: bold; font-size: 11px;">${hora} - ${pagador}</span><br>
+                                                <span style="font-size: 9px; color: #666;">${tipoForma}</span>
+                                            </div>
+                                            <span style="font-weight: bold; font-size: 11px;">${valor}</span>
+                                        </div>`;
                                                 }
                                             });
-                                        }
-
-                                        const container = document.getElementById('resumoListaAgendamentos');
-                                        if (container) {
-                                            container.innerHTML = htmlMovimentacao || "SEM MOVIMENTAÇÕES.";
                                         }
 
                                         document.getElementById('resumoListaAgendamentos').innerHTML =

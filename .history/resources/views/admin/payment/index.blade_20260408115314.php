@@ -1712,6 +1712,8 @@
     </div>
 
     {{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA --}}
+
+
     <script>
         // Substitua as duas linhas antigas por esta:
         if (!window.__CAIXA_SCRIPT_LOADED) {
@@ -2195,6 +2197,7 @@
                 const form = document.getElementById(formId);
                 if (!form) return;
 
+                // Evita duplicidade de binding
                 if (form.dataset.ajaxBound === "1") return;
                 form.dataset.ajaxBound = "1";
 
@@ -2203,6 +2206,7 @@
                 form.onsubmit = function(e) {
                     e.preventDefault();
 
+                    // Bloqueio de cliques duplos
                     if (window.caixaProcessandoGlobal[formId]) return false;
                     window.caixaProcessandoGlobal[formId] = true;
 
@@ -2210,6 +2214,7 @@
                         const btn = document.getElementById(btnId);
                         const spinner = document.getElementById(spinnerId);
 
+                        // Fecha modais de autorização se existirem
                         if (typeof window.fecharModalAutorizacao === 'function') window.fecharModalAutorizacao();
 
                         const modais = document.querySelectorAll(
@@ -2219,6 +2224,7 @@
                             m.classList.add('hidden');
                         });
 
+                        // Feedback visual de carregamento
                         if (btn) {
                             btn.disabled = true;
                             btn.innerText = "AGUARDE...";
@@ -2228,6 +2234,7 @@
                         const formData = new FormData(form);
                         if (tokenRecebido) formData.append('supervisor_token', tokenRecebido);
 
+                        // Montagem da URL
                         const reservaId = formData.get('reserva_id') || document.getElementById('noShowReservaId')
                             ?.value;
                         let targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
@@ -2247,7 +2254,7 @@
                                     if (formId === 'closeCashForm') {
                                         if (typeof closeCloseCashModal === 'function') closeCloseCashModal();
 
-                                        // 1. Preenchimento dos Cards de Resumo
+                                        // 1. Preenche Financeiro no Resumo
                                         document.getElementById('resumoPix').innerText = document
                                             .getElementById('displayBancoModal')?.innerText || 'R$ 0,00';
                                         document.getElementById('resumoDinheiro').innerText = document
@@ -2257,7 +2264,7 @@
                                         document.getElementById('resumoTotal').innerText = document
                                             .getElementById('calculatedLiquidAmount')?.innerText || 'R$ 0,00';
 
-                                        // 2. Cabeçalho
+                                        // 2. Cabeçalho do Resumo
                                         const arenaNome = document.querySelector('h2')?.innerText.replace('💰',
                                             '').trim() || 'Arena';
                                         const dataSel = document.getElementById('date')?.value.split('-')
@@ -2267,87 +2274,45 @@
                                                 `${arenaNome} - ${dataSel}`;
                                         }
 
-                                        // 3. 📝 VARREDURA DA TABELA DE MOVIMENTAÇÃO (DIFERENCIANDO CRÉDITO/DÉBITO)
+                                        // 3. Varredura da Tabela de Movimentação
                                         let htmlMovimentacao = "";
-                                        const tabelas = document.querySelectorAll('table');
-                                        let tabelaFinanceira = null;
+                                        const todasTabelas = document.querySelectorAll('table');
+                                        let tabelaAlvo = null;
 
-                                        tabelas.forEach((t) => {
-                                            const txt = t.innerText.toUpperCase();
-                                            if (txt.includes('TIPO | FORMA') || txt.includes(
-                                                    'DESCRIÇÃO')) {
-                                                tabelaFinanceira = t;
+                                        todasTabelas.forEach(t => {
+                                            if (t.innerText.includes('Pagador / Gestor') && t.innerText
+                                                .includes('Valor')) {
+                                                tabelaAlvo = t;
                                             }
                                         });
 
-                                        if (!tabelaFinanceira && tabelas.length > 0) {
-                                            tabelaFinanceira = tabelas[tabelas.length - 1];
-                                        }
+                                        if (tabelaAlvo) {
+                                            const linhas = tabelaAlvo.querySelectorAll('tbody tr');
+                                            linhas.forEach(linha => {
+                                                if (linha.innerText.includes('Reserva ID') || linha
+                                                    .cells.length < 5) return;
 
-                                        if (tabelaFinanceira) {
-                                            const linhas = tabelaFinanceira.querySelectorAll('tbody tr');
+                                                const cols = linha.querySelectorAll('td');
+                                                const hora = cols[0]?.innerText.trim() || "";
+                                                const pagadorFull = cols[2]?.innerText || "";
+                                                const pagador = pagadorFull.split('\n')[0].trim();
+                                                const forma = cols[3]?.innerText.trim().replace(/\n/g,
+                                                    ' ') || "";
+                                                const valor = cols[5]?.innerText.trim() || "R$ 0,00";
 
-                                            linhas.forEach((linha) => {
-                                                // Filtro de segurança para pegar apenas linhas de dados (6 colunas)
-                                                if (linha.cells.length < 6 || linha.innerText.includes(
-                                                        'Nenhuma')) return;
-
-                                                const cols = linha.cells;
-                                                const hora = cols[0].innerText.trim();
-                                                const pagador = cols[2].innerText.split('\n')[0].trim();
-
-                                                // --- LÓGICA DE DIFERENCIAÇÃO APRIMORADA ---
-                                                let formaOriginal = cols[3].innerText.trim()
-                                                    .toUpperCase();
-                                                let formaExibicao = "";
-
-                                                // 1. Identifica o método principal limpando textos secundários
-                                                if (formaOriginal.includes('PIX')) {
-                                                    formaExibicao = 'PIX';
-                                                } else if (formaOriginal.includes('DINHEIRO') ||
-                                                    formaOriginal.includes('CASH') || formaOriginal
-                                                    .includes('ESPECIE')) {
-                                                    formaExibicao = 'DINHEIRO';
-                                                } else if (formaOriginal.includes('CRÉDITO') ||
-                                                    formaOriginal.includes('CREDIT')) {
-                                                    formaExibicao = 'CARTÃO CRÉDITO';
-                                                } else if (formaOriginal.includes('DÉBITO') ||
-                                                    formaOriginal.includes('DEBIT')) {
-                                                    formaExibicao = 'CARTÃO DÉBITO';
-                                                } else if (formaOriginal.includes('CARTÃO') ||
-                                                    formaOriginal.includes('CARD')) {
-                                                    // Se caiu aqui, é um cartão mas o texto não diz qual.
-                                                    // Mantemos 'CARTÃO' mas limpamos o resto (ex: removemos 'SINAL/ENTRADA')
-                                                    formaExibicao = 'CARTÃO';
-                                                } else {
-                                                    // Caso seja algo como 'Transferência' ou 'Outro'
-                                                    formaExibicao = formaOriginal.replace(/\s+/g, ' ');
-                                                }
-                                                // ------------------------------------------
-                                                // ------------------------------------------
-
-                                                const valor = cols[5].innerText.trim();
-
-                                                if (valor && valor !== "R$ 0,00") {
-                                                    htmlMovimentacao += `
-                <div class="flex border-b" style="display: flex; justify-content: space-between; margin-bottom: 3px; border-bottom: 1px dashed #000; padding: 2px 0; font-family: monospace;">
-                    <div style="text-align: left; max-width: 72%;">
-                        <span style="font-weight: bold; font-size: 10px;">${hora} - ${pagador}</span><br>
-                        <span style="font-size: 9px; color: #333; font-weight: bold;">[${formaExibicao}]</span>
-                    </div>
-                    <span style="font-weight: bold; font-size: 10px; align-self: center;">${valor}</span>
-                </div>`;
-                                                }
+                                                htmlMovimentacao += `
+                                    <div class="flex border-b" style="margin-bottom: 2px;">
+                                        <div style="text-align: left;">
+                                            <span class="font-black">${hora} - ${pagador}</span><br>
+                                            <span style="font-size: 9px; opacity: 0.8;">${forma}</span>
+                                        </div>
+                                        <span class="font-black">${valor}</span>
+                                    </div>`;
                                             });
                                         }
 
-                                        const container = document.getElementById('resumoListaAgendamentos');
-                                        if (container) {
-                                            container.innerHTML = htmlMovimentacao || "SEM MOVIMENTAÇÕES.";
-                                        }
-
                                         document.getElementById('resumoListaAgendamentos').innerHTML =
-                                            htmlMovimentacao || "SEM MOVIMENTAÇÕES REGISTRADAS.";
+                                            htmlMovimentacao || "SEM ENTRADAS REGISTRADAS.";
 
                                         const modalResumo = document.getElementById('modalResumoFinal');
                                         if (modalResumo) modalResumo.classList.replace('hidden', 'flex');
@@ -2355,6 +2320,7 @@
                                         window.caixaProcessandoGlobal[formId] = false;
                                         return;
                                     }
+                                    // Sucesso genérico para outros forms
                                     window.location.reload();
                                 } else {
                                     alert("Erro: " + (json.message || 'Falha no processamento.'));
@@ -2375,15 +2341,20 @@
                             });
                     };
 
+                    // Regras de Autorização
                     const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
                     if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
                         window.requisitarAutorizacao(token => {
-                            if (token) enviarParaOServidor(token);
-                            else window.caixaProcessandoGlobal[formId] = false;
+                            if (token) {
+                                enviarParaOServidor(token);
+                            } else {
+                                window.caixaProcessandoGlobal[formId] = false;
+                            }
                         });
                     } else {
                         enviarParaOServidor();
                     }
+
                     return false;
                 };
             }

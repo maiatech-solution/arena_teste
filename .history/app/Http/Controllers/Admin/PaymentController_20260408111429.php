@@ -271,10 +271,7 @@ class PaymentController extends Controller
             return response()->json(['success' => true, 'message' => 'Caixa fechado com sucesso!']);
         } catch (\Exception $e) {
             \Log::error("Erro no fechamento: " . $e->getMessage());
-            return response()->json([
-                'success' => true,
-                'message' => null // Removida a frase que gerava o alert
-            ]);
+            return response()->json(['success' => false, 'message' => 'Erro interno: ' . $e->getMessage()], 500);
         }
     }
 

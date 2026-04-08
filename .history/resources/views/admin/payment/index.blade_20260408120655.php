@@ -2267,73 +2267,55 @@
                                                 `${arenaNome} - ${dataSel}`;
                                         }
 
-                                        // 3. 📝 VARREDURA DA TABELA DE MOVIMENTAÇÃO (DIFERENCIANDO CRÉDITO/DÉBITO)
+                                        // 3. 📝 VARREDURA DA TABELA DE MOVIMENTAÇÃO (SEÇÃO 7 DO HTML)
                                         let htmlMovimentacao = "";
+
+                                        // Localiza a tabela de transações
                                         const tabelas = document.querySelectorAll('table');
                                         let tabelaFinanceira = null;
 
-                                        tabelas.forEach((t) => {
-                                            const txt = t.innerText.toUpperCase();
-                                            if (txt.includes('TIPO | FORMA') || txt.includes(
-                                                    'DESCRIÇÃO')) {
+                                        tabelas.forEach(t => {
+                                            // Usamos o cabeçalho específico para não pegar a tabela errada
+                                            if (t.innerText.includes('Pagador / Gestor') && t.innerText
+                                                .includes('Tipo | Forma')) {
                                                 tabelaFinanceira = t;
                                             }
                                         });
 
-                                        if (!tabelaFinanceira && tabelas.length > 0) {
-                                            tabelaFinanceira = tabelas[tabelas.length - 1];
-                                        }
-
                                         if (tabelaFinanceira) {
                                             const linhas = tabelaFinanceira.querySelectorAll('tbody tr');
 
-                                            linhas.forEach((linha) => {
-                                                // Filtro de segurança para pegar apenas linhas de dados (6 colunas)
-                                                if (linha.cells.length < 6 || linha.innerText.includes(
-                                                        'Nenhuma')) return;
+                                            linhas.forEach(linha => {
+                                                // 1. Pula linhas de título de grupo (ID da Reserva) ou mensagens de "Nenhuma transação"
+                                                // No seu HTML, essas linhas de título têm a classe 'bg-gray-100'
+                                                if (linha.classList.contains('bg-gray-100') ||
+                                                    linha.innerText.includes('Nenhuma') ||
+                                                    linha.cells.length < 6) return;
 
                                                 const cols = linha.cells;
+
+                                                // 2. Captura os dados baseado na estrutura real da sua tabela
                                                 const hora = cols[0].innerText.trim();
-                                                const pagador = cols[2].innerText.split('\n')[0].trim();
 
-                                                // --- LÓGICA DE DIFERENCIAÇÃO APRIMORADA ---
-                                                let formaOriginal = cols[3].innerText.trim()
-                                                    .toUpperCase();
-                                                let formaExibicao = "";
+                                                // Pega o nome do pagador (está no primeiro div da coluna 2)
+                                                // Usamos split('\n')[0] para garantir que não pegue o nome do gestor que vem abaixo
+                                                const pagadorRaw = cols[2].innerText.trim();
+                                                const pagador = pagadorRaw.split('\n')[0].trim();
 
-                                                // 1. Identifica o método principal limpando textos secundários
-                                                if (formaOriginal.includes('PIX')) {
-                                                    formaExibicao = 'PIX';
-                                                } else if (formaOriginal.includes('DINHEIRO') ||
-                                                    formaOriginal.includes('CASH') || formaOriginal
-                                                    .includes('ESPECIE')) {
-                                                    formaExibicao = 'DINHEIRO';
-                                                } else if (formaOriginal.includes('CRÉDITO') ||
-                                                    formaOriginal.includes('CREDIT')) {
-                                                    formaExibicao = 'CARTÃO CRÉDITO';
-                                                } else if (formaOriginal.includes('DÉBITO') ||
-                                                    formaOriginal.includes('DEBIT')) {
-                                                    formaExibicao = 'CARTÃO DÉBITO';
-                                                } else if (formaOriginal.includes('CARTÃO') ||
-                                                    formaOriginal.includes('CARD')) {
-                                                    // Se caiu aqui, é um cartão mas o texto não diz qual.
-                                                    // Mantemos 'CARTÃO' mas limpamos o resto (ex: removemos 'SINAL/ENTRADA')
-                                                    formaExibicao = 'CARTÃO';
-                                                } else {
-                                                    // Caso seja algo como 'Transferência' ou 'Outro'
-                                                    formaExibicao = formaOriginal.replace(/\s+/g, ' ');
-                                                }
-                                                // ------------------------------------------
-                                                // ------------------------------------------
+                                                // Tipo e Forma (Coluna 3)
+                                                const tipoForma = cols[3].innerText.trim().replace(
+                                                    /\s+/g, ' ');
 
+                                                // Valor (Coluna 5)
                                                 const valor = cols[5].innerText.trim();
 
+                                                // 3. Monta o HTML do item para o resumo térmico
                                                 if (valor && valor !== "R$ 0,00") {
                                                     htmlMovimentacao += `
-                <div class="flex border-b" style="display: flex; justify-content: space-between; margin-bottom: 3px; border-bottom: 1px dashed #000; padding: 2px 0; font-family: monospace;">
-                    <div style="text-align: left; max-width: 72%;">
+                <div class="flex border-b" style="display: flex; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px dashed #ccc; padding: 2px 0;">
+                    <div style="text-align: left; max-width: 70%;">
                         <span style="font-weight: bold; font-size: 10px;">${hora} - ${pagador}</span><br>
-                        <span style="font-size: 9px; color: #333; font-weight: bold;">[${formaExibicao}]</span>
+                        <span style="font-size: 9px; color: #666;">${tipoForma}</span>
                     </div>
                     <span style="font-weight: bold; font-size: 10px; align-self: center;">${valor}</span>
                 </div>`;
@@ -2341,9 +2323,12 @@
                                             });
                                         }
 
-                                        const container = document.getElementById('resumoListaAgendamentos');
-                                        if (container) {
-                                            container.innerHTML = htmlMovimentacao || "SEM MOVIMENTAÇÕES.";
+                                        // Injeta o resultado no modal de resumo
+                                        const containerResumo = document.getElementById(
+                                            'resumoListaAgendamentos');
+                                        if (containerResumo) {
+                                            containerResumo.innerHTML = htmlMovimentacao ||
+                                                "SEM MOVIMENTAÇÕES REGISTRADAS.";
                                         }
 
                                         document.getElementById('resumoListaAgendamentos').innerHTML =

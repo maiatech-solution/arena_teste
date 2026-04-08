@@ -1712,6 +1712,8 @@
     </div>
 
     {{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA --}}
+
+
     <script>
         // Substitua as duas linhas antigas por esta:
         if (!window.__CAIXA_SCRIPT_LOADED) {
@@ -2247,7 +2249,7 @@
                                     if (formId === 'closeCashForm') {
                                         if (typeof closeCloseCashModal === 'function') closeCloseCashModal();
 
-                                        // 1. Preenchimento dos Cards de Resumo
+                                        // 1. Preenche Financeiro
                                         document.getElementById('resumoPix').innerText = document
                                             .getElementById('displayBancoModal')?.innerText || 'R$ 0,00';
                                         document.getElementById('resumoDinheiro').innerText = document
@@ -2267,87 +2269,65 @@
                                                 `${arenaNome} - ${dataSel}`;
                                         }
 
-                                        // 3. 📝 VARREDURA DA TABELA DE MOVIMENTAÇÃO (DIFERENCIANDO CRÉDITO/DÉBITO)
+                                        // 3. 📝 VARREDURA DA TABELA (DEBUGADA)
                                         let htmlMovimentacao = "";
-                                        const tabelas = document.querySelectorAll('table');
-                                        let tabelaFinanceira = null;
+                                        const todasTabelas = document.querySelectorAll('table');
+                                        let tabelaAlvo = null;
 
-                                        tabelas.forEach((t) => {
-                                            const txt = t.innerText.toUpperCase();
-                                            if (txt.includes('TIPO | FORMA') || txt.includes(
-                                                    'DESCRIÇÃO')) {
-                                                tabelaFinanceira = t;
+                                        // Debug: Ver quantas tabelas existem
+                                        console.log("Total de tabelas encontradas:", todasTabelas.length);
+
+                                        todasTabelas.forEach((t, idx) => {
+                                            const txt = t.innerText;
+                                            // Busca por palavras-chave que definem a tabela de movimentações
+                                            if ((txt.includes('Pagador') || txt.includes('Gestor')) &&
+                                                txt.includes('Valor')) {
+                                                tabelaAlvo = t;
+                                                console.log(`Tabela alvo encontrada no índice: ${idx}`);
                                             }
                                         });
 
-                                        if (!tabelaFinanceira && tabelas.length > 0) {
-                                            tabelaFinanceira = tabelas[tabelas.length - 1];
-                                        }
+                                        if (tabelaAlvo) {
+                                            const linhas = tabelaAlvo.querySelectorAll('tbody tr');
+                                            console.log("Total de linhas na tabela alvo:", linhas.length);
 
-                                        if (tabelaFinanceira) {
-                                            const linhas = tabelaFinanceira.querySelectorAll('tbody tr');
-
-                                            linhas.forEach((linha) => {
-                                                // Filtro de segurança para pegar apenas linhas de dados (6 colunas)
-                                                if (linha.cells.length < 6 || linha.innerText.includes(
-                                                        'Nenhuma')) return;
+                                            linhas.forEach(linha => {
+                                                // Filtro: Ignora se for cabeçalho interno ou se tiver poucas colunas
+                                                if (linha.innerText.includes('Reserva ID') ||
+                                                    linha.innerText.includes('Nenhuma movimentação') ||
+                                                    linha.cells.length < 4) return;
 
                                                 const cols = linha.cells;
-                                                const hora = cols[0].innerText.trim();
-                                                const pagador = cols[2].innerText.split('\n')[0].trim();
+                                                const hora = cols[0]?.innerText.trim() || "";
+                                                // Pega o nome do pagador (geralmente na coluna 2 ou 3 dependendo da sua estrutura)
+                                                const pagadorFull = cols[2]?.innerText || "";
+                                                const pagador = pagadorFull.split('\n')[0].trim();
+                                                const forma = cols[3]?.innerText.trim().replace(/\n/g,
+                                                    ' ') || "";
 
-                                                // --- LÓGICA DE DIFERENCIAÇÃO APRIMORADA ---
-                                                let formaOriginal = cols[3].innerText.trim()
-                                                    .toUpperCase();
-                                                let formaExibicao = "";
+                                                // O valor costuma ser a última ou penúltima coluna
+                                                const valor = cols[cols.length - 1]?.innerText.trim() ||
+                                                    "R$ 0,00";
 
-                                                // 1. Identifica o método principal limpando textos secundários
-                                                if (formaOriginal.includes('PIX')) {
-                                                    formaExibicao = 'PIX';
-                                                } else if (formaOriginal.includes('DINHEIRO') ||
-                                                    formaOriginal.includes('CASH') || formaOriginal
-                                                    .includes('ESPECIE')) {
-                                                    formaExibicao = 'DINHEIRO';
-                                                } else if (formaOriginal.includes('CRÉDITO') ||
-                                                    formaOriginal.includes('CREDIT')) {
-                                                    formaExibicao = 'CARTÃO CRÉDITO';
-                                                } else if (formaOriginal.includes('DÉBITO') ||
-                                                    formaOriginal.includes('DEBIT')) {
-                                                    formaExibicao = 'CARTÃO DÉBITO';
-                                                } else if (formaOriginal.includes('CARTÃO') ||
-                                                    formaOriginal.includes('CARD')) {
-                                                    // Se caiu aqui, é um cartão mas o texto não diz qual.
-                                                    // Mantemos 'CARTÃO' mas limpamos o resto (ex: removemos 'SINAL/ENTRADA')
-                                                    formaExibicao = 'CARTÃO';
-                                                } else {
-                                                    // Caso seja algo como 'Transferência' ou 'Outro'
-                                                    formaExibicao = formaOriginal.replace(/\s+/g, ' ');
-                                                }
-                                                // ------------------------------------------
-                                                // ------------------------------------------
-
-                                                const valor = cols[5].innerText.trim();
-
-                                                if (valor && valor !== "R$ 0,00") {
+                                                if (pagador && valor !== "R$ 0,00") {
                                                     htmlMovimentacao += `
-                <div class="flex border-b" style="display: flex; justify-content: space-between; margin-bottom: 3px; border-bottom: 1px dashed #000; padding: 2px 0; font-family: monospace;">
-                    <div style="text-align: left; max-width: 72%;">
-                        <span style="font-weight: bold; font-size: 10px;">${hora} - ${pagador}</span><br>
-                        <span style="font-size: 9px; color: #333; font-weight: bold;">[${formaExibicao}]</span>
-                    </div>
-                    <span style="font-weight: bold; font-size: 10px; align-self: center;">${valor}</span>
-                </div>`;
+                                        <div class="flex border-b" style="margin-bottom: 2px; justify-content: space-between; display: flex;">
+                                            <div style="text-align: left;">
+                                                <span class="font-black" style="font-weight: bold;">${hora} - ${pagador}</span><br>
+                                                <span style="font-size: 9px; opacity: 0.8;">${forma}</span>
+                                            </div>
+                                            <span class="font-black" style="font-weight: bold;">${valor}</span>
+                                        </div>`;
                                                 }
                                             });
-                                        }
-
-                                        const container = document.getElementById('resumoListaAgendamentos');
-                                        if (container) {
-                                            container.innerHTML = htmlMovimentacao || "SEM MOVIMENTAÇÕES.";
+                                        } else {
+                                            console.error(
+                                                "ERRO: Não foi possível localizar a tabela de movimentações no DOM."
+                                                );
                                         }
 
                                         document.getElementById('resumoListaAgendamentos').innerHTML =
-                                            htmlMovimentacao || "SEM MOVIMENTAÇÕES REGISTRADAS.";
+                                            htmlMovimentacao || "SEM ENTRADAS REGISTRADAS.";
 
                                         const modalResumo = document.getElementById('modalResumoFinal');
                                         if (modalResumo) modalResumo.classList.replace('hidden', 'flex');
@@ -2366,7 +2346,7 @@
                                 }
                             })
                             .catch(err => {
-                                console.error(err);
+                                console.error("Erro no Fetch:", err);
                                 window.caixaProcessandoGlobal[formId] = false;
                                 if (btn) {
                                     btn.disabled = false;

@@ -2267,83 +2267,80 @@
                                                 `${arenaNome} - ${dataSel}`;
                                         }
 
-                                        // 3. 📝 VARREDURA DA TABELA DE MOVIMENTAÇÃO (DIFERENCIANDO CRÉDITO/DÉBITO)
+                                        // 3. 📝 VARREDURA DA TABELA DE MOVIMENTAÇÃO (VERSÃO POR SELETOR DE CLASSE)
                                         let htmlMovimentacao = "";
+
+                                        // No seu HTML, a tabela de transações está dentro da Seção 7.
+                                        // Vamos buscar todas as tabelas e pegar aquela que tem o cabeçalho de "Hora" e "Tipo | Forma"
                                         const tabelas = document.querySelectorAll('table');
                                         let tabelaFinanceira = null;
 
                                         tabelas.forEach((t) => {
                                             const txt = t.innerText.toUpperCase();
+                                            // Buscamos por palavras que SABEMOS que existem no THEAD da segunda tabela
                                             if (txt.includes('TIPO | FORMA') || txt.includes(
                                                     'DESCRIÇÃO')) {
                                                 tabelaFinanceira = t;
                                             }
                                         });
 
+                                        // Se não achou pelo texto, vamos tentar pegar a ÚLTIMA tabela (geralmente é a de transações)
                                         if (!tabelaFinanceira && tabelas.length > 0) {
                                             tabelaFinanceira = tabelas[tabelas.length - 1];
+                                            console.log("⚠️ Tabela selecionada pela posição (última do DOM)");
                                         }
 
                                         if (tabelaFinanceira) {
+                                            console.log(
+                                                "✅ Tabela alvo definida. Iniciando leitura de linhas...");
                                             const linhas = tabelaFinanceira.querySelectorAll('tbody tr');
 
-                                            linhas.forEach((linha) => {
-                                                // Filtro de segurança para pegar apenas linhas de dados (6 colunas)
+                                            linhas.forEach((linha, i) => {
+                                                // Ignora linhas de agrupamento (ID Reserva) ou vazias
+                                                // Linhas de transação real no seu Blade têm 6 colunas (td)
                                                 if (linha.cells.length < 6 || linha.innerText.includes(
-                                                        'Nenhuma')) return;
+                                                        'Nenhuma')) {
+                                                    return;
+                                                }
 
                                                 const cols = linha.cells;
-                                                const hora = cols[0].innerText.trim();
-                                                const pagador = cols[2].innerText.split('\n')[0].trim();
 
-                                                // --- LÓGICA DE DIFERENCIAÇÃO APRIMORADA ---
-                                                let formaOriginal = cols[3].innerText.trim()
-                                                    .toUpperCase();
-                                                let formaExibicao = "";
+                                                try {
+                                                    const hora = cols[0].innerText.trim();
+                                                    // Pega o nome (primeira linha da célula 2)
+                                                    const pagador = cols[2].innerText.split('\n')[0]
+                                                        .trim();
+                                                    // Pega o tipo/forma (célula 3)
+                                                    const tipoForma = cols[3].innerText.trim().replace(
+                                                        /\s+/g, ' ');
+                                                    // Valor (célula 5 - última)
+                                                    const valor = cols[5].innerText.trim();
 
-                                                // 1. Identifica o método principal limpando textos secundários
-                                                if (formaOriginal.includes('PIX')) {
-                                                    formaExibicao = 'PIX';
-                                                } else if (formaOriginal.includes('DINHEIRO') ||
-                                                    formaOriginal.includes('CASH') || formaOriginal
-                                                    .includes('ESPECIE')) {
-                                                    formaExibicao = 'DINHEIRO';
-                                                } else if (formaOriginal.includes('CRÉDITO') ||
-                                                    formaOriginal.includes('CREDIT')) {
-                                                    formaExibicao = 'CARTÃO CRÉDITO';
-                                                } else if (formaOriginal.includes('DÉBITO') ||
-                                                    formaOriginal.includes('DEBIT')) {
-                                                    formaExibicao = 'CARTÃO DÉBITO';
-                                                } else if (formaOriginal.includes('CARTÃO') ||
-                                                    formaOriginal.includes('CARD')) {
-                                                    // Se caiu aqui, é um cartão mas o texto não diz qual.
-                                                    // Mantemos 'CARTÃO' mas limpamos o resto (ex: removemos 'SINAL/ENTRADA')
-                                                    formaExibicao = 'CARTÃO';
-                                                } else {
-                                                    // Caso seja algo como 'Transferência' ou 'Outro'
-                                                    formaExibicao = formaOriginal.replace(/\s+/g, ' ');
-                                                }
-                                                // ------------------------------------------
-                                                // ------------------------------------------
+                                                    console.log(
+                                                        `Row ${i}: Capturado -> ${pagador} | ${valor}`
+                                                        );
 
-                                                const valor = cols[5].innerText.trim();
-
-                                                if (valor && valor !== "R$ 0,00") {
                                                     htmlMovimentacao += `
                 <div class="flex border-b" style="display: flex; justify-content: space-between; margin-bottom: 3px; border-bottom: 1px dashed #000; padding: 2px 0; font-family: monospace;">
-                    <div style="text-align: left; max-width: 72%;">
+                    <div style="text-align: left; max-width: 70%;">
                         <span style="font-weight: bold; font-size: 10px;">${hora} - ${pagador}</span><br>
-                        <span style="font-size: 9px; color: #333; font-weight: bold;">[${formaExibicao}]</span>
+                        <span style="font-size: 9px; color: #333;">${tipoForma}</span>
                     </div>
                     <span style="font-weight: bold; font-size: 10px; align-self: center;">${valor}</span>
                 </div>`;
+                                                } catch (err) {
+                                                    console.error(`Erro ao ler linha ${i}:`, err);
                                                 }
                                             });
+                                        } else {
+                                            console.error(
+                                                "❌ FALHA CRÍTICA: Nenhuma tabela financeira encontrada.");
                                         }
 
                                         const container = document.getElementById('resumoListaAgendamentos');
                                         if (container) {
-                                            container.innerHTML = htmlMovimentacao || "SEM MOVIMENTAÇÕES.";
+                                            container.innerHTML = htmlMovimentacao ||
+                                                "SEM MOVIMENTAÇÕES PARA O RESUMO.";
                                         }
 
                                         document.getElementById('resumoListaAgendamentos').innerHTML =

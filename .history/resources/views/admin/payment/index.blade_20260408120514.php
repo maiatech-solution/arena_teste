@@ -2267,83 +2267,81 @@
                                                 `${arenaNome} - ${dataSel}`;
                                         }
 
-                                        // 3. 📝 VARREDURA DA TABELA DE MOVIMENTAÇÃO (DIFERENCIANDO CRÉDITO/DÉBITO)
+                                        // 3. 📝 VARREDURA DA TABELA DE MOVIMENTAÇÃO (SEÇÃO 7 DO HTML)
                                         let htmlMovimentacao = "";
                                         const tabelas = document.querySelectorAll('table');
                                         let tabelaFinanceira = null;
 
-                                        tabelas.forEach((t) => {
-                                            const txt = t.innerText.toUpperCase();
-                                            if (txt.includes('TIPO | FORMA') || txt.includes(
-                                                    'DESCRIÇÃO')) {
+                                        // Tenta achar a tabela pelo texto do cabeçalho
+                                        tabelas.forEach((t, idx) => {
+                                            if (t.innerText.includes('Pagador / Gestor')) {
                                                 tabelaFinanceira = t;
+                                                console.log(
+                                                    "✅ Tabela financeira encontrada no índice: " +
+                                                    idx);
                                             }
                                         });
 
-                                        if (!tabelaFinanceira && tabelas.length > 0) {
-                                            tabelaFinanceira = tabelas[tabelas.length - 1];
-                                        }
-
                                         if (tabelaFinanceira) {
                                             const linhas = tabelaFinanceira.querySelectorAll('tbody tr');
+                                            console.log("📊 Total de linhas brutas na tabela: " + linhas
+                                            .length);
 
-                                            linhas.forEach((linha) => {
-                                                // Filtro de segurança para pegar apenas linhas de dados (6 colunas)
-                                                if (linha.cells.length < 6 || linha.innerText.includes(
-                                                        'Nenhuma')) return;
+                                            linhas.forEach((linha, i) => {
+                                                // FILTRO 1: Ignora a linha se for o cabeçalho azul do ID da Reserva
+                                                if (linha.classList.contains('bg-gray-100') || linha
+                                                    .innerText.includes('ID:')) {
+                                                    console.log(
+                                                        `Row ${i}: Ignorada (Cabeçalho de Reserva)`);
+                                                    return;
+                                                }
+
+                                                // FILTRO 2: Ignora se for a mensagem de "Nenhuma transação"
+                                                if (linha.innerText.includes('Nenhuma')) {
+                                                    console.log(`Row ${i}: Ignorada (Texto 'Nenhuma')`);
+                                                    return;
+                                                }
 
                                                 const cols = linha.cells;
-                                                const hora = cols[0].innerText.trim();
-                                                const pagador = cols[2].innerText.split('\n')[0].trim();
 
-                                                // --- LÓGICA DE DIFERENCIAÇÃO APRIMORADA ---
-                                                let formaOriginal = cols[3].innerText.trim()
-                                                    .toUpperCase();
-                                                let formaExibicao = "";
+                                                // Na sua tabela de transações, as linhas de pagamento REAL têm 6 colunas
+                                                if (cols.length >= 6) {
+                                                    const hora = cols[0].innerText.trim();
+                                                    const pagador = cols[2].innerText.split('\n')[0]
+                                                        .trim(); // Pega só o nome, ignora o gestor
+                                                    const tipoForma = cols[3].innerText.trim().replace(
+                                                        /\s+/g, ' ');
+                                                    const valor = cols[5].innerText.trim();
 
-                                                // 1. Identifica o método principal limpando textos secundários
-                                                if (formaOriginal.includes('PIX')) {
-                                                    formaExibicao = 'PIX';
-                                                } else if (formaOriginal.includes('DINHEIRO') ||
-                                                    formaOriginal.includes('CASH') || formaOriginal
-                                                    .includes('ESPECIE')) {
-                                                    formaExibicao = 'DINHEIRO';
-                                                } else if (formaOriginal.includes('CRÉDITO') ||
-                                                    formaOriginal.includes('CREDIT')) {
-                                                    formaExibicao = 'CARTÃO CRÉDITO';
-                                                } else if (formaOriginal.includes('DÉBITO') ||
-                                                    formaOriginal.includes('DEBIT')) {
-                                                    formaExibicao = 'CARTÃO DÉBITO';
-                                                } else if (formaOriginal.includes('CARTÃO') ||
-                                                    formaOriginal.includes('CARD')) {
-                                                    // Se caiu aqui, é um cartão mas o texto não diz qual.
-                                                    // Mantemos 'CARTÃO' mas limpamos o resto (ex: removemos 'SINAL/ENTRADA')
-                                                    formaExibicao = 'CARTÃO';
-                                                } else {
-                                                    // Caso seja algo como 'Transferência' ou 'Outro'
-                                                    formaExibicao = formaOriginal.replace(/\s+/g, ' ');
-                                                }
-                                                // ------------------------------------------
-                                                // ------------------------------------------
+                                                    console.log(
+                                                        `✅ Sucesso na Row ${i}: ${pagador} - ${valor}`
+                                                        );
 
-                                                const valor = cols[5].innerText.trim();
-
-                                                if (valor && valor !== "R$ 0,00") {
                                                     htmlMovimentacao += `
-                <div class="flex border-b" style="display: flex; justify-content: space-between; margin-bottom: 3px; border-bottom: 1px dashed #000; padding: 2px 0; font-family: monospace;">
-                    <div style="text-align: left; max-width: 72%;">
+                <div class="flex border-b" style="display: flex; justify-content: space-between; margin-bottom: 2px; border-bottom: 1px dashed #ccc; padding: 2px 0;">
+                    <div style="text-align: left;">
                         <span style="font-weight: bold; font-size: 10px;">${hora} - ${pagador}</span><br>
-                        <span style="font-size: 9px; color: #333; font-weight: bold;">[${formaExibicao}]</span>
+                        <span style="font-size: 9px; color: #666;">${tipoForma}</span>
                     </div>
-                    <span style="font-weight: bold; font-size: 10px; align-self: center;">${valor}</span>
+                    <span style="font-weight: bold; font-size: 10px;">${valor}</span>
                 </div>`;
+                                                } else {
+                                                    console.log(
+                                                        `Row ${i}: Ignorada (Colunas insuficientes: ${cols.length})`
+                                                        );
                                                 }
                                             });
+                                        } else {
+                                            console.error(
+                                                "❌ ERRO: A tabela com 'Pagador / Gestor' não foi encontrada no HTML."
+                                                );
                                         }
 
+                                        // Injeta no modal
                                         const container = document.getElementById('resumoListaAgendamentos');
                                         if (container) {
-                                            container.innerHTML = htmlMovimentacao || "SEM MOVIMENTAÇÕES.";
+                                            container.innerHTML = htmlMovimentacao ||
+                                                "SEM MOVIMENTAÇÕES REGISTRADAS.";
                                         }
 
                                         document.getElementById('resumoListaAgendamentos').innerHTML =

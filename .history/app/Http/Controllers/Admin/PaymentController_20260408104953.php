@@ -195,7 +195,6 @@ class PaymentController extends Controller
         ]);
     }
 
-
     /**
      * 🎯 FECHAR CAIXA: Grava a auditoria no banco com cálculo automático de segurança por arena.
      */
@@ -211,18 +210,15 @@ class PaymentController extends Controller
             $date = $validated['date'];
             $arenaId = $validated['arena_id'];
 
-            // --- 🛡️ VALIDAÇÃO PROFISSIONAL DE PENDÊNCIAS ---
-            // Só travamos se houver reservas CONFIRMADAS ou PENDENTES que JÁ TERMINARAM.
-            // Se for "Dívida Ativa" (Partial) ou "Pago" (Paid), o sistema permite o fechamento.
+            // --- 🛡️ VALIDAÇÃO DE PENDÊNCIAS (Mantida) ---
             $agora = now();
             $pendenciasCriticas = \App\Models\Reserva::where('arena_id', $arenaId)
                 ->whereDate('date', $date)
                 ->where('is_fixed', false)
                 ->whereIn('status', ['confirmed', 'pending'])
-                ->where('payment_status', 'unpaid') // Dívida ativa (partial) não trava o caixa
+                ->where('payment_status', 'unpaid')
                 ->get()
                 ->filter(function ($r) use ($agora) {
-                    // Monta o Carbon do fim do jogo para comparar com a hora atual
                     $fimJogo = \Carbon\Carbon::parse($r->date->format('Y-m-d') . ' ' . $r->end_time);
                     return $agora->greaterThan($fimJogo);
                 });
@@ -230,51 +226,62 @@ class PaymentController extends Controller
             if ($pendenciasCriticas->count() > 0) {
                 return response()->json([
                     'success' => false,
-                    'message' => "🚨 Bloqueio: Existem {$pendenciasCriticas->count()} jogo(s) finalizados sem definição financeira (Quitado, Falta ou Dívida). Resolva-os para fechar."
+                    'message' => "🚨 Bloqueio: Existem {$pendenciasCriticas->count()} jogo(s) pendentes. Resolva-os para fechar."
                 ], 403);
             }
-            // ------------------------------------------------
 
-            $calculatedSystem = FinancialTransaction::whereDate('paid_at', $date)
-                ->where('arena_id', $arenaId)
-                ->sum('amount');
+            // --- 📊 CÁLCULOS DETALHADOS PARA O RESUMO ---
+            $transactions = FinancialTransaction::whereDate('paid_at', $date)
+                ->where('arena_id', $arenaId);
 
-            $calculated = round((float)$calculatedSystem, 2);
+            $totalCalculated = (float)$transactions->sum('amount');
+
+            // Separação por tipo para o cupom
+            $totalGaveta = (float)$transactions->clone()->whereIn('payment_method', ['money', 'dinheiro', 'cash', 'especie'])->sum('amount');
+            $totalBanco  = (float)$transactions->clone()->whereIn('payment_method', ['pix', 'transfer', 'transferencia'])->sum('amount');
+            $totalOutros = $totalCalculated - ($totalGaveta + $totalBanco);
+
             $actual     = round((float)$validated['actual_amount'], 2);
-            $difference = round($actual - $calculated, 2);
+            $difference = round($actual - $totalCalculated, 2);
 
-            // 🚀 REGRA DE AUTORIZAÇÃO DO SUPERVISOR
-            if ($difference != 0 && Auth::user()->role === 'colaborador') {
-                if (!$request->filled('supervisor_token')) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Divergência de valores detectada. Requer autorização do supervisor.'
-                    ], 403);
-                }
+            // Validação supervisor (Mantida)
+            if ($difference != 0 && Auth::user()->role === 'colaborador' && !$request->filled('supervisor_token')) {
+                return response()->json(['success' => false, 'message' => 'Divergência detectada. Requer supervisor.'], 403);
             }
 
-            DB::transaction(function () use ($date, $arenaId, $calculated, $actual, $difference, $request) {
+            DB::transaction(function () use ($date, $arenaId, $totalCalculated, $actual, $difference, $request) {
                 Cashier::updateOrCreate(
                     ['date' => $date, 'arena_id' => $arenaId],
                     [
                         'user_id'           => Auth::id(),
-                        'calculated_amount' => $calculated,
+                        'calculated_amount' => $totalCalculated,
                         'actual_amount'     => $actual,
                         'difference'        => $difference,
                         'status'            => 'closed',
                         'closing_time'      => now(),
-                        'notes'             => $request->input('notes') . ($request->filled('supervisor_token') ? " | [AUTORIZADO POR SUPERVISOR]" : ""),
+                        'notes'             => $request->input('notes') . ($request->filled('supervisor_token') ? " | [AUTORIZADO]" : ""),
                     ]
                 );
             });
 
-            return response()->json(['success' => true, 'message' => 'Caixa fechado com sucesso!']);
-        } catch (\Exception $e) {
-            \Log::error("Erro no fechamento: " . $e->getMessage());
+            // 🚀 RETORNO ATUALIZADO (Sem a chave 'message' para evitar o alert no JS)
             return response()->json([
                 'success' => true,
-                'message' => null // Removida a frase que gerava o alert
+                'resumo' => [
+                    'arena'     => \App\Models\Arena::find($arenaId)->name,
+                    'data'      => \Carbon\Carbon::parse($date)->format('d/m/Y'),
+                    'sistema'   => (float)$totalCalculated,
+                    'dinheiro'  => (float)$totalGaveta, // Mudei para 'dinheiro' para facilitar
+                    'pix'       => (float)$totalBanco,   // Mudei para 'pix'
+                    'credito'   => 0, // Se não tiver separado, envie 0 ou calcule
+                    'debito'    => (float)$totalOutros,
+                    'informado' => (float)$actual,
+                    'diferenca' => (float)$difference,
+                    'operador'  => Auth::user()->name
+                ]
             ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Erro: ' . $e->getMessage()], 500);
         }
     }
 

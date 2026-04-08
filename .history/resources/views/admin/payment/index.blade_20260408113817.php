@@ -1712,6 +1712,8 @@
     </div>
 
     {{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA --}}
+
+
     <script>
         // Substitua as duas linhas antigas por esta:
         if (!window.__CAIXA_SCRIPT_LOADED) {
@@ -2195,6 +2197,7 @@
                 const form = document.getElementById(formId);
                 if (!form) return;
 
+                // Impede múltiplas vinculações de eventos
                 if (form.dataset.ajaxBound === "1") return;
                 form.dataset.ajaxBound = "1";
 
@@ -2203,6 +2206,7 @@
                 form.onsubmit = function(e) {
                     e.preventDefault();
 
+                    // Trava de segurança para evitar cliques duplos
                     if (window.caixaProcessandoGlobal[formId]) return false;
                     window.caixaProcessandoGlobal[formId] = true;
 
@@ -2210,8 +2214,14 @@
                         const btn = document.getElementById(btnId);
                         const spinner = document.getElementById(spinnerId);
 
-                        if (typeof window.fecharModalAutorizacao === 'function') window.fecharModalAutorizacao();
+                        console.log("🚀 Iniciando envio para o servidor do form:", formId);
 
+                        // Fecha modais de autorização se existirem
+                        if (typeof window.fecharModalAutorizacao === 'function') {
+                            window.fecharModalAutorizacao();
+                        }
+
+                        // Limpeza visual de backdrops e outros modais
                         const modais = document.querySelectorAll(
                             '.modal, .modal-backdrop, #modalSenha, [id*="Autorizacao"]');
                         modais.forEach(m => {
@@ -2228,6 +2238,7 @@
                         const formData = new FormData(form);
                         if (tokenRecebido) formData.append('supervisor_token', tokenRecebido);
 
+                        // Captura o ID da reserva para montar a URL dinâmica
                         const reservaId = formData.get('reserva_id') || document.getElementById('noShowReservaId')
                             ?.value;
                         let targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
@@ -2243,130 +2254,59 @@
                             })
                             .then(res => res.json())
                             .then(json => {
+                                console.log("📩 Resposta recebida do servidor:", json);
+
                                 if (json.success) {
+                                    form.dataset.finalizado = "true";
+
+                                    // Dispara impressão se o backend retornar URL
+                                    if (json.print_url) {
+                                        imprimirCupomArena(json.print_url);
+                                    }
+
+                                    // 🎯 LÓGICA EXCLUSIVA PARA O FECHAMENTO DE CAIXA
                                     if (formId === 'closeCashForm') {
-                                        if (typeof closeCloseCashModal === 'function') closeCloseCashModal();
+                                        closeCloseCashModal();
 
-                                        // 1. Preenchimento dos Cards de Resumo
+                                        // Preenche o modal de resumo com os valores já calculados na tela
                                         document.getElementById('resumoPix').innerText = document
-                                            .getElementById('displayBancoModal')?.innerText || 'R$ 0,00';
+                                            .getElementById('displayBancoModal').innerText;
                                         document.getElementById('resumoDinheiro').innerText = document
-                                            .getElementById('displayGavetaModal')?.innerText || 'R$ 0,00';
+                                            .getElementById('displayGavetaModal').innerText;
                                         document.getElementById('resumoCartao').innerText = document
-                                            .getElementById('displayOutrosModal')?.innerText || 'R$ 0,00';
+                                            .getElementById('displayOutrosModal').innerText;
                                         document.getElementById('resumoTotal').innerText = document
-                                            .getElementById('calculatedLiquidAmount')?.innerText || 'R$ 0,00';
+                                            .getElementById('calculatedLiquidAmount').innerText;
 
-                                        // 2. Cabeçalho
-                                        const arenaNome = document.querySelector('h2')?.innerText.replace('💰',
-                                            '').trim() || 'Arena';
-                                        const dataSel = document.getElementById('date')?.value.split('-')
-                                            .reverse().join('/') || '';
-                                        if (document.getElementById('resumoDataInfo')) {
-                                            document.getElementById('resumoDataInfo').innerText =
-                                                `${arenaNome} - ${dataSel}`;
-                                        }
+                                        // Exibe o modal de sucesso final (Resumo)
+                                        document.getElementById('modalResumoFinal').classList.replace('hidden',
+                                            'flex');
 
-                                        // 3. 📝 VARREDURA DA TABELA DE MOVIMENTAÇÃO (DIFERENCIANDO CRÉDITO/DÉBITO)
-                                        let htmlMovimentacao = "";
-                                        const tabelas = document.querySelectorAll('table');
-                                        let tabelaFinanceira = null;
-
-                                        tabelas.forEach((t) => {
-                                            const txt = t.innerText.toUpperCase();
-                                            if (txt.includes('TIPO | FORMA') || txt.includes(
-                                                    'DESCRIÇÃO')) {
-                                                tabelaFinanceira = t;
-                                            }
-                                        });
-
-                                        if (!tabelaFinanceira && tabelas.length > 0) {
-                                            tabelaFinanceira = tabelas[tabelas.length - 1];
-                                        }
-
-                                        if (tabelaFinanceira) {
-                                            const linhas = tabelaFinanceira.querySelectorAll('tbody tr');
-
-                                            linhas.forEach((linha) => {
-                                                // Filtro de segurança para pegar apenas linhas de dados (6 colunas)
-                                                if (linha.cells.length < 6 || linha.innerText.includes(
-                                                        'Nenhuma')) return;
-
-                                                const cols = linha.cells;
-                                                const hora = cols[0].innerText.trim();
-                                                const pagador = cols[2].innerText.split('\n')[0].trim();
-
-                                                // --- LÓGICA DE DIFERENCIAÇÃO APRIMORADA ---
-                                                let formaOriginal = cols[3].innerText.trim()
-                                                    .toUpperCase();
-                                                let formaExibicao = "";
-
-                                                // 1. Identifica o método principal limpando textos secundários
-                                                if (formaOriginal.includes('PIX')) {
-                                                    formaExibicao = 'PIX';
-                                                } else if (formaOriginal.includes('DINHEIRO') ||
-                                                    formaOriginal.includes('CASH') || formaOriginal
-                                                    .includes('ESPECIE')) {
-                                                    formaExibicao = 'DINHEIRO';
-                                                } else if (formaOriginal.includes('CRÉDITO') ||
-                                                    formaOriginal.includes('CREDIT')) {
-                                                    formaExibicao = 'CARTÃO CRÉDITO';
-                                                } else if (formaOriginal.includes('DÉBITO') ||
-                                                    formaOriginal.includes('DEBIT')) {
-                                                    formaExibicao = 'CARTÃO DÉBITO';
-                                                } else if (formaOriginal.includes('CARTÃO') ||
-                                                    formaOriginal.includes('CARD')) {
-                                                    // Se caiu aqui, é um cartão mas o texto não diz qual.
-                                                    // Mantemos 'CARTÃO' mas limpamos o resto (ex: removemos 'SINAL/ENTRADA')
-                                                    formaExibicao = 'CARTÃO';
-                                                } else {
-                                                    // Caso seja algo como 'Transferência' ou 'Outro'
-                                                    formaExibicao = formaOriginal.replace(/\s+/g, ' ');
-                                                }
-                                                // ------------------------------------------
-                                                // ------------------------------------------
-
-                                                const valor = cols[5].innerText.trim();
-
-                                                if (valor && valor !== "R$ 0,00") {
-                                                    htmlMovimentacao += `
-                <div class="flex border-b" style="display: flex; justify-content: space-between; margin-bottom: 3px; border-bottom: 1px dashed #000; padding: 2px 0; font-family: monospace;">
-                    <div style="text-align: left; max-width: 72%;">
-                        <span style="font-weight: bold; font-size: 10px;">${hora} - ${pagador}</span><br>
-                        <span style="font-size: 9px; color: #333; font-weight: bold;">[${formaExibicao}]</span>
-                    </div>
-                    <span style="font-weight: bold; font-size: 10px; align-self: center;">${valor}</span>
-                </div>`;
-                                                }
-                                            });
-                                        }
-
-                                        const container = document.getElementById('resumoListaAgendamentos');
-                                        if (container) {
-                                            container.innerHTML = htmlMovimentacao || "SEM MOVIMENTAÇÕES.";
-                                        }
-
-                                        document.getElementById('resumoListaAgendamentos').innerHTML =
-                                            htmlMovimentacao || "SEM MOVIMENTAÇÕES REGISTRADAS.";
-
-                                        const modalResumo = document.getElementById('modalResumoFinal');
-                                        if (modalResumo) modalResumo.classList.replace('hidden', 'flex');
-
+                                        // Reseta a trava global para o form
                                         window.caixaProcessandoGlobal[formId] = false;
+
+                                        // 🛑 MATAMOS O ALERT AQUI. O return impede que o código execute as linhas de baixo.
+                                        console.log("✅ Modal de resumo aberto. Ignorando alertas nativos.");
                                         return;
                                     }
+
+                                    // Para outros formulários, recarrega a página direto para atualizar status
                                     window.location.reload();
+
                                 } else {
-                                    alert("Erro: " + (json.message || 'Falha no processamento.'));
+                                    // Mantenha o alert apenas para ERROS críticos ou mensagens de bloqueio do Controller
+                                    alert("Atenção: " + (json.message || 'Falha no processamento.'));
                                     window.caixaProcessandoGlobal[formId] = false;
+
                                     if (btn) {
                                         btn.disabled = false;
                                         btn.innerText = "CONCLUIR";
                                     }
+                                    if (spinner) spinner.classList.add('hidden');
                                 }
                             })
                             .catch(err => {
-                                console.error(err);
+                                console.error("🔥 Erro fatal na requisição:", err);
                                 window.caixaProcessandoGlobal[formId] = false;
                                 if (btn) {
                                     btn.disabled = false;
@@ -2375,9 +2315,16 @@
                             });
                     };
 
+                    // Lógica de permissões e autorização por senha
+                    if (formId === 'debtForm') {
+                        enviarParaOServidor();
+                        return false;
+                    }
+
                     const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
                     if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
                         window.requisitarAutorizacao(token => {
+                            console.log("🔑 Autorização validada. Prosseguindo...");
                             if (token) enviarParaOServidor(token);
                             else window.caixaProcessandoGlobal[formId] = false;
                         });
@@ -2386,79 +2333,6 @@
                     }
                     return false;
                 };
-            }
-
-            // --- 🖨️ FUNÇÃO DE IMPRESSÃO TÉRMICA CENTRALIZADA ---
-            function imprimirResumoTermico() {
-                const printableElement = document.getElementById('printableArea');
-                if (!printableElement) return alert("Erro: Área de impressão não encontrada.");
-
-                // Captura o conteúdo atualizado do modal de resumo
-                const conteudo = printableElement.innerHTML;
-                const win = window.open('', '_blank', 'width=300,height=600');
-
-                if (!win) return alert("Por favor, permita pop-ups para imprimir.");
-
-                win.document.write(`
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <title>Impressão de Resumo</title>
-                <style>
-                    /* Configurações para impressora térmica de 58mm ou 80mm */
-                    @page { margin: 0; }
-                    body {
-                        font-family: 'Courier New', monospace;
-                        width: 72mm; /* Ajuste comum para papel de 80mm */
-                        margin: 0 auto;
-                        padding: 10px;
-                        font-size: 11px;
-                        line-height: 1.3;
-                        color: #000;
-                    }
-                    .font-black { font-weight: bold; text-transform: uppercase; }
-                    .flex {
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: flex-start;
-                        margin-bottom: 4px;
-                    }
-                    .border-b {
-                        border-bottom: 1px dashed #000;
-                        margin-bottom: 6px;
-                        padding-bottom: 4px;
-                    }
-                    .mb-4 { margin-bottom: 12px; }
-                    .text-center { text-align: center; }
-
-                    /* Ocultar elementos desnecessários na impressão */
-                    svg, button, .print\\:hidden, .hidden {
-                        display: none !important;
-                    }
-
-                    /* Garante que o texto dentro da flex não quebre o layout */
-                    .flex > div { text-align: left; }
-                    .flex > span:last-child { text-align: right; min-width: 60px; }
-                </style>
-            </head>
-            <body>
-                <div class="text-center">
-                    ${conteudo}
-                </div>
-                <script>
-                    window.onload = function() {
-                        // Pequeno delay para garantir renderização de fontes
-                        setTimeout(function() {
-                            window.print();
-                            window.close();
-                        }, 250);
-                    };
-                <\/script>
-            </body>
-        </html>
-    `);
-
-                win.document.close();
             }
 
             /**

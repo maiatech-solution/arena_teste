@@ -817,8 +817,7 @@
                                         class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 text-sm h-10">
                                         <option value="">Selecione</option>
                                         <option value="pix">PIX</option>
-                                        <option value="debito">Débito</option>
-                                        <option value="credito">Crédito</option>
+                                        <option value="cartao">Cartão</option>
                                         <option value="dinheiro">Dinheiro</option>
                                         <option value="outro">Sem Sinal</option>
                                     </select>
