@@ -1639,7 +1639,6 @@
     <script>
         // Substitua as duas linhas antigas por esta:
         if (!window.__CAIXA_SCRIPT_LOADED) {
-
             window.__CAIXA_SCRIPT_LOADED = true;
 
             // ... todo o restante do seu código vem aqui dentro ...
@@ -2119,7 +2118,6 @@
                 const form = document.getElementById(formId);
                 if (!form) return;
 
-                // Impede múltiplas vinculações
                 if (form.dataset.ajaxBound === "1") return;
                 form.dataset.ajaxBound = "1";
 
@@ -2128,7 +2126,6 @@
                 form.onsubmit = function(e) {
                     e.preventDefault();
 
-                    // Trava de clique duplo
                     if (window.caixaProcessandoGlobal[formId]) {
                         console.warn("🚫 [TRAVA] Bloqueio de clique duplo para:", formId);
                         return false;
@@ -2139,11 +2136,12 @@
                         const btn = document.getElementById(btnId);
                         const spinner = document.getElementById(spinnerId);
 
-                        // 🛡️ LIMPEZA AGRESSIVA: Fecha o modal via função e força via CSS
+                        // 🛡️ LIMPEZA AGRESSIVA: Fecha o modal via função e também força via CSS
                         if (typeof window.fecharModalAutorizacao === 'function') {
                             window.fecharModalAutorizacao();
                         }
 
+                        // Força o desaparecimento de qualquer overlay de modal no DOM imediatamente
                         const modais = document.querySelectorAll(
                             '.modal, .modal-backdrop, #modalSenha, [id*="Autorizacao"]');
                         modais.forEach(m => {
@@ -2171,14 +2169,14 @@
                                 method: 'POST',
                                 body: formData,
                                 headers: {
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name='
-                                        csrf - token ']').getAttribute('content'),
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')
+                                        .getAttribute('content'),
                                     'Accept': 'application/json'
                                 }
                             })
                             .then(res => res.json())
                             .then(json => {
-                                // Segunda limpeza por segurança
+                                // Garante que o modal suma de novo após a resposta
                                 if (typeof window.fecharModalAutorizacao === 'function') {
                                     window.fecharModalAutorizacao();
                                 }
@@ -2186,12 +2184,9 @@
                                 if (json.success) {
                                     form.dataset.finalizado = "true";
 
-                                    // 🖨️ IMPRESSÃO NA BOBINA (Mesmo esquema do Bar)
-                                    if (json.print_url) {
-                                        imprimirCupomArena(json.print_url);
-                                    }
-
-                                    // Delay de 400ms para o navegador limpar a tela antes do alert
+                                    // 🔥 O SEGREDO: Aumentamos para 400ms.
+                                    // Esse tempo é necessário para o navegador remover o fundo preto e o modal
+                                    // da tela ANTES do alert() travar tudo.
                                     setTimeout(() => {
                                         alert(json.message);
                                         window.location.reload();
@@ -2223,15 +2218,15 @@
                             });
                     };
 
-                    // --- LÓGICA DE PERMISSÕES ---
+                    // --- LÓGICA DE PERMISSÕES COM BYPASS PARA DÍVIDA ---
 
-                    // Bypass para o formulário de dívida (Pagar Depois)
+                    // ✨ CORREÇÃO 4: Se for o form de Dívida, ignora Role e restrições. Envia direto.
                     if (formId === 'debtForm') {
                         enviarParaOServidor();
                         return false;
                     }
 
-                    const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
+                    const acoesRestritas = ['noShowForm', 'transactionForm', 'reopenCashForm'];
 
                     if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
                         window.requisitarAutorizacao(token => {
@@ -2247,19 +2242,6 @@
 
                     return false;
                 };
-            }
-
-            /**
-             * Função de apoio para abrir a janela de impressão da bobina
-             */
-            function imprimirCupomArena(url) {
-                const win = window.open(url, 'ImpressaoArena',
-                    'width=300,height=600,menubar=no,toolbar=no,location=no,status=no');
-                if (win) {
-                    win.focus();
-                } else {
-                    console.warn("Pop-up de impressão bloqueado pelo navegador.");
-                }
             }
 
             document.addEventListener('DOMContentLoaded', () => {
@@ -2349,7 +2331,6 @@
                     window.location.href = urlDestino;
                 }
             }
-
         }
     </script>
 

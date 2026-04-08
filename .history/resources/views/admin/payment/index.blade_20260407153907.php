@@ -1638,719 +1638,743 @@
 
     <script>
         // Substitua as duas linhas antigas por esta:
-        if (!window.__CAIXA_SCRIPT_LOADED) {
+        <
+        script >
+            if (!window.__CAIXA_SCRIPT_LOADED) {
+                window.__CAIXA_SCRIPT_LOADED = true;
 
-            window.__CAIXA_SCRIPT_LOADED = true;
+                // --- COLE ESTAS LINHAS AQUI (DESBLOQUEIO GLOBAL) ---
+                window.openCloseCashModal = openCloseCashModal;
+                window.closeCloseCashModal = closeCloseCashModal;
+                window.openPaymentModal = openPaymentModal;
+                window.closePaymentModal = closePaymentModal;
+                window.openNoShowModal = openNoShowModal;
+                window.closeNoShowModal = closeNoShowModal;
+                window.openDebtModal = openDebtModal;
+                window.closeDebtModal = closeDebtModal;
+                window.openTransactionModal = openTransactionModal;
+                window.closeTransactionModal = closeTransactionModal;
+                window.openCash = openCash;
+                window.calculateDifference = calculateDifference;
+                window.imprimirCupomArena = imprimirCupomArena;
+                // --------------------------------------------------
 
-            // ... todo o restante do seu código vem aqui dentro ...
-
-            // --- Funções de Suporte e Formatação ---
-            function toCents(value) {
-                return Math.round(parseFloat(value || 0) * 100);
-            }
-
-            function fromCents(cents) {
-                return (cents / 100).toFixed(2);
-            }
-
-            function updateRecurrentTogglePrice(newPrice) {
-                const currentNewPriceEl = document.getElementById('currentNewPrice');
-                if (currentNewPriceEl) {
-                    const newPriceFloat = parseFloat(newPrice) || 0;
-                    currentNewPriceEl.innerText = newPriceFloat.toLocaleString('pt-BR', {
-                        minimumFractionDigits: 2
-                    });
+                // MANTENHA O RESTANTE DO SEU SCRIPT IGUAL ABAIXO DISSO...
+                function openCloseCashModal() {
+                    ...
                 }
-            }
+                // ...
+                // ... todo o restante do seu código vem aqui dentro ...
 
-            // --- Controle de Estorno no No-Show ---
-            function toggleCustomRefundInput() {
-                const shouldRefund = document.getElementById('should_refund').value === 'true';
-                const customDiv = document.getElementById('customRefundDiv');
-                const paidAmount = parseFloat(document.getElementById('noShowPaidAmount').value) || 0;
-                const inputRefund = document.getElementById('custom_refund_amount');
-
-                if (shouldRefund) {
-                    customDiv.classList.remove('hidden');
-                    inputRefund.value = paidAmount.toFixed(2);
-                } else {
-                    customDiv.classList.add('hidden');
-                    inputRefund.value = 0;
+                // --- Funções de Suporte e Formatação ---
+                function toCents(value) {
+                    return Math.round(parseFloat(value || 0) * 100);
                 }
-            }
 
-            // --- Lógica de Cálculo de Pagamento ---
-            function calculateAmountDue() {
-                const finalPriceEl = document.getElementById('modalFinalPrice');
-                const signalRawEl = document.getElementById('modalSignalAmountRaw');
-                const amountPaidEl = document.getElementById('modalAmountPaid');
-                const trocoMessageEl = document.getElementById('trocoMessage');
-
-                if (!finalPriceEl || !amountPaidEl) return;
-
-                trocoMessageEl.classList.add('hidden');
-                amountPaidEl.classList.remove('border-yellow-500', 'bg-yellow-50');
-
-                const finalPriceCents = toCents(finalPriceEl.value);
-                const signalAmountCents = toCents(signalRawEl.value);
-                const balanceCents = finalPriceCents - signalAmountCents;
-
-                updateRecurrentTogglePrice(fromCents(finalPriceCents));
-
-                if (balanceCents < 0) {
-                    const trocoCents = Math.abs(balanceCents);
-                    amountPaidEl.value = "0.00";
-                    trocoMessageEl.innerHTML =
-                        `🚨 <strong>ATENÇÃO:</strong> Devolver Troco: R$ ${fromCents(trocoCents).replace('.', ',')}`;
-                    trocoMessageEl.classList.remove('hidden');
-                    amountPaidEl.classList.add('border-yellow-500', 'bg-yellow-50');
-                } else {
-                    // Se o saldo for maior que zero, coloca o valor, senão deixa 0.00
-                    amountPaidEl.value = balanceCents > 0 ? fromCents(balanceCents) : "0.00";
-                    checkManualOverpayment();
+                function fromCents(cents) {
+                    return (cents / 100).toFixed(2);
                 }
-            }
 
-            function checkManualOverpayment() {
-                const finalPriceEl = document.getElementById('modalFinalPrice');
-                const signalRawEl = document.getElementById('modalSignalAmountRaw');
-                const amountPaidEl = document.getElementById('modalAmountPaid');
-                const trocoMessageEl = document.getElementById('trocoMessage');
+                function updateRecurrentTogglePrice(newPrice) {
+                    const currentNewPriceEl = document.getElementById('currentNewPrice');
+                    if (currentNewPriceEl) {
+                        const newPriceFloat = parseFloat(newPrice) || 0;
+                        currentNewPriceEl.innerText = newPriceFloat.toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2
+                        });
+                    }
+                }
 
-                if (!finalPriceEl || !amountPaidEl) return;
+                // --- Controle de Estorno no No-Show ---
+                function toggleCustomRefundInput() {
+                    const shouldRefund = document.getElementById('should_refund').value === 'true';
+                    const customDiv = document.getElementById('customRefundDiv');
+                    const paidAmount = parseFloat(document.getElementById('noShowPaidAmount').value) || 0;
+                    const inputRefund = document.getElementById('custom_refund_amount');
 
-                const finalPriceCents = toCents(finalPriceEl.value);
-                const signalAmountCents = toCents(signalRawEl.value);
-                const amountPaidNowCents = toCents(amountPaidEl.value);
-                const overpaymentCents = (signalAmountCents + amountPaidNowCents) - finalPriceCents;
+                    if (shouldRefund) {
+                        customDiv.classList.remove('hidden');
+                        inputRefund.value = paidAmount.toFixed(2);
+                    } else {
+                        customDiv.classList.add('hidden');
+                        inputRefund.value = 0;
+                    }
+                }
 
-                if (overpaymentCents > 0) {
-                    trocoMessageEl.innerHTML =
-                        `🚨 <strong>ATENÇÃO:</strong> Devolver Troco: R$ ${fromCents(overpaymentCents).replace('.', ',')}`;
-                    trocoMessageEl.classList.remove('hidden');
-                    amountPaidEl.classList.add('border-yellow-500', 'bg-yellow-50');
-                } else {
+                // --- Lógica de Cálculo de Pagamento ---
+                function calculateAmountDue() {
+                    const finalPriceEl = document.getElementById('modalFinalPrice');
+                    const signalRawEl = document.getElementById('modalSignalAmountRaw');
+                    const amountPaidEl = document.getElementById('modalAmountPaid');
+                    const trocoMessageEl = document.getElementById('trocoMessage');
+
+                    if (!finalPriceEl || !amountPaidEl) return;
+
                     trocoMessageEl.classList.add('hidden');
                     amountPaidEl.classList.remove('border-yellow-500', 'bg-yellow-50');
-                }
-            }
 
-            // --- Abertura de Modais ---
+                    const finalPriceCents = toCents(finalPriceEl.value);
+                    const signalAmountCents = toCents(signalRawEl.value);
+                    const balanceCents = finalPriceCents - signalAmountCents;
 
-            // NOVO: Abrir Modal de Sangria/Reforço com Detecção de Arena
-            function openTransactionModal() {
-                // 1. Verifica se o caixa geral/arena está fechado
-                if (document.getElementById('js_isActionDisabled')?.value === '1') {
-                    alert('🚫 Operação bloqueada: O caixa deste dia já está fechado.');
-                    return;
-                }
+                    updateRecurrentTogglePrice(fromCents(finalPriceCents));
 
-                // 2. Captura a arena que está selecionada no filtro da URL
-                const urlParams = new URLSearchParams(window.location.search);
-                const filteredArenaId = urlParams.get('arena_id');
-                const arenaSelect = document.getElementById('modal_transaction_arena_id');
-
-                // 3. Se houver um filtro de arena ativo, pré-seleciona ela no Modal
-                if (filteredArenaId && arenaSelect) {
-                    arenaSelect.value = filteredArenaId;
-                } else if (arenaSelect) {
-                    // Se não houver filtro, reseta para a opção padrão "Selecione..."
-                    arenaSelect.value = "";
+                    if (balanceCents < 0) {
+                        const trocoCents = Math.abs(balanceCents);
+                        amountPaidEl.value = "0.00";
+                        trocoMessageEl.innerHTML =
+                            `🚨 <strong>ATENÇÃO:</strong> Devolver Troco: R$ ${fromCents(trocoCents).replace('.', ',')}`;
+                        trocoMessageEl.classList.remove('hidden');
+                        amountPaidEl.classList.add('border-yellow-500', 'bg-yellow-50');
+                    } else {
+                        // Se o saldo for maior que zero, coloca o valor, senão deixa 0.00
+                        amountPaidEl.value = balanceCents > 0 ? fromCents(balanceCents) : "0.00";
+                        checkManualOverpayment();
+                    }
                 }
 
-                // 4. Abre o modal trocando as classes do Tailwind
-                document.getElementById('transactionModal').classList.replace('hidden', 'flex');
-            }
+                function checkManualOverpayment() {
+                    const finalPriceEl = document.getElementById('modalFinalPrice');
+                    const signalRawEl = document.getElementById('modalSignalAmountRaw');
+                    const amountPaidEl = document.getElementById('modalAmountPaid');
+                    const trocoMessageEl = document.getElementById('trocoMessage');
 
-            function openPaymentModal(id, totalPrice, remaining, signalAmount, clientName, isRecurrent = false) {
-                // 1. Trava de segurança: impede abrir o modal se o caixa estiver fechado
-                if (document.getElementById('js_isActionDisabled')?.value === '1') {
-                    return alert('🚫 Operação bloqueada: O caixa deste dia já está fechado.');
+                    if (!finalPriceEl || !amountPaidEl) return;
+
+                    const finalPriceCents = toCents(finalPriceEl.value);
+                    const signalAmountCents = toCents(signalRawEl.value);
+                    const amountPaidNowCents = toCents(amountPaidEl.value);
+                    const overpaymentCents = (signalAmountCents + amountPaidNowCents) - finalPriceCents;
+
+                    if (overpaymentCents > 0) {
+                        trocoMessageEl.innerHTML =
+                            `🚨 <strong>ATENÇÃO:</strong> Devolver Troco: R$ ${fromCents(overpaymentCents).replace('.', ',')}`;
+                        trocoMessageEl.classList.remove('hidden');
+                        amountPaidEl.classList.add('border-yellow-500', 'bg-yellow-50');
+                    } else {
+                        trocoMessageEl.classList.add('hidden');
+                        amountPaidEl.classList.remove('border-yellow-500', 'bg-yellow-50');
+                    }
                 }
 
-                // 2. Preenchimento de IDs e nomes
-                document.getElementById('modalReservaId').value = id;
-                document.getElementById('modalClientName').innerText = clientName;
+                // --- Abertura de Modais ---
 
-                // 🎯 AJUSTE DE LÓGICA: Se o 'remaining' (restante) for igual ao total,
-                // garantimos que o signalAmount (já pago) seja zerado para o cálculo do controlador.
-                let valorParaSugerir = remaining;
-                let sinalReal = signalAmount;
+                // NOVO: Abrir Modal de Sangria/Reforço com Detecção de Arena
+                function openTransactionModal() {
+                    // 1. Verifica se o caixa geral/arena está fechado
+                    if (document.getElementById('js_isActionDisabled')?.value === '1') {
+                        alert('🚫 Operação bloqueada: O caixa deste dia já está fechado.');
+                        return;
+                    }
 
-                // Se o saldo a pagar na tela é o valor total do jogo (R$ 100),
-                // ignoramos pagamentos anteriores que podem ser estornos mal interpretados.
-                if (Math.abs(remaining - totalPrice) < 0.01) {
-                    sinalReal = 0;
-                    valorParaSugerir = totalPrice;
+                    // 2. Captura a arena que está selecionada no filtro da URL
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const filteredArenaId = urlParams.get('arena_id');
+                    const arenaSelect = document.getElementById('modal_transaction_arena_id');
+
+                    // 3. Se houver um filtro de arena ativo, pré-seleciona ela no Modal
+                    if (filteredArenaId && arenaSelect) {
+                        arenaSelect.value = filteredArenaId;
+                    } else if (arenaSelect) {
+                        // Se não houver filtro, reseta para a opção padrão "Selecione..."
+                        arenaSelect.value = "";
+                    }
+
+                    // 4. Abre o modal trocando as classes do Tailwind
+                    document.getElementById('transactionModal').classList.replace('hidden', 'flex');
                 }
 
-                // 3. Formatação visual do sinal já pago
-                document.getElementById('modalSignalAmount').innerText =
-                    sinalReal.toLocaleString('pt-BR', {
+                function openPaymentModal(id, totalPrice, remaining, signalAmount, clientName, isRecurrent = false) {
+                    // 1. Trava de segurança: impede abrir o modal se o caixa estiver fechado
+                    if (document.getElementById('js_isActionDisabled')?.value === '1') {
+                        return alert('🚫 Operação bloqueada: O caixa deste dia já está fechado.');
+                    }
+
+                    // 2. Preenchimento de IDs e nomes
+                    document.getElementById('modalReservaId').value = id;
+                    document.getElementById('modalClientName').innerText = clientName;
+
+                    // 🎯 AJUSTE DE LÓGICA: Se o 'remaining' (restante) for igual ao total,
+                    // garantimos que o signalAmount (já pago) seja zerado para o cálculo do controlador.
+                    let valorParaSugerir = remaining;
+                    let sinalReal = signalAmount;
+
+                    // Se o saldo a pagar na tela é o valor total do jogo (R$ 100),
+                    // ignoramos pagamentos anteriores que podem ser estornos mal interpretados.
+                    if (Math.abs(remaining - totalPrice) < 0.01) {
+                        sinalReal = 0;
+                        valorParaSugerir = totalPrice;
+                    }
+
+                    // 3. Formatação visual do sinal já pago
+                    document.getElementById('modalSignalAmount').innerText =
+                        sinalReal.toLocaleString('pt-BR', {
+                            style: 'currency',
+                            currency: 'BRL'
+                        });
+
+                    // 4. Valores brutos para cálculos internos do Modal
+                    document.getElementById('modalSignalAmountRaw').value = sinalReal.toFixed(2);
+                    document.getElementById('modalFinalPrice').value = totalPrice.toFixed(2);
+
+                    // 5. Captura da data operacional
+                    const inputDataFiltro = document.querySelector('input[name="date"]');
+                    const dataDoCaixa = inputDataFiltro ?
+                        inputDataFiltro.value :
+                        document.getElementById('js_cashierDate')?.value;
+
+                    if (dataDoCaixa) {
+                        document.getElementById('modalPaymentDate').value = dataDoCaixa;
+                    }
+
+                    // 6. Controle da opção de aplicar a série (mensalistas)
+                    const recurrentOption = document.getElementById('recurrentOption');
+                    if (recurrentOption) {
+                        isRecurrent ? recurrentOption.classList.remove('hidden') : recurrentOption.classList.add('hidden');
+                    }
+
+                    // 7. Sugere o valor correto para pagamento
+                    const amountPaidInput = document.getElementById('modalAmountPaid');
+                    if (amountPaidInput) {
+                        amountPaidInput.value = valorParaSugerir.toFixed(2);
+                    }
+
+                    // Reset do botão de envio
+                    const submitBtn = document.querySelector('#paymentForm button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = 'CONCLUIR PAGAMENTO';
+                        // Reset da trava global específica deste formulário para garantir que abra limpo
+                        if (window.caixaProcessandoGlobal) window.caixaProcessandoGlobal['paymentForm'] = false;
+                    }
+
+                    // 8. Recalcula os campos de saldo devedor no modal
+                    if (typeof calculateAmountDue === "function") {
+                        calculateAmountDue();
+                    }
+
+                    // 9. Exibe o modal
+                    const modal = document.getElementById('paymentModal');
+                    if (modal) {
+                        modal.classList.replace('hidden', 'flex');
+                    }
+                }
+
+                function openNoShowModal(id, clientName, paidAmount) {
+                    // 1. Preenchimento básico dos dados no modal
+                    document.getElementById('noShowReservaId').value = id;
+                    document.getElementById('noShowClientName').innerText = clientName;
+                    document.getElementById('noShowPaidAmount').value = paidAmount;
+
+                    // 2. 🎯 CORREÇÃO DA DATA OPERACIONAL
+                    // Buscamos a data do filtro (calendário do topo) para garantir o registro no caixa correto
+                    const inputDataFiltro = document.querySelector('input[name="date"]');
+                    const dataDoCaixa = inputDataFiltro ? inputDataFiltro.value : document.getElementById('js_cashierDate')
+                        ?.value;
+
+                    if (dataDoCaixa) {
+                        document.getElementById('noShowPaymentDate').value = dataDoCaixa;
+                        console.log("📅 No-Show sendo registrado na data:", dataDoCaixa);
+                    } else {
+                        console.error("❌ Erro: Data operacional não encontrada para o No-Show.");
+                    }
+
+                    // 3. Exibição do valor pago para conferência de estorno
+                    document.getElementById('noShowAmountDisplay').innerText = paidAmount.toLocaleString('pt-BR', {
                         style: 'currency',
                         currency: 'BRL'
                     });
 
-                // 4. Valores brutos para cálculos internos do Modal
-                document.getElementById('modalSignalAmountRaw').value = sinalReal.toFixed(2);
-                document.getElementById('modalFinalPrice').value = totalPrice.toFixed(2);
+                    // 4. Controle visual: Se não houve pagamento, não precisa mostrar opções de estorno
+                    const refundControls = document.getElementById('refundControls');
+                    if (refundControls) {
+                        paidAmount > 0 ? refundControls.classList.remove('hidden') : refundControls.classList.add('hidden');
+                    }
 
-                // 5. Captura da data operacional
-                const inputDataFiltro = document.querySelector('input[name="date"]');
-                const dataDoCaixa = inputDataFiltro ?
-                    inputDataFiltro.value :
-                    document.getElementById('js_cashierDate')?.value;
-
-                if (dataDoCaixa) {
-                    document.getElementById('modalPaymentDate').value = dataDoCaixa;
-                }
-
-                // 6. Controle da opção de aplicar a série (mensalistas)
-                const recurrentOption = document.getElementById('recurrentOption');
-                if (recurrentOption) {
-                    isRecurrent ? recurrentOption.classList.remove('hidden') : recurrentOption.classList.add('hidden');
-                }
-
-                // 7. Sugere o valor correto para pagamento
-                const amountPaidInput = document.getElementById('modalAmountPaid');
-                if (amountPaidInput) {
-                    amountPaidInput.value = valorParaSugerir.toFixed(2);
-                }
-
-                // Reset do botão de envio
-                const submitBtn = document.querySelector('#paymentForm button[type="submit"]');
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = 'CONCLUIR PAGAMENTO';
-                    // Reset da trava global específica deste formulário para garantir que abra limpo
-                    if (window.caixaProcessandoGlobal) window.caixaProcessandoGlobal['paymentForm'] = false;
-                }
-
-                // 8. Recalcula os campos de saldo devedor no modal
-                if (typeof calculateAmountDue === "function") {
-                    calculateAmountDue();
-                }
-
-                // 9. Exibe o modal
-                const modal = document.getElementById('paymentModal');
-                if (modal) {
-                    modal.classList.replace('hidden', 'flex');
-                }
-            }
-
-            function openNoShowModal(id, clientName, paidAmount) {
-                // 1. Preenchimento básico dos dados no modal
-                document.getElementById('noShowReservaId').value = id;
-                document.getElementById('noShowClientName').innerText = clientName;
-                document.getElementById('noShowPaidAmount').value = paidAmount;
-
-                // 2. 🎯 CORREÇÃO DA DATA OPERACIONAL
-                // Buscamos a data do filtro (calendário do topo) para garantir o registro no caixa correto
-                const inputDataFiltro = document.querySelector('input[name="date"]');
-                const dataDoCaixa = inputDataFiltro ? inputDataFiltro.value : document.getElementById('js_cashierDate')
-                    ?.value;
-
-                if (dataDoCaixa) {
-                    document.getElementById('noShowPaymentDate').value = dataDoCaixa;
-                    console.log("📅 No-Show sendo registrado na data:", dataDoCaixa);
-                } else {
-                    console.error("❌ Erro: Data operacional não encontrada para o No-Show.");
-                }
-
-                // 3. Exibição do valor pago para conferência de estorno
-                document.getElementById('noShowAmountDisplay').innerText = paidAmount.toLocaleString('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL'
-                });
-
-                // 4. Controle visual: Se não houve pagamento, não precisa mostrar opções de estorno
-                const refundControls = document.getElementById('refundControls');
-                if (refundControls) {
-                    paidAmount > 0 ? refundControls.classList.remove('hidden') : refundControls.classList.add('hidden');
-                }
-
-                // 5. Abre o modal
-                const modal = document.getElementById('noShowModal');
-                if (modal) {
-                    modal.classList.replace('hidden', 'flex');
-                }
-            }
-
-            function openDebtModal(id, clientName) {
-                // 1. Trava de segurança (já está ok)
-                if (document.getElementById('js_isActionDisabled')?.value === '1') return alert('🚫 Caixa Fechado.');
-
-                // 2. BUSCA O INPUT (Garanta que o ID do elemento no HTML é exatamente este)
-                const inputId = document.getElementById('debtReservaId');
-
-                if (inputId) {
-                    inputId.value = id; // Injeta o ID real (ex: 450)
-                    console.log("✅ Modal de Dívida aberto para ID:", id); // Log para seu debug
-                } else {
-                    console.error("❌ Erro: O input 'debtReservaId' não foi encontrado no HTML.");
-                }
-
-                // 3. Atualiza o texto e exibe
-                document.getElementById('debtClientName').innerText = clientName;
-                document.getElementById('debtModal').classList.replace('hidden', 'flex');
-            }
-
-            function openCloseCashModal() {
-                try {
-                    // 1. Captura de elementos e valores com fallback para "0"
-                    const dateEl = document.getElementById('js_cashierDate');
-                    const systemValueEl = document.getElementById('js_valorLiquidoArenaRaw'); // O TOTAL (1.780)
-                    const saldoGavetaEl = document.getElementById('js_saldoFisicoGavetaRaw'); // DINHEIRO (90)
-                    const saldoDigitalEl = document.getElementById('js_saldoDigitalBancoRaw'); // PIX (1.410)
-
-                    const date = dateEl ? dateEl.value : '';
-
-                    // Convertemos para float para poder fazer contas matemáticas
-                    const totalGeral = parseFloat(systemValueEl?.value || 0);
-                    const totalDinheiro = parseFloat(saldoGavetaEl?.value || 0);
-                    const totalPix = parseFloat(saldoDigitalEl?.value || 0);
-
-                    // 🧠 A MÁGICA: O que não é dinheiro nem PIX, é Cartão/Outros
-                    // No seu caso: 1780 - 90 - 1410 = 280
-                    const totalOutros = totalGeral - (totalDinheiro + totalPix);
-
-                    // 2. Helper de formatação
-                    const formatarBRL = (val) => {
-                        return parseFloat(val).toLocaleString('pt-br', {
-                            style: 'currency',
-                            currency: 'BRL'
-                        });
-                    };
-
-                    // 3. Alimentação do Modal (Campos de exibição e Inputs)
-                    if (document.getElementById('closeCashDate'))
-                        document.getElementById('closeCashDate').value = date;
-
-                    if (document.getElementById('closeCashDateDisplay'))
-                        document.getElementById('closeCashDateDisplay').innerText = date.split('-').reverse().join('/');
-
-                    // Exibe o Totalzão no topo
-                    if (document.getElementById('calculatedLiquidAmount'))
-                        document.getElementById('calculatedLiquidAmount').innerText = formatarBRL(totalGeral);
-
-                    // Cards Detalhados: Preenche os 3 agora
-                    const displayGaveta = document.getElementById('displayGavetaModal');
-                    const displayBanco = document.getElementById('displayBancoModal');
-                    const displayOutros = document.getElementById('displayOutrosModal'); // O novo ID que criamos
-
-                    if (displayGaveta) displayGaveta.innerText = formatarBRL(totalDinheiro);
-                    if (displayBanco) displayBanco.innerText = formatarBRL(totalPix);
-                    if (displayOutros) displayOutros.innerText = formatarBRL(totalOutros);
-
-                    // 4. Reset do campo de entrada para forçar nova conferência cega
-                    const actualInput = document.getElementById('actualCashAmount');
-                    if (actualInput) actualInput.value = '';
-
-                    // 5. Troca de visibilidade do Modal
-                    const modal = document.getElementById('closeCashModal');
+                    // 5. Abre o modal
+                    const modal = document.getElementById('noShowModal');
                     if (modal) {
                         modal.classList.replace('hidden', 'flex');
-                        // Foca automaticamente no campo de digitar o valor
-                        setTimeout(() => actualInput?.focus(), 100);
+                    }
+                }
+
+                function openDebtModal(id, clientName) {
+                    // 1. Trava de segurança (já está ok)
+                    if (document.getElementById('js_isActionDisabled')?.value === '1') return alert('🚫 Caixa Fechado.');
+
+                    // 2. BUSCA O INPUT (Garanta que o ID do elemento no HTML é exatamente este)
+                    const inputId = document.getElementById('debtReservaId');
+
+                    if (inputId) {
+                        inputId.value = id; // Injeta o ID real (ex: 450)
+                        console.log("✅ Modal de Dívida aberto para ID:", id); // Log para seu debug
+                    } else {
+                        console.error("❌ Erro: O input 'debtReservaId' não foi encontrado no HTML.");
                     }
 
-                    // 6. Atualiza a mensagem de diferença
-                    calculateDifference();
-
-                } catch (error) {
-                    console.error("Erro ao abrir o modal de fechamento:", error);
-                }
-            }
-
-            function openCash(date) {
-                // 1. Busca os elementos necessários (IDs sincronizados com o Modal 4)
-                const arenaIdInput = document.getElementById('js_arenaId');
-                const modalArenaInput = document.getElementById('reopenCashArenaId');
-                const modalDateInput = document.getElementById('reopenCashDate');
-                const modalDateDisplay = document.getElementById('reopenCashDateDisplay'); // Ajustado
-
-                // 2. Validação
-                if (!arenaIdInput || !arenaIdInput.value) {
-                    alert('⚠️ Selecione uma arena antes de tentar reabrir o caixa.');
-                    return;
+                    // 3. Atualiza o texto e exibe
+                    document.getElementById('debtClientName').innerText = clientName;
+                    document.getElementById('debtModal').classList.replace('hidden', 'flex');
                 }
 
-                // 3. Preenche os campos do Modal
-                if (modalDateInput) modalDateInput.value = date;
-                if (modalArenaInput) modalArenaInput.value = arenaIdInput.value;
+                function openCloseCashModal() {
+                    try {
+                        // 1. Captura de elementos e valores com fallback para "0"
+                        const dateEl = document.getElementById('js_cashierDate');
+                        const systemValueEl = document.getElementById('js_valorLiquidoArenaRaw'); // O TOTAL (1.780)
+                        const saldoGavetaEl = document.getElementById('js_saldoFisicoGavetaRaw'); // DINHEIRO (90)
+                        const saldoDigitalEl = document.getElementById('js_saldoDigitalBancoRaw'); // PIX (1.410)
 
-                // 4. Preenche o texto visual com segurança
-                if (modalDateDisplay) {
-                    modalDateDisplay.innerText = date.split('-').reverse().join('/');
+                        const date = dateEl ? dateEl.value : '';
+
+                        // Convertemos para float para poder fazer contas matemáticas
+                        const totalGeral = parseFloat(systemValueEl?.value || 0);
+                        const totalDinheiro = parseFloat(saldoGavetaEl?.value || 0);
+                        const totalPix = parseFloat(saldoDigitalEl?.value || 0);
+
+                        // 🧠 A MÁGICA: O que não é dinheiro nem PIX, é Cartão/Outros
+                        // No seu caso: 1780 - 90 - 1410 = 280
+                        const totalOutros = totalGeral - (totalDinheiro + totalPix);
+
+                        // 2. Helper de formatação
+                        const formatarBRL = (val) => {
+                            return parseFloat(val).toLocaleString('pt-br', {
+                                style: 'currency',
+                                currency: 'BRL'
+                            });
+                        };
+
+                        // 3. Alimentação do Modal (Campos de exibição e Inputs)
+                        if (document.getElementById('closeCashDate'))
+                            document.getElementById('closeCashDate').value = date;
+
+                        if (document.getElementById('closeCashDateDisplay'))
+                            document.getElementById('closeCashDateDisplay').innerText = date.split('-').reverse().join('/');
+
+                        // Exibe o Totalzão no topo
+                        if (document.getElementById('calculatedLiquidAmount'))
+                            document.getElementById('calculatedLiquidAmount').innerText = formatarBRL(totalGeral);
+
+                        // Cards Detalhados: Preenche os 3 agora
+                        const displayGaveta = document.getElementById('displayGavetaModal');
+                        const displayBanco = document.getElementById('displayBancoModal');
+                        const displayOutros = document.getElementById('displayOutrosModal'); // O novo ID que criamos
+
+                        if (displayGaveta) displayGaveta.innerText = formatarBRL(totalDinheiro);
+                        if (displayBanco) displayBanco.innerText = formatarBRL(totalPix);
+                        if (displayOutros) displayOutros.innerText = formatarBRL(totalOutros);
+
+                        // 4. Reset do campo de entrada para forçar nova conferência cega
+                        const actualInput = document.getElementById('actualCashAmount');
+                        if (actualInput) actualInput.value = '';
+
+                        // 5. Troca de visibilidade do Modal
+                        const modal = document.getElementById('closeCashModal');
+                        if (modal) {
+                            modal.classList.replace('hidden', 'flex');
+                            // Foca automaticamente no campo de digitar o valor
+                            setTimeout(() => actualInput?.focus(), 100);
+                        }
+
+                        // 6. Atualiza a mensagem de diferença
+                        calculateDifference();
+
+                    } catch (error) {
+                        console.error("Erro ao abrir o modal de fechamento:", error);
+                    }
                 }
 
-                // 5. Limpa justificativa
-                const reasonField = document.getElementById('reopen_reason');
-                if (reasonField) reasonField.value = '';
+                function openCash(date) {
+                    // 1. Busca os elementos necessários (IDs sincronizados com o Modal 4)
+                    const arenaIdInput = document.getElementById('js_arenaId');
+                    const modalArenaInput = document.getElementById('reopenCashArenaId');
+                    const modalDateInput = document.getElementById('reopenCashDate');
+                    const modalDateDisplay = document.getElementById('reopenCashDateDisplay'); // Ajustado
 
-                // 6. Exibe o modal
-                const modal = document.getElementById('openCashModal');
-                if (modal) {
-                    modal.classList.replace('hidden', 'flex');
-                }
-            }
+                    // 2. Validação
+                    if (!arenaIdInput || !arenaIdInput.value) {
+                        alert('⚠️ Selecione uma arena antes de tentar reabrir o caixa.');
+                        return;
+                    }
 
-            // --- Fechamento de Modais ---
+                    // 3. Preenche os campos do Modal
+                    if (modalDateInput) modalDateInput.value = date;
+                    if (modalArenaInput) modalArenaInput.value = arenaIdInput.value;
 
-            // NOVO: Fechar Modal de Sangria/Reforço
-            function closeTransactionModal() {
-                document.getElementById('transactionModal').classList.replace('flex', 'hidden');
-                document.getElementById('transactionForm').reset();
-            }
+                    // 4. Preenche o texto visual com segurança
+                    if (modalDateDisplay) {
+                        modalDateDisplay.innerText = date.split('-').reverse().join('/');
+                    }
 
-            function closePaymentModal() {
-                document.getElementById('paymentModal').classList.replace('flex', 'hidden');
-            }
+                    // 5. Limpa justificativa
+                    const reasonField = document.getElementById('reopen_reason');
+                    if (reasonField) reasonField.value = '';
 
-            function closeNoShowModal() {
-                document.getElementById('noShowModal').classList.replace('flex', 'hidden');
-            }
-
-            function closeCloseCashModal() {
-                document.getElementById('closeCashModal').classList.replace('flex', 'hidden');
-            }
-
-            function closeOpenCashModal() {
-                document.getElementById('openCashModal').classList.replace('flex', 'hidden');
-            }
-
-            function closeDebtModal() {
-                document.getElementById('debtModal').classList.replace('flex', 'hidden');
-                document.getElementById('debtForm').reset();
-            }
-
-            // --- Lógica de Diferença de Caixa ---
-            function calculateDifference() {
-                // 🚀 AJUSTE: Buscamos o valor bruto (raw) do input oculto para evitar erros de formatação ou de arena
-                const systemValueRaw = document.getElementById('js_valorLiquidoArenaRaw')?.value || "0";
-                const actualInput = document.getElementById('actualCashAmount');
-                const diffMessageEl = document.getElementById('differenceMessage');
-
-                if (!actualInput || !diffMessageEl) return;
-
-                // Calculamos em centavos para evitar erros de precisão do JavaScript
-                const diffCents = toCents(actualInput.value) - toCents(systemValueRaw);
-
-                // Reset de classes visual
-                diffMessageEl.className =
-                    'mt-3 p-3 text-sm font-bold rounded-lg text-center border transition-all duration-300';
-
-                if (diffCents === 0) {
-                    diffMessageEl.innerHTML = '✅ Caixa Perfeito!';
-                    diffMessageEl.classList.add('bg-green-100', 'text-green-700', 'border-green-200');
-                } else if (diffCents > 0) {
-                    // Se informado > sistema = Sobra
-                    diffMessageEl.innerHTML = `⚠️ Sobra no Físico: R$ ${fromCents(diffCents).replace('.', ',')}`;
-                    diffMessageEl.classList.add('bg-amber-100', 'text-amber-700', 'border-amber-200');
-                } else {
-                    // Se informado < sistema = Falta
-                    diffMessageEl.innerHTML = `🚨 Falta no Físico: R$ ${fromCents(Math.abs(diffCents)).replace('.', ',')}`;
-                    diffMessageEl.classList.add('bg-red-100', 'text-red-700', 'border-red-200');
+                    // 6. Exibe o modal
+                    const modal = document.getElementById('openCashModal');
+                    if (modal) {
+                        modal.classList.replace('hidden', 'flex');
+                    }
                 }
 
-                diffMessageEl.classList.remove('hidden');
-            }
+                // --- Fechamento de Modais ---
 
-            function checkCashierStatus() {
-                const btn = document.getElementById('openCloseCashModalBtn');
-                const statusEl = document.getElementById('cashStatus');
-                const isFiltered = document.getElementById('js_isFiltered')?.value === '1';
-
-                if (!btn || !statusEl) return;
-
-                if (!isFiltered) {
-                    btn.disabled = true;
-                    statusEl.innerHTML = "👈 Selecione uma Arena";
-                    statusEl.className = "text-amber-500 font-bold text-xs";
-                    return;
+                // NOVO: Fechar Modal de Sangria/Reforço
+                function closeTransactionModal() {
+                    document.getElementById('transactionModal').classList.replace('flex', 'hidden');
+                    document.getElementById('transactionForm').reset();
                 }
 
-                const rows = document.querySelectorAll('table tbody tr');
-                let pendenciasCount = 0;
+                function closePaymentModal() {
+                    document.getElementById('paymentModal').classList.replace('flex', 'hidden');
+                }
 
-                rows.forEach(tr => {
-                    const txtLinha = tr.innerText.toUpperCase();
+                function closeNoShowModal() {
+                    document.getElementById('noShowModal').classList.replace('flex', 'hidden');
+                }
 
-                    // 1. Ignoramos apenas o que já é irreversível ou resolvido
-                    const isResolvido = txtLinha.includes('DÍVIDA ATIVA') ||
-                        txtLinha.includes('QUITADO') ||
-                        txtLinha.includes('CANCELADO');
+                function closeCloseCashModal() {
+                    document.getElementById('closeCashModal').classList.replace('flex', 'hidden');
+                }
 
-                    if (!isResolvido) {
-                        // 2. Se não está resolvido, procuramos botões de ação ativos
-                        const botoes = tr.querySelectorAll('button:not([disabled]), a:not([disabled])');
-                        let temAcaoPendente = false;
+                function closeOpenCashModal() {
+                    document.getElementById('openCashModal').classList.replace('flex', 'hidden');
+                }
 
-                        botoes.forEach(el => {
-                            const txtBotao = el.innerText.toUpperCase();
-                            // Se tiver qualquer um desses botões, o caixa NÃO pode fechar
-                            if (txtBotao.includes('BAIXAR') || txtBotao.includes('DEPOIS') || txtBotao
-                                .includes('FALTA')) {
-                                temAcaoPendente = true;
+                function closeDebtModal() {
+                    document.getElementById('debtModal').classList.replace('flex', 'hidden');
+                    document.getElementById('debtForm').reset();
+                }
+
+                // --- Lógica de Diferença de Caixa ---
+                function calculateDifference() {
+                    // 🚀 AJUSTE: Buscamos o valor bruto (raw) do input oculto para evitar erros de formatação ou de arena
+                    const systemValueRaw = document.getElementById('js_valorLiquidoArenaRaw')?.value || "0";
+                    const actualInput = document.getElementById('actualCashAmount');
+                    const diffMessageEl = document.getElementById('differenceMessage');
+
+                    if (!actualInput || !diffMessageEl) return;
+
+                    // Calculamos em centavos para evitar erros de precisão do JavaScript
+                    const diffCents = toCents(actualInput.value) - toCents(systemValueRaw);
+
+                    // Reset de classes visual
+                    diffMessageEl.className =
+                        'mt-3 p-3 text-sm font-bold rounded-lg text-center border transition-all duration-300';
+
+                    if (diffCents === 0) {
+                        diffMessageEl.innerHTML = '✅ Caixa Perfeito!';
+                        diffMessageEl.classList.add('bg-green-100', 'text-green-700', 'border-green-200');
+                    } else if (diffCents > 0) {
+                        // Se informado > sistema = Sobra
+                        diffMessageEl.innerHTML = `⚠️ Sobra no Físico: R$ ${fromCents(diffCents).replace('.', ',')}`;
+                        diffMessageEl.classList.add('bg-amber-100', 'text-amber-700', 'border-amber-200');
+                    } else {
+                        // Se informado < sistema = Falta
+                        diffMessageEl.innerHTML =
+                            `🚨 Falta no Físico: R$ ${fromCents(Math.abs(diffCents)).replace('.', ',')}`;
+                        diffMessageEl.classList.add('bg-red-100', 'text-red-700', 'border-red-200');
+                    }
+
+                    diffMessageEl.classList.remove('hidden');
+                }
+
+                function checkCashierStatus() {
+                    const btn = document.getElementById('openCloseCashModalBtn');
+                    const statusEl = document.getElementById('cashStatus');
+                    const isFiltered = document.getElementById('js_isFiltered')?.value === '1';
+
+                    if (!btn || !statusEl) return;
+
+                    if (!isFiltered) {
+                        btn.disabled = true;
+                        statusEl.innerHTML = "👈 Selecione uma Arena";
+                        statusEl.className = "text-amber-500 font-bold text-xs";
+                        return;
+                    }
+
+                    const rows = document.querySelectorAll('table tbody tr');
+                    let pendenciasCount = 0;
+
+                    rows.forEach(tr => {
+                        const txtLinha = tr.innerText.toUpperCase();
+
+                        // 1. Ignoramos apenas o que já é irreversível ou resolvido
+                        const isResolvido = txtLinha.includes('DÍVIDA ATIVA') ||
+                            txtLinha.includes('QUITADO') ||
+                            txtLinha.includes('CANCELADO');
+
+                        if (!isResolvido) {
+                            // 2. Se não está resolvido, procuramos botões de ação ativos
+                            const botoes = tr.querySelectorAll('button:not([disabled]), a:not([disabled])');
+                            let temAcaoPendente = false;
+
+                            botoes.forEach(el => {
+                                const txtBotao = el.innerText.toUpperCase();
+                                // Se tiver qualquer um desses botões, o caixa NÃO pode fechar
+                                if (txtBotao.includes('BAIXAR') || txtBotao.includes('DEPOIS') || txtBotao
+                                    .includes('FALTA')) {
+                                    temAcaoPendente = true;
+                                }
+                            });
+
+                            if (temAcaoPendente) pendenciasCount++;
+                        }
+                    });
+
+                    if (pendenciasCount > 0) {
+                        btn.disabled = true;
+                        btn.classList.add('opacity-50', 'cursor-not-allowed');
+                        statusEl.innerHTML = `🚨 PENDÊNCIA: ${pendenciasCount} jogo(s) aguardando decisão`;
+                        statusEl.className = "text-red-600 font-black text-xs uppercase animate-pulse";
+                    } else {
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        statusEl.innerHTML = "✅ Arena pronta para fechar!";
+                        statusEl.className = "text-green-600 font-black text-xs uppercase";
+                    }
+                }
+
+                // 1. Variável global atômica para controle de concorrência
+                window.caixaProcessandoGlobal = window.caixaProcessandoGlobal || {};
+
+                function setupAjaxForm(formId, btnId, spinnerId, errorId, urlTemplate) {
+                    const form = document.getElementById(formId);
+                    if (!form) return;
+
+                    // Impede múltiplas vinculações
+                    if (form.dataset.ajaxBound === "1") return;
+                    form.dataset.ajaxBound = "1";
+
+                    const userRole = "{{ Auth::user()->role ?? 'guest' }}";
+
+                    form.onsubmit = function(e) {
+                        e.preventDefault();
+
+                        // Trava de clique duplo
+                        if (window.caixaProcessandoGlobal[formId]) {
+                            console.warn("🚫 [TRAVA] Bloqueio de clique duplo para:", formId);
+                            return false;
+                        }
+                        window.caixaProcessandoGlobal[formId] = true;
+
+                        const enviarParaOServidor = (tokenRecebido = null) => {
+                            const btn = document.getElementById(btnId);
+                            const spinner = document.getElementById(spinnerId);
+
+                            // 🛡️ LIMPEZA AGRESSIVA: Fecha o modal via função e força via CSS
+                            if (typeof window.fecharModalAutorizacao === 'function') {
+                                window.fecharModalAutorizacao();
+                            }
+
+                            const modais = document.querySelectorAll(
+                                '.modal, .modal-backdrop, #modalSenha, [id*="Autorizacao"]');
+                            modais.forEach(m => {
+                                m.style.display = 'none';
+                                m.classList.add('hidden');
+                            });
+
+                            console.log("🚀 [DEBUG] Iniciando envio do Form:", formId);
+
+                            if (btn) {
+                                btn.disabled = true;
+                                btn.dataset.originalText = btn.innerText;
+                                btn.innerText = "AGUARDE...";
+                            }
+                            if (spinner) spinner.classList.remove('hidden');
+
+                            const formData = new FormData(form);
+                            if (tokenRecebido) formData.append('supervisor_token', tokenRecebido);
+
+                            const reservaId = formData.get('reserva_id') || document.getElementById(
+                                    'noShowReservaId')
+                                ?.value;
+                            let targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
+
+                            fetch(targetUrl, {
+                                    method: 'POST',
+                                    body: formData,
+                                    headers: {
+                                        'X-CSRF-TOKEN': document.querySelector('meta[name='
+                                            csrf - token ']').getAttribute('content'),
+                                        'Accept': 'application/json'
+                                    }
+                                })
+                                .then(res => res.json())
+                                .then(json => {
+                                    // Segunda limpeza por segurança
+                                    if (typeof window.fecharModalAutorizacao === 'function') {
+                                        window.fecharModalAutorizacao();
+                                    }
+
+                                    if (json.success) {
+                                        form.dataset.finalizado = "true";
+
+                                        // 🖨️ IMPRESSÃO NA BOBINA (Mesmo esquema do Bar)
+                                        if (json.print_url) {
+                                            imprimirCupomArena(json.print_url);
+                                        }
+
+                                        // Delay de 400ms para o navegador limpar a tela antes do alert
+                                        setTimeout(() => {
+                                            alert(json.message);
+                                            window.location.reload();
+                                        }, 400);
+                                    } else {
+                                        if (json.message && json.message.includes('DUPLICATE_PAYMENT')) {
+                                            window.location.reload();
+                                            return;
+                                        }
+
+                                        setTimeout(() => {
+                                            alert(json.message || 'Erro ao processar.');
+                                            window.caixaProcessandoGlobal[formId] = false;
+                                            if (btn) {
+                                                btn.disabled = false;
+                                                btn.innerText = btn.dataset.originalText || "CONCLUIR";
+                                            }
+                                            if (spinner) spinner.classList.add('hidden');
+                                        }, 400);
+                                    }
+                                })
+                                .catch(err => {
+                                    console.error("🔥 [DEBUG FATAL]:", err);
+                                    window.caixaProcessandoGlobal[formId] = false;
+                                    if (btn) {
+                                        btn.disabled = false;
+                                        btn.innerText = "TENTAR NOVAMENTE";
+                                    }
+                                });
+                        };
+
+                        // --- LÓGICA DE PERMISSÕES ---
+
+                        // Bypass para o formulário de dívida (Pagar Depois)
+                        if (formId === 'debtForm') {
+                            enviarParaOServidor();
+                            return false;
+                        }
+
+                        const acoesRestritas = ['noShowForm', 'transactionForm', 'reopenCashForm'];
+
+                        if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
+                            window.requisitarAutorizacao(token => {
+                                if (token) {
+                                    enviarParaOServidor(token);
+                                } else {
+                                    window.caixaProcessandoGlobal[formId] = false;
+                                }
+                            });
+                        } else {
+                            enviarParaOServidor();
+                        }
+
+                        return false;
+                    };
+                }
+
+                /**
+                 * Função de apoio para abrir a janela de impressão da bobina
+                 */
+                function imprimirCupomArena(url) {
+                    const win = window.open(url, 'ImpressaoArena',
+                        'width=300,height=600,menubar=no,toolbar=no,location=no,status=no');
+                    if (win) {
+                        win.focus();
+                    } else {
+                        console.warn("Pop-up de impressão bloqueado pelo navegador.");
+                    }
+                }
+
+                document.addEventListener('DOMContentLoaded', () => {
+                    // 🧹 LIMPEZA TOTAL DE TRAVAS AO CARREGAR
+                    sessionStorage.clear();
+                    window.caixaProcessandoGlobal = {};
+
+                    console.log('🚀 Scripts de Caixa carregados e travas resetadas!');
+
+                    // 1. Inicialização de status e cálculos (Verifica se a arena pode fechar)
+                    if (typeof checkCashierStatus === "function") {
+                        checkCashierStatus();
+                    }
+
+                    // 2. Ouvinte para cálculo de diferença em tempo real no Fechamento
+                    const actualCashInput = document.getElementById('actualCashAmount');
+                    if (actualCashInput) {
+                        actualCashInput.oninput = function() {
+                            if (typeof calculateDifference === "function") {
+                                calculateDifference();
+                            }
+                        };
+                    }
+
+                    // 3. 🧠 INTELIGÊNCIA DE MOVIMENTAÇÃO (Sangria/Reforço)
+                    // Este trecho avisa visualmente se o dinheiro sai do PIX ou da GAVETA
+                    const paymentMethodSelect = document.getElementById('transaction_payment_method');
+                    if (paymentMethodSelect) {
+                        paymentMethodSelect.addEventListener('change', function(e) {
+                            const helper = document.getElementById('transaction_helper_text');
+                            if (!helper) return;
+
+                            if (e.target.value === 'money') {
+                                helper.innerText = "* ESTA OPERAÇÃO AFETARÁ O SALDO FÍSICO DA GAVETA.";
+                                helper.classList.remove('text-blue-500');
+                                helper.classList.add('text-gray-400');
+                            } else {
+                                helper.innerText =
+                                "* ESTA OPERAÇÃO AFETARÁ O SALDO DIGITAL DO BANCO (PIX).";
+                                helper.classList.remove('text-gray-400');
+                                helper.classList.add('text-blue-500');
                             }
                         });
+                    }
 
-                        if (temAcaoPendente) pendenciasCount++;
+                    // 4. Registro dos formulários AJAX com blindagem anti-duplicidade
+                    try {
+                        // --- ROTAS FIXAS ---
+                        setupAjaxForm('transactionForm', 'submitTransactionBtn', null, null,
+                            '/admin/pagamentos/movimentacao-avulsa');
+
+                        setupAjaxForm('closeCashForm', 'submitCloseCashBtn', 'submitCloseCashSpinner',
+                            'closecash-error-message', '/admin/pagamentos/fechar-caixa');
+
+                        setupAjaxForm('openCashForm', 'submitOpenCashBtn', 'submitOpenCashSpinner',
+                            'openCash-error-message', '/admin/pagamentos/abrir-caixa');
+
+                        // --- ROTAS DINÂMICAS ({reserva}) ---
+
+                        // Finalizar Pagamento
+                        setupAjaxForm('paymentForm', 'submitPaymentBtn', 'submitPaymentSpinner',
+                            'payment-error-message', '/admin/pagamentos/{reserva}/finalizar');
+
+                        // Registrar No-Show (Falta)
+                        setupAjaxForm('noShowForm', 'submitNoShowBtn', 'submitNoShowSpinner',
+                            'noshow-error-message', '/admin/reservas/{reserva}/no-show');
+
+                        // Pagar Depois (Dívida)
+                        setupAjaxForm('debtForm', 'submitDebtBtn', null, null,
+                            '/admin/pagamentos/{reserva}/pendenciar');
+
+                        console.log('✅ Todos os formulários registrados com blindagem e seletores de origem!');
+                    } catch (e) {
+                        console.error('❌ Erro crítico ao registrar formulários:', e);
                     }
                 });
 
-                if (pendenciasCount > 0) {
-                    btn.disabled = true;
-                    btn.classList.add('opacity-50', 'cursor-not-allowed');
-                    statusEl.innerHTML = `🚨 PENDÊNCIA: ${pendenciasCount} jogo(s) aguardando decisão`;
-                    statusEl.className = "text-red-600 font-black text-xs uppercase animate-pulse";
-                } else {
-                    btn.disabled = false;
-                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                    statusEl.innerHTML = "✅ Arena pronta para fechar!";
-                    statusEl.className = "text-green-600 font-black text-xs uppercase";
-                }
-            }
+                function acessarDividasComSenha() {
+                    const userRole = "{{ Auth::user()->role ?? 'guest' }}";
+                    // Usamos o nome da rota nova que o colaborador tem permissão de "atravessar"
+                    const urlDestino = "{{ route('admin.payment.dividas_acesso') }}";
 
-            // 1. Variável global atômica para controle de concorrência
-            window.caixaProcessandoGlobal = window.caixaProcessandoGlobal || {};
-
-            function setupAjaxForm(formId, btnId, spinnerId, errorId, urlTemplate) {
-                const form = document.getElementById(formId);
-                if (!form) return;
-
-                // Impede múltiplas vinculações
-                if (form.dataset.ajaxBound === "1") return;
-                form.dataset.ajaxBound = "1";
-
-                const userRole = "{{ Auth::user()->role ?? 'guest' }}";
-
-                form.onsubmit = function(e) {
-                    e.preventDefault();
-
-                    // Trava de clique duplo
-                    if (window.caixaProcessandoGlobal[formId]) {
-                        console.warn("🚫 [TRAVA] Bloqueio de clique duplo para:", formId);
-                        return false;
-                    }
-                    window.caixaProcessandoGlobal[formId] = true;
-
-                    const enviarParaOServidor = (tokenRecebido = null) => {
-                        const btn = document.getElementById(btnId);
-                        const spinner = document.getElementById(spinnerId);
-
-                        // 🛡️ LIMPEZA AGRESSIVA: Fecha o modal via função e força via CSS
-                        if (typeof window.fecharModalAutorizacao === 'function') {
-                            window.fecharModalAutorizacao();
-                        }
-
-                        const modais = document.querySelectorAll(
-                            '.modal, .modal-backdrop, #modalSenha, [id*="Autorizacao"]');
-                        modais.forEach(m => {
-                            m.style.display = 'none';
-                            m.classList.add('hidden');
-                        });
-
-                        console.log("🚀 [DEBUG] Iniciando envio do Form:", formId);
-
-                        if (btn) {
-                            btn.disabled = true;
-                            btn.dataset.originalText = btn.innerText;
-                            btn.innerText = "AGUARDE...";
-                        }
-                        if (spinner) spinner.classList.remove('hidden');
-
-                        const formData = new FormData(form);
-                        if (tokenRecebido) formData.append('supervisor_token', tokenRecebido);
-
-                        const reservaId = formData.get('reserva_id') || document.getElementById('noShowReservaId')
-                            ?.value;
-                        let targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
-
-                        fetch(targetUrl, {
-                                method: 'POST',
-                                body: formData,
-                                headers: {
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name='
-                                        csrf - token ']').getAttribute('content'),
-                                    'Accept': 'application/json'
-                                }
-                            })
-                            .then(res => res.json())
-                            .then(json => {
-                                // Segunda limpeza por segurança
-                                if (typeof window.fecharModalAutorizacao === 'function') {
-                                    window.fecharModalAutorizacao();
-                                }
-
-                                if (json.success) {
-                                    form.dataset.finalizado = "true";
-
-                                    // 🖨️ IMPRESSÃO NA BOBINA (Mesmo esquema do Bar)
-                                    if (json.print_url) {
-                                        imprimirCupomArena(json.print_url);
-                                    }
-
-                                    // Delay de 400ms para o navegador limpar a tela antes do alert
-                                    setTimeout(() => {
-                                        alert(json.message);
-                                        window.location.reload();
-                                    }, 400);
-                                } else {
-                                    if (json.message && json.message.includes('DUPLICATE_PAYMENT')) {
-                                        window.location.reload();
-                                        return;
-                                    }
-
-                                    setTimeout(() => {
-                                        alert(json.message || 'Erro ao processar.');
-                                        window.caixaProcessandoGlobal[formId] = false;
-                                        if (btn) {
-                                            btn.disabled = false;
-                                            btn.innerText = btn.dataset.originalText || "CONCLUIR";
-                                        }
-                                        if (spinner) spinner.classList.add('hidden');
-                                    }, 400);
-                                }
-                            })
-                            .catch(err => {
-                                console.error("🔥 [DEBUG FATAL]:", err);
-                                window.caixaProcessandoGlobal[formId] = false;
-                                if (btn) {
-                                    btn.disabled = false;
-                                    btn.innerText = "TENTAR NOVAMENTE";
-                                }
-                            });
-                    };
-
-                    // --- LÓGICA DE PERMISSÕES ---
-
-                    // Bypass para o formulário de dívida (Pagar Depois)
-                    if (formId === 'debtForm') {
-                        enviarParaOServidor();
-                        return false;
-                    }
-
-                    const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
-
-                    if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
-                        window.requisitarAutorizacao(token => {
-                            if (token) {
-                                enviarParaOServidor(token);
-                            } else {
-                                window.caixaProcessandoGlobal[formId] = false;
-                            }
+                    if (userRole === 'colaborador') {
+                        window.requisitarAutorizacao(function(token) {
+                            if (token) window.location.href = urlDestino;
                         });
                     } else {
-                        enviarParaOServidor();
+                        window.location.href = urlDestino;
                     }
-
-                    return false;
-                };
-            }
-
-            /**
-             * Função de apoio para abrir a janela de impressão da bobina
-             */
-            function imprimirCupomArena(url) {
-                const win = window.open(url, 'ImpressaoArena',
-                    'width=300,height=600,menubar=no,toolbar=no,location=no,status=no');
-                if (win) {
-                    win.focus();
-                } else {
-                    console.warn("Pop-up de impressão bloqueado pelo navegador.");
                 }
             }
-
-            document.addEventListener('DOMContentLoaded', () => {
-                // 🧹 LIMPEZA TOTAL DE TRAVAS AO CARREGAR
-                sessionStorage.clear();
-                window.caixaProcessandoGlobal = {};
-
-                console.log('🚀 Scripts de Caixa carregados e travas resetadas!');
-
-                // 1. Inicialização de status e cálculos (Verifica se a arena pode fechar)
-                if (typeof checkCashierStatus === "function") {
-                    checkCashierStatus();
-                }
-
-                // 2. Ouvinte para cálculo de diferença em tempo real no Fechamento
-                const actualCashInput = document.getElementById('actualCashAmount');
-                if (actualCashInput) {
-                    actualCashInput.oninput = function() {
-                        if (typeof calculateDifference === "function") {
-                            calculateDifference();
-                        }
-                    };
-                }
-
-                // 3. 🧠 INTELIGÊNCIA DE MOVIMENTAÇÃO (Sangria/Reforço)
-                // Este trecho avisa visualmente se o dinheiro sai do PIX ou da GAVETA
-                const paymentMethodSelect = document.getElementById('transaction_payment_method');
-                if (paymentMethodSelect) {
-                    paymentMethodSelect.addEventListener('change', function(e) {
-                        const helper = document.getElementById('transaction_helper_text');
-                        if (!helper) return;
-
-                        if (e.target.value === 'money') {
-                            helper.innerText = "* ESTA OPERAÇÃO AFETARÁ O SALDO FÍSICO DA GAVETA.";
-                            helper.classList.remove('text-blue-500');
-                            helper.classList.add('text-gray-400');
-                        } else {
-                            helper.innerText = "* ESTA OPERAÇÃO AFETARÁ O SALDO DIGITAL DO BANCO (PIX).";
-                            helper.classList.remove('text-gray-400');
-                            helper.classList.add('text-blue-500');
-                        }
-                    });
-                }
-
-                // 4. Registro dos formulários AJAX com blindagem anti-duplicidade
-                try {
-                    // --- ROTAS FIXAS ---
-                    setupAjaxForm('transactionForm', 'submitTransactionBtn', null, null,
-                        '/admin/pagamentos/movimentacao-avulsa');
-
-                    setupAjaxForm('closeCashForm', 'submitCloseCashBtn', 'submitCloseCashSpinner',
-                        'closecash-error-message', '/admin/pagamentos/fechar-caixa');
-
-                    setupAjaxForm('openCashForm', 'submitOpenCashBtn', 'submitOpenCashSpinner',
-                        'openCash-error-message', '/admin/pagamentos/abrir-caixa');
-
-                    // --- ROTAS DINÂMICAS ({reserva}) ---
-
-                    // Finalizar Pagamento
-                    setupAjaxForm('paymentForm', 'submitPaymentBtn', 'submitPaymentSpinner',
-                        'payment-error-message', '/admin/pagamentos/{reserva}/finalizar');
-
-                    // Registrar No-Show (Falta)
-                    setupAjaxForm('noShowForm', 'submitNoShowBtn', 'submitNoShowSpinner',
-                        'noshow-error-message', '/admin/reservas/{reserva}/no-show');
-
-                    // Pagar Depois (Dívida)
-                    setupAjaxForm('debtForm', 'submitDebtBtn', null, null,
-                        '/admin/pagamentos/{reserva}/pendenciar');
-
-                    console.log('✅ Todos os formulários registrados com blindagem e seletores de origem!');
-                } catch (e) {
-                    console.error('❌ Erro crítico ao registrar formulários:', e);
-                }
-            });
-
-            function acessarDividasComSenha() {
-                const userRole = "{{ Auth::user()->role ?? 'guest' }}";
-                // Usamos o nome da rota nova que o colaborador tem permissão de "atravessar"
-                const urlDestino = "{{ route('admin.payment.dividas_acesso') }}";
-
-                if (userRole === 'colaborador') {
-                    window.requisitarAutorizacao(function(token) {
-                        if (token) window.location.href = urlDestino;
-                    });
-                } else {
-                    window.location.href = urlDestino;
-                }
-            }
-
-        }
     </script>
 
 </x-app-layout>

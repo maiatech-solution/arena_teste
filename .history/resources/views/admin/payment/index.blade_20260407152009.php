@@ -1639,7 +1639,6 @@
     <script>
         // Substitua as duas linhas antigas por esta:
         if (!window.__CAIXA_SCRIPT_LOADED) {
-
             window.__CAIXA_SCRIPT_LOADED = true;
 
             // ... todo o restante do seu código vem aqui dentro ...
@@ -2231,7 +2230,7 @@
                         return false;
                     }
 
-                    const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
+                    const acoesRestritas = ['noShowForm', 'transactionForm', 'reopenCashForm'];
 
                     if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
                         window.requisitarAutorizacao(token => {
@@ -2349,7 +2348,6 @@
                     window.location.href = urlDestino;
                 }
             }
-
         }
     </script>
 

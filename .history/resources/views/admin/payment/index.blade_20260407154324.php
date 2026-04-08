@@ -2231,7 +2231,7 @@
                         return false;
                     }
 
-                    const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
+                    const acoesRestritas = ['noShowForm', 'transactionForm', 'reopenCashForm'];
 
                     if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
                         window.requisitarAutorizacao(token => {
@@ -2350,6 +2350,24 @@
                 }
             }
 
+            // --- EXPORTAÇÃO PARA O ESCOPO GLOBAL (RESOLVE O ERRO "IS NOT DEFINED") ---
+            window.openCloseCashModal = openCloseCashModal;
+            window.closeCloseCashModal = closeCloseCashModal;
+            window.openPaymentModal = openPaymentModal;
+            window.closePaymentModal = closePaymentModal;
+            window.openNoShowModal = openNoShowModal;
+            window.closeNoShowModal = closeNoShowModal;
+            window.openDebtModal = openDebtModal;
+            window.closeDebtModal = closeDebtModal;
+            window.openTransactionModal = openTransactionModal;
+            window.closeTransactionModal = closeTransactionModal;
+            window.openCash = openCash;
+            window.closeOpenCashModal = closeOpenCashModal;
+            window.calculateDifference = calculateDifference;
+            window.calculateAmountDue = calculateAmountDue; // Importante para o cálculo no modal
+            window.acessarDividasComSenha = acessarDividasComSenha;
+            window.checkManualOverpayment = checkManualOverpayment;
+            window.toggleCustomRefundInput = toggleCustomRefundInput;
         }
     </script>
 

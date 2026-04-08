@@ -2231,7 +2231,7 @@
                         return false;
                     }
 
-                    const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
+                    const acoesRestritas = ['noShowForm', 'transactionForm', 'reopenCashForm'];
 
                     if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
                         window.requisitarAutorizacao(token => {
