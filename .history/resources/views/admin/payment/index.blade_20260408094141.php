@@ -2119,53 +2119,33 @@
                 const form = document.getElementById(formId);
                 if (!form) return;
 
-                // Impede múltiplas vinculações
-                if (form.dataset.ajaxBound === "1") return;
-                form.dataset.ajaxBound = "1";
+                if (form.dataset.ajaxBound === "true") return;
+                form.dataset.ajaxBound = "true";
 
                 const userRole = "{{ Auth::user()->role ?? 'guest' }}";
 
                 form.onsubmit = function(e) {
                     e.preventDefault();
+                    e.stopPropagation();
 
-                    // Trava de clique duplo
-                    if (window.caixaProcessandoGlobal[formId]) {
-                        console.warn("🚫 [TRAVA] Bloqueio de clique duplo para:", formId);
-                        return false;
-                    }
+                    if (window.caixaProcessandoGlobal[formId]) return false;
                     window.caixaProcessandoGlobal[formId] = true;
 
                     const enviarParaOServidor = (tokenRecebido = null) => {
                         const btn = document.getElementById(btnId);
                         const spinner = document.getElementById(spinnerId);
 
-                        // 🛡️ LIMPEZA AGRESSIVA: Fecha o modal via função e força via CSS
-                        if (typeof window.fecharModalAutorizacao === 'function') {
-                            window.fecharModalAutorizacao();
-                        }
-
-                        const modais = document.querySelectorAll(
-                            '.modal, .modal-backdrop, #modalSenha, [id*="Autorizacao"]');
-                        modais.forEach(m => {
-                            m.style.display = 'none';
-                            m.classList.add('hidden');
-                        });
-
-                        console.log("🚀 [DEBUG] Iniciando envio do Form:", formId);
-
                         if (btn) {
                             btn.disabled = true;
-                            btn.dataset.originalText = btn.innerText;
-                            btn.innerText = "AGUARDE...";
+                            btn.innerText = "PROCESSANDO...";
                         }
                         if (spinner) spinner.classList.remove('hidden');
 
                         const formData = new FormData(form);
                         if (tokenRecebido) formData.append('supervisor_token', tokenRecebido);
 
-                        const reservaId = formData.get('reserva_id') || document.getElementById('noShowReservaId')
-                            ?.value;
-                        let targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
+                        const idVal = formData.get('reserva_id') || formData.get('id') || '0';
+                        let targetUrl = urlTemplate.replace(/{reserva}/g, idVal).replace(/{id}/g, idVal);
 
                         fetch(targetUrl, {
                                 method: 'POST',
@@ -2178,73 +2158,81 @@
                             })
                             .then(res => res.json())
                             .then(json => {
-                                // Segunda limpeza por segurança
-                                if (typeof window.fecharModalAutorizacao === 'function') {
-                                    window.fecharModalAutorizacao();
-                                }
+                                console.log("🔍 DEBUG RESPOSTA " + formId + ":", json);
 
                                 if (json.success) {
-                                    form.dataset.finalizado = "true";
+                                    // 🧼 LIMPEZA DE INTERFACE (Executa antes do Print para não travar)
+                                    if (typeof window.fecharModalAutorizacao === 'function') window
+                                        .fecharModalAutorizacao();
 
-                                    // 🖨️ IMPRESSÃO NA BOBINA (Mesmo esquema do Bar)
-                                    if (json.print_url) {
-                                        imprimirCupomArena(json.print_url);
-                                    }
+                                    // Fecha qualquer modal do Bootstrap/Tailwind e remove o fundo escuro
+                                    document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+                                    document.body.classList.remove('modal-open');
+                                    document.body.style.overflow = '';
 
-                                    // Delay de 400ms para o navegador limpar a tela antes do alert
-                                    setTimeout(() => {
-                                        alert(json.message);
-                                        window.location.reload();
-                                    }, 400);
-                                } else {
-                                    if (json.message && json.message.includes('DUPLICATE_PAYMENT')) {
-                                        window.location.reload();
-                                        return;
-                                    }
+                                    if (json.resumo) {
+                                        const area = document.getElementById('area-impressao-reserva');
+                                        if (area) {
+                                            const r = json.resumo;
+                                            area.innerHTML = `
+                                <div style="text-align:center; font-family:monospace; font-size:12px; text-transform:uppercase;">
+                                    <strong>${r.titulo || 'COMPROVANTE'}</strong><br>
+                                    --------------------------------<br>
+                                    DATA: ${r.data || ''}<br>
+                                    --------------------------------<br>
+                                    ${r.detalhes || ''}<br>
+                                    --------------------------------<br>
+                                    <strong>TOTAL: R$ ${r.total || '0,00'}</strong><br>
+                                    --------------------------------<br>
+                                    MAIATECH SYSTEM
+                                </div>
+                            `;
 
-                                    setTimeout(() => {
-                                        alert(json.message || 'Erro ao processar.');
-                                        window.caixaProcessandoGlobal[formId] = false;
-                                        if (btn) {
-                                            btn.disabled = false;
-                                            btn.innerText = btn.dataset.originalText || "CONCLUIR";
+                                            // ⏳ Delay para o navegador processar o HTML novo antes de abrir a janela de print
+                                            setTimeout(() => {
+                                                window.print();
+                                                window.location.reload();
+                                            }, 500);
+                                            return;
                                         }
-                                        if (spinner) spinner.classList.add('hidden');
-                                    }, 400);
+                                    }
+
+                                    alert(json.message);
+                                    window.location.reload();
+                                } else {
+                                    alert(json.message || 'Erro ao processar.');
+                                    window.caixaProcessandoGlobal[formId] = false;
+                                    if (btn) {
+                                        btn.disabled = false;
+                                        btn.innerText = "TENTAR NOVAMENTE";
+                                    }
+                                    if (spinner) spinner.classList.add('hidden');
                                 }
                             })
                             .catch(err => {
-                                console.error("🔥 [DEBUG FATAL]:", err);
+                                console.error("🔥 Erro:", err);
                                 window.caixaProcessandoGlobal[formId] = false;
                                 if (btn) {
                                     btn.disabled = false;
-                                    btn.innerText = "TENTAR NOVAMENTE";
+                                    btn.innerText = "ERRO DE CONEXÃO";
                                 }
                             });
                     };
 
-                    // --- LÓGICA DE PERMISSÕES ---
-
-                    // Bypass para o formulário de dívida (Pagar Depois)
-                    if (formId === 'debtForm') {
-                        enviarParaOServidor();
-                        return false;
-                    }
-
-                    const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
-
+                    const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm', 'closeCashForm'];
                     if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
                         window.requisitarAutorizacao(token => {
-                            if (token) {
-                                enviarParaOServidor(token);
-                            } else {
+                            if (token) enviarParaOServidor(token);
+                            else {
                                 window.caixaProcessandoGlobal[formId] = false;
+                                // Se cancelar a senha, reativa o botão
+                                const btn = document.getElementById(btnId);
+                                if (btn) btn.disabled = false;
                             }
                         });
                     } else {
                         enviarParaOServidor();
                     }
-
                     return false;
                 };
             }
@@ -2352,5 +2340,41 @@
 
         }
     </script>
+
+    {{-- ÁREA DE IMPRESSÃO (ESTILO BAR) --}}
+    <style>
+        #area-impressao-reserva {
+            display: none;
+        }
+
+        @media print {
+
+            /* Esconde tudo */
+            body * {
+                visibility: hidden;
+                -webkit-print-color-adjust: exact;
+            }
+
+            /* Mostra apenas a div de impressão e seus filhos */
+            #area-impressao-reserva,
+            #area-impressao-reserva * {
+                visibility: visible;
+                display: block !important;
+            }
+
+            /* Posiciona no topo esquerdo para a impressora térmica */
+            #area-impressao-reserva {
+                position: fixed;
+                /* Troque absolute por fixed */
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+        }
+    </style>
+
+    <div id="area-impressao-reserva"></div>
 
 </x-app-layout>

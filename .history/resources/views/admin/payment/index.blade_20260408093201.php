@@ -2115,152 +2115,20 @@
             // 1. Variável global atômica para controle de concorrência
             window.caixaProcessandoGlobal = window.caixaProcessandoGlobal || {};
 
-            function setupAjaxForm(formId, btnId, spinnerId, errorId, urlTemplate) {
-                const form = document.getElementById(formId);
-                if (!form) return;
+            Caixa fechado com sucesso!
 
-                // Impede múltiplas vinculações
-                if (form.dataset.ajaxBound === "1") return;
-                form.dataset.ajaxBound = "1";
-
-                const userRole = "{{ Auth::user()->role ?? 'guest' }}";
-
-                form.onsubmit = function(e) {
-                    e.preventDefault();
-
-                    // Trava de clique duplo
-                    if (window.caixaProcessandoGlobal[formId]) {
-                        console.warn("🚫 [TRAVA] Bloqueio de clique duplo para:", formId);
-                        return false;
-                    }
-                    window.caixaProcessandoGlobal[formId] = true;
-
-                    const enviarParaOServidor = (tokenRecebido = null) => {
-                        const btn = document.getElementById(btnId);
-                        const spinner = document.getElementById(spinnerId);
-
-                        // 🛡️ LIMPEZA AGRESSIVA: Fecha o modal via função e força via CSS
-                        if (typeof window.fecharModalAutorizacao === 'function') {
-                            window.fecharModalAutorizacao();
-                        }
-
-                        const modais = document.querySelectorAll(
-                            '.modal, .modal-backdrop, #modalSenha, [id*="Autorizacao"]');
-                        modais.forEach(m => {
-                            m.style.display = 'none';
-                            m.classList.add('hidden');
-                        });
-
-                        console.log("🚀 [DEBUG] Iniciando envio do Form:", formId);
-
-                        if (btn) {
-                            btn.disabled = true;
-                            btn.dataset.originalText = btn.innerText;
-                            btn.innerText = "AGUARDE...";
-                        }
-                        if (spinner) spinner.classList.remove('hidden');
-
-                        const formData = new FormData(form);
-                        if (tokenRecebido) formData.append('supervisor_token', tokenRecebido);
-
-                        const reservaId = formData.get('reserva_id') || document.getElementById('noShowReservaId')
-                            ?.value;
-                        let targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
-
-                        fetch(targetUrl, {
-                                method: 'POST',
-                                body: formData,
-                                headers: {
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')
-                                        .getAttribute('content'),
-                                    'Accept': 'application/json'
-                                }
-                            })
-                            .then(res => res.json())
-                            .then(json => {
-                                // Segunda limpeza por segurança
-                                if (typeof window.fecharModalAutorizacao === 'function') {
-                                    window.fecharModalAutorizacao();
-                                }
-
-                                if (json.success) {
-                                    form.dataset.finalizado = "true";
-
-                                    // 🖨️ IMPRESSÃO NA BOBINA (Mesmo esquema do Bar)
-                                    if (json.print_url) {
-                                        imprimirCupomArena(json.print_url);
-                                    }
-
-                                    // Delay de 400ms para o navegador limpar a tela antes do alert
-                                    setTimeout(() => {
-                                        alert(json.message);
-                                        window.location.reload();
-                                    }, 400);
-                                } else {
-                                    if (json.message && json.message.includes('DUPLICATE_PAYMENT')) {
-                                        window.location.reload();
-                                        return;
-                                    }
-
-                                    setTimeout(() => {
-                                        alert(json.message || 'Erro ao processar.');
-                                        window.caixaProcessandoGlobal[formId] = false;
-                                        if (btn) {
-                                            btn.disabled = false;
-                                            btn.innerText = btn.dataset.originalText || "CONCLUIR";
-                                        }
-                                        if (spinner) spinner.classList.add('hidden');
-                                    }, 400);
-                                }
-                            })
-                            .catch(err => {
-                                console.error("🔥 [DEBUG FATAL]:", err);
-                                window.caixaProcessandoGlobal[formId] = false;
-                                if (btn) {
-                                    btn.disabled = false;
-                                    btn.innerText = "TENTAR NOVAMENTE";
-                                }
-                            });
-                    };
-
-                    // --- LÓGICA DE PERMISSÕES ---
-
-                    // Bypass para o formulário de dívida (Pagar Depois)
-                    if (formId === 'debtForm') {
-                        enviarParaOServidor();
-                        return false;
-                    }
-
-                    const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
-
-                    if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
-                        window.requisitarAutorizacao(token => {
-                            if (token) {
-                                enviarParaOServidor(token);
-                            } else {
-                                window.caixaProcessandoGlobal[formId] = false;
-                            }
-                        });
+                /**
+                 * Função de apoio para abrir a janela de impressão da bobina
+                 */
+                function imprimirCupomArena(url) {
+                    const win = window.open(url, 'ImpressaoArena',
+                        'width=300,height=600,menubar=no,toolbar=no,location=no,status=no');
+                    if (win) {
+                        win.focus();
                     } else {
-                        enviarParaOServidor();
+                        console.warn("Pop-up de impressão bloqueado pelo navegador.");
                     }
-
-                    return false;
-                };
-            }
-
-            /**
-             * Função de apoio para abrir a janela de impressão da bobina
-             */
-            function imprimirCupomArena(url) {
-                const win = window.open(url, 'ImpressaoArena',
-                    'width=300,height=600,menubar=no,toolbar=no,location=no,status=no');
-                if (win) {
-                    win.focus();
-                } else {
-                    console.warn("Pop-up de impressão bloqueado pelo navegador.");
                 }
-            }
 
             document.addEventListener('DOMContentLoaded', () => {
                 // 🧹 LIMPEZA TOTAL DE TRAVAS AO CARREGAR
@@ -2352,5 +2220,40 @@
 
         }
     </script>
+
+    {{-- ÁREA DE IMPRESSÃO (ESTILO BAR) --}}
+    <style>
+        #area-impressao-reserva {
+            display: none;
+        }
+
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+
+            #area-impressao-reserva,
+            #area-impressao-reserva * {
+                visibility: visible;
+            }
+
+            #area-impressao-reserva {
+                display: block !important;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 58mm;
+                font-family: 'Courier New', Courier, monospace;
+                font-size: 12px;
+                line-height: 1.2;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+
+    <div id="area-impressao-reserva"></div>
 
 </x-app-layout>

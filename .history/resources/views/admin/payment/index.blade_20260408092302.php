@@ -2171,8 +2171,8 @@
                                 method: 'POST',
                                 body: formData,
                                 headers: {
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')
-                                        .getAttribute('content'),
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name='
+                                        csrf - token ']').getAttribute('content'),
                                     'Accept': 'application/json'
                                 }
                             })
@@ -2352,5 +2352,40 @@
 
         }
     </script>
+
+    {{-- ÁREA DE IMPRESSÃO (ESTILO BAR) --}}
+    <style>
+        #area-impressao-reserva {
+            display: none;
+        }
+
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+
+            #area-impressao-reserva,
+            #area-impressao-reserva * {
+                visibility: visible;
+            }
+
+            #area-impressao-reserva {
+                display: block !important;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 58mm;
+                font-family: 'Courier New', Courier, monospace;
+                font-size: 12px;
+                line-height: 1.2;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+
+    <div id="area-impressao-reserva"></div>
 
 </x-app-layout>

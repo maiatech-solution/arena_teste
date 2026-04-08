@@ -2119,18 +2119,17 @@
                 const form = document.getElementById(formId);
                 if (!form) return;
 
-                // Impede múltiplas vinculações
-                if (form.dataset.ajaxBound === "1") return;
-                form.dataset.ajaxBound = "1";
+                // 🛑 REMOVE o onsubmit antigo para garantir que só exista UM
+                form.onsubmit = null;
 
                 const userRole = "{{ Auth::user()->role ?? 'guest' }}";
 
                 form.onsubmit = function(e) {
                     e.preventDefault();
+                    e.stopPropagation();
 
-                    // Trava de clique duplo
                     if (window.caixaProcessandoGlobal[formId]) {
-                        console.warn("🚫 [TRAVA] Bloqueio de clique duplo para:", formId);
+                        console.warn("⚠️ Já existe um processamento para este form.");
                         return false;
                     }
                     window.caixaProcessandoGlobal[formId] = true;
@@ -2139,33 +2138,22 @@
                         const btn = document.getElementById(btnId);
                         const spinner = document.getElementById(spinnerId);
 
-                        // 🛡️ LIMPEZA AGRESSIVA: Fecha o modal via função e força via CSS
-                        if (typeof window.fecharModalAutorizacao === 'function') {
-                            window.fecharModalAutorizacao();
-                        }
-
-                        const modais = document.querySelectorAll(
-                            '.modal, .modal-backdrop, #modalSenha, [id*="Autorizacao"]');
-                        modais.forEach(m => {
-                            m.style.display = 'none';
-                            m.classList.add('hidden');
-                        });
-
-                        console.log("🚀 [DEBUG] Iniciando envio do Form:", formId);
+                        // Limpa modais e backdrops para não travar a UI
+                        if (typeof window.fecharModalAutorizacao === 'function') window.fecharModalAutorizacao();
+                        document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+                        document.body.classList.remove('modal-open');
 
                         if (btn) {
                             btn.disabled = true;
-                            btn.dataset.originalText = btn.innerText;
-                            btn.innerText = "AGUARDE...";
+                            btn.innerText = "FECHANDO...";
                         }
                         if (spinner) spinner.classList.remove('hidden');
 
                         const formData = new FormData(form);
                         if (tokenRecebido) formData.append('supervisor_token', tokenRecebido);
 
-                        const reservaId = formData.get('reserva_id') || document.getElementById('noShowReservaId')
-                            ?.value;
-                        let targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
+                        const idVal = formData.get('reserva_id') || formData.get('id') || '0';
+                        let targetUrl = urlTemplate.replace(/{reserva}/g, idVal).replace(/{id}/g, idVal);
 
                         fetch(targetUrl, {
                                 method: 'POST',
@@ -2178,68 +2166,63 @@
                             })
                             .then(res => res.json())
                             .then(json => {
-                                // Segunda limpeza por segurança
-                                if (typeof window.fecharModalAutorizacao === 'function') {
-                                    window.fecharModalAutorizacao();
-                                }
+                                console.log("🔍 DEBUG RESPOSTA:", json); // OLHE ISSO NO F12
 
                                 if (json.success) {
-                                    form.dataset.finalizado = "true";
+                                    // 🖨️ PRIORIDADE 1: IMPRESSÃO
+                                    if (json.resumo) {
+                                        const area = document.getElementById('area-impressao-reserva');
+                                        if (area) {
+                                            const r = json.resumo;
+                                            area.innerHTML = `
+                                <div style="text-align:center; font-family:monospace; font-size:12px;">
+                                    <strong>${r.titulo || 'FECHAMENTO DE CAIXA'}</strong><br>
+                                    --------------------------------<br>
+                                    DATA: ${r.data || ''}<br>
+                                    OP: ${r.usuario || ''}<br>
+                                    --------------------------------<br>
+                                    ${r.detalhes || ''}
+                                    <br><strong>TOTAL: R$ ${r.total || '0,00'}</strong><br>
+                                    --------------------------------<br>
+                                    SISTEMA MAIATECH
+                                </div>
+                            `;
 
-                                    // 🖨️ IMPRESSÃO NA BOBINA (Mesmo esquema do Bar)
-                                    if (json.print_url) {
-                                        imprimirCupomArena(json.print_url);
-                                    }
-
-                                    // Delay de 400ms para o navegador limpar a tela antes do alert
-                                    setTimeout(() => {
-                                        alert(json.message);
-                                        window.location.reload();
-                                    }, 400);
-                                } else {
-                                    if (json.message && json.message.includes('DUPLICATE_PAYMENT')) {
-                                        window.location.reload();
-                                        return;
-                                    }
-
-                                    setTimeout(() => {
-                                        alert(json.message || 'Erro ao processar.');
-                                        window.caixaProcessandoGlobal[formId] = false;
-                                        if (btn) {
-                                            btn.disabled = false;
-                                            btn.innerText = btn.dataset.originalText || "CONCLUIR";
+                                            // Imprime e recarrega sem mostrar ALERT
+                                            setTimeout(() => {
+                                                window.print();
+                                                window.location.reload();
+                                            }, 500);
+                                            return;
                                         }
-                                        if (spinner) spinner.classList.add('hidden');
-                                    }, 400);
+                                    }
+
+                                    // 📢 SE NÃO TIVER RESUMO, MOSTRA ALERT (UMA VEZ)
+                                    alert(json.message || "Sucesso!");
+                                    window.location.reload();
+
+                                } else {
+                                    alert(json.message || "Erro no servidor");
+                                    window.caixaProcessandoGlobal[formId] = false;
+                                    if (btn) {
+                                        btn.disabled = false;
+                                        btn.innerText = "TENTAR NOVAMENTE";
+                                    }
                                 }
                             })
                             .catch(err => {
-                                console.error("🔥 [DEBUG FATAL]:", err);
+                                console.error("🔥 Erro:", err);
                                 window.caixaProcessandoGlobal[formId] = false;
-                                if (btn) {
-                                    btn.disabled = false;
-                                    btn.innerText = "TENTAR NOVAMENTE";
-                                }
+                                if (btn) btn.disabled = false;
                             });
                     };
 
-                    // --- LÓGICA DE PERMISSÕES ---
-
-                    // Bypass para o formulário de dívida (Pagar Depois)
-                    if (formId === 'debtForm') {
-                        enviarParaOServidor();
-                        return false;
-                    }
-
+                    // Lógica de Supervisor
                     const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
-
                     if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
                         window.requisitarAutorizacao(token => {
-                            if (token) {
-                                enviarParaOServidor(token);
-                            } else {
-                                window.caixaProcessandoGlobal[formId] = false;
-                            }
+                            if (token) enviarParaOServidor(token);
+                            else window.caixaProcessandoGlobal[formId] = false;
                         });
                     } else {
                         enviarParaOServidor();
@@ -2352,5 +2335,40 @@
 
         }
     </script>
+
+    {{-- ÁREA DE IMPRESSÃO (ESTILO BAR) --}}
+    <style>
+        #area-impressao-reserva {
+            display: none;
+        }
+
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+
+            #area-impressao-reserva,
+            #area-impressao-reserva * {
+                visibility: visible;
+            }
+
+            #area-impressao-reserva {
+                display: block !important;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 58mm;
+                font-family: 'Courier New', Courier, monospace;
+                font-size: 12px;
+                line-height: 1.2;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+
+    <div id="area-impressao-reserva"></div>
 
 </x-app-layout>

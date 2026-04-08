@@ -2171,8 +2171,8 @@
                                 method: 'POST',
                                 body: formData,
                                 headers: {
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')
-                                        .getAttribute('content'),
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name='
+                                        csrf - token ']').getAttribute('content'),
                                     'Accept': 'application/json'
                                 }
                             })
@@ -2247,19 +2247,6 @@
 
                     return false;
                 };
-            }
-
-            /**
-             * Função de apoio para abrir a janela de impressão da bobina
-             */
-            function imprimirCupomArena(url) {
-                const win = window.open(url, 'ImpressaoArena',
-                    'width=300,height=600,menubar=no,toolbar=no,location=no,status=no');
-                if (win) {
-                    win.focus();
-                } else {
-                    console.warn("Pop-up de impressão bloqueado pelo navegador.");
-                }
             }
 
             document.addEventListener('DOMContentLoaded', () => {

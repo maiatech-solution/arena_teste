@@ -2119,7 +2119,7 @@
                 const form = document.getElementById(formId);
                 if (!form) return;
 
-                // Impede múltiplas vinculações
+                // 🛑 Impede múltiplas vinculações de eventos no mesmo formulário
                 if (form.dataset.ajaxBound === "1") return;
                 form.dataset.ajaxBound = "1";
 
@@ -2128,7 +2128,7 @@
                 form.onsubmit = function(e) {
                     e.preventDefault();
 
-                    // Trava de clique duplo
+                    // 🔒 Trava de clique duplo global para evitar envios duplicados
                     if (window.caixaProcessandoGlobal[formId]) {
                         console.warn("🚫 [TRAVA] Bloqueio de clique duplo para:", formId);
                         return false;
@@ -2139,7 +2139,7 @@
                         const btn = document.getElementById(btnId);
                         const spinner = document.getElementById(spinnerId);
 
-                        // 🛡️ LIMPEZA AGRESSIVA: Fecha o modal via função e força via CSS
+                        // 🛡️ LIMPEZA AGRESSIVA: Fecha modais e remove backdrops antes do processamento
                         if (typeof window.fecharModalAutorizacao === 'function') {
                             window.fecharModalAutorizacao();
                         }
@@ -2153,6 +2153,7 @@
 
                         console.log("🚀 [DEBUG] Iniciando envio do Form:", formId);
 
+                        // Atualiza estado visual do botão
                         if (btn) {
                             btn.disabled = true;
                             btn.dataset.originalText = btn.innerText;
@@ -2163,6 +2164,7 @@
                         const formData = new FormData(form);
                         if (tokenRecebido) formData.append('supervisor_token', tokenRecebido);
 
+                        // Resgate do ID da reserva para montagem da URL
                         const reservaId = formData.get('reserva_id') || document.getElementById('noShowReservaId')
                             ?.value;
                         let targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
@@ -2178,7 +2180,7 @@
                             })
                             .then(res => res.json())
                             .then(json => {
-                                // Segunda limpeza por segurança
+                                // Segunda limpeza por segurança pós-fetch
                                 if (typeof window.fecharModalAutorizacao === 'function') {
                                     window.fecharModalAutorizacao();
                                 }
@@ -2186,22 +2188,49 @@
                                 if (json.success) {
                                     form.dataset.finalizado = "true";
 
-                                    // 🖨️ IMPRESSÃO NA BOBINA (Mesmo esquema do Bar)
-                                    if (json.print_url) {
-                                        imprimirCupomArena(json.print_url);
+                                    // 🖨️ LÓGICA DE IMPRESSÃO (Mesmo fluxo do módulo de Bar)
+                                    // Se o servidor retornar o resumo, imprime na mesma página
+                                    if (json.resumo) {
+                                        const areaImpressao = document.getElementById('area-impressao-reserva');
+                                        if (areaImpressao) {
+                                            const r = json.resumo;
+                                            areaImpressao.innerHTML = `
+                                <div style="text-align:center; text-transform:uppercase; font-family:monospace;">
+                                    <strong>COMPROVANTE ARENA</strong><br>
+                                    --------------------------------<br>
+                                    ID: #${r.id} | DATA: ${r.data}<br>
+                                    CLIENTE: ${r.cliente}<br>
+                                    PERÍODO: ${r.periodo}<br>
+                                    --------------------------------<br>
+                                    MÉTODO: ${r.metodo}<br>
+                                    VALOR PAGO: R$ ${r.pago}<br>
+                                    --------------------------------<br>
+                                    MAIATECH SYSTEM - ${new Date().toLocaleTimeString()}
+                                </div>
+                            `;
+
+                                            setTimeout(() => {
+                                                window.print();
+                                                window.location.reload();
+                                            }, 500);
+                                            return; // Encerra aqui para o reload acontecer após o print
+                                        }
                                     }
 
-                                    // Delay de 400ms para o navegador limpar a tela antes do alert
+                                    // Se não houver resumo para imprimir, segue o fluxo normal
                                     setTimeout(() => {
                                         alert(json.message);
                                         window.location.reload();
                                     }, 400);
+
                                 } else {
+                                    // Tratamento de erro de pagamento duplicado (F5 preventivo)
                                     if (json.message && json.message.includes('DUPLICATE_PAYMENT')) {
                                         window.location.reload();
                                         return;
                                     }
 
+                                    // Erro genérico ou validação
                                     setTimeout(() => {
                                         alert(json.message || 'Erro ao processar.');
                                         window.caixaProcessandoGlobal[formId] = false;
@@ -2220,12 +2249,13 @@
                                     btn.disabled = false;
                                     btn.innerText = "TENTAR NOVAMENTE";
                                 }
+                                alert("Erro de conexão com o servidor.");
                             });
                     };
 
-                    // --- LÓGICA DE PERMISSÕES ---
+                    // --- LÓGICA DE PERMISSÕES E GATEWAY ---
 
-                    // Bypass para o formulário de dívida (Pagar Depois)
+                    // Bypass: Formulário de dívida (Pagar Depois) não exige supervisor
                     if (formId === 'debtForm') {
                         enviarParaOServidor();
                         return false;
@@ -2233,6 +2263,7 @@
 
                     const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
 
+                    // Se for colaborador e a ação for restrita, solicita token de supervisor
                     if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
                         window.requisitarAutorizacao(token => {
                             if (token) {
@@ -2242,6 +2273,7 @@
                             }
                         });
                     } else {
+                        // Admin ou ações não restritas seguem direto
                         enviarParaOServidor();
                     }
 
@@ -2352,5 +2384,40 @@
 
         }
     </script>
+
+    {{-- ÁREA DE IMPRESSÃO (ESTILO BAR) --}}
+    <style>
+        #area-impressao-reserva {
+            display: none;
+        }
+
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+
+            #area-impressao-reserva,
+            #area-impressao-reserva * {
+                visibility: visible;
+            }
+
+            #area-impressao-reserva {
+                display: block !important;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 58mm;
+                font-family: 'Courier New', Courier, monospace;
+                font-size: 12px;
+                line-height: 1.2;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+
+    <div id="area-impressao-reserva"></div>
 
 </x-app-layout>
