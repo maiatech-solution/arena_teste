@@ -358,10 +358,10 @@
                                                 </button>
                                             @endif
 
-                                            {{-- Botão Ajustar Valor (Removida a trava aqui para não pedir duas vezes) --}}
+                                            {{-- Botão Ajustar Valor (Protegido) --}}
                                             @if (!$reserva->is_fixed && in_array($reserva->status, ['confirmed', 'pending']))
                                                 <button type="button"
-                                                    onclick="openPriceUpdateModal({{ $reserva->id }}, {{ $reserva->price ?? 0 }}, '{{ $client }}', {{ $reserva->is_recurrent ? 'true' : 'false' }})"
+                                                    onclick="{{ $isColaborador ? "window.requisitarAutorizacao(token => { if(token) openPriceUpdateModal($reserva->id, " . ($reserva->price ?? 0) . ", '$client', " . ($reserva->is_recurrent ? 'true' : 'false') . '); })' : "openPriceUpdateModal($reserva->id, " . ($reserva->price ?? 0) . ", '$client', " . ($reserva->is_recurrent ? 'true' : 'false') . ')' }}"
                                                     class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase transition text-center">
                                                     Ajustar Valor
                                                 </button>

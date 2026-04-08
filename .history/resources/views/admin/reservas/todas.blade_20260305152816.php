@@ -358,10 +358,10 @@
                                                 </button>
                                             @endif
 
-                                            {{-- Botão Ajustar Valor (Removida a trava aqui para não pedir duas vezes) --}}
+                                            {{-- Botão Ajustar Valor (Protegido) --}}
                                             @if (!$reserva->is_fixed && in_array($reserva->status, ['confirmed', 'pending']))
                                                 <button type="button"
-                                                    onclick="openPriceUpdateModal({{ $reserva->id }}, {{ $reserva->price ?? 0 }}, '{{ $client }}', {{ $reserva->is_recurrent ? 'true' : 'false' }})"
+                                                    onclick="{{ $isColaborador ? "window.requisitarAutorizacao(token => { if(token) openPriceUpdateModal($reserva->id, " . ($reserva->price ?? 0) . ", '$client', " . ($reserva->is_recurrent ? 'true' : 'false') . '); })' : "openPriceUpdateModal($reserva->id, " . ($reserva->price ?? 0) . ", '$client', " . ($reserva->is_recurrent ? 'true' : 'false') . ')' }}"
                                                     class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow uppercase transition text-center">
                                                     Ajustar Valor
                                                 </button>
@@ -532,16 +532,9 @@
          * EVENTO: Confirmar Novo Preço
          */
         document.getElementById('confirm-price-update-btn')?.addEventListener('click', function() {
-            const newPriceInput = document.getElementById('new-price-input');
-            const justificationInput = document.getElementById('price-justification-input');
+            const newPrice = parseFloat(document.getElementById('new-price-input').value);
+            const justification = document.getElementById('price-justification-input').value.trim();
             const justificationError = document.getElementById('price-justification-error');
-
-            const newPrice = parseFloat(newPriceInput.value);
-            const justification = justificationInput.value.trim();
-            const userRole = "{{ auth()->user()->role }}";
-
-            // Reseta o erro antes de validar
-            justificationError.classList.add('hidden');
 
             if (isNaN(newPrice) || newPrice < 0) {
                 alert("Insira um preço válido.");
@@ -560,25 +553,10 @@
                 scope = selectedRadio ? selectedRadio.value : 'single';
             }
 
-            const dispararEnvio = (token = null) => {
-                sendAjaxRequest(currentReservaId, 'PATCH', UPDATE_PRICE_URL, justification, {
-                    new_price: newPrice,
-                    scope: scope,
-                    supervisor_token: token
-                });
-            };
-
-            if (userRole === 'colaborador') {
-                window.requisitarAutorizacao(token => {
-                    if (token) {
-                        dispararEnvio(token);
-                    } else {
-                        console.log("Autorização cancelada.");
-                    }
-                });
-            } else {
-                dispararEnvio();
-            }
+            sendAjaxRequest(currentReservaId, 'PATCH', UPDATE_PRICE_URL, justification, {
+                new_price: newPrice,
+                scope: scope
+            });
         });
 
         /**
