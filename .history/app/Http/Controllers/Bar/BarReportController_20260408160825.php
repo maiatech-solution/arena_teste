@@ -425,7 +425,7 @@ class BarReportController extends Controller
      */
     public function movements(Request $request)
     {
-        // 1. Base da Query (Já trazemos as relações para evitar o problema de N+1)
+        // 1. Base da Query
         $query = BarStockMovement::with(['product.category', 'user']);
 
         // --- Aplicamos os Filtros ---
@@ -441,7 +441,8 @@ class BarReportController extends Controller
             });
         }
 
-        // 2. 🔥 CÁLCULO TOTAL (Para os cards do topo)
+        // 2. 🔥 CÁLCULO TOTAL (Antes da Paginação)
+        // Isso garante que os cards do topo mostrem o total real do período/filtro
         $allMovementsInPeriod = $query->get();
 
         // 3. Paginação para a Tabela
@@ -449,35 +450,12 @@ class BarReportController extends Controller
             ->paginate(30)
             ->withQueryString();
 
-        // --- 🚀 NOVIDADE: Identificando Cortesias via Texto de Referência ---
-        $movimentacoes->getCollection()->transform(function ($mov) {
-            $isVoucher = false;
-
-            // 1. Tenta extrair o número da Ref: XX da descrição
-            if (preg_match('/Ref:\s*(\d+)/i', $mov->description, $matches)) {
-                $saleId = $matches[1];
-
-                // 2. Busca a venda pelo ID extraído
-                $venda = \App\Models\Bar\BarSale::find($saleId);
-
-                // 3. Checa se o pagamento foi Voucher
-                $isVoucher = $venda && str_contains(strtolower($venda->payment_method ?? ''), 'voucher');
-            }
-
-            // 4. Fallback caso o texto já diga "voucher" (lançamentos manuais)
-            if (!$isVoucher && str_contains(strtolower($mov->description ?? ''), 'voucher')) {
-                $isVoucher = true;
-            }
-
-            $mov->is_voucher = $isVoucher;
-            return $mov;
-        });
-
-        // 4. Inventário Atual
+        // 4. Inventário Atual (Destaque para estoque baixo)
         $inventorySummary = \App\Models\Bar\BarProduct::with('category')
             ->orderBy('stock_quantity', 'asc')
             ->get();
 
+        // Enviamos a coleção completa 'allMovementsInPeriod' para os cards do topo
         return view('bar.reports.movements', compact('movimentacoes', 'inventorySummary', 'allMovementsInPeriod'));
     }
 

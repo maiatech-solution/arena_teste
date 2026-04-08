@@ -425,60 +425,38 @@ class BarReportController extends Controller
      */
     public function movements(Request $request)
     {
-        // 1. Base da Query (Já trazemos as relações para evitar o problema de N+1)
+        // 1. Query para o Histórico de Movimentações (Tabela)
         $query = BarStockMovement::with(['product.category', 'user']);
 
-        // --- Aplicamos os Filtros ---
+        // Filtro por Tipo (Entrada ou Saída)
         if ($request->filled('type')) {
             $query->where('type', $request->type);
         }
+
+        // Filtro por Data Específica
         if ($request->filled('date')) {
             $query->whereDate('created_at', $request->date);
         }
+
+        // Filtro por Busca de Nome de Produto
         if ($request->filled('search')) {
             $query->whereHas('product', function ($q) use ($request) {
                 $q->where('name', 'like', '%' . $request->search . '%');
             });
         }
 
-        // 2. 🔥 CÁLCULO TOTAL (Para os cards do topo)
-        $allMovementsInPeriod = $query->get();
-
-        // 3. Paginação para a Tabela
+        // Paginação das movimentações
         $movimentacoes = $query->orderBy('created_at', 'desc')
             ->paginate(30)
             ->withQueryString();
 
-        // --- 🚀 NOVIDADE: Identificando Cortesias via Texto de Referência ---
-        $movimentacoes->getCollection()->transform(function ($mov) {
-            $isVoucher = false;
-
-            // 1. Tenta extrair o número da Ref: XX da descrição
-            if (preg_match('/Ref:\s*(\d+)/i', $mov->description, $matches)) {
-                $saleId = $matches[1];
-
-                // 2. Busca a venda pelo ID extraído
-                $venda = \App\Models\Bar\BarSale::find($saleId);
-
-                // 3. Checa se o pagamento foi Voucher
-                $isVoucher = $venda && str_contains(strtolower($venda->payment_method ?? ''), 'voucher');
-            }
-
-            // 4. Fallback caso o texto já diga "voucher" (lançamentos manuais)
-            if (!$isVoucher && str_contains(strtolower($mov->description ?? ''), 'voucher')) {
-                $isVoucher = true;
-            }
-
-            $mov->is_voucher = $isVoucher;
-            return $mov;
-        });
-
-        // 4. Inventário Atual
+        // 2. 🔥 NOVIDADE: Busca a Posição Atual de todos os itens (Resumo do Topo)
+        // Ordenamos pelos que têm menos estoque primeiro para destacar o que precisa comprar
         $inventorySummary = \App\Models\Bar\BarProduct::with('category')
             ->orderBy('stock_quantity', 'asc')
             ->get();
 
-        return view('bar.reports.movements', compact('movimentacoes', 'inventorySummary', 'allMovementsInPeriod'));
+        return view('bar.reports.movements', compact('movimentacoes', 'inventorySummary'));
     }
 
     public function getDetails($tipo, $id)

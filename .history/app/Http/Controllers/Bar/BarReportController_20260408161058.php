@@ -449,27 +449,16 @@ class BarReportController extends Controller
             ->paginate(30)
             ->withQueryString();
 
-        // --- 🚀 NOVIDADE: Identificando Cortesias via Texto de Referência ---
+        // --- 🚀 NOVIDADE: Identificando Cortesias na Coleção Paginada ---
         $movimentacoes->getCollection()->transform(function ($mov) {
-            $isVoucher = false;
-
-            // 1. Tenta extrair o número da Ref: XX da descrição
-            if (preg_match('/Ref:\s*(\d+)/i', $mov->description, $matches)) {
-                $saleId = $matches[1];
-
-                // 2. Busca a venda pelo ID extraído
-                $venda = \App\Models\Bar\BarSale::find($saleId);
-
-                // 3. Checa se o pagamento foi Voucher
-                $isVoucher = $venda && str_contains(strtolower($venda->payment_method ?? ''), 'voucher');
+            // Se for saída e tiver uma venda vinculada
+            if ($mov->type === 'saida' && $mov->bar_sale_id) {
+                // Buscamos a venda para checar o pagamento (usando cache ou find simples)
+                $venda = \App\Models\Bar\BarSale::find($mov->bar_sale_id);
+                $mov->is_voucher = $venda && str_contains(strtolower($venda->payment_method ?? ''), 'voucher');
+            } else {
+                $mov->is_voucher = false;
             }
-
-            // 4. Fallback caso o texto já diga "voucher" (lançamentos manuais)
-            if (!$isVoucher && str_contains(strtolower($mov->description ?? ''), 'voucher')) {
-                $isVoucher = true;
-            }
-
-            $mov->is_voucher = $isVoucher;
             return $mov;
         });
 

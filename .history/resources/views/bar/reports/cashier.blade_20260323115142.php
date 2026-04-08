@@ -132,7 +132,7 @@
                             $movs = \App\Models\Bar\BarCashMovement::where('bar_cash_session_id', $sessao->id)->get();
                             $metodosDigitais = ['pix', 'debito', 'credito', 'cartao', 'misto', 'crédito', 'débito'];
 
-                            // 💵 Dinheiro (Venda - Estorno)
+                            // 💵 Dinheiro
                             $vCash = $movs
                                 ->where('type', 'venda')
                                 ->filter(fn($m) => strtolower($m->payment_method) === 'dinheiro')
@@ -142,7 +142,7 @@
                                 ->filter(fn($m) => strtolower($m->payment_method) === 'dinheiro')
                                 ->sum('amount');
 
-                            // 💳 Digital (Venda - Estorno)
+                            // 💳 Digital
                             $vDigital = $movs
                                 ->where('type', 'venda')
                                 ->filter(fn($m) => in_array(strtolower($m->payment_method), $metodosDigitais))
@@ -152,18 +152,11 @@
                                 ->filter(fn($m) => in_array(strtolower($m->payment_method), $metodosDigitais))
                                 ->sum('amount');
 
-                            // 🎟️ VOUCHERS (Calculamos para exibir, mas NÃO somamos no esperado financeiro)
-                            $vVoucher = $movs
-                                ->where('type', 'venda')
-                                ->filter(fn($m) => str_contains(strtolower($m->payment_method ?? ''), 'voucher'))
-                                ->sum('amount');
-
-                            // 🔺🔻 Ajustes de Caixa
+                            // 🔺🔻 Ajustes
                             $reforcosSessao = $movs->where('type', 'reforco')->sum('amount');
                             $sangriasSessao = $movs->where('type', 'sangria')->sum('amount');
 
-                            // 📊 O NOVO "ESPERADO" (APENAS DINHEIRO + DIGITAL + REFORÇO - SANGRIAS/ESTORNOS)
-                            // Note que o $vVoucher fica de fora, pois não entrou dinheiro físico/digital na gaveta.
+                            // 📊 O NOVO "ESPERADO" (UNIFICADO: DINHEIRO + DIGITAL)
                             $esperadoTotalTurno =
                                 $sessao->opening_balance +
                                 $vCash +
@@ -173,6 +166,7 @@
 
                             $diferenca = 0;
                             if ($sessao->status == 'closed') {
+                                // Comparamos o que foi digitado com o Total que o sistema rastreou
                                 $diferenca = $sessao->closing_balance - $esperadoTotalTurno;
                             }
                         @endphp
@@ -197,15 +191,7 @@
                                 R$ {{ number_format($sessao->opening_balance, 2, ',', '.') }}
                             </td>
                             <td class="p-8 text-right font-black text-blue-400 text-sm font-mono italic">
-                                {{-- Valor real que entrou (Dinheiro + Digital) --}}
-                                R$ {{ number_format($vCash + $vDigital, 2, ',', '.') }}
-
-                                {{-- Informativo de Vouchers (Não entra no cálculo de quebra, mas sai do estoque) --}}
-                                @if ($vVoucher > 0)
-                                    <div class="text-[9px] text-indigo-400 font-bold uppercase tracking-tighter mt-1">
-                                        + R$ {{ number_format($vVoucher, 2, ',', '.') }} Vouchers
-                                    </div>
-                                @endif
+                                R$ {{ number_format($sessao->vendas_turno, 2, ',', '.') }}
                             </td>
                             <td class="p-8 text-right font-bold text-gray-400 text-xs italic font-mono">
                                 {{-- Agora exibe o total (Dinheiro + PIX) esperado --}}

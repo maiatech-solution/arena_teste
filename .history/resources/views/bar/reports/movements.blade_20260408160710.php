@@ -63,33 +63,28 @@
 
         {{-- 📊 GRID DE RESUMO --}}
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-            {{-- Card de Entradas --}}
             <div
                 class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 border-l-4 border-l-green-600 relative overflow-hidden group">
                 <div class="absolute -right-4 -bottom-4 text-7xl opacity-5 group-hover:scale-110 transition-transform">
                     📦</div>
                 <p class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Entradas (Período)</p>
                 <h3 class="text-3xl font-black text-white italic">
-                    {{-- Usamos a variável de total real --}}
-                    + {{ $allMovementsInPeriod->where('type', 'entrada')->sum('quantity') }}
+                    + {{ $movimentacoes->where('type', 'entrada')->sum('quantity') }}
                     <span class="text-xs text-gray-500 font-medium">un</span>
                 </h3>
             </div>
 
-            {{-- Card de Saídas --}}
             <div
                 class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 border-l-4 border-l-red-600 relative overflow-hidden group">
                 <div class="absolute -right-4 -bottom-4 text-7xl opacity-5 group-hover:scale-110 transition-transform">
                     📉</div>
                 <p class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Saídas (Período)</p>
                 <h3 class="text-3xl font-black text-white italic">
-                    {{-- Usamos a variável de total real --}}
-                    - {{ abs($allMovementsInPeriod->where('type', 'saida')->sum('quantity')) }}
+                    - {{ abs($movimentacoes->where('type', 'saida')->sum('quantity')) }}
                     <span class="text-xs text-gray-500 font-medium">un</span>
                 </h3>
             </div>
 
-            {{-- Card de Status --}}
             <div
                 class="bg-orange-600 p-8 rounded-[2.5rem] shadow-xl shadow-orange-600/20 flex flex-col justify-center relative overflow-hidden group">
                 <div
@@ -181,16 +176,8 @@
                                         </span>
 
                                         <div class="flex items-center gap-2 mt-1">
-                                            {{-- Badge por Lógica de Pagamento (Injetada pela Controller) --}}
-                                            @if ($mov->is_voucher)
-                                                <span
-                                                    class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 text-[8px] font-black uppercase rounded border border-indigo-500/30 shrink-0 animate-pulse">
-                                                    🎟️ Cortesia
-                                                </span>
-                                            @endif
-
-                                            {{-- Fallback: Mantemos a busca por texto caso seja um lançamento manual --}}
-                                            @if (!$mov->is_voucher && str_contains(strtolower($mov->description), 'voucher'))
+                                            {{-- Badge Inteligente: Se for voucher, ganha destaque --}}
+                                            @if (str_contains(strtolower($mov->description), 'voucher'))
                                                 <span
                                                     class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 text-[8px] font-black uppercase rounded border border-indigo-500/30 shrink-0">
                                                     🎟️ Voucher

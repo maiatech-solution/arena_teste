@@ -33,18 +33,15 @@
                     <select name="type" onchange="this.form.submit()"
                         class="bg-black border-none rounded-2xl text-white text-[10px] font-black uppercase px-6 py-3 outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer appearance-none pr-10">
                         <option value="">🔄 Todos os Tipos</option>
-                        <option value="entrada" {{ request('type') == 'entrada' ? 'selected' : '' }}>🟢 Entradas
-                        </option>
+                        <option value="entrada" {{ request('type') == 'entrada' ? 'selected' : '' }}>🟢 Entradas</option>
                         <option value="saida" {{ request('type') == 'saida' ? 'selected' : '' }}>🔴 Saídas</option>
                     </select>
-                    <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[8px] text-gray-600">
-                        ▼</div>
+                    <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[8px] text-gray-600">▼</div>
                 </div>
 
                 {{-- Filtro de Data --}}
                 <div class="relative group">
-                    <div
-                        class="absolute left-4 top-1/2 -translate-y-1/2 text-orange-500 pointer-events-none group-hover:scale-110 transition-transform z-10">
+                    <div class="absolute left-4 top-1/2 -translate-y-1/2 text-orange-500 pointer-events-none group-hover:scale-110 transition-transform z-10">
                         📅
                     </div>
                     <input type="date" name="date" id="dateInput" value="{{ request('date') }}"
@@ -63,38 +60,26 @@
 
         {{-- 📊 GRID DE RESUMO --}}
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-            {{-- Card de Entradas --}}
-            <div
-                class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 border-l-4 border-l-green-600 relative overflow-hidden group">
-                <div class="absolute -right-4 -bottom-4 text-7xl opacity-5 group-hover:scale-110 transition-transform">
-                    📦</div>
+            <div class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 border-l-4 border-l-green-600 relative overflow-hidden group">
+                <div class="absolute -right-4 -bottom-4 text-7xl opacity-5 group-hover:scale-110 transition-transform">📦</div>
                 <p class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Entradas (Período)</p>
                 <h3 class="text-3xl font-black text-white italic">
-                    {{-- Usamos a variável de total real --}}
-                    + {{ $allMovementsInPeriod->where('type', 'entrada')->sum('quantity') }}
+                    + {{ $movimentacoes->where('type', 'entrada')->sum('quantity') }}
                     <span class="text-xs text-gray-500 font-medium">un</span>
                 </h3>
             </div>
 
-            {{-- Card de Saídas --}}
-            <div
-                class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 border-l-4 border-l-red-600 relative overflow-hidden group">
-                <div class="absolute -right-4 -bottom-4 text-7xl opacity-5 group-hover:scale-110 transition-transform">
-                    📉</div>
+            <div class="bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 border-l-4 border-l-red-600 relative overflow-hidden group">
+                <div class="absolute -right-4 -bottom-4 text-7xl opacity-5 group-hover:scale-110 transition-transform">📉</div>
                 <p class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Saídas (Período)</p>
                 <h3 class="text-3xl font-black text-white italic">
-                    {{-- Usamos a variável de total real --}}
-                    - {{ abs($allMovementsInPeriod->where('type', 'saida')->sum('quantity')) }}
+                    - {{ abs($movimentacoes->where('type', 'saida')->sum('quantity')) }}
                     <span class="text-xs text-gray-500 font-medium">un</span>
                 </h3>
             </div>
 
-            {{-- Card de Status --}}
-            <div
-                class="bg-orange-600 p-8 rounded-[2.5rem] shadow-xl shadow-orange-600/20 flex flex-col justify-center relative overflow-hidden group">
-                <div
-                    class="absolute -right-4 -bottom-4 text-7xl opacity-10 group-hover:rotate-12 transition-transform italic font-black">
-                    OK</div>
+            <div class="bg-orange-600 p-8 rounded-[2.5rem] shadow-xl shadow-orange-600/20 flex flex-col justify-center relative overflow-hidden group">
+                <div class="absolute -right-4 -bottom-4 text-7xl opacity-10 group-hover:rotate-12 transition-transform italic font-black">OK</div>
                 <p class="text-[10px] font-black text-orange-200 uppercase tracking-widest mb-1">Status da Auditoria</p>
                 <h3 class="text-3xl font-black text-white italic uppercase tracking-tighter">Conferido ✅</h3>
             </div>
@@ -114,17 +99,12 @@
                 <table class="w-full text-left border-collapse">
                     <thead>
                         <tr class="bg-black/40">
-                            <th class="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Registro
-                            </th>
+                            <th class="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Registro</th>
                             <th class="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Produto</th>
-                            <th class="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] text-center">
-                                Fluxo</th>
-                            <th class="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] text-center">
-                                Qtd</th>
-                            <th class="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Motivo /
-                                Origem</th>
-                            <th class="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] text-right">
-                                Ação</th>
+                            <th class="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] text-center">Fluxo</th>
+                            <th class="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] text-center">Qtd</th>
+                            <th class="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Motivo / Origem</th>
+                            <th class="p-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] text-right">Ação</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-800/40">
@@ -132,42 +112,33 @@
                             <tr class="hover:bg-white/[0.02] transition-colors group">
                                 <td class="p-6">
                                     <div class="flex flex-col">
-                                        <span
-                                            class="text-white font-black text-xs">{{ $mov->created_at->format('d/m/Y') }}</span>
-                                        <span
-                                            class="text-gray-600 text-[10px] font-bold">{{ $mov->created_at->format('H:i:s') }}</span>
+                                        <span class="text-white font-black text-xs">{{ $mov->created_at->format('d/m/Y') }}</span>
+                                        <span class="text-gray-600 text-[10px] font-bold">{{ $mov->created_at->format('H:i:s') }}</span>
                                     </div>
                                 </td>
 
                                 <td class="p-6">
                                     <div class="flex items-center gap-4">
-                                        <div
-                                            class="w-10 h-10 bg-black rounded-xl flex flex-col items-center justify-center border border-gray-800 group-hover:border-orange-500 transition-colors">
+                                        <div class="w-10 h-10 bg-black rounded-xl flex flex-col items-center justify-center border border-gray-800 group-hover:border-orange-500 transition-colors">
                                             <span class="text-[8px] text-gray-600 font-black italic">ID</span>
-                                            <span
-                                                class="text-xs text-orange-500 font-mono font-black">{{ $mov->product->id }}</span>
+                                            <span class="text-xs text-orange-500 font-mono font-black">{{ $mov->product->id }}</span>
                                         </div>
                                         <div>
-                                            <span
-                                                class="text-white font-black text-sm uppercase italic tracking-tighter">{{ $mov->product->name }}</span>
-                                            <span
-                                                class="text-gray-600 text-[9px] block uppercase font-bold">{{ $mov->product->category->name ?? 'Geral' }}</span>
+                                            <span class="text-white font-black text-sm uppercase italic tracking-tighter">{{ $mov->product->name }}</span>
+                                            <span class="text-gray-600 text-[9px] block uppercase font-bold">{{ $mov->product->category->name ?? 'Geral' }}</span>
                                         </div>
                                     </div>
                                 </td>
 
                                 <td class="p-6 text-center">
-                                    <span
-                                        class="px-3 py-1.5 {{ $mov->type == 'entrada' ? 'bg-green-950/30 text-green-500 border-green-500/20' : 'bg-red-950/30 text-red-500 border-red-500/20' }} text-[9px] font-black uppercase rounded-lg border italic">
+                                    <span class="px-3 py-1.5 {{ $mov->type == 'entrada' ? 'bg-green-950/30 text-green-500 border-green-500/20' : 'bg-red-950/30 text-red-500 border-red-500/20' }} text-[9px] font-black uppercase rounded-lg border italic">
                                         {{ $mov->type == 'entrada' ? '▲ Entrada' : '▼ Saída' }}
                                     </span>
                                 </td>
 
                                 <td class="p-6 text-center">
-                                    <div
-                                        class="inline-block px-4 py-1.5 bg-black rounded-xl border {{ $mov->type == 'entrada' ? 'border-green-900/50' : 'border-red-900/50' }}">
-                                        <span
-                                            class="text-sm font-black {{ $mov->type == 'entrada' ? 'text-green-500' : 'text-red-500' }}">
+                                    <div class="inline-block px-4 py-1.5 bg-black rounded-xl border {{ $mov->type == 'entrada' ? 'border-green-900/50' : 'border-red-900/50' }}">
+                                        <span class="text-sm font-black {{ $mov->type == 'entrada' ? 'text-green-500' : 'text-red-500' }}">
                                             {{ $mov->type == 'entrada' ? '+' : '-' }} {{ abs($mov->quantity) }}
                                         </span>
                                     </div>
@@ -175,39 +146,17 @@
 
                                 <td class="p-6">
                                     <div class="flex flex-col">
-                                        <span
-                                            class="text-gray-400 font-black text-[10px] uppercase italic tracking-tighter">
+                                        <span class="text-gray-400 font-black text-[10px] uppercase italic tracking-tighter">
                                             👤 {{ $mov->user->name ?? 'Sistema' }}
                                         </span>
-
-                                        <div class="flex items-center gap-2 mt-1">
-                                            {{-- Badge por Lógica de Pagamento (Injetada pela Controller) --}}
-                                            @if ($mov->is_voucher)
-                                                <span
-                                                    class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 text-[8px] font-black uppercase rounded border border-indigo-500/30 shrink-0 animate-pulse">
-                                                    🎟️ Cortesia
-                                                </span>
-                                            @endif
-
-                                            {{-- Fallback: Mantemos a busca por texto caso seja um lançamento manual --}}
-                                            @if (!$mov->is_voucher && str_contains(strtolower($mov->description), 'voucher'))
-                                                <span
-                                                    class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 text-[8px] font-black uppercase rounded border border-indigo-500/30 shrink-0">
-                                                    🎟️ Voucher
-                                                </span>
-                                            @endif
-
-                                            <span
-                                                class="text-gray-600 text-[10px] font-medium leading-tight line-clamp-1 max-w-[200px]">
-                                                {{ $mov->description }}
-                                            </span>
-                                        </div>
+                                        <span class="text-gray-600 text-[10px] font-medium leading-tight line-clamp-1 max-w-[250px]">
+                                            {{ $mov->description }}
+                                        </span>
                                     </div>
                                 </td>
 
                                 <td class="p-6 text-right">
-                                    <button
-                                        class="p-2 text-gray-800 hover:text-orange-500 opacity-0 group-hover:opacity-100 transition-all transform hover:scale-125">
+                                    <button class="p-2 text-gray-800 hover:text-orange-500 opacity-0 group-hover:opacity-100 transition-all transform hover:scale-125">
                                         🔍
                                     </button>
                                 </td>
@@ -215,9 +164,7 @@
                         @empty
                             <tr>
                                 <td colspan="6" class="p-32 text-center">
-                                    <p
-                                        class="text-gray-600 text-xs font-black uppercase tracking-[0.4em] italic opacity-20">
-                                        Nenhum registro encontrado</p>
+                                    <p class="text-gray-600 text-xs font-black uppercase tracking-[0.4em] italic opacity-20">Nenhum registro encontrado</p>
                                 </td>
                             </tr>
                         @endforelse
@@ -236,35 +183,29 @@
             <div class="absolute right-0 top-0 p-10 opacity-5 text-9xl italic font-black">STOCK</div>
 
             <div class="flex items-center gap-4 mb-10">
-                <div
-                    class="w-12 h-12 bg-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-600/20">
+                <div class="w-12 h-12 bg-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-600/20">
                     <span class="text-xl">📊</span>
                 </div>
                 <div>
                     <h2 class="text-2xl font-black text-white uppercase italic tracking-tighter">
                         Posição <span class="text-orange-600">Atual</span> de Inventário
                     </h2>
-                    <p class="text-[10px] text-gray-500 font-black uppercase tracking-widest mt-1 italic">Dados
-                        consolidados do salão e balcão</p>
+                    <p class="text-[10px] text-gray-500 font-black uppercase tracking-widest mt-1 italic">Dados consolidados do salão e balcão</p>
                 </div>
             </div>
 
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-6">
                 @foreach ($inventorySummary as $product)
-                    <div
-                        class="bg-black/60 border {{ $product->stock_quantity <= 10 ? 'border-red-600/50 shadow-[0_0_20px_rgba(220,38,38,0.1)]' : 'border-gray-800' }} p-5 rounded-[2rem] flex flex-col items-center justify-center text-center group hover:scale-105 transition-all">
-                        <span
-                            class="text-gray-500 text-[9px] font-black uppercase mb-2 tracking-widest line-clamp-1 group-hover:text-white transition-colors">
+                    <div class="bg-black/60 border {{ $product->stock_quantity <= 10 ? 'border-red-600/50 shadow-[0_0_20px_rgba(220,38,38,0.1)]' : 'border-gray-800' }} p-5 rounded-[2rem] flex flex-col items-center justify-center text-center group hover:scale-105 transition-all">
+                        <span class="text-gray-500 text-[9px] font-black uppercase mb-2 tracking-widest line-clamp-1 group-hover:text-white transition-colors">
                             {{ $product->name }}
                         </span>
 
                         <div class="flex items-baseline gap-1 mb-3">
-                            <span
-                                class="text-2xl font-black {{ $product->stock_quantity <= 10 ? 'text-red-500' : 'text-white' }}">
+                            <span class="text-2xl font-black {{ $product->stock_quantity <= 10 ? 'text-red-500' : 'text-white' }}">
                                 {{ $product->stock_quantity }}
                             </span>
-                            <span
-                                class="text-[8px] text-gray-600 font-bold uppercase italic tracking-tighter">un</span>
+                            <span class="text-[8px] text-gray-600 font-bold uppercase italic tracking-tighter">un</span>
                         </div>
 
                         {{-- Barra de Saúde do Estoque --}}
@@ -274,10 +215,8 @@
                             </div>
                         </div>
 
-                        @if ($product->stock_quantity <= 10)
-                            <span
-                                class="mt-3 text-[7px] font-black text-red-500 uppercase italic animate-pulse">Reposição
-                                Crítica</span>
+                        @if($product->stock_quantity <= 10)
+                            <span class="mt-3 text-[7px] font-black text-red-500 uppercase italic animate-pulse">Reposição Crítica</span>
                         @endif
                     </div>
                 @endforeach
@@ -287,34 +226,13 @@
 
     {{-- ESTILOS CSS --}}
     <style>
-        input[type="date"] {
-            color-scheme: dark;
-        }
-
+        input[type="date"] { color-scheme: dark; }
         input[type="date"]::-webkit-calendar-picker-indicator {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            cursor: pointer;
-            opacity: 0;
+            position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+            margin: 0; padding: 0; cursor: pointer; opacity: 0;
         }
-
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-
-        input:focus {
-            border: 1px solid #ea580c !important;
-            box-shadow: 0 0 0 1px #ea580c;
-        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        input:focus { border: 1px solid #ea580c !important; box-shadow: 0 0 0 1px #ea580c; }
     </style>
 </x-bar-layout>

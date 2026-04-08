@@ -181,16 +181,8 @@
                                         </span>
 
                                         <div class="flex items-center gap-2 mt-1">
-                                            {{-- Badge por Lógica de Pagamento (Injetada pela Controller) --}}
-                                            @if ($mov->is_voucher)
-                                                <span
-                                                    class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 text-[8px] font-black uppercase rounded border border-indigo-500/30 shrink-0 animate-pulse">
-                                                    🎟️ Cortesia
-                                                </span>
-                                            @endif
-
-                                            {{-- Fallback: Mantemos a busca por texto caso seja um lançamento manual --}}
-                                            @if (!$mov->is_voucher && str_contains(strtolower($mov->description), 'voucher'))
+                                            {{-- Badge Inteligente: Se for voucher, ganha destaque --}}
+                                            @if (str_contains(strtolower($mov->description), 'voucher'))
                                                 <span
                                                     class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 text-[8px] font-black uppercase rounded border border-indigo-500/30 shrink-0">
                                                     🎟️ Voucher
