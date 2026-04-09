@@ -167,10 +167,9 @@
                         class="bg-indigo-600 dark:bg-indigo-900 p-8 rounded-2xl flex flex-col justify-center items-center shadow-inner text-white relative overflow-hidden">
                         <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full"></div>
                         <span class="text-xs font-bold uppercase opacity-80 tracking-widest text-center italic">Saldo
-                            Financeiro Real</span>
+                            Líquido Esperado</span>
                         <span class="text-4xl font-black mt-2">R$
-                            {{ number_format($saldoLiquidoReal, 2, ',', '.') }}
-                        </span>
+                            {{ number_format($movimentacoes->sum('amount'), 2, ',', '.') }}</span>
                     </div>
                 </div>
 
@@ -202,15 +201,13 @@
                                         $arenaObj = \App\Models\Arena::find($arenaId);
                                         $nomeArena = $arenaObj ? $arenaObj->name : 'Geral/Outros';
 
-                                        // 🎯 AQUI O SEGREDO: Soma apenas o que NÃO é voucher para bater com o dinheiro físico
-                                        $somaSistema = $transacoes
-                                            ->where('payment_method', '!=', 'voucher')
-                                            ->sum('amount');
+                                        // 1. Soma real (com um "m")
+                                        $somaSistema = $transacoes->sum('amount');
 
                                         $conferencia = $cashierHistory->where('arena_id', $arenaId)->first();
                                         $valorFisico = $conferencia ? $conferencia->actual_amount : 0;
 
-                                        // Agora a diferença será justa: Dinheiro na mão vs Dinheiro no sistema
+                                        // 2. Cálculo da diferença (corrigido para um "m")
                                         $diferenca = $valorFisico - $somaSistema;
                                     @endphp
 
@@ -224,7 +221,7 @@
                                         </td>
                                         <td
                                             class="py-3 px-2 text-right text-gray-800 dark:text-white font-mono font-bold">
-                                            {{-- Mostra o valor que REALMENTE deve estar na gaveta --}}
+                                            {{-- 3. Exibição (corrigido para um "m") --}}
                                             R$ {{ number_format($somaSistema, 2, ',', '.') }}
                                         </td>
                                         <td
@@ -232,10 +229,11 @@
                                             R$ {{ number_format($valorFisico, 2, ',', '.') }}
                                         </td>
                                         <td class="py-3 px-4 text-right font-black">
+                                            {{-- 4. Validação do IF (corrigido para um "m") --}}
                                             @if ($valorFisico == 0 && $somaSistema != 0)
                                                 <span class="text-amber-500 text-[10px] animate-pulse">AGUARDANDO
                                                     CONFERÊNCIA... ⏳</span>
-                                            @elseif (round($diferenca, 2) == 0)
+                                            @elseif ($diferenca == 0)
                                                 <span class="text-emerald-500 text-[11px]">CONFERIDO ✅</span>
                                             @else
                                                 <span

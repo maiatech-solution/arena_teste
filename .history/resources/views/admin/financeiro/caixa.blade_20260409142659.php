@@ -167,10 +167,9 @@
                         class="bg-indigo-600 dark:bg-indigo-900 p-8 rounded-2xl flex flex-col justify-center items-center shadow-inner text-white relative overflow-hidden">
                         <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full"></div>
                         <span class="text-xs font-bold uppercase opacity-80 tracking-widest text-center italic">Saldo
-                            Financeiro Real</span>
+                            Líquido Esperado</span>
                         <span class="text-4xl font-black mt-2">R$
-                            {{ number_format($saldoLiquidoReal, 2, ',', '.') }}
-                        </span>
+                            {{ number_format($movimentacoes->sum('amount'), 2, ',', '.') }}</span>
                     </div>
                 </div>
 
@@ -202,15 +201,13 @@
                                         $arenaObj = \App\Models\Arena::find($arenaId);
                                         $nomeArena = $arenaObj ? $arenaObj->name : 'Geral/Outros';
 
-                                        // 🎯 AQUI O SEGREDO: Soma apenas o que NÃO é voucher para bater com o dinheiro físico
-                                        $somaSistema = $transacoes
-                                            ->where('payment_method', '!=', 'voucher')
-                                            ->sum('amount');
+                                        // 1. Soma real (com um "m")
+                                        $somaSistema = $transacoes->sum('amount');
 
                                         $conferencia = $cashierHistory->where('arena_id', $arenaId)->first();
                                         $valorFisico = $conferencia ? $conferencia->actual_amount : 0;
 
-                                        // Agora a diferença será justa: Dinheiro na mão vs Dinheiro no sistema
+                                        // 2. Cálculo da diferença (corrigido para um "m")
                                         $diferenca = $valorFisico - $somaSistema;
                                     @endphp
 
@@ -224,7 +221,7 @@
                                         </td>
                                         <td
                                             class="py-3 px-2 text-right text-gray-800 dark:text-white font-mono font-bold">
-                                            {{-- Mostra o valor que REALMENTE deve estar na gaveta --}}
+                                            {{-- 3. Exibição (corrigido para um "m") --}}
                                             R$ {{ number_format($somaSistema, 2, ',', '.') }}
                                         </td>
                                         <td
@@ -232,10 +229,11 @@
                                             R$ {{ number_format($valorFisico, 2, ',', '.') }}
                                         </td>
                                         <td class="py-3 px-4 text-right font-black">
+                                            {{-- 4. Validação do IF (corrigido para um "m") --}}
                                             @if ($valorFisico == 0 && $somaSistema != 0)
                                                 <span class="text-amber-500 text-[10px] animate-pulse">AGUARDANDO
                                                     CONFERÊNCIA... ⏳</span>
-                                            @elseif (round($diferenca, 2) == 0)
+                                            @elseif ($diferenca == 0)
                                                 <span class="text-emerald-500 text-[11px]">CONFERIDO ✅</span>
                                             @else
                                                 <span
@@ -271,38 +269,11 @@
                         </thead>
                         <tbody class="divide-y divide-gray-50 dark:divide-gray-700">
                             @foreach ($movimentacoes as $m)
-                                @php
-                                    $tipoRaw = strtolower($m->type);
-                                    $metodoRaw = strtolower($m->payment_method);
-                                    $isVoucher = $metodoRaw === 'voucher' || $metodoRaw === 'cortesia';
-
-                                    $textoTipo = $traducaoTipos[$tipoRaw] ?? strtoupper($m->type);
-                                    $corTipo = 'bg-gray-100 text-gray-600 border border-gray-200';
-
-                                    // Lógica de Cores dos Badges
-                                    if ($isVoucher) {
-                                        $corTipo = 'bg-amber-100 text-amber-700 border border-amber-200';
-                                        $textoTipo = 'CORTESIA';
-                                    } elseif ($tipoRaw == 'signal') {
-                                        $corTipo = 'bg-blue-50 text-blue-700 border border-blue-200';
-                                    } elseif (
-                                        in_array($tipoRaw, ['full_payment', 'payment', 'payment_settlement', 'reforco'])
-                                    ) {
-                                        $corTipo = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-                                    } elseif (in_array($tipoRaw, ['refund', 'sangria']) || $m->amount < 0) {
-                                        $corTipo = 'bg-red-50 text-red-700 border border-red-200';
-                                    } elseif (str_contains($tipoRaw, 'reten')) {
-                                        $corTipo = 'bg-amber-50 text-amber-700 border border-amber-200';
-                                    }
-                                @endphp
-                                <tr
-                                    class="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition duration-150 {{ $isVoucher ? 'opacity-75' : '' }}">
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition duration-150">
                                     <td class="py-3 px-2 text-gray-400 font-mono text-xs text-center italic">
-                                        {{ $m->paid_at->format('H:i') }}
-                                    </td>
+                                        {{ $m->paid_at->format('H:i') }}</td>
                                     <td class="py-3 px-2 text-[10px] font-bold text-gray-500 uppercase italic">
-                                        {{ $m->arena?->name ?? '---' }}
-                                    </td>
+                                        {{ $m->arena?->name ?? '---' }}</td>
                                     <td class="py-3 px-2 pl-4">
                                         <div class="font-bold dark:text-gray-200">
                                             @if ($m->reserva_id)
@@ -317,27 +288,43 @@
                                         </div>
                                     </td>
                                     <td class="py-3 px-2 text-center text-[9px] font-black uppercase">
+                                        @php
+                                            $tipoRaw = strtolower($m->type);
+                                            $textoTipo = $traducaoTipos[$tipoRaw] ?? strtoupper($m->type);
+                                            $corTipo = 'bg-gray-100 text-gray-600 border border-gray-200';
+
+                                            if ($tipoRaw == 'signal') {
+                                                $corTipo = 'bg-blue-50 text-blue-700 border border-blue-200';
+                                            }
+                                            if (
+                                                in_array($tipoRaw, [
+                                                    'full_payment',
+                                                    'payment',
+                                                    'payment_settlement',
+                                                    'reforco',
+                                                ])
+                                            ) {
+                                                $corTipo = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+                                            }
+                                            if (in_array($tipoRaw, ['refund', 'sangria']) || $m->amount < 0) {
+                                                $corTipo = 'bg-red-50 text-red-700 border border-red-200';
+                                            }
+                                            if (str_contains($tipoRaw, 'reten')) {
+                                                $corTipo = 'bg-amber-50 text-amber-700 border border-amber-200';
+                                            }
+                                        @endphp
                                         <span class="px-2 py-1 rounded {{ $corTipo }}">
                                             {{ $textoTipo }}
                                         </span>
                                     </td>
                                     <td
-                                        class="py-3 px-2 text-center text-[10px] font-bold italic uppercase {{ $isVoucher ? 'text-amber-600' : 'text-gray-600 dark:text-gray-400' }}">
-                                        {!! $isVoucher ? '🎟️ ' : '' !!}
-                                        {{ $traducaoMetodos[$metodoRaw] ?? $m->payment_method }}
+                                        class="py-3 px-2 text-center text-[10px] text-gray-600 dark:text-gray-400 font-bold italic uppercase">
+                                        {{ $traducaoMetodos[strtolower($m->payment_method)] ?? $m->payment_method }}
                                     </td>
-                                    <td class="py-3 px-2 text-right font-mono font-bold">
-                                        @if ($isVoucher)
-                                            <span class="text-amber-600/70 italic">
-                                                R$ {{ number_format(abs($m->amount), 2, ',', '.') }}
-                                            </span>
-                                        @else
-                                            <span
-                                                class="{{ $m->amount < 0 ? 'text-red-500' : 'text-gray-800 dark:text-white' }}">
-                                                {{ $m->amount < 0 ? '-' : '' }} R$
-                                                {{ number_format(abs($m->amount), 2, ',', '.') }}
-                                            </span>
-                                        @endif
+                                    <td
+                                        class="py-3 px-2 text-right font-mono font-bold {{ $m->amount < 0 ? 'text-red-500' : 'text-gray-800 dark:text-white' }}">
+                                        {{ $m->amount < 0 ? '-' : '' }} R$
+                                        {{ number_format(abs($m->amount), 2, ',', '.') }}
                                     </td>
                                 </tr>
                             @endforeach
