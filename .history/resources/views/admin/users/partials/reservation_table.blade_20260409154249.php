@@ -25,10 +25,11 @@
                     $totalPaid = (float)($reserva->total_paid ?? 0);
                     $isFullyPaid = $reserva->is_paid ?? ($totalPaid >= $totalPrice);
 
-                    // 🕒 Limpeza radical do horário para evitar o bug de data repetida
+                    // Limpeza radical do horário para evitar o "2026-"
+                    // Se a string contiver espaço (data + hora), pegamos só a última parte
                     $formatTime = function($time) {
                         if (!$time) return '--:--';
-                        $parts = explode(' ', (string)$time);
+                        $parts = explode(' ', $time);
                         $onlyTime = end($parts);
                         return substr($onlyTime, 0, 5);
                     };
@@ -43,7 +44,6 @@
                         default     => ['label' => ucfirst($reserva->status), 'class' => 'bg-gray-100 text-gray-600'],
                     };
 
-                    // Lógica de Status Financeiro
                     if ($reserva->status === 'maintenance') {
                         $pInfo = ['label' => 'N/A', 'class' => 'bg-gray-100 text-gray-400 border-gray-200'];
                     } elseif ($isFullyPaid) {
@@ -58,17 +58,20 @@
                             : ['label' => 'PENDENTE', 'class' => 'bg-yellow-100 text-yellow-700 border-yellow-200'];
                     }
                 @endphp
-                <tr class="odd:bg-white even:bg-gray-50/50 hover:bg-indigo-50/30 transition duration-150 text-[11px]">
-                    <td class="px-4 py-3 whitespace-nowrap font-black text-gray-800">
+                <tr class="odd:bg-white even:bg-gray-50/50 hover:bg-indigo-50/30 transition duration-150">
+                    <td class="px-4 py-3 whitespace-nowrap text-sm font-black text-gray-800">
                         {{ $reservaDate->format('d/m/Y') }}
                     </td>
 
-                    <td class="px-4 py-3 whitespace-nowrap text-gray-600 font-mono">
+                    {{-- 🕒 HORÁRIO REFORMADO --}}
+                    <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-600 font-mono">
                         {{ $formatTime($reserva->start_time) }} - {{ $formatTime($reserva->end_time) }}
                     </td>
 
-                    <td class="px-4 py-3 whitespace-nowrap uppercase tracking-tighter text-gray-500">
-                        {{ $reserva->arena->name ?? 'Arena' }}
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <span class="text-[9px] font-black px-2 py-1 rounded bg-white border border-gray-200 text-gray-500 uppercase tracking-tighter">
+                            {{ $reserva->arena->name ?? 'Arena' }}
+                        </span>
                     </td>
 
                     <td class="px-4 py-3 whitespace-nowrap">
@@ -77,7 +80,7 @@
                         </span>
                     </td>
 
-                    <td class="px-4 py-3 whitespace-nowrap font-black text-right text-gray-700">
+                    <td class="px-4 py-3 whitespace-nowrap text-sm font-black text-right text-gray-700">
                         R$ {{ number_format($totalPrice, 2, ',', '.') }}
                     </td>
 
@@ -108,15 +111,15 @@
                         </div>
                     </td>
 
-                    <td class="px-4 py-3 whitespace-nowrap">
+                    <td class="px-4 py-3 whitespace-nowrap text-xs">
                         @if($reserva->is_recurrent)
-                            <span class="font-black text-fuchsia-600 uppercase tracking-tighter text-[9px]">Série #{{ $reserva->recurrent_series_id }}</span>
+                            <span class="font-black text-fuchsia-600 uppercase tracking-tighter">Série #{{ $reserva->recurrent_series_id }}</span>
                         @else
-                            <span class="text-gray-400 font-medium text-[9px]">Pontual</span>
+                            <span class="text-gray-400 font-medium">Pontual</span>
                         @endif
                     </td>
 
-                    <td class="px-4 py-3 whitespace-nowrap text-center">
+                    <td class="px-4 py-3 whitespace-nowrap text-center text-sm font-medium">
                         <div class="flex items-center justify-center gap-1">
                             <a href="{{ route('admin.reservas.show', $reserva) }}"
                                class="bg-gray-800 text-white px-2 py-1 text-[9px] font-black rounded hover:bg-black transition shadow-sm uppercase">
