@@ -449,14 +449,11 @@ class FinanceiroController extends Controller
         $arenaId = $request->get('arena_id');
         $search = $request->get('search');
 
-        // 1. Query Base: Filtramos apenas o que é cobrável.
-        // 🎯 AJUSTE: Incluído 'maintenance' para não cobrar horários de manutenção.
+        // 1. Query Base: Focamos em reservas que não foram rejeitadas e estão com pendência financeira
         $query = \App\Models\Reserva::with(['arena', 'transactions'])
-            ->whereNotIn('status', ['rejected', 'cancelled', 'maintenance'])
-            ->whereIn('payment_status', ['unpaid', 'partial'])
-            ->where('final_price', '>', 0);
+            ->whereNotIn('status', ['rejected', 'cancelled']) // Ignora o que não deve ser cobrado
+            ->whereIn('payment_status', ['unpaid', 'partial']);
 
-        // 2. Aplicar Filtros Dinâmicos (Unidade e Busca)
         if ($arenaId) {
             $query->where('arena_id', $arenaId);
         }
@@ -468,28 +465,29 @@ class FinanceiroController extends Controller
             });
         }
 
-        // 3. Paginação (Conserva os filtros na URL para navegação)
+        // 2. Paginação
         $dividas = $query->orderBy('date', 'desc')
             ->orderBy('start_time', 'desc')
             ->paginate(30)
             ->withQueryString();
 
-        // 🎯 4. Cálculo do Total Global (Soma apenas a inadimplência real)
-        // Usamos clone() para garantir que o cálculo use os mesmos filtros da listagem acima sem interferir na paginação
-        $totalGlobalDividas = (clone $query)->get()->sum(function ($r) {
+        // 🎯 3. Cálculo do Total Global (Otimizado)
+        // Pegamos os dados necessários de uma vez para evitar queries dentro do loop
+        $totalGlobalDividas = $query->get()->sum(function ($r) {
             $valorVenda = (float) ($r->final_price ?? $r->price);
 
-            // Soma transações vinculadas (incluindo Vouchers que abatem a dívida)
+            // No sum('amount'), o sistema já inclui os Vouchers, pois mapeamos eles
+            // com valor positivo no financeiro, o que abate a dívida perfeitamente.
             $diretas = (float) $r->transactions->sum('amount');
 
-            // Busca ajustes manuais (transações órfãs) vinculados pelo #ID na descrição
+            // Busca transações órfãs (ajustes manuais)
+            // Dica: Se possível, no futuro, tente sempre vincular a reserva_id para evitar esse LIKE
             $orfas = (float) \App\Models\FinancialTransaction::whereNull('reserva_id')
                 ->where('description', 'LIKE', "%#{$r->id}%")
                 ->sum('amount');
 
             $pagoReal = round($diretas + $orfas, 2);
 
-            // Retorna apenas a diferença (o que falta pagar)
             return max(0, $valorVenda - $pagoReal);
         });
 

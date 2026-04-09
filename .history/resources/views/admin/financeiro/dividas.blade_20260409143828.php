@@ -163,28 +163,10 @@
                                     <td class="p-4 text-right text-gray-700 dark:text-gray-300">R$
                                         {{ number_format($totalReserva, 2, ',', '.') }}</td>
                                     <td class="p-4 text-right">
-                                        {{-- Valor Numérico Principal --}}
                                         <span
-                                            class="{{ $pagoReal > 0 ? 'text-green-600' : 'text-gray-400 dark:text-gray-500' }} font-mono">
+                                            class="{{ $pagoReal > 0 ? 'text-green-600' : 'text-gray-400 dark:text-gray-500' }}">
                                             R$ {{ number_format($pagoReal, 2, ',', '.') }}
                                         </span>
-
-                                        {{-- 🎟️ Alerta de Cortesia: Mostra se parte ou o total foi via Voucher --}}
-                                        @if ($temVoucher)
-                                            <div class="flex items-center justify-end gap-1 mt-1">
-                                                <span
-                                                    class="text-[8px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-black uppercase italic tracking-tighter border border-amber-200">
-                                                    🎟️ Com Voucher
-                                                </span>
-                                            </div>
-                                        @endif
-
-                                        {{-- Informativo de Estorno Avulso (Opcional, mas útil para auditoria) --}}
-                                        @if ($somaEstornosAvulsos != 0)
-                                            <div class="text-[7px] text-indigo-500 uppercase font-bold mt-0.5 italic">
-                                                Inclui Ajuste Manual
-                                            </div>
-                                        @endif
                                     </td>
                                     <td class="p-4 text-right text-red-600 font-black italic">R$
                                         {{ number_format($restante, 2, ',', '.') }}</td>
