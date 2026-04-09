@@ -241,7 +241,7 @@
                     </div>
 
                     {{-- 📊 WIDGET ANALÍTICO DE MÃO DUPLA (Colar abaixo do Preço de Venda) --}}
-                   <!-- <div class="md:col-span-2 p-5 bg-black/40 border border-gray-800 rounded-[2rem] mt-2 shadow-inner">
+                    <div class="md:col-span-2 p-5 bg-black/40 border border-gray-800 rounded-[2rem] mt-2 shadow-inner">
                         <div class="flex flex-col md:flex-row items-center justify-between gap-6">
                             <div class="flex items-center gap-4">
                                 {{-- Ícone de Status Dinâmico --}}
@@ -250,7 +250,7 @@
                                     <span id="margem_emoji">💰</span>
                                 </div>
 
-                                <div>
+                               <!-- <div>
                                     <p
                                         class="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1 italic">
                                         Análise de Precificação Atual</p>
@@ -283,7 +283,7 @@
                                                 0,00</span>
                                         </div>
                                     </div>
-                                </div>
+                                </div> -->
                             </div>
 
                             {{-- Campo de ajuste manual por porcentagem --}}
@@ -295,7 +295,7 @@
                                     class="w-full md:w-32 bg-gray-950 border-gray-800 rounded-xl p-3 text-xs text-orange-500 font-black text-center outline-none focus:border-orange-500 transition-all shadow-inner">
                             </div>
                         </div>
-                    </div>-->
+                    </div>
 
 
                     {{-- ESTOQUE ATUAL (BLOQUEADO) --}}

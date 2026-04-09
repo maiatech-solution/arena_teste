@@ -237,7 +237,6 @@ class PaymentController extends Controller
 
             $calculatedSystem = FinancialTransaction::whereDate('paid_at', $date)
                 ->where('arena_id', $arenaId)
-                ->where('payment_method', '!=', 'voucher') // 👈 A LINHA CHAVE É ESTA
                 ->sum('amount');
 
             $calculated = round((float)$calculatedSystem, 2);

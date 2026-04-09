@@ -166,49 +166,19 @@ class FinanceiroController extends Controller
         $arenaId = $request->get('arena_id');
         $data = $request->input('data', now()->format('Y-m-d'));
 
-        // 1. Busca todas as movimentações do dia
         $movimentacoes = FinancialTransaction::whereDate('paid_at', $data)
             ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
             ->with(['reserva', 'manager', 'arena'])
             ->orderBy('paid_at', 'asc')
             ->get();
 
-        // 💰 2. CÁLCULOS FINANCEIROS REAIS (Ignorando Vouchers)
-        // Isso garante que o "Saldo Geral" e "Total Líquido" batam com a gaveta
-        $totalEntradas = $movimentacoes
-            ->where('amount', '>', 0)
-            ->where('payment_method', '!=', FinancialTransaction::PAYMENT_VOUCHER)
-            ->sum('amount');
-
-        $totalSaidas = $movimentacoes
-            ->where('amount', '<', 0)
-            ->where('payment_method', '!=', FinancialTransaction::PAYMENT_VOUCHER)
-            ->sum('amount');
-
-        $saldoLiquidoReal = $totalEntradas + $totalSaidas;
-
-        // 🎟️ 3. TOTAL DE CORTESIAS (Apenas informativo)
-        $totalVouchers = $movimentacoes
-            ->where('payment_method', FinancialTransaction::PAYMENT_VOUCHER)
-            ->sum('amount');
-
-        // 4. Histórico de Fechamentos
         $cashierHistory = Cashier::with(['user', 'arena'])
             ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
             ->orderBy('date', 'desc')
             ->limit(10)
             ->get();
 
-        return view('admin.financeiro.caixa', compact(
-            'movimentacoes',
-            'data',
-            'cashierHistory',
-            'arenaId',
-            'totalEntradas',   // 👈 Enviando valores limpos para a View
-            'totalSaidas',
-            'saldoLiquidoReal',
-            'totalVouchers'
-        ));
+        return view('admin.financeiro.caixa', compact('movimentacoes', 'data', 'cashierHistory', 'arenaId'));
     }
 
     /**

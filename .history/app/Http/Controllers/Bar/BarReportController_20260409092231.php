@@ -117,13 +117,11 @@ class BarReportController extends Controller
         // 1. Pegamos todas as ordens (Mesas) e vendas (PDV) finalizadas
         $orders = BarOrder::whereIn('status', ['paid', 'pago'])
             ->whereBetween('updated_at', [$startDate, $endDate])
-            ->when(!$isAdmin, fn($q) => $q->where('user_id', $user->id))
             ->with('items.product')
             ->get();
 
         $sales = BarSale::whereIn('status', ['paid', 'pago'])
             ->whereBetween('created_at', [$startDate, $endDate])
-            ->when(!$isAdmin, fn($q) => $q->where('user_id', $user->id))
             ->with('items.product')
             ->get();
 
@@ -132,7 +130,7 @@ class BarReportController extends Controller
 
         // Processamento de Mesas
         foreach ($orders as $order) {
-            $isVoucher = str_contains(strtolower($order->payment_method ?? ''), 'voucher');
+            $isVoucher = str_contains(strtoupper($order->payment_method), 'VOUCHER');
             foreach ($order->items as $item) {
                 $this->aggregateItem($rankingData, $item, $isVoucher);
             }
@@ -140,7 +138,7 @@ class BarReportController extends Controller
 
         // Processamento de Balcão (PDV)
         foreach ($sales as $sale) {
-            $isVoucher = str_contains(strtolower($sale->payment_method ?? ''), 'voucher');
+            $isVoucher = strtoupper($sale->payment_method) === 'VOUCHER';
             foreach ($sale->items as $item) {
                 $this->aggregateItem($rankingData, $item, $isVoucher);
             }
@@ -152,34 +150,25 @@ class BarReportController extends Controller
             $purchasePrice = (float)($product->purchase_price ?? 0);
             $salePrice = (float)($product->sale_price ?? 0);
 
-            // --- MÉTRICAS DE VOLUME ---
-            $totalSaidas = $data['paid_qty'] + $data['voucher_qty'];
-
             // --- CÁLCULO FINANCEIRO REAL (Impactado pelos Vouchers) ---
             $faturamentoReal = (float)$data['paid_revenue'];
-
             // Custo total de TUDO que saiu do estoque (Pagas + Cortesias)
-            $custoTotalEstoque = $purchasePrice * $totalSaidas;
-
+            $custoTotalEstoque = $purchasePrice * ($data['paid_qty'] + $data['voucher_qty']);
             // Lucro real no bolso (Ficará vermelho/negativo se houver muita cortesia)
             $totalProfit = $faturamentoReal - $custoTotalEstoque;
 
-            // --- CÁLCULO DE INVESTIMENTO ---
-            $investimentoCortesia = $data['voucher_qty'] * $salePrice;
-
             // --- CÁLCULO TÉCNICO DE SAÚDE (Baseado no Preço de Cadastro) ---
+            // Isso garante que o card de "Saúde do Mix" não fique negativo
             $marginTech = $salePrice > 0 ? (($salePrice - $purchasePrice) / $salePrice) * 100 : 0;
 
             return (object)[
                 'product' => $product,
-                'total_qty' => $totalSaidas,
+                'total_qty' => $data['paid_qty'] + $data['voucher_qty'],
                 'total_paid_qty' => $data['paid_qty'],
                 'total_voucher_qty' => $data['voucher_qty'],
                 'total_revenue' => $faturamentoReal,
                 'total_profit' => $totalProfit,
-                'investimento_cortesia' => $investimentoCortesia,
-                'margin_percent' => $marginTech,
-                'is_critical' => ($faturamentoReal > 0 && $totalProfit <= 0) // Alerta se as cortesias "comeram" o lucro
+                'margin_percent' => $marginTech
             ];
         })->sortByDesc('total_qty');
 
@@ -209,13 +198,8 @@ class BarReportController extends Controller
             $current['voucher_qty'] += $item->quantity;
         } else {
             $current['paid_qty'] += $item->quantity;
-
-            // 🚀 PRECISÃO HISTÓRICA:
-            // Tenta pegar o preço salvo na venda, se não houver, usa o unit_price da tabela de itens,
-            // e como última garantia, o preço atual do cadastro do produto.
-            $precoPraticado = $item->price_at_sale ?? $item->unit_price ?? ($item->product->sale_price ?? 0);
-
-            $current['paid_revenue'] += $item->quantity * $precoPraticado;
+            // Usa o preço registrado no momento da venda para precisão histórica
+            $current['paid_revenue'] += $item->quantity * ($item->price_at_sale ?? $item->unit_price ?? 0);
         }
 
         $collection->put($id, $current);
@@ -230,21 +214,17 @@ class BarReportController extends Controller
         $startDate = Carbon::parse($mesReferencia)->startOfMonth();
         $endDate = Carbon::parse($mesReferencia)->endOfMonth();
 
-        // 1. Buscamos as sessões com os movimentos já carregados (Eager Loading)
-        // Isso evita o problema de performance (N+1) que existia no foreach
-        $sessoes = BarCashSession::with(['user', 'movements'])
+        $sessoes = BarCashSession::with('user')
             ->whereBetween('opened_at', [$startDate, $endDate])
-            ->orderBy('opened_at', 'desc')
-            ->get();
+            ->orderBy('opened_at', 'desc')->get();
 
-        // Métodos que REALMENTE trazem dinheiro físico ou digital (Exclui Voucher/Cortesia)
+        // Métodos que REALMENTE trazem dinheiro para o caixa
         $metodosFinanceiros = ['dinheiro', 'pix', 'debito', 'credito', 'cartao', 'misto', 'crédito', 'débito'];
 
         foreach ($sessoes as $s) {
-            // Filtramos os movimentos da sessão em memória (muito mais rápido que nova query)
-            $movs = $s->movements;
+            $movs = BarCashMovement::where('bar_cash_session_id', $s->id)->get();
 
-            // 💰 Vendas Reais (Dinheiro/Pix/Cartão)
+            // 💰 Faturamento Financeiro (O que entrou de verdade)
             $vendasReais = $movs->where('type', 'venda')
                 ->filter(fn($m) => in_array(strtolower($m->payment_method), $metodosFinanceiros))
                 ->sum('amount');
@@ -254,22 +234,8 @@ class BarReportController extends Controller
                 ->filter(fn($m) => in_array(strtolower($m->payment_method), $metodosFinanceiros))
                 ->sum('amount');
 
-            // ➕ Reforços (Entrada de troco)
-            $reforcos = $movs->where('type', 'reforco')->sum('amount');
-
-            // ➖ Sangrias (Retiradas para pagamento ou segurança)
-            $sangrias = $movs->where('type', 'sangria')->sum('amount');
-
-            // 🎯 SALDO ESPERADO EM CAIXA
-            // Vendas - Estornos + Reforços - Sangrias
-            // Nota: O valor de abertura (troco inicial) deve ser somado se não estiver nos movimentos como 'reforco'
+            // Agora o vendas_turno reflete o dinheiro que entrou no bolso, ignorando Vouchers
             $s->vendas_turno = $vendasReais - $estornosReais;
-            $s->saldo_final_esperado = ($vendasReais - $estornosReais) + $reforcos - $sangrias;
-
-            // Volume de Vouchers (Apenas para informação na listagem, se quiser exibir)
-            $s->total_vouchers = $movs->where('type', 'venda')
-                ->filter(fn($m) => str_contains(strtolower($m->payment_method), 'voucher'))
-                ->sum('amount');
         }
 
         return view('bar.reports.cashier', compact('sessoes', 'mesReferencia'));
@@ -284,78 +250,67 @@ class BarReportController extends Controller
         $startDate = Carbon::parse($mesReferencia)->startOfMonth();
         $endDate = Carbon::parse($mesReferencia)->endOfMonth();
 
-        // 1. Inicializa o array com todos os dias do mês
+        // 1. Busca os Itens
+        $orderItems = BarOrderItem::whereHas('order', fn($q) => $q->whereIn('status', ['paid', 'pago'])->whereBetween('updated_at', [$startDate, $endDate]))->with('product')->get();
+        $saleItems = BarSaleItem::whereHas('sale', fn($q) => $q->whereIn('status', ['paid', 'pago'])->whereBetween('created_at', [$startDate, $endDate]))->with('product')->get();
+
         $datas = [];
         $periodo = new \DatePeriod($startDate, new \DateInterval('P1D'), $endDate->copy()->addDay());
         foreach ($periodo as $d) {
-            $datas[$d->format('Y-m-d')] = [
-                'mesas' => 0,
-                'pdv' => 0,
-                'lucro_mesas' => 0,
-                'lucro_pdv' => 0,
-                'descontos' => 0,
-                'vouchers' => 0 // Adicionado para auditoria visual no gráfico
-            ];
+            $datas[$d->format('Y-m-d')] = ['mesas' => 0, 'pdv' => 0, 'lucro_mesas' => 0, 'lucro_pdv' => 0, 'descontos' => 0];
         }
 
-        // 2. Busca itens de Mesas (BarOrder) - Otimizado com with('product')
-        $orderItems = BarOrderItem::whereHas('order', function ($q) use ($startDate, $endDate) {
-            $q->whereIn('status', ['paid', 'pago'])->whereBetween('updated_at', [$startDate, $endDate]);
-        })->with(['order', 'product'])->get();
-
+        // 2. Processa itens de Mesas (Soma o valor BRUTO primeiro)
         foreach ($orderItems as $i) {
             $dia = $i->updated_at->format('Y-m-d');
             if (isset($datas[$dia])) {
-                $isVoucher = str_contains(strtolower($i->order->payment_method ?? ''), 'voucher');
                 $venda = $i->subtotal;
                 $custo = ($i->product->purchase_price ?? 0) * $i->quantity;
-
-                if ($isVoucher) {
-                    $datas[$dia]['vouchers'] += $venda;
-                    // No voucher, o lucro é NEGATIVO (custo do produto) pois não houve entrada
-                    $datas[$dia]['lucro_mesas'] -= $custo;
-                } else {
-                    $datas[$dia]['mesas'] += $venda;
-                    $datas[$dia]['lucro_mesas'] += ($venda - $custo);
-                }
+                $datas[$dia]['mesas'] += $venda;
+                $datas[$dia]['lucro_mesas'] += ($venda - $custo);
             }
         }
 
-        // 3. Busca itens de PDV (BarSale)
-        $saleItems = BarSaleItem::whereHas('sale', function ($q) use ($startDate, $endDate) {
-            $q->whereIn('status', ['paid', 'pago'])->whereBetween('created_at', [$startDate, $endDate]);
-        })->with(['sale', 'product'])->get();
-
+        // 3. Processa itens de PDV (Soma o valor BRUTO primeiro)
         foreach ($saleItems as $i) {
             $dia = $i->created_at->format('Y-m-d');
             if (isset($datas[$dia])) {
-                $isVoucher = str_contains(strtolower($i->sale->payment_method ?? ''), 'voucher');
                 $venda = $i->quantity * ($i->price_at_sale ?? $i->unit_price ?? 0);
                 $custo = ($i->product->purchase_price ?? 0) * $i->quantity;
-
-                if ($isVoucher) {
-                    $datas[$dia]['vouchers'] += $venda;
-                    $datas[$dia]['lucro_pdv'] -= $custo;
-                } else {
-                    $datas[$dia]['pdv'] += $venda;
-                    $datas[$dia]['lucro_pdv'] += ($venda - $custo);
-                }
+                $datas[$dia]['pdv'] += $venda;
+                $datas[$dia]['lucro_pdv'] += ($venda - $custo);
             }
         }
 
-        // 4. Ajuste Final de Descontos (Apenas para vendas NÃO-voucher)
+        // 🎯 4. AJUSTE DE DESCONTOS (Lógica de Diferença para evitar erro de SQL)
         foreach ($datas as $data => $valores) {
-            $ordens = BarOrder::whereIn('status', ['paid', 'pago'])
-                ->where('payment_method', 'not like', '%voucher%')
-                ->whereDate('updated_at', $data)->get();
-
+            // Descontos em Mesas (usa a coluna discount_value se existir, senão calcula)
+            $ordens = BarOrder::whereIn('status', ['paid', 'pago'])->whereDate('updated_at', $data)->get();
+            $descMesas = 0;
             foreach ($ordens as $o) {
-                $desconto = $o->discount_value ?? ($o->items->sum('subtotal') - $o->total_value);
-                if ($desconto > 0.01) {
-                    $datas[$data]['mesas'] -= $desconto;
-                    $datas[$data]['lucro_mesas'] -= $desconto;
-                    $datas[$data]['descontos'] += $desconto;
+                // Se você tem a coluna na tabela de ordens, usamos ela, senão calculamos a diferença
+                $descMesas += $o->discount_value ?? ($o->items->sum('subtotal') - $o->total_value);
+            }
+
+            // Descontos em PDV (Cálculo por diferença pura para evitar erro de coluna inexistente)
+            $vendasPDV = BarSale::whereIn('status', ['paid', 'pago'])->whereDate('created_at', $data)->with('items')->get();
+            $descPDV = 0;
+            foreach ($vendasPDV as $v) {
+                $brutoVenda = $v->items->sum(fn($item) => $item->quantity * ($item->price_at_sale ?? $item->unit_price ?? 0));
+                $pagoReal = (float)$v->total_value;
+                if ($brutoVenda > $pagoReal) {
+                    $descPDV += ($brutoVenda - $pagoReal);
                 }
+            }
+
+            $totalDesc = $descMesas + $descPDV;
+
+            if ($totalDesc > 0.01) {
+                $datas[$data]['mesas'] -= $descMesas;
+                $datas[$data]['pdv'] -= $descPDV;
+                $datas[$data]['lucro_mesas'] -= $descMesas;
+                $datas[$data]['lucro_pdv'] -= $descPDV;
+                $datas[$data]['descontos'] = $totalDesc;
             }
         }
 
@@ -417,34 +372,30 @@ class BarReportController extends Controller
     public function cancelations(Request $request)
     {
         $mesReferencia = $request->input('mes_referencia', now()->format('Y-m'));
-        $startDate = Carbon::parse($mesReferencia)->startOfMonth();
-        $endDate = Carbon::parse($mesReferencia)->endOfMonth();
+        $startDate = \Carbon\Carbon::parse($mesReferencia)->startOfMonth();
+        $endDate = \Carbon\Carbon::parse($mesReferencia)->endOfMonth();
 
         // 1. Financeiro (Estornos de Caixa)
-        // Monitora quem devolveu dinheiro para clientes e por qual motivo
-        $cancelamentosFinanceiros = BarCashMovement::with(['user'])
+        $cancelamentosFinanceiros = \App\Models\Bar\BarCashMovement::with(['user'])
             ->where('type', 'estorno')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // 2. Prejuízo Real (Perdas/Vencidos/Quebras)
-        // Itens que saíram do estoque mas não foram vendidos (o verdadeiro prejuízo)
-        $perdasReais = BarStockMovement::with(['product', 'user'])
+        // 2. Prejuízo Real (Perdas/Vencidos)
+        $perdasReais = \App\Models\Bar\BarStockMovement::with(['product', 'user'])
             ->where('type', 'perda')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // 💰 Cálculo do prejuízo total em R$ baseado no preço de CUSTO
+        // 💰 NOVO: Cálculo do prejuízo total em R$ (Baseado no preço de custo)
         $valorTotalPerdas = $perdasReais->sum(function ($movimento) {
-            $custoUnitario = (float)($movimento->product->purchase_price ?? 0);
-            return abs($movimento->quantity) * $custoUnitario;
+            return abs($movimento->quantity) * ($movimento->product->purchase_price ?? 0);
         });
 
-        // 3. Log de Retornos ao Estoque
-        // Garante que, se uma venda foi cancelada, o produto "voltou pra prateleira"
-        $retornosEstoque = BarStockMovement::with(['product', 'user'])
+        // 3. Apenas Retorno (Itens que voltaram para o estoque)
+        $retornosEstoque = \App\Models\Bar\BarStockMovement::with(['product', 'user'])
             ->where('type', 'input')
             ->where(function ($q) {
                 $q->where('description', 'like', '%CANCELAMENTO%')
@@ -459,7 +410,7 @@ class BarReportController extends Controller
             'perdasReais',
             'retornosEstoque',
             'mesReferencia',
-            'valorTotalPerdas'
+            'valorTotalPerdas' // <-- Enviando para a view
         ));
     }
 
@@ -595,17 +546,14 @@ class BarReportController extends Controller
      */
     public function operators(Request $request)
     {
-        // 1. Filtros de Data
+        // 📅 Filtros de Data (Início e Fim do mês por padrão)
         $start = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
         $end = $request->get('end_date', now()->endOfMonth()->format('Y-m-d'));
         $search = $request->get('search');
 
-        // Métodos que trazem dinheiro real (Lógica consistente com o resto do sistema)
-        $metodosFinanceiros = ['dinheiro', 'pix', 'debito', 'credito', 'cartao', 'misto', 'crédito', 'débito'];
-
-        // 2. Query Principal
-        $query = BarCashMovement::with('user')
-            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59']);
+        $query = \App\Models\Bar\BarCashMovement::with('user')
+            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59'])
+            ->whereIn('type', ['venda', 'estorno']);
 
         // 🔍 Filtro por Nome do Operador
         if ($search) {
@@ -614,32 +562,16 @@ class BarReportController extends Controller
             });
         }
 
-        // 📊 Agrupamento com separação de Dinheiro Real vs Vouchers
         $vendasPorOperador = $query->select(
             'user_id',
-            // Total que entrou no caixa (apenas métodos financeiros)
-            DB::raw("SUM(CASE WHEN type = 'venda' AND payment_method IN ('" . implode("','", $metodosFinanceiros) . "') THEN amount ELSE 0 END) as total_financeiro"),
-
-            // Total de Vouchers (Cortesias que este operador emitiu)
-            DB::raw("SUM(CASE WHEN type = 'venda' AND payment_method LIKE '%voucher%' THEN amount ELSE 0 END) as total_vouchers"),
-
-            // Estornos financeiros
-            DB::raw("SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END) as total_estornado"),
-
-            // Quantidade de transações realizadas
-            DB::raw("COUNT(CASE WHEN type = 'venda' THEN 1 END) as qtd_vendas")
+            \DB::raw("SUM(CASE WHEN type = 'venda' THEN amount ELSE 0 END) as total_bruto"),
+            \DB::raw("SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END) as total_estornado"),
+            \DB::raw("COUNT(CASE WHEN type = 'venda' THEN 1 END) as qtd_vendas")
         )
             ->groupBy('user_id')
             ->get()
             ->map(function ($item) {
-                // Cálculo da produtividade líquida
-                $item->faturamento_liquido = $item->total_financeiro - $item->total_estornado;
-
-                // Ticket Médio Real (Baseado no faturamento financeiro)
-                $item->ticket_medio = $item->qtd_vendas > 0
-                    ? $item->faturamento_liquido / $item->qtd_vendas
-                    : 0;
-
+                $item->faturamento_liquido = $item->total_bruto - $item->total_estornado;
                 return $item;
             })
             ->sortByDesc('faturamento_liquido');

@@ -241,9 +241,9 @@
                     </div>
 
                     {{-- 📊 WIDGET ANALÍTICO DE MÃO DUPLA (Colar abaixo do Preço de Venda) --}}
-                   <!-- <div class="md:col-span-2 p-5 bg-black/40 border border-gray-800 rounded-[2rem] mt-2 shadow-inner">
+                    <div class="md:col-span-2 p-5 bg-black/40 border border-gray-800 rounded-[2rem] mt-2 shadow-inner">
                         <div class="flex flex-col md:flex-row items-center justify-between gap-6">
-                            <div class="flex items-center gap-4">
+                            <!--<div class="flex items-center gap-4">
                                 {{-- Ícone de Status Dinâmico --}}
                                 <div id="margem_status_bg"
                                     class="w-14 h-14 rounded-2xl bg-gray-950 border border-gray-800 flex items-center justify-center transition-all duration-500 text-2xl">
@@ -284,7 +284,7 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            </div>-->
 
                             {{-- Campo de ajuste manual por porcentagem --}}
                             <div class="w-full md:w-auto text-center md:text-right">
@@ -295,7 +295,7 @@
                                     class="w-full md:w-32 bg-gray-950 border-gray-800 rounded-xl p-3 text-xs text-orange-500 font-black text-center outline-none focus:border-orange-500 transition-all shadow-inner">
                             </div>
                         </div>
-                    </div>-->
+                    </div>
 
 
                     {{-- ESTOQUE ATUAL (BLOQUEADO) --}}

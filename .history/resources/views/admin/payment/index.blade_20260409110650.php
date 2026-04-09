@@ -19,141 +19,70 @@
 
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-            {{-- CONTAINER DOS 4 CARDS SUPERIORES (LADO A LADO) --}}
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-
-                {{-- CARD 1: SALDO LÍQUIDO --}}
-                <div
-                    class="bg-green-600 dark:bg-green-700 overflow-hidden shadow-lg rounded-xl p-4 flex flex-col justify-center border-b-4 border-green-900 transition-all hover:scale-105">
-                    <div class="text-[10px] font-bold text-green-50 uppercase tracking-tighter">
-                        Saldo {{ request('arena_id') ? 'da Arena' : 'Geral' }}
-                    </div>
-                    <div class="mt-1 text-2xl font-black text-white truncate">
-                        R$
-                        {{ number_format($financialTransactions->where('payment_method', '!=', 'voucher')->sum('amount'), 2, ',', '.') }}
-                    </div>
-                    <div class="text-[9px] text-green-100 mt-1 italic font-medium">Dinheiro no caixa (Real).</div>
+            {{-- CARD 1: SALDO LÍQUIDO (O que REALMENTE entrou) --}}
+            <div
+                class="bg-green-600 dark:bg-green-700 overflow-hidden shadow-lg rounded-xl p-4 flex flex-col justify-center border-b-4 border-green-900 transition-all hover:scale-105">
+                <div class="text-[10px] font-bold text-green-50 uppercase tracking-tighter flex items-center">
+                    Saldo {{ request('arena_id') ? 'da Arena' : 'Geral' }}
                 </div>
-
-                {{-- CARD 2: REFORÇOS --}}
-                <div
-                    class="bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-900 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center">
-                    <div
-                        class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-tighter">
-                        Reforços (Avulsos)</div>
-                    <div class="mt-1 text-2xl font-black text-emerald-700 dark:text-emerald-500">
-                        R$
-                        {{ number_format($financialTransactions->where('type', 'reforco')->where('payment_method', '!=', 'voucher')->sum('amount'), 2, ',', '.') }}
-                    </div>
-                    <div class="text-[9px] text-gray-500 mt-1 leading-tight font-medium">Troco ou aportes.</div>
+                <div id="valor-liquido-total-real" class="mt-1 text-2xl font-black text-white truncate">
+                    {{-- 🎯 AJUSTE: Use a variável filtrada que vem do Controller --}}
+                    R$
+                    {{ number_format($financialTransactions->where('payment_method', '!=', 'voucher')->sum('amount'), 2, ',', '.') }}
                 </div>
-
-                {{-- CARD 3: SANGRIA --}}
-                <div
-                    class="bg-white dark:bg-gray-800 border border-red-200 dark:border-red-900 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center text-left">
-                    <div class="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-tighter">
-                        Sangrias / Saídas</div>
-                    <div class="mt-1 text-2xl font-black text-red-600 dark:text-red-500">
-                        R$
-                        {{ number_format(abs($financialTransactions->whereIn('type', ['sangria', 'refund', 'no_show_penalty'])->where('amount', '<', 0)->where('payment_method', '!=', 'voucher')->sum('amount')),2,',','.') }}
-                    </div>
-                    <div class="text-[9px] text-gray-500 mt-1 font-medium">Pagamentos e retiradas.</div>
+                <div class="text-[9px] text-green-100 mt-1 italic leading-tight font-medium">
+                    Dinheiro no caixa (Exclui Vouchers).
                 </div>
+            </div>
 
-                {{-- 🎯 CARD 4: RELATÓRIO DE DÍVIDAS (COM CÁLCULO REAL) --}}
-                @php
-                    // Cálculo em tempo real para o Card mostrar o valor correto
-                    $valorDividasHoje = $reservas->sum(function ($r) {
-                        // Pega o valor total (final_price ou price) e subtrai o que já foi pago
-                        $totalPago = $r->transactions->sum('amount');
-                        $valorDevido = (float) ($r->final_price ?? $r->price);
-                        $pendente = $valorDevido - $totalPago;
-
-                        // Retorna o pendente apenas se for maior que zero e não for falta (no_show)
-                        return $r->status !== 'no_show' && $pendente > 0 ? $pendente : 0;
-                    });
-                @endphp
-
-                <a href="{{ route('admin.payment.dividas_acesso') }}"
-                    class="bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-900 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center hover:bg-amber-50 dark:hover:bg-amber-900/10 transition-all border-b-4 border-b-amber-500 group">
-                    <div
-                        class="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-tighter flex items-center justify-between">
-                        Dívidas Pendentes
-                        <svg class="w-4 h-4 text-amber-500 group-hover:animate-bounce" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2">
-                            </path>
-                        </svg>
-                    </div>
-                    <div class="mt-1 text-2xl font-black text-amber-600 dark:text-amber-500">
-                        {{-- 🎯 Agora ele usa a soma real calculada acima --}}
-                        R$ {{ number_format($valorDividasHoje, 2, ',', '.') }}
-                    </div>
-                    <div class="text-[9px] text-amber-500 mt-1 leading-tight font-bold italic uppercase">Acessar
-                        Relatório →</div>
-                </a>
-
-                {{-- 🎯 CARD 5 NOVO: JOGOS / FALTAS (RESTAURADO) --}}
+            {{-- CARD 2: REFORÇOS --}}
+            <div
+                class="bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-900 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center">
                 <div
-                    class="bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-900 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center">
-                    <div
-                        class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-tighter flex items-center">
-                        📊 Jogos / Faltas
-                    </div>
-                    <div class="mt-1 flex items-baseline gap-2">
-                        <span
-                            class="text-2xl font-black text-indigo-700 dark:text-indigo-500">{{ $reservas->count() }}</span>
-                        <span class="text-xs font-bold text-gray-400 uppercase">Totais</span>
-                        <span class="text-gray-300">|</span>
-                        <span
-                            class="text-2xl font-black text-red-600">{{ $reservas->where('status', 'no_show')->count() }}</span>
-                        <span class="text-xs font-bold text-red-500/50 uppercase italic">Faltas</span>
-                    </div>
-                    <div class="text-[9px] text-gray-500 mt-1 leading-tight font-medium">Controle de fluxo de quadras.
-                    </div>
+                    class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-tighter flex items-center">
+                    Reforços (Avulsos)
                 </div>
+                <div class="mt-1 text-2xl font-black text-emerald-700 dark:text-emerald-500">
+                    R$
+                    {{-- 🎯 AJUSTE: Usando financialTransactions para evitar erro 500 --}}
+                    {{ number_format($financialTransactions->where('type', 'reforco')->where('payment_method', '!=', 'voucher')->sum('amount'), 2, ',', '.') }}
+                </div>
+                <div class="text-[9px] text-gray-500 mt-1 leading-tight">Troco inicial ou aportes.</div>
+            </div>
 
-            </div> {{-- FIM DO GRID DE 4 COLUNAS --}}
+            {{-- CARD 3: SANGRIA --}}
+            <div
+                class="bg-white dark:bg-gray-800 border border-red-200 dark:border-red-900 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center text-left">
+                <div
+                    class="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-tighter flex items-center">
+                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M20 12H4"></path>
+                    </svg>
+                    Sangrias / Saídas
+                </div>
+                <div class="mt-1 text-2xl font-black text-red-600 dark:text-red-500">
+                    R$
+                    {{-- 🎯 AJUSTE: Usando a variável correta $financialTransactions e filtrando voucher --}}
+                    {{ number_format(abs($financialTransactions->whereIn('type', ['sangria', 'refund', 'no_show_penalty'])->where('amount', '<', 0)->where('payment_method', '!=', 'voucher')->sum('amount')),2,',','.') }}
+                </div>
+                <div class="text-[9px] text-gray-500 mt-1 leading-tight font-medium">Pagamentos e retiradas.</div>
+            </div>
 
-            {{-- CARD 2: CONTROLE DE STATUS E DADOS (UNIFICADO E CORRIGIDO) --}}
+            {{-- CARD 4: CONTROLE DE STATUS E DADOS (UNIFICADO E CORRIGIDO) --}}
             <div class="space-y-4">
                 {{-- 1. DADOS OCULTOS GLOBAIS --}}
-                {{-- 1. DADOS OCULTOS GLOBAIS (UNIFICADO E CORRIGIDO) --}}
                 <div id="js_global_data">
-                    {{-- Cálculo manual de pendências reais para garantir o desbloqueio do botão --}}
-                    @php
-                        $pendenciasDeHoje = $reservas
-                            ->filter(function ($r) use ($financialTransactions) {
-                                // Soma tudo o que foi pago para esta reserva (incluindo vouchers)
-                                $totalPagoReserva =
-                                    $r->transactions()->sum('amount') +
-                                    \App\Models\FinancialTransaction::whereNull('reserva_id')
-                                        ->where('description', 'LIKE', "%#{$r->id}%")
-                                        ->sum('amount');
+                    {{-- ... outros inputs ... --}}
 
-                                $valorDevido = (float) ($r->final_price ?? $r->price);
-
-                                // Se o que foi pago for menor que o devido, e não for falta, ainda é pendente
-                                return round($totalPagoReserva, 2) < round($valorDevido, 2) && $r->status !== 'no_show';
-                            })
-                            ->count();
-                    @endphp
-
-                    <input type="hidden" id="js_totalReservas" value="{{ $reservas->count() }}">
-                    <input type="hidden" id="js_totalPending" value="{{ $pendenciasDeHoje }}"> {{-- 🎯 Aqui destrava o botão --}}
-                    <input type="hidden" id="js_arenaId" value="{{ request('arena_id') }}">
-                    <input type="hidden" id="js_isFiltered" value="{{ request('arena_id') ? '1' : '0' }}">
-                    <input type="hidden" id="js_cashierDate" value="{{ $selectedDate }}">
-                    <input type="hidden" id="js_isActionDisabled" value="{{ $isActionDisabled ? '1' : '0' }}">
-
-                    {{-- Valor que o Modal de Fechamento vai mostrar como "Esperado" --}}
+                    {{-- 🎯 AJUSTE: O valor líquido da arena para o modal também deve ignorar vouchers --}}
                     <input type="hidden" id="js_valorLiquidoArenaRaw"
                         value="{{ $financialTransactions->where('payment_method', '!=', 'voucher')->sum('amount') }}">
 
+                    {{-- ✨ CORREÇÃO GAVETA: Já está correto pois filtra por dinheiro real, mas garanta as chaves --}}
                     <input type="hidden" id="js_saldoFisicoGavetaRaw"
                         value="{{ $financialTransactions->whereIn('payment_method', ['dinheiro', 'money', 'cash', 'especie', 'money'])->sum('amount') }}">
 
+                    {{-- ✨ CORREÇÃO BANCO: Filtre para garantir que voucher não entre aqui por engano --}}
                     <input type="hidden" id="js_saldoDigitalBancoRaw"
                         value="{{ $financialTransactions->whereIn('payment_method', ['pix', 'transfer', 'transferencia', 'credit_card', 'debit_card'])->where('payment_method', '!=', 'voucher')->sum('amount') }}">
                 </div>
@@ -249,7 +178,7 @@
                 </div>
             </div>
 
-            {{-- CARD 3: LINHA DOS FILTROS (DATA E BUSCA) --}}
+            {{-- CARD 5: LINHA DOS FILTROS (DATA E BUSCA) --}}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                 {{-- BLOCO 1: FILTRO DE DATA --}}
@@ -339,7 +268,7 @@
                 </div>
             </div>
 
-            {{-- CARD 4: NOVA MOVIMENTAÇÃO AVULSA --}}
+            {{-- CARD 6: NOVA MOVIMENTAÇÃO AVULSA --}}
             <div class="flex justify-end items-center mb-4">
                 <button onclick="openTransactionModal()"
                     class="inline-flex items-center px-4 py-2 bg-gray-800 dark:bg-gray-200 border border-transparent rounded-md font-semibold text-xs text-white dark:text-gray-800 uppercase tracking-widest hover:bg-gray-700 active:bg-gray-900 transition ease-in-out duration-150 {{ $isActionDisabled ? 'opacity-50 cursor-not-allowed' : '' }}"
@@ -352,7 +281,7 @@
                 </button>
             </div>
 
-            {{-- CARD 5: FATURAMENTO SEGMENTADO POR ARENA (COM FILTRO CLICÁVEL) --}}
+            {{-- CARD 7: FATURAMENTO SEGMENTADO POR ARENA (COM FILTRO CLICÁVEL) --}}
             <div class="space-y-3 mb-6">
                 <div class="flex items-center justify-between">
                     <h3
@@ -436,7 +365,7 @@
             </div>
 
 
-            {{-- CARD 6: TABELA DE RESERVAS (CONTROLE DE FLUXO) --}}
+            {{-- CARD 8: TABELA DE RESERVAS (CONTROLE DE FLUXO) --}}
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
                     <h3 class="text-lg font-semibold mb-4 flex items-center justify-between">
@@ -588,22 +517,9 @@
                                                 class="text-sm {{ $saldoRealReserva > 0.01 ? 'text-green-600' : 'text-gray-400' }} font-bold">
                                                 R$ {{ number_format($saldoRealReserva, 2, ',', '.') }}
                                             </div>
-
-                                            {{-- 🎯 AJUSTE O AVISO DE "ENTROU HOJE" PARA IGNORAR VOUCHER --}}
-                                            @php
-                                                $pagoNoDiaReal = $financialTransactions
-                                                    ->where('reserva_id', $reserva->id)
-                                                    ->where('payment_method', '!=', 'voucher') // 👈 Não mostra "Entrou hoje" para voucher
-                                                    ->filter(function ($t) use ($selectedDate) {
-                                                        return \Carbon\Carbon::parse($t->paid_at)->toDateString() ===
-                                                            \Carbon\Carbon::parse($selectedDate)->toDateString();
-                                                    })
-                                                    ->sum('amount');
-                                            @endphp
-
-                                            @if ($pagoNoDiaReal > 0.01)
+                                            @if (abs($pagoNoDia - $saldoRealReserva) > 0.01 && $pagoNoDia != 0)
                                                 <div class="text-[9px] text-blue-500 italic">
-                                                    Dinheiro Hoje: R$ {{ number_format($pagoNoDiaReal, 2, ',', '.') }}
+                                                    Entrou hoje: R$ {{ number_format($pagoNoDia, 2, ',', '.') }}
                                                 </div>
                                             @endif
                                         </td>
@@ -667,7 +583,7 @@
                 </div>
             </div>
 
-            {{-- CARD 7: TABELA DE TRANSAÇÕES FINANCEIRAS (AUDITORIA DE CAIXA) --}}
+            {{-- 7. TABELA DE TRANSAÇÕES FINANCEIRAS (AUDITORIA DE CAIXA) --}}
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
                     <h3
@@ -691,13 +607,11 @@
                             class="p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-xl flex justify-between items-center text-left">
                             <div>
                                 <span
-                                    class="block text-[10px] uppercase font-bold text-green-600 dark:text-green-400 tracking-widest">
-                                    Total de Entradas
-                                </span>
+                                    class="block text-[10px] uppercase font-bold text-green-600 dark:text-green-400 tracking-widest">Total
+                                    de Entradas</span>
                                 <span class="text-2xl font-black text-green-700 dark:text-green-300">
                                     R$
-                                    {{-- 🎯 AJUSTE: Soma apenas o que NÃO é voucher --}}
-                                    {{ number_format($financialTransactions->where('amount', '>', 0)->where('payment_method', '!=', 'voucher')->sum('amount'), 2, ',', '.') }}
+                                    {{ number_format($financialTransactions->where('amount', '>', 0)->sum('amount'), 2, ',', '.') }}
                                 </span>
                             </div>
                             <div class="bg-green-100 dark:bg-green-800/30 p-2 rounded-lg text-green-600">
@@ -730,7 +644,7 @@
                     @php
                         $groupedTransactions = $financialTransactions->groupBy('reserva_id');
 
-                        // DICIONÁRIO DE TRADUÇÃO PARA DADOS DO BANCO (Atualizado para incluir Voucher)
+                        // DICIONÁRIO DE TRADUÇÃO PARA DADOS DO BANCO (Atualizado para evitar termos em inglês)
                         $traducao = [
                             // Tipos de Movimentação
                             'no_show_penalty' => 'Multa de Falta',
@@ -743,7 +657,7 @@
                             'sangria' => 'Sangria',
                             'cash_out' => 'Saída (Estorno)',
 
-                            // Meios de Pagamento
+                            // Meios de Pagamento (Tratando todas as variações do Controller/Banco)
                             'pix' => 'PIX',
                             'money' => 'Dinheiro',
                             'cash' => 'Dinheiro',
@@ -756,10 +670,6 @@
                             'transferencia' => 'Transferência',
                             'other' => 'Outro',
                             'outro' => 'Outro',
-
-                            // 🎯 ADICIONADO: Tradução para Voucher/Cortesia
-                            'voucher' => 'Voucher / Cortesia',
-                            'cortesia' => 'Voucher / Cortesia',
                         ];
                     @endphp
 
@@ -837,31 +747,18 @@
                                         @php
                                             $amount = (float) $transaction->amount;
                                             $isRefund = $transaction->type === 'refund' || $amount < 0;
-
-                                            // 🎯 IDENTIFICA SE É VOUCHER PARA APLICAR O ESTILO DIFERENCIADO
-                                            $isVoucher = strtolower($transaction->payment_method) === 'voucher';
-
-                                            // Definição da cor da linha
-                                            if ($isVoucher) {
-                                                $rowClass =
-                                                    'bg-purple-50 dark:bg-purple-900/10 border-l-4 border-purple-500';
-                                                $amountClass = 'text-purple-600 dark:text-purple-400 font-bold';
-                                            } elseif ($isRefund) {
-                                                $rowClass = 'bg-red-50/50 dark:bg-red-900/10 border-l-4 border-red-500';
-                                                $amountClass = 'text-red-600 font-black';
-                                            } else {
-                                                $rowClass =
-                                                    'hover:bg-gray-50 dark:hover:bg-gray-700 border-l-4 border-transparent';
-                                                $amountClass = 'text-green-600 font-bold';
-                                            }
+                                            $rowClass = $isRefund
+                                                ? 'bg-red-50/50 dark:bg-red-900/10 border-l-4 border-red-500'
+                                                : 'hover:bg-gray-50 dark:hover:bg-gray-700 border-l-4 border-transparent';
+                                            $amountClass =
+                                                $amount >= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-black';
                                         @endphp
-
                                         <tr class="{{ $rowClass }} transition duration-150">
                                             <td class="px-4 py-3 text-sm text-gray-500 font-mono italic text-left">
                                                 {{ \Carbon\Carbon::parse($transaction->paid_at)->format('H:i:s') }}
                                             </td>
                                             <td
-                                                class="px-4 py-3 text-sm font-medium {{ $isVoucher ? 'text-purple-700' : ($isRefund ? 'text-red-700' : 'text-indigo-600') }} text-left">
+                                                class="px-4 py-3 text-sm font-medium {{ $isRefund ? 'text-red-700' : 'text-indigo-600' }} text-left">
                                                 #{{ $transaction->reserva_id ?? '--' }}
                                             </td>
                                             <td class="px-4 py-3 text-sm text-left">
@@ -873,22 +770,18 @@
                                                 </div>
                                             </td>
                                             <td class="px-4 py-3 text-sm text-left">
+                                                {{-- AQUI É FEITA A TRADUÇÃO DINÂMICA --}}
                                                 <div class="text-[10px] font-extrabold uppercase text-gray-500">
                                                     {{ $traducao[strtolower($transaction->type)] ?? $transaction->type }}
                                                 </div>
                                                 <div
-                                                    class="text-[9px] px-1 {{ $isVoucher ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 dark:bg-gray-700' }} w-fit rounded font-bold text-gray-600 dark:text-gray-400">
+                                                    class="text-[9px] px-1 bg-gray-100 dark:bg-gray-700 w-fit rounded font-bold text-gray-600 dark:text-gray-400">
                                                     ({{ $traducao[strtolower($transaction->payment_method)] ?? $transaction->payment_method }})
                                                 </div>
                                             </td>
                                             <td
                                                 class="px-4 py-3 text-sm text-left leading-tight text-gray-600 dark:text-gray-400">
                                                 {{ $transaction->description }}
-                                                @if ($isVoucher)
-                                                    <span
-                                                        class="block text-[8px] text-purple-500 font-black uppercase mt-0.5 italic">Entrada
-                                                        não financeira</span>
-                                                @endif
                                             </td>
                                             <td class="px-4 py-3 text-right text-sm font-mono {{ $amountClass }}">
                                                 {{ $amount < 0 ? '-' : '' }} R$
@@ -906,16 +799,10 @@
                                 <tr class="bg-gray-100 dark:bg-gray-700 font-bold border-t-2 border-gray-300">
                                     <td colspan="5"
                                         class="px-4 py-4 text-right uppercase text-xs tracking-widest text-gray-600 dark:text-gray-300">
-                                        Total Líquido do Caixa:
-                                    </td>
-                                    <td class="px-4 py-4 text-right text-lg text-indigo-700 dark:text-indigo-300">
-                                        @php
-                                            // 🎯 AJUSTE FINAL: Calcula o saldo real excluindo vouchers
-                                            $saldoRealFinal = $financialTransactions
-                                                ->where('payment_method', '!=', 'voucher')
-                                                ->sum('amount');
-                                        @endphp
-                                        R$ {{ number_format($saldoRealFinal, 2, ',', '.') }}
+                                        Total Líquido do Caixa:</td>
+                                    <td
+                                        class="px-4 py-4 text-right text-lg {{ $totalRecebidoDiaLiquido >= 0 ? 'text-green-700' : 'text-red-700' }}">
+                                        R$ {{ number_format($totalRecebidoDiaLiquido, 2, ',', '.') }}
                                     </td>
                                 </tr>
                             </tbody>
@@ -925,7 +812,7 @@
             </div>
 
 
-            {{-- CARD 8: HISTÓRICO DE FECHAMENTOS (AUDITORIA DE DIVERGÊNCIAS POR ARENA) --}}
+            {{-- 8. HISTÓRICO DE FECHAMENTOS (AUDITORIA DE DIVERGÊNCIAS POR ARENA) --}}
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg mt-6">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
                     <h3
@@ -1019,7 +906,7 @@
             </div>
 
 
-            {{-- CARD 9: LINK PARA RELATÓRIOS (NAVEGAÇÃO ESTRATÉGICA) --}}
+            {{-- 9. LINK PARA RELATÓRIOS (NAVEGAÇÃO ESTRATÉGICA) --}}
             <div class="mt-8 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
                 <a href="{{ route('admin.financeiro.dashboard') }}"
                     class="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 transition duration-150 group">
@@ -1799,8 +1686,6 @@
 
     {{-- SCRIPT PARA MODAIS E LÓGICA DE CAIXA --}}
     <script>
-        // Adicione isso para que o sistema re-calcule o troco toda vez que mudar a forma de pagamento
-        document.getElementById('modalPaymentMethod').addEventListener('change', checkManualOverpayment);
         // Substitua as duas linhas antigas por esta:
         if (!window.__CAIXA_SCRIPT_LOADED) {
 
@@ -1880,23 +1765,20 @@
                 const signalRawEl = document.getElementById('modalSignalAmountRaw');
                 const amountPaidEl = document.getElementById('modalAmountPaid');
                 const trocoMessageEl = document.getElementById('trocoMessage');
-                const paymentMethodEl = document.getElementById('modalPaymentMethod'); // Pega o Select
 
-                if (!finalPriceEl || !amountPaidEl || !paymentMethodEl) return;
+                if (!finalPriceEl || !amountPaidEl) return;
 
                 const finalPriceCents = toCents(finalPriceEl.value);
                 const signalAmountCents = toCents(signalRawEl.value);
                 const amountPaidNowCents = toCents(amountPaidEl.value);
                 const overpaymentCents = (signalAmountCents + amountPaidNowCents) - finalPriceCents;
 
-                // LÓGICA: Se tem troco E NÃO é voucher, mostra o alerta.
-                if (overpaymentCents > 0 && paymentMethodEl.value !== 'voucher') {
+                if (overpaymentCents > 0) {
                     trocoMessageEl.innerHTML =
                         `🚨 <strong>ATENÇÃO:</strong> Devolver Troco: R$ ${fromCents(overpaymentCents).replace('.', ',')}`;
                     trocoMessageEl.classList.remove('hidden');
                     amountPaidEl.classList.add('border-yellow-500', 'bg-yellow-50');
                 } else {
-                    // Se for voucher ou não tiver troco, limpa o aviso
                     trocoMessageEl.classList.add('hidden');
                     amountPaidEl.classList.remove('border-yellow-500', 'bg-yellow-50');
                 }
@@ -2286,7 +2168,6 @@
                 const form = document.getElementById(formId);
                 if (!form) return;
 
-                // Evita múltiplas vinculações de eventos
                 if (form.dataset.ajaxBound === "1") return;
                 form.dataset.ajaxBound = "1";
 
@@ -2295,19 +2176,8 @@
                 form.onsubmit = function(e) {
                     e.preventDefault();
 
-                    // Controle de concorrência (Anti-clique duplo)
                     if (window.caixaProcessandoGlobal[formId]) return false;
                     window.caixaProcessandoGlobal[formId] = true;
-
-                    const formData = new FormData(form);
-                    const paymentMethod = formData.get('payment_method');
-
-                    // 🛡️ LÓGICA DE FILTRO PARA AUTORIZAÇÃO
-                    const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
-                    const precisaDeAutorizacao = userRole === 'colaborador' && (
-                        acoesRestritas.includes(formId) ||
-                        (formId === 'paymentForm' && paymentMethod === 'voucher')
-                    );
 
                     const enviarParaOServidor = (tokenRecebido = null) => {
                         const btn = document.getElementById(btnId);
@@ -2328,17 +2198,12 @@
                         }
                         if (spinner) spinner.classList.remove('hidden');
 
+                        const formData = new FormData(form);
                         if (tokenRecebido) formData.append('supervisor_token', tokenRecebido);
 
-                        // 🎯 AJUSTE DE URL: Diferencia rotas com ID das rotas de Caixa
-                        let targetUrl = urlTemplate;
-                        if (formId !== 'openCashForm' && formId !== 'closeCashForm') {
-                            const reservaId = formData.get('reserva_id') ||
-                                document.getElementById('noShowReservaId')?.value ||
-                                document.getElementById('debtReservaId')?.value;
-
-                            targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
-                        }
+                        const reservaId = formData.get('reserva_id') || document.getElementById('noShowReservaId')
+                            ?.value;
+                        let targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
 
                         fetch(targetUrl, {
                                 method: 'POST',
@@ -2355,7 +2220,7 @@
                                     if (formId === 'closeCashForm') {
                                         if (typeof closeCloseCashModal === 'function') closeCloseCashModal();
 
-                                        // --- 🧮 LÓGICA DE SOMA REAL PARA RESUMO (RECIBO) ---
+                                        // --- 🧮 LÓGICA DE SOMA REAL (TABELA) ---
                                         let htmlMovimentacao = "";
                                         let sPix = 0,
                                             sDin = 0,
@@ -2379,10 +2244,7 @@
                                                 const formaStr = cols[3].innerText.trim().toUpperCase();
                                                 const valorTxt = cols[5].innerText.trim();
 
-                                                // 🎯 IGNORAR VOUCHER E CORTESIA NO RECIBO
-                                                if (formaStr.includes('VOUCHER') || formaStr.includes(
-                                                        'CORTESIA')) return;
-
+                                                // Converte texto "R$ 60,00" para número real
                                                 const vNum = parseFloat(valorTxt.replace(/[^\d,-]/g, '')
                                                     .replace(',', '.')) || 0;
 
@@ -2401,7 +2263,6 @@
                                                     exibicao = 'CARTÃO DÉBITO';
                                                     sDeb += vNum;
                                                 }
-
                                                 sTotal += vNum;
 
                                                 htmlMovimentacao += `
@@ -2415,12 +2276,12 @@
                                             });
                                         }
 
+                                        // Formatação BRL e Injeção no Modal de Resumo
                                         const f = (v) => v.toLocaleString('pt-br', {
                                             style: 'currency',
                                             currency: 'BRL'
                                         });
 
-                                        // Atualiza os campos do recibo com os valores filtrados
                                         if (document.getElementById('resumoPix')) document.getElementById(
                                             'resumoPix').innerText = f(sPix);
                                         if (document.getElementById('resumoDinheiro')) document.getElementById(
@@ -2432,9 +2293,17 @@
                                         if (document.getElementById('resumoTotal')) document.getElementById(
                                             'resumoTotal').innerText = f(sTotal);
 
+                                        // Data e Exibição
+                                        const dataCaixa = document.getElementById('js_cashierDate')?.value
+                                            .split('-').reverse().join('/') || '';
+                                        if (document.getElementById('resumoDataInfo')) {
+                                            document.getElementById('resumoDataInfo').innerText =
+                                                `Gerenciamento de Caixa - ${dataCaixa}`;
+                                        }
+
                                         const container = document.getElementById('resumoListaAgendamentos');
                                         if (container) container.innerHTML = htmlMovimentacao ||
-                                            "SEM MOVIMENTAÇÕES FINANCEIRAS.";
+                                            "SEM MOVIMENTAÇÕES.";
 
                                         const modalResumo = document.getElementById('modalResumoFinal');
                                         if (modalResumo) modalResumo.classList.replace('hidden', 'flex');
@@ -2442,7 +2311,6 @@
                                         window.caixaProcessandoGlobal[formId] = false;
                                         return;
                                     }
-
                                     window.location.reload();
                                 } else {
                                     alert("Erro: " + (json.message || 'Falha no processamento.'));
@@ -2459,14 +2327,11 @@
                             });
                     };
 
-                    if (precisaDeAutorizacao) {
+                    const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
+                    if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
                         window.requisitarAutorizacao(token => {
-                            if (token) {
-                                enviarParaOServidor(token);
-                            } else {
-                                window.caixaProcessandoGlobal[formId] = false;
-                                if (paymentMethod === 'voucher') alert("Uso de Voucher não autorizado.");
-                            }
+                            if (token) enviarParaOServidor(token);
+                            else window.caixaProcessandoGlobal[formId] = false;
                         });
                     } else {
                         enviarParaOServidor();

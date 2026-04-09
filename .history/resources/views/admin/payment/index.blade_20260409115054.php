@@ -2286,7 +2286,6 @@
                 const form = document.getElementById(formId);
                 if (!form) return;
 
-                // Evita múltiplas vinculações de eventos
                 if (form.dataset.ajaxBound === "1") return;
                 form.dataset.ajaxBound = "1";
 
@@ -2295,19 +2294,8 @@
                 form.onsubmit = function(e) {
                     e.preventDefault();
 
-                    // Controle de concorrência (Anti-clique duplo)
                     if (window.caixaProcessandoGlobal[formId]) return false;
                     window.caixaProcessandoGlobal[formId] = true;
-
-                    const formData = new FormData(form);
-                    const paymentMethod = formData.get('payment_method');
-
-                    // 🛡️ LÓGICA DE FILTRO PARA AUTORIZAÇÃO
-                    const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
-                    const precisaDeAutorizacao = userRole === 'colaborador' && (
-                        acoesRestritas.includes(formId) ||
-                        (formId === 'paymentForm' && paymentMethod === 'voucher')
-                    );
 
                     const enviarParaOServidor = (tokenRecebido = null) => {
                         const btn = document.getElementById(btnId);
@@ -2328,17 +2316,12 @@
                         }
                         if (spinner) spinner.classList.remove('hidden');
 
+                        const formData = new FormData(form);
                         if (tokenRecebido) formData.append('supervisor_token', tokenRecebido);
 
-                        // 🎯 AJUSTE DE URL: Diferencia rotas com ID das rotas de Caixa
-                        let targetUrl = urlTemplate;
-                        if (formId !== 'openCashForm' && formId !== 'closeCashForm') {
-                            const reservaId = formData.get('reserva_id') ||
-                                document.getElementById('noShowReservaId')?.value ||
-                                document.getElementById('debtReservaId')?.value;
-
-                            targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
-                        }
+                        const reservaId = formData.get('reserva_id') || document.getElementById('noShowReservaId')
+                            ?.value;
+                        let targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
 
                         fetch(targetUrl, {
                                 method: 'POST',
@@ -2355,7 +2338,7 @@
                                     if (formId === 'closeCashForm') {
                                         if (typeof closeCloseCashModal === 'function') closeCloseCashModal();
 
-                                        // --- 🧮 LÓGICA DE SOMA REAL PARA RESUMO (RECIBO) ---
+                                        // --- 🧮 LÓGICA DE SOMA REAL (TABELA) ---
                                         let htmlMovimentacao = "";
                                         let sPix = 0,
                                             sDin = 0,
@@ -2379,10 +2362,7 @@
                                                 const formaStr = cols[3].innerText.trim().toUpperCase();
                                                 const valorTxt = cols[5].innerText.trim();
 
-                                                // 🎯 IGNORAR VOUCHER E CORTESIA NO RECIBO
-                                                if (formaStr.includes('VOUCHER') || formaStr.includes(
-                                                        'CORTESIA')) return;
-
+                                                // Converte texto "R$ 60,00" para número real
                                                 const vNum = parseFloat(valorTxt.replace(/[^\d,-]/g, '')
                                                     .replace(',', '.')) || 0;
 
@@ -2401,7 +2381,6 @@
                                                     exibicao = 'CARTÃO DÉBITO';
                                                     sDeb += vNum;
                                                 }
-
                                                 sTotal += vNum;
 
                                                 htmlMovimentacao += `
@@ -2415,12 +2394,12 @@
                                             });
                                         }
 
+                                        // Formatação BRL e Injeção no Modal de Resumo
                                         const f = (v) => v.toLocaleString('pt-br', {
                                             style: 'currency',
                                             currency: 'BRL'
                                         });
 
-                                        // Atualiza os campos do recibo com os valores filtrados
                                         if (document.getElementById('resumoPix')) document.getElementById(
                                             'resumoPix').innerText = f(sPix);
                                         if (document.getElementById('resumoDinheiro')) document.getElementById(
@@ -2432,9 +2411,17 @@
                                         if (document.getElementById('resumoTotal')) document.getElementById(
                                             'resumoTotal').innerText = f(sTotal);
 
+                                        // Data e Exibição
+                                        const dataCaixa = document.getElementById('js_cashierDate')?.value
+                                            .split('-').reverse().join('/') || '';
+                                        if (document.getElementById('resumoDataInfo')) {
+                                            document.getElementById('resumoDataInfo').innerText =
+                                                `Gerenciamento de Caixa - ${dataCaixa}`;
+                                        }
+
                                         const container = document.getElementById('resumoListaAgendamentos');
                                         if (container) container.innerHTML = htmlMovimentacao ||
-                                            "SEM MOVIMENTAÇÕES FINANCEIRAS.";
+                                            "SEM MOVIMENTAÇÕES.";
 
                                         const modalResumo = document.getElementById('modalResumoFinal');
                                         if (modalResumo) modalResumo.classList.replace('hidden', 'flex');
@@ -2442,7 +2429,6 @@
                                         window.caixaProcessandoGlobal[formId] = false;
                                         return;
                                     }
-
                                     window.location.reload();
                                 } else {
                                     alert("Erro: " + (json.message || 'Falha no processamento.'));
@@ -2459,14 +2445,11 @@
                             });
                     };
 
-                    if (precisaDeAutorizacao) {
+                    const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
+                    if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
                         window.requisitarAutorizacao(token => {
-                            if (token) {
-                                enviarParaOServidor(token);
-                            } else {
-                                window.caixaProcessandoGlobal[formId] = false;
-                                if (paymentMethod === 'voucher') alert("Uso de Voucher não autorizado.");
-                            }
+                            if (token) enviarParaOServidor(token);
+                            else window.caixaProcessandoGlobal[formId] = false;
                         });
                     } else {
                         enviarParaOServidor();

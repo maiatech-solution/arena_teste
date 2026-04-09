@@ -20,7 +20,7 @@
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
             {{-- CONTAINER DOS 4 CARDS SUPERIORES (LADO A LADO) --}}
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
 
                 {{-- CARD 1: SALDO LÍQUIDO --}}
                 <div
@@ -60,20 +60,7 @@
                     <div class="text-[9px] text-gray-500 mt-1 font-medium">Pagamentos e retiradas.</div>
                 </div>
 
-                {{-- 🎯 CARD 4: RELATÓRIO DE DÍVIDAS (COM CÁLCULO REAL) --}}
-                @php
-                    // Cálculo em tempo real para o Card mostrar o valor correto
-                    $valorDividasHoje = $reservas->sum(function ($r) {
-                        // Pega o valor total (final_price ou price) e subtrai o que já foi pago
-                        $totalPago = $r->transactions->sum('amount');
-                        $valorDevido = (float) ($r->final_price ?? $r->price);
-                        $pendente = $valorDevido - $totalPago;
-
-                        // Retorna o pendente apenas se for maior que zero e não for falta (no_show)
-                        return $r->status !== 'no_show' && $pendente > 0 ? $pendente : 0;
-                    });
-                @endphp
-
+                {{-- 🎯 CARD 4: RELATÓRIO DE DÍVIDAS (RESTAURADO) --}}
                 <a href="{{ route('admin.payment.dividas_acesso') }}"
                     class="bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-900 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center hover:bg-amber-50 dark:hover:bg-amber-900/10 transition-all border-b-4 border-b-amber-500 group">
                     <div
@@ -87,32 +74,11 @@
                         </svg>
                     </div>
                     <div class="mt-1 text-2xl font-black text-amber-600 dark:text-amber-500">
-                        {{-- 🎯 Agora ele usa a soma real calculada acima --}}
-                        R$ {{ number_format($valorDividasHoje, 2, ',', '.') }}
+                        R$ {{ number_format($totalPending, 2, ',', '.') }}
                     </div>
                     <div class="text-[9px] text-amber-500 mt-1 leading-tight font-bold italic uppercase">Acessar
                         Relatório →</div>
                 </a>
-
-                {{-- 🎯 CARD 5 NOVO: JOGOS / FALTAS (RESTAURADO) --}}
-                <div
-                    class="bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-900 overflow-hidden shadow-md rounded-xl p-4 flex flex-col justify-center">
-                    <div
-                        class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-tighter flex items-center">
-                        📊 Jogos / Faltas
-                    </div>
-                    <div class="mt-1 flex items-baseline gap-2">
-                        <span
-                            class="text-2xl font-black text-indigo-700 dark:text-indigo-500">{{ $reservas->count() }}</span>
-                        <span class="text-xs font-bold text-gray-400 uppercase">Totais</span>
-                        <span class="text-gray-300">|</span>
-                        <span
-                            class="text-2xl font-black text-red-600">{{ $reservas->where('status', 'no_show')->count() }}</span>
-                        <span class="text-xs font-bold text-red-500/50 uppercase italic">Faltas</span>
-                    </div>
-                    <div class="text-[9px] text-gray-500 mt-1 leading-tight font-medium">Controle de fluxo de quadras.
-                    </div>
-                </div>
 
             </div> {{-- FIM DO GRID DE 4 COLUNAS --}}
 
@@ -2286,7 +2252,6 @@
                 const form = document.getElementById(formId);
                 if (!form) return;
 
-                // Evita múltiplas vinculações de eventos
                 if (form.dataset.ajaxBound === "1") return;
                 form.dataset.ajaxBound = "1";
 
@@ -2295,19 +2260,8 @@
                 form.onsubmit = function(e) {
                     e.preventDefault();
 
-                    // Controle de concorrência (Anti-clique duplo)
                     if (window.caixaProcessandoGlobal[formId]) return false;
                     window.caixaProcessandoGlobal[formId] = true;
-
-                    const formData = new FormData(form);
-                    const paymentMethod = formData.get('payment_method');
-
-                    // 🛡️ LÓGICA DE FILTRO PARA AUTORIZAÇÃO
-                    const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
-                    const precisaDeAutorizacao = userRole === 'colaborador' && (
-                        acoesRestritas.includes(formId) ||
-                        (formId === 'paymentForm' && paymentMethod === 'voucher')
-                    );
 
                     const enviarParaOServidor = (tokenRecebido = null) => {
                         const btn = document.getElementById(btnId);
@@ -2328,17 +2282,12 @@
                         }
                         if (spinner) spinner.classList.remove('hidden');
 
+                        const formData = new FormData(form);
                         if (tokenRecebido) formData.append('supervisor_token', tokenRecebido);
 
-                        // 🎯 AJUSTE DE URL: Diferencia rotas com ID das rotas de Caixa
-                        let targetUrl = urlTemplate;
-                        if (formId !== 'openCashForm' && formId !== 'closeCashForm') {
-                            const reservaId = formData.get('reserva_id') ||
-                                document.getElementById('noShowReservaId')?.value ||
-                                document.getElementById('debtReservaId')?.value;
-
-                            targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
-                        }
+                        const reservaId = formData.get('reserva_id') || document.getElementById('noShowReservaId')
+                            ?.value;
+                        let targetUrl = urlTemplate.replace('{reserva}', reservaId).replace('{id}', reservaId);
 
                         fetch(targetUrl, {
                                 method: 'POST',
@@ -2355,7 +2304,7 @@
                                     if (formId === 'closeCashForm') {
                                         if (typeof closeCloseCashModal === 'function') closeCloseCashModal();
 
-                                        // --- 🧮 LÓGICA DE SOMA REAL PARA RESUMO (RECIBO) ---
+                                        // --- 🧮 LÓGICA DE SOMA REAL (TABELA) ---
                                         let htmlMovimentacao = "";
                                         let sPix = 0,
                                             sDin = 0,
@@ -2379,10 +2328,7 @@
                                                 const formaStr = cols[3].innerText.trim().toUpperCase();
                                                 const valorTxt = cols[5].innerText.trim();
 
-                                                // 🎯 IGNORAR VOUCHER E CORTESIA NO RECIBO
-                                                if (formaStr.includes('VOUCHER') || formaStr.includes(
-                                                        'CORTESIA')) return;
-
+                                                // Converte texto "R$ 60,00" para número real
                                                 const vNum = parseFloat(valorTxt.replace(/[^\d,-]/g, '')
                                                     .replace(',', '.')) || 0;
 
@@ -2401,7 +2347,6 @@
                                                     exibicao = 'CARTÃO DÉBITO';
                                                     sDeb += vNum;
                                                 }
-
                                                 sTotal += vNum;
 
                                                 htmlMovimentacao += `
@@ -2415,12 +2360,12 @@
                                             });
                                         }
 
+                                        // Formatação BRL e Injeção no Modal de Resumo
                                         const f = (v) => v.toLocaleString('pt-br', {
                                             style: 'currency',
                                             currency: 'BRL'
                                         });
 
-                                        // Atualiza os campos do recibo com os valores filtrados
                                         if (document.getElementById('resumoPix')) document.getElementById(
                                             'resumoPix').innerText = f(sPix);
                                         if (document.getElementById('resumoDinheiro')) document.getElementById(
@@ -2432,9 +2377,17 @@
                                         if (document.getElementById('resumoTotal')) document.getElementById(
                                             'resumoTotal').innerText = f(sTotal);
 
+                                        // Data e Exibição
+                                        const dataCaixa = document.getElementById('js_cashierDate')?.value
+                                            .split('-').reverse().join('/') || '';
+                                        if (document.getElementById('resumoDataInfo')) {
+                                            document.getElementById('resumoDataInfo').innerText =
+                                                `Gerenciamento de Caixa - ${dataCaixa}`;
+                                        }
+
                                         const container = document.getElementById('resumoListaAgendamentos');
                                         if (container) container.innerHTML = htmlMovimentacao ||
-                                            "SEM MOVIMENTAÇÕES FINANCEIRAS.";
+                                            "SEM MOVIMENTAÇÕES.";
 
                                         const modalResumo = document.getElementById('modalResumoFinal');
                                         if (modalResumo) modalResumo.classList.replace('hidden', 'flex');
@@ -2442,7 +2395,6 @@
                                         window.caixaProcessandoGlobal[formId] = false;
                                         return;
                                     }
-
                                     window.location.reload();
                                 } else {
                                     alert("Erro: " + (json.message || 'Falha no processamento.'));
@@ -2459,14 +2411,11 @@
                             });
                     };
 
-                    if (precisaDeAutorizacao) {
+                    const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
+                    if (userRole === 'colaborador' && acoesRestritas.includes(formId)) {
                         window.requisitarAutorizacao(token => {
-                            if (token) {
-                                enviarParaOServidor(token);
-                            } else {
-                                window.caixaProcessandoGlobal[formId] = false;
-                                if (paymentMethod === 'voucher') alert("Uso de Voucher não autorizado.");
-                            }
+                            if (token) enviarParaOServidor(token);
+                            else window.caixaProcessandoGlobal[formId] = false;
                         });
                     } else {
                         enviarParaOServidor();

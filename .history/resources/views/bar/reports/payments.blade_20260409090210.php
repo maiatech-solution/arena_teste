@@ -219,30 +219,4 @@
             display: none;
         }
     </style>
-
-    {{-- 🕵️ SEÇÃO DE AUDITORIA DE VOUCHERS --}}
-    <div class="mt-12 bg-black/40 border border-indigo-500/20 rounded-[3rem] p-8">
-        <h3 class="text-indigo-400 font-black text-xs uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
-            <span>🎟️ Detalhamento de Itens Voucher (Auditoria)</span>
-        </h3>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            @foreach ($listaVouchers as $v)
-                <div class="bg-gray-900/50 border border-gray-800 p-4 rounded-2xl flex justify-between items-center">
-                    <div>
-                        <p class="text-white font-bold text-xs">ID #{{ $v->id }}</p>
-                        <p class="text-[10px] text-gray-500">
-                            {{ \Carbon\Carbon::parse($v->created_at)->format('d/m H:i') }}</p>
-                        <p class="text-[9px] text-indigo-400 italic">{{ $v->description }}</p>
-                    </div>
-                    <div class="text-right">
-                        <p
-                            class="text-xl font-black {{ $v->amount > 0 ? 'text-green-500' : 'text-red-500 opacity-50' }}">
-                            R$ {{ number_format($v->amount, 2, ',', '.') }}
-                        </p>
-                    </div>
-                </div>
-            @endforeach
-        </div>
-    </div>
 </x-bar-layout>

@@ -595,17 +595,14 @@ class BarReportController extends Controller
      */
     public function operators(Request $request)
     {
-        // 1. Filtros de Data
+        // 📅 Filtros de Data (Início e Fim do mês por padrão)
         $start = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
         $end = $request->get('end_date', now()->endOfMonth()->format('Y-m-d'));
         $search = $request->get('search');
 
-        // Métodos que trazem dinheiro real (Lógica consistente com o resto do sistema)
-        $metodosFinanceiros = ['dinheiro', 'pix', 'debito', 'credito', 'cartao', 'misto', 'crédito', 'débito'];
-
-        // 2. Query Principal
-        $query = BarCashMovement::with('user')
-            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59']);
+        $query = \App\Models\Bar\BarCashMovement::with('user')
+            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59'])
+            ->whereIn('type', ['venda', 'estorno']);
 
         // 🔍 Filtro por Nome do Operador
         if ($search) {
@@ -614,32 +611,16 @@ class BarReportController extends Controller
             });
         }
 
-        // 📊 Agrupamento com separação de Dinheiro Real vs Vouchers
         $vendasPorOperador = $query->select(
             'user_id',
-            // Total que entrou no caixa (apenas métodos financeiros)
-            DB::raw("SUM(CASE WHEN type = 'venda' AND payment_method IN ('" . implode("','", $metodosFinanceiros) . "') THEN amount ELSE 0 END) as total_financeiro"),
-
-            // Total de Vouchers (Cortesias que este operador emitiu)
-            DB::raw("SUM(CASE WHEN type = 'venda' AND payment_method LIKE '%voucher%' THEN amount ELSE 0 END) as total_vouchers"),
-
-            // Estornos financeiros
-            DB::raw("SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END) as total_estornado"),
-
-            // Quantidade de transações realizadas
-            DB::raw("COUNT(CASE WHEN type = 'venda' THEN 1 END) as qtd_vendas")
+            \DB::raw("SUM(CASE WHEN type = 'venda' THEN amount ELSE 0 END) as total_bruto"),
+            \DB::raw("SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END) as total_estornado"),
+            \DB::raw("COUNT(CASE WHEN type = 'venda' THEN 1 END) as qtd_vendas")
         )
             ->groupBy('user_id')
             ->get()
             ->map(function ($item) {
-                // Cálculo da produtividade líquida
-                $item->faturamento_liquido = $item->total_financeiro - $item->total_estornado;
-
-                // Ticket Médio Real (Baseado no faturamento financeiro)
-                $item->ticket_medio = $item->qtd_vendas > 0
-                    ? $item->faturamento_liquido / $item->qtd_vendas
-                    : 0;
-
+                $item->faturamento_liquido = $item->total_bruto - $item->total_estornado;
                 return $item;
             })
             ->sortByDesc('faturamento_liquido');

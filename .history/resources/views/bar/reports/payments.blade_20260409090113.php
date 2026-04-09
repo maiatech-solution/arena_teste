@@ -157,43 +157,29 @@
                 </thead>
                 <tbody class="divide-y divide-gray-800/50">
                     @forelse($pagamentos as $p)
-                        @php
-                            $m = strtolower($p->payment_method);
-                            $isVoucher = str_contains($m, 'voucher');
-                        @endphp
-                        <tr
-                            class="{{ $isVoucher ? 'bg-indigo-500/[0.03]' : '' }} hover:bg-white/[0.02] transition-colors group">
+                        <tr class="hover:bg-white/[0.02] transition-colors group">
                             <td class="p-8">
                                 <div class="flex items-center gap-4">
                                     <div
-                                        class="w-12 h-12 bg-black rounded-2xl flex items-center justify-center border {{ $isVoucher ? 'border-indigo-500/30' : 'border-gray-800' }} group-hover:border-orange-500 transition-all text-xl">
+                                        class="w-12 h-12 bg-black rounded-2xl flex items-center justify-center border border-gray-800 group-hover:border-orange-500 transition-all text-xl">
                                         @php
+                                            $m = strtolower($p->payment_method);
                                             if (str_contains($m, 'pix')) {
                                                 echo '💎';
                                             } elseif (str_contains($m, 'dinheiro')) {
                                                 echo '💵';
-                                            } elseif ($isVoucher) {
-                                                echo '🎟️';
                                             } else {
                                                 echo '💳';
                                             }
                                         @endphp
                                     </div>
-                                    <div>
-                                        <span
-                                            class="text-white font-black text-sm uppercase block tracking-tight">{{ $p->payment_method }}</span>
-                                        @if ($isVoucher)
-                                            <span
-                                                class="text-[8px] text-indigo-400 font-bold uppercase tracking-widest italic">Modalidade
-                                                de Isenção</span>
-                                        @endif
-                                    </div>
+                                    <span
+                                        class="text-white font-black text-sm uppercase block tracking-tight">{{ $p->payment_method }}</span>
                                 </div>
                             </td>
                             <td class="p-8 text-center text-gray-400 font-black font-mono text-xl">{{ $p->qtd }}
                             </td>
-                            <td
-                                class="p-8 text-right font-black {{ $isVoucher ? 'text-indigo-400' : 'text-orange-500' }} italic text-3xl tracking-tighter">
+                            <td class="p-8 text-right font-black text-orange-500 italic text-3xl tracking-tighter">
                                 R$ {{ number_format($p->total, 2, ',', '.') }}
                             </td>
                         </tr>
@@ -219,30 +205,4 @@
             display: none;
         }
     </style>
-
-    {{-- 🕵️ SEÇÃO DE AUDITORIA DE VOUCHERS --}}
-    <div class="mt-12 bg-black/40 border border-indigo-500/20 rounded-[3rem] p-8">
-        <h3 class="text-indigo-400 font-black text-xs uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
-            <span>🎟️ Detalhamento de Itens Voucher (Auditoria)</span>
-        </h3>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            @foreach ($listaVouchers as $v)
-                <div class="bg-gray-900/50 border border-gray-800 p-4 rounded-2xl flex justify-between items-center">
-                    <div>
-                        <p class="text-white font-bold text-xs">ID #{{ $v->id }}</p>
-                        <p class="text-[10px] text-gray-500">
-                            {{ \Carbon\Carbon::parse($v->created_at)->format('d/m H:i') }}</p>
-                        <p class="text-[9px] text-indigo-400 italic">{{ $v->description }}</p>
-                    </div>
-                    <div class="text-right">
-                        <p
-                            class="text-xl font-black {{ $v->amount > 0 ? 'text-green-500' : 'text-red-500 opacity-50' }}">
-                            R$ {{ number_format($v->amount, 2, ',', '.') }}
-                        </p>
-                    </div>
-                </div>
-            @endforeach
-        </div>
-    </div>
 </x-bar-layout>

@@ -417,34 +417,30 @@ class BarReportController extends Controller
     public function cancelations(Request $request)
     {
         $mesReferencia = $request->input('mes_referencia', now()->format('Y-m'));
-        $startDate = Carbon::parse($mesReferencia)->startOfMonth();
-        $endDate = Carbon::parse($mesReferencia)->endOfMonth();
+        $startDate = \Carbon\Carbon::parse($mesReferencia)->startOfMonth();
+        $endDate = \Carbon\Carbon::parse($mesReferencia)->endOfMonth();
 
         // 1. Financeiro (Estornos de Caixa)
-        // Monitora quem devolveu dinheiro para clientes e por qual motivo
-        $cancelamentosFinanceiros = BarCashMovement::with(['user'])
+        $cancelamentosFinanceiros = \App\Models\Bar\BarCashMovement::with(['user'])
             ->where('type', 'estorno')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // 2. Prejuízo Real (Perdas/Vencidos/Quebras)
-        // Itens que saíram do estoque mas não foram vendidos (o verdadeiro prejuízo)
-        $perdasReais = BarStockMovement::with(['product', 'user'])
+        // 2. Prejuízo Real (Perdas/Vencidos)
+        $perdasReais = \App\Models\Bar\BarStockMovement::with(['product', 'user'])
             ->where('type', 'perda')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // 💰 Cálculo do prejuízo total em R$ baseado no preço de CUSTO
+        // 💰 NOVO: Cálculo do prejuízo total em R$ (Baseado no preço de custo)
         $valorTotalPerdas = $perdasReais->sum(function ($movimento) {
-            $custoUnitario = (float)($movimento->product->purchase_price ?? 0);
-            return abs($movimento->quantity) * $custoUnitario;
+            return abs($movimento->quantity) * ($movimento->product->purchase_price ?? 0);
         });
 
-        // 3. Log de Retornos ao Estoque
-        // Garante que, se uma venda foi cancelada, o produto "voltou pra prateleira"
-        $retornosEstoque = BarStockMovement::with(['product', 'user'])
+        // 3. Apenas Retorno (Itens que voltaram para o estoque)
+        $retornosEstoque = \App\Models\Bar\BarStockMovement::with(['product', 'user'])
             ->where('type', 'input')
             ->where(function ($q) {
                 $q->where('description', 'like', '%CANCELAMENTO%')
@@ -459,7 +455,7 @@ class BarReportController extends Controller
             'perdasReais',
             'retornosEstoque',
             'mesReferencia',
-            'valorTotalPerdas'
+            'valorTotalPerdas' // <-- Enviando para a view
         ));
     }
 
@@ -595,17 +591,14 @@ class BarReportController extends Controller
      */
     public function operators(Request $request)
     {
-        // 1. Filtros de Data
+        // 📅 Filtros de Data (Início e Fim do mês por padrão)
         $start = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
         $end = $request->get('end_date', now()->endOfMonth()->format('Y-m-d'));
         $search = $request->get('search');
 
-        // Métodos que trazem dinheiro real (Lógica consistente com o resto do sistema)
-        $metodosFinanceiros = ['dinheiro', 'pix', 'debito', 'credito', 'cartao', 'misto', 'crédito', 'débito'];
-
-        // 2. Query Principal
-        $query = BarCashMovement::with('user')
-            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59']);
+        $query = \App\Models\Bar\BarCashMovement::with('user')
+            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59'])
+            ->whereIn('type', ['venda', 'estorno']);
 
         // 🔍 Filtro por Nome do Operador
         if ($search) {
@@ -614,32 +607,16 @@ class BarReportController extends Controller
             });
         }
 
-        // 📊 Agrupamento com separação de Dinheiro Real vs Vouchers
         $vendasPorOperador = $query->select(
             'user_id',
-            // Total que entrou no caixa (apenas métodos financeiros)
-            DB::raw("SUM(CASE WHEN type = 'venda' AND payment_method IN ('" . implode("','", $metodosFinanceiros) . "') THEN amount ELSE 0 END) as total_financeiro"),
-
-            // Total de Vouchers (Cortesias que este operador emitiu)
-            DB::raw("SUM(CASE WHEN type = 'venda' AND payment_method LIKE '%voucher%' THEN amount ELSE 0 END) as total_vouchers"),
-
-            // Estornos financeiros
-            DB::raw("SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END) as total_estornado"),
-
-            // Quantidade de transações realizadas
-            DB::raw("COUNT(CASE WHEN type = 'venda' THEN 1 END) as qtd_vendas")
+            \DB::raw("SUM(CASE WHEN type = 'venda' THEN amount ELSE 0 END) as total_bruto"),
+            \DB::raw("SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END) as total_estornado"),
+            \DB::raw("COUNT(CASE WHEN type = 'venda' THEN 1 END) as qtd_vendas")
         )
             ->groupBy('user_id')
             ->get()
             ->map(function ($item) {
-                // Cálculo da produtividade líquida
-                $item->faturamento_liquido = $item->total_financeiro - $item->total_estornado;
-
-                // Ticket Médio Real (Baseado no faturamento financeiro)
-                $item->ticket_medio = $item->qtd_vendas > 0
-                    ? $item->faturamento_liquido / $item->qtd_vendas
-                    : 0;
-
+                $item->faturamento_liquido = $item->total_bruto - $item->total_estornado;
                 return $item;
             })
             ->sortByDesc('faturamento_liquido');

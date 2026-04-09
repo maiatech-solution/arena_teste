@@ -127,24 +127,42 @@ class FinanceiroController extends Controller
         $queryParaTotais = clone $query;
         $transacoesParaTotais = $queryParaTotais->get();
 
-        // 📊 AGRUPAMENTO ALINHADO COM AS NOVAS CONSTANTES
+        // 📊 UNIFICAÇÃO DOS TOTAIS POR MÉTODO
         $totaisPorMetodo = $transacoesParaTotais->groupBy(function ($item) {
-            $metodo = $item->payment_method; // O Mutator do Model já garante que chegue limpo aqui
+            $metodo = strtolower(trim($item->payment_method));
 
-            return match ($metodo) {
-                FinancialTransaction::PAYMENT_MONEY  => 'dinheiro',
-                FinancialTransaction::PAYMENT_PIX    => 'pix',
-                FinancialTransaction::PAYMENT_CREDIT => 'credito', // 💳 Separado
-                FinancialTransaction::PAYMENT_DEBIT  => 'debito',  // 💳 Separado
-                FinancialTransaction::PAYMENT_TRANSFER => 'transferencia',
-                FinancialTransaction::PAYMENT_VOUCHER => 'voucher', // 🎟️ Cortesia
-                default => 'outro',
-            };
+            // 1. GAVETA
+            if (in_array($metodo, ['dinheiro', 'money', 'cash', 'especie'])) {
+                return 'dinheiro';
+            }
+
+            // 2. BANCO / PIX
+            if (in_array($metodo, ['pix', 'bank'])) {
+                return 'pix';
+            }
+
+            // 3. CARTÃO
+            if (in_array($metodo, ['cartao', 'cartão', 'credit', 'card', 'debito', 'débito', 'credit_card', 'debit_card'])) {
+                return 'cartao';
+            }
+
+            // 4. TRANSFERÊNCIA
+            if (in_array($metodo, ['transferencia', 'transferência', 'transf', 'transfer'])) {
+                return 'transferencia';
+            }
+
+            // 🎯 5. VOUCHER / CORTESIA (Identificado separadamente)
+            if (in_array($metodo, ['voucher', 'cortesia'])) {
+                return 'voucher';
+            }
+
+            return $metodo ?: 'outro';
         })->map(fn($row) => $row->sum('amount'));
 
-        // 💰 FATURAMENTO REAL (Soma tudo menos os Vouchers)
+        // 💰 FATURAMENTO REAL (Soma tudo, EXCETO vouchers)
+        // Isso garante que o total do relatório bata com o seu extrato bancário + gaveta
         $faturamentoTotal = $transacoesParaTotais
-            ->where('payment_method', '!=', FinancialTransaction::PAYMENT_VOUCHER)
+            ->where('payment_method', '!=', 'voucher')
             ->sum('amount');
 
         $transacoes = $query->orderBy('paid_at', 'desc')->paginate(30)->withQueryString();
@@ -158,6 +176,7 @@ class FinanceiroController extends Controller
             'fluxo'
         ));
     }
+
     /**
      * Relatório 02: Histórico de Caixa (Isolado por Arena)
      */
@@ -166,49 +185,19 @@ class FinanceiroController extends Controller
         $arenaId = $request->get('arena_id');
         $data = $request->input('data', now()->format('Y-m-d'));
 
-        // 1. Busca todas as movimentações do dia
         $movimentacoes = FinancialTransaction::whereDate('paid_at', $data)
             ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
             ->with(['reserva', 'manager', 'arena'])
             ->orderBy('paid_at', 'asc')
             ->get();
 
-        // 💰 2. CÁLCULOS FINANCEIROS REAIS (Ignorando Vouchers)
-        // Isso garante que o "Saldo Geral" e "Total Líquido" batam com a gaveta
-        $totalEntradas = $movimentacoes
-            ->where('amount', '>', 0)
-            ->where('payment_method', '!=', FinancialTransaction::PAYMENT_VOUCHER)
-            ->sum('amount');
-
-        $totalSaidas = $movimentacoes
-            ->where('amount', '<', 0)
-            ->where('payment_method', '!=', FinancialTransaction::PAYMENT_VOUCHER)
-            ->sum('amount');
-
-        $saldoLiquidoReal = $totalEntradas + $totalSaidas;
-
-        // 🎟️ 3. TOTAL DE CORTESIAS (Apenas informativo)
-        $totalVouchers = $movimentacoes
-            ->where('payment_method', FinancialTransaction::PAYMENT_VOUCHER)
-            ->sum('amount');
-
-        // 4. Histórico de Fechamentos
         $cashierHistory = Cashier::with(['user', 'arena'])
             ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
             ->orderBy('date', 'desc')
             ->limit(10)
             ->get();
 
-        return view('admin.financeiro.caixa', compact(
-            'movimentacoes',
-            'data',
-            'cashierHistory',
-            'arenaId',
-            'totalEntradas',   // 👈 Enviando valores limpos para a View
-            'totalSaidas',
-            'saldoLiquidoReal',
-            'totalVouchers'
-        ));
+        return view('admin.financeiro.caixa', compact('movimentacoes', 'data', 'cashierHistory', 'arenaId'));
     }
 
     /**

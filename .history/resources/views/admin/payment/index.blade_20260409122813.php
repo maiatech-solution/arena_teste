@@ -2300,7 +2300,7 @@
                     window.caixaProcessandoGlobal[formId] = true;
 
                     const formData = new FormData(form);
-                    const paymentMethod = formData.get('payment_method');
+                    const paymentMethod = formData.get('payment_method'); // Para checar Voucher
 
                     // 🛡️ LÓGICA DE FILTRO PARA AUTORIZAÇÃO
                     const acoesRestritas = ['noShowForm', 'transactionForm', 'openCashForm'];
@@ -2313,8 +2313,10 @@
                         const btn = document.getElementById(btnId);
                         const spinner = document.getElementById(spinnerId);
 
+                        // Fecha modais de autorização se existirem
                         if (typeof window.fecharModalAutorizacao === 'function') window.fecharModalAutorizacao();
 
+                        // Limpa visualmente outros modais abertos
                         const modais = document.querySelectorAll(
                             '.modal, .modal-backdrop, #modalSenha, [id*="Autorizacao"]');
                         modais.forEach(m => {
@@ -2328,9 +2330,10 @@
                         }
                         if (spinner) spinner.classList.remove('hidden');
 
+                        // Anexa o token de supervisor ao corpo da requisição se houver
                         if (tokenRecebido) formData.append('supervisor_token', tokenRecebido);
 
-                        // 🎯 AJUSTE DE URL: Diferencia rotas com ID das rotas de Caixa
+                        // 🎯 AJUSTE DE URL: Diferencia rotas com ID das rotas de Caixa (Open/Close)
                         let targetUrl = urlTemplate;
                         if (formId !== 'openCashForm' && formId !== 'closeCashForm') {
                             const reservaId = formData.get('reserva_id') ||
@@ -2352,10 +2355,11 @@
                             .then(res => res.json())
                             .then(json => {
                                 if (json.success) {
+                                    // Se for fechamento de caixa, mostra o resumo visual em vez de dar reload
                                     if (formId === 'closeCashForm') {
                                         if (typeof closeCloseCashModal === 'function') closeCloseCashModal();
 
-                                        // --- 🧮 LÓGICA DE SOMA REAL PARA RESUMO (RECIBO) ---
+                                        // --- 🧮 LÓGICA DE SOMA REAL PARA RESUMO ---
                                         let htmlMovimentacao = "";
                                         let sPix = 0,
                                             sDin = 0,
@@ -2378,11 +2382,6 @@
                                                 const cols = linha.cells;
                                                 const formaStr = cols[3].innerText.trim().toUpperCase();
                                                 const valorTxt = cols[5].innerText.trim();
-
-                                                // 🎯 IGNORAR VOUCHER E CORTESIA NO RECIBO
-                                                if (formaStr.includes('VOUCHER') || formaStr.includes(
-                                                        'CORTESIA')) return;
-
                                                 const vNum = parseFloat(valorTxt.replace(/[^\d,-]/g, '')
                                                     .replace(',', '.')) || 0;
 
@@ -2420,21 +2419,16 @@
                                             currency: 'BRL'
                                         });
 
-                                        // Atualiza os campos do recibo com os valores filtrados
                                         if (document.getElementById('resumoPix')) document.getElementById(
                                             'resumoPix').innerText = f(sPix);
                                         if (document.getElementById('resumoDinheiro')) document.getElementById(
                                             'resumoDinheiro').innerText = f(sDin);
-                                        if (document.getElementById('resumoCredito')) document.getElementById(
-                                            'resumoCredito').innerText = f(sCre);
-                                        if (document.getElementById('resumoDebito')) document.getElementById(
-                                            'resumoDebito').innerText = f(sDeb);
                                         if (document.getElementById('resumoTotal')) document.getElementById(
                                             'resumoTotal').innerText = f(sTotal);
 
                                         const container = document.getElementById('resumoListaAgendamentos');
                                         if (container) container.innerHTML = htmlMovimentacao ||
-                                            "SEM MOVIMENTAÇÕES FINANCEIRAS.";
+                                            "SEM MOVIMENTAÇÕES.";
 
                                         const modalResumo = document.getElementById('modalResumoFinal');
                                         if (modalResumo) modalResumo.classList.replace('hidden', 'flex');
@@ -2443,6 +2437,7 @@
                                         return;
                                     }
 
+                                    // Para todos os outros formulários, recarrega a página
                                     window.location.reload();
                                 } else {
                                     alert("Erro: " + (json.message || 'Falha no processamento.'));

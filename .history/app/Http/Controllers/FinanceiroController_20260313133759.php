@@ -25,15 +25,13 @@ class FinanceiroController extends Controller
         $mes = $dataFiltro->month;
         $ano = $dataFiltro->year;
 
-        // 💰 1. FATURAMENTO FILTRADO (Apenas o que é financeiro real)
-        // Adicionado o filtro where('payment_method', '!=', 'voucher')
+        // 💰 1. FATURAMENTO FILTRADO (Bruto Mensal Real que entrou no Caixa)
         $faturamentoMensal = \App\Models\FinancialTransaction::whereMonth('paid_at', $mes)
             ->whereYear('paid_at', $ano)
-            ->where('payment_method', '!=', 'voucher') // 👈 Ignora cortesias no faturamento
             ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
             ->sum('amount');
 
-        // 📅 2. OCUPAÇÃO FILTRADA (Permanece igual, pois o Voucher ocupou a quadra)
+        // 📅 2. OCUPAÇÃO FILTRADA (Jogos que de fato aconteceram ou estão ativos)
         $totalReservasMes = \App\Models\Reserva::whereMonth('date', $mes)
             ->whereYear('date', $ano)
             ->where('is_fixed', false)
@@ -41,23 +39,23 @@ class FinanceiroController extends Controller
                 \App\Models\Reserva::STATUS_CONFIRMADA,
                 \App\Models\Reserva::STATUS_CONCLUIDA,
                 'completed',
-                'debt'
+                'debt' // ✅ Incluído: Se é dívida, o cliente ocupou a quadra
             ])
             ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
             ->count();
 
-        // 🚫 3. FALTAS FILTRADAS
+        // 🚫 3. FALTAS FILTRADAS (No-Show) - PRECISÃO TOTAL
+        // Contamos apenas as reservas marcadas como falta para bater com o relatório de auditoria
         $canceladasMes = \App\Models\Reserva::whereMonth('date', $mes)
             ->whereYear('date', $ano)
             ->where('status', \App\Models\Reserva::STATUS_NO_SHOW)
             ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
             ->count();
 
-        // 💸 4. CÁLCULO DE DÍVIDAS PENDENTES
-        // Note que aqui o Voucher ajuda: se o cara pagou com Voucher, ele NÃO deve mais.
+        // 💸 4. CÁLCULO DE DÍVIDAS PENDENTES (Inadimplência Real do Período)
         $totalGlobalDividas = \App\Models\Reserva::whereMonth('date', $mes)
             ->whereYear('date', $ano)
-            ->whereIn('status', ['completed', 'debt'])
+            ->whereIn('status', ['completed', 'debt']) // ✅ Foca nos jogos finalizados que devem
             ->whereIn('payment_status', ['unpaid', 'partial'])
             ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
             ->with('transactions')
@@ -65,6 +63,7 @@ class FinanceiroController extends Controller
             ->sum(function ($r) {
                 $valorVenda = (float) ($r->final_price ?? $r->price);
 
+                // Soma transações diretas + transações órfãs (estornos/ajustes) vinculadas pelo #ID
                 $somaVinculada = (float) $r->transactions->sum('amount');
                 $somaOrfa = (float) \App\Models\FinancialTransaction::whereNull('reserva_id')
                     ->where('description', 'LIKE', "%#{$r->id}%")
@@ -72,6 +71,7 @@ class FinanceiroController extends Controller
 
                 $saldoPagoLiquido = round($somaVinculada + $somaOrfa, 2);
 
+                // Retorna o que falta pagar (mínimo 0)
                 return max(0, $valorVenda - $saldoPagoLiquido);
             });
 
@@ -95,7 +95,7 @@ class FinanceiroController extends Controller
     {
         $arenaId = $request->get('arena_id');
         $search = $request->get('search');
-        $fluxo = $request->get('fluxo');
+        $fluxo = $request->get('fluxo'); // 🟢 entrada, saida ou null
 
         $dataInicio = $request->input('data_inicio')
             ? Carbon::parse($request->input('data_inicio'))->startOfDay()
@@ -105,16 +105,19 @@ class FinanceiroController extends Controller
             ? Carbon::parse($request->input('data_fim'))->endOfDay()
             : now()->endOfDay();
 
+        // Início da Query Base
         $query = FinancialTransaction::whereBetween('paid_at', [$dataInicio, $dataFim])
             ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
             ->with(['reserva', 'arena']);
 
+        // 🟢 FILTRO DE FLUXO (Trabalha sobre o valor do amount)
         if ($fluxo === 'entrada') {
             $query->where('amount', '>', 0);
         } elseif ($fluxo === 'saida') {
             $query->where('amount', '<', 0);
         }
 
+        // 🔍 Filtro por Nome do Cliente ou ID da Reserva
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->whereHas('reserva', function ($sub) use ($search) {
@@ -124,29 +127,41 @@ class FinanceiroController extends Controller
             });
         }
 
+        // 📊 UNIFICAÇÃO PROFISSIONAL DOS TOTAIS
         $queryParaTotais = clone $query;
         $transacoesParaTotais = $queryParaTotais->get();
 
-        // 📊 AGRUPAMENTO ALINHADO COM AS NOVAS CONSTANTES
+        // Agrupamos usando um Dicionário de Unificação para evitar duplicidade no Painel
         $totaisPorMetodo = $transacoesParaTotais->groupBy(function ($item) {
-            $metodo = $item->payment_method; // O Mutator do Model já garante que chegue limpo aqui
+            // Normaliza o texto para evitar duplicidade por erro de digitação
+            $metodo = strtolower(trim($item->payment_method));
 
-            return match ($metodo) {
-                FinancialTransaction::PAYMENT_MONEY  => 'dinheiro',
-                FinancialTransaction::PAYMENT_PIX    => 'pix',
-                FinancialTransaction::PAYMENT_CREDIT => 'credito', // 💳 Separado
-                FinancialTransaction::PAYMENT_DEBIT  => 'debito',  // 💳 Separado
-                FinancialTransaction::PAYMENT_TRANSFER => 'transferencia',
-                FinancialTransaction::PAYMENT_VOUCHER => 'voucher', // 🎟️ Cortesia
-                default => 'outro',
-            };
+            // 1. GAVETA (Tudo que é dinheiro vivo)
+            if (in_array($metodo, ['dinheiro', 'money', 'cash', 'especie'])) {
+                return 'dinheiro';
+            }
+
+            // 2. BANCO (Tudo que é digital direto)
+            if (in_array($metodo, ['pix', 'transferencia', 'transf', 'transferência', 'bank'])) {
+                return 'pix';
+            }
+
+            // 3. CARTÃO (Maquininhas)
+            if (in_array($metodo, ['cartao', 'cartão', 'credit', 'card', 'debito', 'débito'])) {
+                return 'cartao';
+            }
+
+            // 4. TRANSFERÊNCIA (Caso queira manter separado do PIX, remova do item 2)
+            if (in_array($metodo, ['transferencia', 'transferência', 'transf'])) {
+                return 'transferencia';
+            }
+
+            return $metodo ?: 'outro';
         })->map(fn($row) => $row->sum('amount'));
 
-        // 💰 FATURAMENTO REAL (Soma tudo menos os Vouchers)
-        $faturamentoTotal = $transacoesParaTotais
-            ->where('payment_method', '!=', FinancialTransaction::PAYMENT_VOUCHER)
-            ->sum('amount');
+        $faturamentoTotal = $transacoesParaTotais->sum('amount');
 
+        // 📄 Tabela Paginada
         $transacoes = $query->orderBy('paid_at', 'desc')->paginate(30)->withQueryString();
 
         return view('admin.financeiro.relatorio_faturamento', compact(
@@ -158,6 +173,7 @@ class FinanceiroController extends Controller
             'fluxo'
         ));
     }
+
     /**
      * Relatório 02: Histórico de Caixa (Isolado por Arena)
      */
@@ -166,49 +182,19 @@ class FinanceiroController extends Controller
         $arenaId = $request->get('arena_id');
         $data = $request->input('data', now()->format('Y-m-d'));
 
-        // 1. Busca todas as movimentações do dia
         $movimentacoes = FinancialTransaction::whereDate('paid_at', $data)
             ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
             ->with(['reserva', 'manager', 'arena'])
             ->orderBy('paid_at', 'asc')
             ->get();
 
-        // 💰 2. CÁLCULOS FINANCEIROS REAIS (Ignorando Vouchers)
-        // Isso garante que o "Saldo Geral" e "Total Líquido" batam com a gaveta
-        $totalEntradas = $movimentacoes
-            ->where('amount', '>', 0)
-            ->where('payment_method', '!=', FinancialTransaction::PAYMENT_VOUCHER)
-            ->sum('amount');
-
-        $totalSaidas = $movimentacoes
-            ->where('amount', '<', 0)
-            ->where('payment_method', '!=', FinancialTransaction::PAYMENT_VOUCHER)
-            ->sum('amount');
-
-        $saldoLiquidoReal = $totalEntradas + $totalSaidas;
-
-        // 🎟️ 3. TOTAL DE CORTESIAS (Apenas informativo)
-        $totalVouchers = $movimentacoes
-            ->where('payment_method', FinancialTransaction::PAYMENT_VOUCHER)
-            ->sum('amount');
-
-        // 4. Histórico de Fechamentos
         $cashierHistory = Cashier::with(['user', 'arena'])
             ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
             ->orderBy('date', 'desc')
             ->limit(10)
             ->get();
 
-        return view('admin.financeiro.caixa', compact(
-            'movimentacoes',
-            'data',
-            'cashierHistory',
-            'arenaId',
-            'totalEntradas',   // 👈 Enviando valores limpos para a View
-            'totalSaidas',
-            'saldoLiquidoReal',
-            'totalVouchers'
-        ));
+        return view('admin.financeiro.caixa', compact('movimentacoes', 'data', 'cashierHistory', 'arenaId'));
     }
 
     /**

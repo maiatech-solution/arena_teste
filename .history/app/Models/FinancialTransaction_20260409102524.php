@@ -27,29 +27,27 @@ class FinancialTransaction extends Model
 
     /**
      * 💳 FONTE ÚNICA: PADRONIZAÇÃO DE MÉTODOS DE PAGAMENTO
-     * Centraliza as chaves oficiais para evitar variações.
+     * Centraliza as chaves oficiais para evitar variações como "Cartão" e "card".
      */
     public const PAYMENT_PIX = 'pix';
     public const PAYMENT_MONEY = 'money';
     public const PAYMENT_CREDIT = 'credit_card';
     public const PAYMENT_DEBIT = 'debit_card';
     public const PAYMENT_TRANSFER = 'transfer';
-    public const PAYMENT_VOUCHER = 'voucher'; // 🎯 Chave única para Voucher/Cortesia
     public const PAYMENT_OTHER = 'other';
 
     /**
-     * Retorna a lista amigável para Selects em todo o sistema
+     * Retorna a lista amigável para Selects em todo o sistema (Dashboard e Caixa)
      */
     public static function getPaymentMethods(): array
     {
         return [
-            self::PAYMENT_PIX      => 'PIX',
-            self::PAYMENT_MONEY    => 'Dinheiro',
-            self::PAYMENT_CREDIT   => 'Cartão de Crédito',
-            self::PAYMENT_DEBIT    => 'Cartão de Débito',
+            self::PAYMENT_PIX    => 'PIX',
+            self::PAYMENT_MONEY  => 'Dinheiro',
+            self::PAYMENT_CREDIT => 'Cartão de Crédito',
+            self::PAYMENT_DEBIT  => 'Cartão de Débito',
             self::PAYMENT_TRANSFER => 'Transferência',
-            self::PAYMENT_VOUCHER  => 'Voucher / Cortesia', // Nome amigável na tela
-            self::PAYMENT_OTHER    => 'Outros',
+            self::PAYMENT_OTHER  => 'Outros/Cortesia',
         ];
     }
 
@@ -78,6 +76,7 @@ class FinancialTransaction extends Model
     {
         parent::boot();
 
+        // Bloqueia a criação (Pagamentos, Sinais, Reforços) em caixa fechado
         static::creating(function ($transaction) {
             if (app()->runningInConsole()) return;
 
@@ -92,10 +91,11 @@ class FinancialTransaction extends Model
 
             if ($isClosed) {
                 $formattedDate = Carbon::parse($dateToCheck)->format('d/m/Y');
-                throw new \Exception("Bloqueio de Segurança: O caixa desta arena para o dia {$formattedDate} já está encerrado.");
+                throw new \Exception("Bloqueio de Segurança: O caixa desta arena para o dia {$formattedDate} já está encerrado. Reabra-o para lançar movimentações.");
             }
         });
 
+        // Bloqueia a exclusão em caixa fechado
         static::deleting(function ($transaction) {
             if (app()->runningInConsole()) return;
 
@@ -109,10 +109,11 @@ class FinancialTransaction extends Model
                 ->exists();
 
             if ($isClosed) {
-                throw new \Exception("Bloqueio de Segurança: Não é possível excluir movimentações de um caixa encerrado.");
+                throw new \Exception("Bloqueio de Segurança: Não é possível excluir ou estornar movimentações de uma arena com caixa encerrado.");
             }
         });
 
+        // ⭐ SINCRONIZAÇÃO AUTOMÁTICA DA RESERVA
         static::created(function ($transaction) {
             if (!$transaction->reserva_id) return;
 
@@ -175,11 +176,13 @@ class FinancialTransaction extends Model
 
     /**
      * 🛡️ PADRONIZAÇÃO AUTOMÁTICA DE MÉTODO DE PAGAMENTO
+     * Centraliza tudo na chave única 'voucher', removendo termos duplicados.
      */
     public function setPaymentMethodAttribute($value)
     {
         $cleanValue = strtolower(trim($value ?? self::PAYMENT_OTHER));
 
+        // Mapeia variações comuns para as constantes oficiais
         $map = [
             'cartão'        => self::PAYMENT_DEBIT,
             'card'          => self::PAYMENT_DEBIT,
@@ -189,14 +192,12 @@ class FinancialTransaction extends Model
             'transferencia' => self::PAYMENT_TRANSFER,
             'transfer'      => self::PAYMENT_TRANSFER,
 
-            // 🎯 MAPA ÚNICO: Independente de como vier, salva 'voucher'
+            // 🎯 ÚNICA ENTRADA OFICIAL
             'voucher'       => self::PAYMENT_VOUCHER,
-            'cortesia'      => self::PAYMENT_VOUCHER,
         ];
 
         $this->attributes['payment_method'] = $map[$cleanValue] ?? $cleanValue;
     }
-
     /**
      * Acessador para retornar o nome bonito (Ex: $t->payment_method_label)
      */
