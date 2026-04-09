@@ -247,29 +247,27 @@ class FinanceiroController extends Controller
         $ano = (int) $request->input('ano', now()->year);
 
         // 1. Busca as Reservas com status de perda (No-Show, Rejeitada, Cancelada)
-        // 🎯 AJUSTE: Ignoramos 'maintenance' e reservas com preço zerado
         $query = \App\Models\Reserva::whereIn('status', [
             \App\Models\Reserva::STATUS_CANCELADA,
             \App\Models\Reserva::STATUS_NO_SHOW,
             \App\Models\Reserva::STATUS_REJEITADA
         ])
-            ->where('status', '!=', 'maintenance')
-            ->where('price', '>', 0)
             ->whereYear('date', $ano)
             ->whereMonth('date', $mes)
             ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
-            ->with(['user', 'arena', 'transactions']); // 👈 Eager Loading de transactions
+            ->with(['user', 'arena']);
 
         $cancelamentos = $query->orderBy('date', 'desc')->get();
 
         // 2. BUSCA AS MULTAS NO FINANCEIRO (Ajustado para pegar sinais retidos)
-        $multasAvulsas = \App\Models\FinancialTransaction::whereMonth('paid_at', $mes)
+        $multasAvulsas = FinancialTransaction::whereMonth('paid_at', $mes)
             ->whereYear('paid_at', $ano)
             ->where(function ($q) {
-                $q->where('description', 'like', '%Multa%')
+                $q->where('description', 'like', '%Multa de Falta%')
                     ->orWhere('description', 'like', '%No-Show%')
-                    ->orWhere('description', 'like', '%ESTORNO%')
-                    ->orWhere('description', 'like', '%RETIDO%');
+                    ->orWhere('description', 'like', '%ESTORNO NO-SHOW%')
+                    ->orWhere('description', 'like', '%RETIDO%') // 👈 Adicione isso
+                    ->orWhere('description', 'like', '%MULTA%');  // 👈 E isso
             })
             ->when($arenaId, fn($q) => $q->where('arena_id', $arenaId))
             ->get();
@@ -279,33 +277,31 @@ class FinanceiroController extends Controller
         $countCancelamentos = $cancelamentos->where('status', \App\Models\Reserva::STATUS_CANCELADA)->count();
         $countRejeitadas = $cancelamentos->where('status', \App\Models\Reserva::STATUS_REJEITADA)->count();
 
-        // 💰 4. CÁLCULO DO PREJUÍZO REAL (Líquido de Faltas e Vouchers)
+        // 💰 4. CÁLCULO DO PREJUÍZO REAL (Líquido de Faltas)
+        // Se o sinal foi retido (positivo), ele diminui o prejuízo.
+        // Se foi estornado (negativo), ignoramos no abatimento e o prejuízo fica cheio.
         $prejuizoFaltasReal = $cancelamentos->where('status', \App\Models\Reserva::STATUS_NO_SHOW)
             ->sum(function ($reserva) use ($multasAvulsas) {
                 $valorOriginal = (float) $reserva->price;
 
-                // Abate 1: Vouchers vinculados (Cortesia/Crédito)
-                $vouchers = (float) $reserva->transactions->where('payment_method', 'voucher')->sum('amount');
-
-                // Abate 2: Multas de caixa (Ajustes manuais #ID)
-                $multas = (float) $multasAvulsas
+                // Soma transações financeiras vinculadas a esta reserva (#ID)
+                $valorFinanceiro = $multasAvulsas
                     ->filter(fn($m) => str_contains($m->description, "#{$reserva->id}"))
                     ->sum('amount');
 
-                // O prejuízo só diminui se o valor for positivo (recuperado)
-                return max(0, $valorOriginal - max(0, $vouchers + $multas));
+                // Abatimento inteligente: só diminui o prejuízo se o valor no caixa for POSITIVO (Retido)
+                return max(0, $valorOriginal - max(0, $valorFinanceiro));
             });
 
-        // 📊 5. IMPACTO TOTAL GERAL (Aquele valor do rodapé preto)
+        // 📊 5. IMPACTO TOTAL (Barra preta do rodapé)
+        // Soma o prejuízo líquido de TUDO que está na tabela (No-Show, Rejeitadas e Canceladas)
         $impactoTotalGeral = $cancelamentos->sum(function ($reserva) use ($multasAvulsas) {
             $valorOriginal = (float) $reserva->price;
-
-            $vouchers = (float) $reserva->transactions->where('payment_method', 'voucher')->sum('amount');
-            $multas = (float) $multasAvulsas
+            $valorFinanceiro = $multasAvulsas
                 ->filter(fn($m) => str_contains($m->description, "#{$reserva->id}"))
                 ->sum('amount');
 
-            return max(0, $valorOriginal - max(0, $vouchers + $multas));
+            return max(0, $valorOriginal - max(0, $valorFinanceiro));
         });
 
         $valorMultasFinanceiro = $multasAvulsas->sum('amount');

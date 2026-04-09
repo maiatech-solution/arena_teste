@@ -169,21 +169,14 @@
 
                             @foreach ($cancelamentos as $c)
                                 @php
-                                    // 1. Busca transações diretas (Aqui é onde o Voucher entra para abater o prejuízo)
-                                    $vouchersAbate = (float) $c->transactions
-                                        ->where('payment_method', 'voucher')
-                                        ->sum('amount');
-
-                                    // 2. Busca o vínculo financeiro no caixa (Multas/Sinais retidos) usando o ID na descrição
+                                    // Busca o vínculo financeiro usando o ID
                                     $vinc = $multasAvulsas->filter(
                                         fn($m) => str_contains($m->description, "#{$c->id}"),
                                     );
-                                    $saldoFin = (float) $vinc->sum('amount');
+                                    $saldoFin = $vinc->sum('amount');
 
-                                    // 3. Cálculo do prejuízo líquido REAL:
-                                    // Preço Base - (Multas de Caixa + Valor em Vouchers)
-                                    // Usamos max(0, ...) para garantir que o prejuízo nunca seja negativo
-                                    $prejuizoLinha = max(0, (float) $c->price - ($saldoFin + $vouchersAbate));
+                                    // Cálculo do prejuízo líquido (abate se houver multa retida)
+                                    $prejuizoLinha = $c->price - ($saldoFin > 0 ? $saldoFin : 0);
                                 @endphp
 
                                 <tr class="hover:bg-red-50/30 dark:hover:bg-red-900/10 transition duration-150">
@@ -205,22 +198,11 @@
                                             {{ $c->client_contact ?? 'S/ Contato' }}
 
                                             {{-- Labels de Auditoria --}}
-
-                                            {{-- 🎟️ NOVO: Alerta de Voucher --}}
-                                            @if ($vouchersAbate > 0)
-                                                <span
-                                                    class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-amber-100 text-amber-600 border border-amber-200 uppercase tracking-tighter">
-                                                    🎟️ Voucher (R$ {{ number_format($vouchersAbate, 2, ',', '.') }})
-                                                </span>
-                                            @endif
-
-                                            {{-- Caso de Estorno --}}
                                             @if ($vinc->contains(fn($m) => $m->amount < 0))
                                                 <span
                                                     class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-gray-100 text-gray-500 border border-gray-200 uppercase tracking-tighter">
                                                     Sinal Estornado
                                                 </span>
-                                                {{-- Caso de Multa Retida --}}
                                             @elseif($saldoFin > 0)
                                                 <span
                                                     class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-green-100 text-green-600 border border-green-200 uppercase tracking-tighter">
@@ -317,7 +299,6 @@
     {{-- Estilos exclusivos para a Impressão --}}
     <style>
         @media print {
-
             /* 1. Esconde elementos de navegação e interface do sistema */
             nav,
             header,
@@ -335,10 +316,7 @@
                 color: black !important;
             }
 
-            .py-12 {
-                padding-top: 0 !important;
-                padding-bottom: 0 !important;
-            }
+            .py-12 { padding-top: 0 !important; padding-bottom: 0 !important; }
 
             .max-w-6xl {
                 max-width: 100% !important;
@@ -362,14 +340,8 @@
             }
 
             /* 5. Ajuste de tabelas para não quebrarem no meio de uma linha */
-            table {
-                page-break-inside: auto;
-            }
-
-            tr {
-                page-break-inside: avoid;
-                page-break-after: auto;
-            }
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
         }
     </style>
 

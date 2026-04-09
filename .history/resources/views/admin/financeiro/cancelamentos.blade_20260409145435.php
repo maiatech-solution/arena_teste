@@ -205,22 +205,11 @@
                                             {{ $c->client_contact ?? 'S/ Contato' }}
 
                                             {{-- Labels de Auditoria --}}
-
-                                            {{-- 🎟️ NOVO: Alerta de Voucher --}}
-                                            @if ($vouchersAbate > 0)
-                                                <span
-                                                    class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-amber-100 text-amber-600 border border-amber-200 uppercase tracking-tighter">
-                                                    🎟️ Voucher (R$ {{ number_format($vouchersAbate, 2, ',', '.') }})
-                                                </span>
-                                            @endif
-
-                                            {{-- Caso de Estorno --}}
                                             @if ($vinc->contains(fn($m) => $m->amount < 0))
                                                 <span
                                                     class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-gray-100 text-gray-500 border border-gray-200 uppercase tracking-tighter">
                                                     Sinal Estornado
                                                 </span>
-                                                {{-- Caso de Multa Retida --}}
                                             @elseif($saldoFin > 0)
                                                 <span
                                                     class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-green-100 text-green-600 border border-green-200 uppercase tracking-tighter">
