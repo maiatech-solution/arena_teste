@@ -109,113 +109,100 @@
                 MESAS</div>
 
             <div class="overflow-x-auto no-scrollbar">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr
-                            class="bg-black/40 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-800/50">
-                            <th class="p-8">Mesa / Comanda</th>
-                            <th class="p-8">Operador</th>
-                            <th class="p-8 text-center">Pagamento</th> {{-- Nova Coluna --}}
-                            <th class="p-8 text-center">Visualizar</th>
-                            <th class="p-8 text-right">Valor Pago</th>
-                            <th class="p-8 text-center">Status</th>
-                            <th class="p-8 text-center">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-800/40 font-mono italic">
-                        @forelse($vendas as $venda)
-                            @php
-                                $caixaAberto = $venda->cashSession && $venda->cashSession->status === 'open';
-                                $isPaga = $venda->status === 'paid' || $venda->status === 'pago';
-                                $isVoucher = str_contains(strtolower($venda->payment_method ?? ''), 'voucher');
-                            @endphp
-                            <tr class="hover:bg-white/[0.01] transition-colors group">
-                                <td class="p-8">
-                                    <div class="flex items-center gap-4">
-                                        {{-- 🏷️ NÚMERO DA MESA EM DESTAQUE --}}
-                                        <div
-                                            class="w-14 h-14 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex flex-col items-center justify-center shadow-lg shadow-orange-900/10">
-                                            <span
-                                                class="text-[8px] font-black text-orange-500/50 uppercase leading-none">Mesa</span>
-                                            <span class="text-xl font-black text-orange-500 italic leading-none">
-                                                {{ str_pad($venda->table->identifier ?? '00', 2, '0', STR_PAD_LEFT) }}
-                                            </span>
-                                        </div>
+               <table class="w-full text-left border-collapse">
+    <thead>
+        <tr class="bg-black/40 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-800/50">
+            <th class="p-8">Mesa / Comanda</th>
+            <th class="p-8">Operador</th>
+            <th class="p-8 text-center">Pagamento</th> {{-- Nova Coluna --}}
+            <th class="p-8 text-center">Visualizar</th>
+            <th class="p-8 text-right">Valor Pago</th>
+            <th class="p-8 text-center">Status</th>
+            <th class="p-8 text-center">Ações</th>
+        </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-800/40 font-mono italic">
+        @forelse($vendas as $venda)
+            @php
+                $caixaAberto = $venda->cashSession && $venda->cashSession->status === 'open';
+                $isPaga = $venda->status === 'paid' || $venda->status === 'pago';
+                $isVoucher = str_contains(strtolower($venda->payment_method ?? ''), 'voucher');
+            @endphp
+            <tr class="hover:bg-white/[0.01] transition-colors group">
+                <td class="p-8">
+                    <div class="flex items-center gap-4">
+                        {{-- 🏷️ NÚMERO DA MESA EM DESTAQUE --}}
+                        <div class="w-14 h-14 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex flex-col items-center justify-center shadow-lg shadow-orange-900/10">
+                            <span class="text-[8px] font-black text-orange-500/50 uppercase leading-none">Mesa</span>
+                            <span class="text-xl font-black text-orange-500 italic leading-none">
+                                {{ str_pad($venda->table->identifier ?? '00', 2, '0', STR_PAD_LEFT) }}
+                            </span>
+                        </div>
 
-                                        <div>
-                                            <span class="text-white font-black block text-sm tracking-tighter">Pedido
-                                                #{{ $venda->id }}</span>
-                                            <span class="text-gray-600 text-[10px] font-bold uppercase tracking-widest">
-                                                {{ $venda->updated_at->format('d/m/Y H:i') }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="p-8">
-                                    <div class="flex items-center gap-2">
-                                        <div class="w-2 h-2 rounded-full bg-orange-500/40"></div>
-                                        <span
-                                            class="text-gray-400 font-black text-[11px] uppercase italic tracking-wider">
-                                            {{ $venda->user->name ?? 'N/A' }}
-                                        </span>
-                                    </div>
-                                </td>
+                        <div>
+                            <span class="text-white font-black block text-sm tracking-tighter">Pedido #{{ $venda->id }}</span>
+                            <span class="text-gray-600 text-[10px] font-bold uppercase tracking-widest">
+                                {{ $venda->updated_at->format('d/m/Y H:i') }}
+                            </span>
+                        </div>
+                    </div>
+                </td>
+                <td class="p-8">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-orange-500/40"></div>
+                        <span class="text-gray-400 font-black text-[11px] uppercase italic tracking-wider">
+                            {{ $venda->user->name ?? 'N/A' }}
+                        </span>
+                    </div>
+                </td>
 
-                                {{-- 💰 COLUNA DE PAGAMENTO COM BADGE (SINCRONIZADA COM PDV) --}}
-                                <td class="p-8 text-center">
-                                    @if ($isVoucher)
-                                        <span
-                                            class="px-3 py-1 bg-orange-500/10 border border-orange-500/30 text-orange-500 text-[9px] font-black uppercase rounded-lg shadow-[0_0_10px_rgba(234,88,12,0.1)]">
-                                            🎁 Voucher
-                                        </span>
-                                    @else
-                                        <span
-                                            class="px-3 py-1 bg-gray-800/50 border border-gray-700 text-gray-500 text-[9px] font-black uppercase rounded-lg">
-                                            {{ $venda->payment_method ?? 'N/A' }}
-                                        </span>
-                                    @endif
-                                </td>
+                {{-- 💰 COLUNA DE PAGAMENTO COM BADGE (SINCRONIZADA COM PDV) --}}
+                <td class="p-8 text-center">
+                    @if($isVoucher)
+                        <span class="px-3 py-1 bg-orange-500/10 border border-orange-500/30 text-orange-500 text-[9px] font-black uppercase rounded-lg shadow-[0_0_10px_rgba(234,88,12,0.1)]">
+                            🎁 Voucher
+                        </span>
+                    @else
+                        <span class="px-3 py-1 bg-gray-800/50 border border-gray-700 text-gray-500 text-[9px] font-black uppercase rounded-lg">
+                            {{ $venda->payment_method ?? 'N/A' }}
+                        </span>
+                    @endif
+                </td>
 
-                                <td class="p-8 text-center">
-                                    <button @click="abrirDetalhes({{ $venda->id }})"
-                                        class="mx-auto flex items-center gap-2 px-4 py-2 bg-gray-950 border border-gray-800 rounded-xl text-[10px] font-black uppercase text-gray-400 hover:text-orange-400 hover:border-orange-500 transition-all">
-                                        <span>🔍</span> Ver Itens
-                                    </button>
-                                </td>
-                                <td
-                                    class="p-8 text-right font-mono text-xl font-black {{ !$isPaga ? 'text-red-900 line-through' : 'text-white' }}">
-                                    R$ {{ number_format($venda->total_value, 2, ',', '.') }}
-                                </td>
-                                <td class="p-8 text-center">
-                                    @if ($isPaga)
-                                        <span
-                                            class="px-3 py-1 bg-green-500/10 text-green-500 text-[9px] font-black rounded-full border border-green-500/20">PAGA</span>
-                                    @else
-                                        <span
-                                            class="px-3 py-1 bg-red-500/10 text-red-500 text-[9px] font-black rounded-full border border-red-500/20">ANULADA</span>
-                                    @endif
-                                </td>
-                                <td class="p-8 text-center flex justify-center gap-2">
-                                    @if ($isPaga && $caixaAberto)
-                                        <button
-                                            onclick="abrirModalCancelamento({{ $venda->id }}, '{{ number_format($venda->total_value, 2, ',', '.') }}')"
-                                            class="w-10 h-10 flex items-center justify-center bg-gray-950 hover:bg-red-600 text-red-500 hover:text-white rounded-xl transition-all border border-gray-800">
-                                            🚫
-                                        </button>
-                                    @else
-                                        <span
-                                            class="text-[10px] text-gray-800 font-black uppercase italic">BLOQUEADO</span>
-                                    @endif
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="7" class="p-20 text-center text-gray-600 uppercase font-black italic">
-                                    Vazio</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
+                <td class="p-8 text-center">
+                    <button @click="abrirDetalhes({{ $venda->id }})"
+                        class="mx-auto flex items-center gap-2 px-4 py-2 bg-gray-950 border border-gray-800 rounded-xl text-[10px] font-black uppercase text-gray-400 hover:text-orange-400 hover:border-orange-500 transition-all">
+                        <span>🔍</span> Ver Itens
+                    </button>
+                </td>
+                <td class="p-8 text-right font-mono text-xl font-black {{ !$isPaga ? 'text-red-900 line-through' : 'text-white' }}">
+                    R$ {{ number_format($venda->total_value, 2, ',', '.') }}
+                </td>
+                <td class="p-8 text-center">
+                    @if ($isPaga)
+                        <span class="px-3 py-1 bg-green-500/10 text-green-500 text-[9px] font-black rounded-full border border-green-500/20">PAGA</span>
+                    @else
+                        <span class="px-3 py-1 bg-red-500/10 text-red-500 text-[9px] font-black rounded-full border border-red-500/20">ANULADA</span>
+                    @endif
+                </td>
+                <td class="p-8 text-center flex justify-center gap-2">
+                    @if ($isPaga && $caixaAberto)
+                        <button onclick="abrirModalCancelamento({{ $venda->id }}, '{{ number_format($venda->total_value, 2, ',', '.') }}')"
+                            class="w-10 h-10 flex items-center justify-center bg-gray-950 hover:bg-red-600 text-red-500 hover:text-white rounded-xl transition-all border border-gray-800">
+                            🚫
+                        </button>
+                    @else
+                        <span class="text-[10px] text-gray-800 font-black uppercase italic">BLOQUEADO</span>
+                    @endif
+                </td>
+            </tr>
+        @empty
+            <tr>
+                <td colspan="7" class="p-20 text-center text-gray-600 uppercase font-black italic">Vazio</td>
+            </tr>
+        @endforelse
+    </tbody>
+</table>
             </div>
             @if ($vendas->hasPages())
                 <div class="p-6 border-t border-gray-800">{{ $vendas->links() }} </div>
