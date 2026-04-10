@@ -53,29 +53,27 @@ class BarCashController extends Controller
         $sessionsClosed = BarCashSession::with('user')
             ->where('status', 'closed')
             ->whereDate('opened_at', $date)
+            ->when(!$isAdmin, function ($query) use ($user) {
+                return $query->where('user_id', $user->id);
+            })
             ->orderBy('closed_at', 'desc')
             ->get()
             ->map(function ($sessao) {
-                // 🎯 BUSCA BLINDADA: Converte o campo para minúsculo no banco antes de comparar
-                $vouchers = BarCashMovement::where('bar_cash_session_id', $sessao->id)
-                    ->whereRaw('LOWER(payment_method) LIKE ?', ['%voucher%'])
+                // 🎯 DEBUG: Vamos calcular o voucher na hora
+                $vouchers = \App\Models\BarCashMovement::where('bar_cash_session_id', $sessao->id)
+                    ->where('type', 'venda')
+                    ->where('payment_method', 'like', '%voucher%')
                     ->sum('amount');
 
-                // Se o faturamento líquido for o que realmente entrou,
-                // usamos o closing_balance que já está com 40.00 no seu debug!
+                // Injetamos um atributo "fantasma" que só existe aqui na memória
                 $sessao->valor_voucher_debug = (float) $vouchers;
-
-                // 💡 ATENÇÃO: Se o banco diz que o fechamento foi 40,
-                // vamos priorizar o que foi contado (closing_balance)
-                $sessao->faturamento_liquido = ($sessao->closing_balance > 0)
-                    ? (float) $sessao->closing_balance
-                    : (float) $sessao->total_vendas_sistema - (float) $vouchers;
+                $sessao->faturamento_liquido = (float) $sessao->total_vendas_sistema - (float) $vouchers;
 
                 return $sessao;
             });
 
-        // 🚀 GATILHO DO DEBUG: Se a sessão 37 existir, pare tudo e me mostre os dados
-        $debugSessao = $sessionsClosed->where('id', 37)->first();
+        // 🚀 LINHA DE DEBUG (Remova após testar)
+        if ($request->has('debug')) dd($sessionsClosed->where('id', 37)->first()->toArray());
 
         $mesasAbertasCount = BarTable::where('status', 'occupied')->count();
 

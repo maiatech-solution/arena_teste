@@ -499,11 +499,8 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     @forelse($sessionsClosed ?? [] as $sessao)
                         @php
-                            // 🎯 PRIORIDADE: Usamos o faturamento_liquido calculado no Controller.
-                            // Se por algum motivo for nulo, usamos o closing_balance (que no debug era 40.00).
-                            $totalDinheiroReal = $sessao->faturamento_liquido ?? $sessao->closing_balance;
-
-                            // O valor do voucher para o badge laranja
+                            // 🎯 Usando as variáveis que calculamos no Controller via 'map'
+                            $totalDinheiroReal = $sessao->faturamento_liquido ?? $sessao->total_vendas_sistema;
                             $valorVoucher = $sessao->valor_voucher_debug ?? 0;
 
                             $conflitoOperador = $openSession && $openSession->user_id == $sessao->user_id;
@@ -515,21 +512,16 @@
                                 <div class="flex items-center gap-3">
                                     <div
                                         class="w-10 h-10 bg-gray-800 rounded-2xl flex items-center justify-center text-xl shadow-inner">
-                                        👤
-                                    </div>
+                                        👤</div>
                                     <div>
                                         <h4 class="text-white font-black uppercase text-xs italic">
-                                            {{ $sessao->user->name }}
-                                        </h4>
-                                        <p class="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">
-                                            Sessão #{{ $sessao->id }}
-                                        </p>
+                                            {{ $sessao->user->name }}</h4>
+                                        <p class="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">Sessão
+                                            #{{ $sessao->id }}</p>
                                     </div>
                                 </div>
                                 <span
-                                    class="px-2 py-0.5 bg-red-500/10 text-red-500 text-[8px] font-black rounded border border-red-500/20 uppercase">
-                                    Encerrado
-                                </span>
+                                    class="px-2 py-0.5 bg-red-500/10 text-red-500 text-[8px] font-black rounded border border-red-500/20 uppercase">Encerrado</span>
                             </div>
 
                             <div class="space-y-3 mb-6 bg-black/20 p-5 rounded-3xl border border-white/5">
@@ -537,21 +529,19 @@
                                     <div>
                                         <p
                                             class="text-[8px] text-gray-600 font-black uppercase italic tracking-widest leading-none mb-1">
-                                            Entrada em Caixa
-                                        </p>
-                                        {{-- 💰 EXIBE O VALOR REAL (Ex: R$ 40,00) --}}
+                                            Entrada em Caixa</p>
+                                        {{-- 💰 AQUI MOSTRARÁ OS R$ 40,00 --}}
                                         <p class="text-xl text-green-500 font-black font-mono italic leading-none">
                                             R$ {{ number_format($totalDinheiroReal, 2, ',', '.') }}
                                         </p>
                                     </div>
 
-                                    {{-- 🎁 EXIBE O VALOR DAS CORTESIAS (Ex: R$ 36,00) --}}
+                                    {{-- 🎁 AQUI MOSTRARÁ OS R$ 36,00 --}}
                                     @if ($valorVoucher > 0)
                                         <div class="text-right">
                                             <p
                                                 class="text-[7px] text-orange-500/60 font-black uppercase italic leading-none mb-1">
-                                                🎁 Cortesias
-                                            </p>
+                                                🎁 Cortesias</p>
                                             <p
                                                 class="text-[10px] text-orange-500 font-bold font-mono italic leading-none">
                                                 R$ {{ number_format($valorVoucher, 2, ',', '.') }}
@@ -566,8 +556,7 @@
                                     <div>
                                         <p
                                             class="text-[8px] text-gray-600 font-black uppercase italic leading-none mb-1">
-                                            Abertura
-                                        </p>
+                                            Abertura</p>
                                         <p class="text-[11px] text-gray-400 font-bold tracking-tighter">
                                             {{ \Carbon\Carbon::parse($sessao->opened_at)->format('H:i') }}
                                         </p>
@@ -575,15 +564,13 @@
                                     <div class="text-right">
                                         <p
                                             class="text-[8px] text-gray-600 font-black uppercase italic leading-none mb-1">
-                                            Fechamento
-                                        </p>
+                                            Fechamento</p>
                                         <p class="text-[11px] text-gray-400 font-bold tracking-tighter">
                                             {{ \Carbon\Carbon::parse($sessao->closed_at)->format('H:i') }}
                                         </p>
                                     </div>
                                 </div>
 
-                                {{-- NOTA DE RODAPÉ COM O BRUTO TOTAL DO SISTEMA --}}
                                 @if ($valorVoucher > 0)
                                     <div class="mt-2 pt-2 border-t border-white/5">
                                         <p class="text-[7px] text-gray-700 font-black uppercase text-center italic">
@@ -610,9 +597,8 @@
                     @empty
                         <div
                             class="col-span-full py-10 text-center border-2 border-dashed border-gray-800 rounded-[2.5rem] opacity-30">
-                            <p class="text-gray-600 font-black uppercase text-[10px] tracking-widest italic">
-                                Nenhum turno encerrado para auditar
-                            </p>
+                            <p class="text-gray-600 font-black uppercase text-[10px] tracking-widest italic">Nenhum
+                                turno encerrado para auditar</p>
                         </div>
                     @endforelse
                 </div>

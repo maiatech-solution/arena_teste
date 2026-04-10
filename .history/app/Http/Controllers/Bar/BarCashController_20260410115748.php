@@ -11,7 +11,6 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
-
 class BarCashController extends Controller
 {
 
@@ -25,22 +24,22 @@ class BarCashController extends Controller
         $user = auth()->user();
         $isAdmin = in_array($user->role, ['admin', 'gestor']);
 
-        // 1. Busca a sessão aberta específica DESTE usuário
+        // 1. Busca a sessão aberta específica DESTE usuário (Lógica atual)
         $openSession = BarCashSession::where('status', 'open')
             ->where('user_id', $user->id)
             ->first();
 
         $caixaVencido = false;
         if ($openSession) {
-            $dataAbertura = \Carbon\Carbon::parse($openSession->opened_at)->startOfDay();
-            $hoje = \Carbon\Carbon::today();
+            $dataAbertura = Carbon::parse($openSession->opened_at)->startOfDay();
+            $hoje = Carbon::today();
             if ($dataAbertura->lt($hoje)) {
                 $caixaVencido = true;
             }
         }
 
         // Define a sessão atual para exibição dos cards
-        $currentSession = ($openSession && \Carbon\Carbon::parse($openSession->opened_at)->format('Y-m-d') == $date)
+        $currentSession = ($openSession && Carbon::parse($openSession->opened_at)->format('Y-m-d') == $date)
             ? $openSession
             : BarCashSession::whereDate('opened_at', $date)
             ->when(!$isAdmin, function ($query) use ($user) {
@@ -49,37 +48,20 @@ class BarCashController extends Controller
             ->latest()
             ->first();
 
-        // 🔍 AUDITORIA: Busca sessões FECHADAS e calcula os vouchers de cada uma para o Blade subtrair
+        // 🔍 NOVIDADE: Busca sessões FECHADAS para a lista de Auditoria/Reabertura
+        // Se for admin, vê todos os fechados do dia. Se for operador, vê apenas os seus fechados.
         $sessionsClosed = BarCashSession::with('user')
             ->where('status', 'closed')
             ->whereDate('opened_at', $date)
+            ->when(!$isAdmin, function ($query) use ($user) {
+                return $query->where('user_id', $user->id);
+            })
             ->orderBy('closed_at', 'desc')
-            ->get()
-            ->map(function ($sessao) {
-                // 🎯 BUSCA BLINDADA: Converte o campo para minúsculo no banco antes de comparar
-                $vouchers = BarCashMovement::where('bar_cash_session_id', $sessao->id)
-                    ->whereRaw('LOWER(payment_method) LIKE ?', ['%voucher%'])
-                    ->sum('amount');
-
-                // Se o faturamento líquido for o que realmente entrou,
-                // usamos o closing_balance que já está com 40.00 no seu debug!
-                $sessao->valor_voucher_debug = (float) $vouchers;
-
-                // 💡 ATENÇÃO: Se o banco diz que o fechamento foi 40,
-                // vamos priorizar o que foi contado (closing_balance)
-                $sessao->faturamento_liquido = ($sessao->closing_balance > 0)
-                    ? (float) $sessao->closing_balance
-                    : (float) $sessao->total_vendas_sistema - (float) $vouchers;
-
-                return $sessao;
-            });
-
-        // 🚀 GATILHO DO DEBUG: Se a sessão 37 existir, pare tudo e me mostre os dados
-        $debugSessao = $sessionsClosed->where('id', 37)->first();
+            ->get();
 
         $mesasAbertasCount = BarTable::where('status', 'occupied')->count();
 
-        // Inicialização de variáveis
+        // Inicialização de variáveis para segurança da View
         $movements = collect();
         $totalBruto = 0;
         $faturamentoDigital = 0;
@@ -90,11 +72,12 @@ class BarCashController extends Controller
         $vendasDinheiro = 0;
 
         if ($currentSession) {
-            // 2. BUSCA TODAS AS MOVIMENTAÇÕES
+            // 2. BUSCA TODAS AS MOVIMENTAÇÕES (Fonte única da verdade)
             $allMovements = BarCashMovement::with(['user', 'barOrder.table'])
                 ->where('bar_cash_session_id', $currentSession->id)
                 ->get();
 
+            // Histórico visual (Colaborador vê o dele, Gestor vê a sessão)
             $movements = (!$isAdmin)
                 ? $allMovements->where('user_id', $user->id)
                 : $allMovements;
@@ -114,8 +97,7 @@ class BarCashController extends Controller
                 return strtolower($m->payment_method) === 'dinheiro';
             })->sum('amount');
 
-            // ⚠️ VOUCHER REMOVIDO DAQUI para não somar no faturamento "real"
-            $metodosDigitais = ['pix', 'credito', 'debito', 'cartao', 'misto', 'crédito', 'débito'];
+            $metodosDigitais = ['pix', 'credito', 'debito', 'cartao', 'misto', 'crédito', 'débito', 'voucher'];
 
             $vendasDigital = $allMovements->where('type', 'venda')->filter(function ($m) use ($metodosDigitais) {
                 return in_array(strtolower($m->payment_method), $metodosDigitais);
@@ -125,28 +107,17 @@ class BarCashController extends Controller
                 return in_array(strtolower($m->payment_method), $metodosDigitais);
             })->sum('amount');
 
-            // 🎁 CÁLCULO ISOLADO DE VOUCHERS (Para auditoria apenas)
-            $totalVouchers = $allMovements->where('type', 'venda')->filter(function ($m) {
-                return str_contains(strtolower($m->payment_method), 'voucher');
-            })->sum('amount');
-
-            // 📊 CÁLCULOS DOS CARDS (O que deve ter no bolso/banco)
+            // 📊 CÁLCULOS DOS CARDS
             $dinheiroGeral = ($currentSession->opening_balance + $vendasDinheiro + $reforcos) - ($sangrias + $estornosDinheiro);
             $faturamentoDigital = $vendasDigital - $estornosDigital;
-
-            // Total Bruto = Dinheiro Vivo + Cartões/Pix (Exclui Vouchers)
             $totalBruto = ($vendasDinheiro - $estornosDinheiro) + $faturamentoDigital;
             $totalEstornado = $estornosDinheiro + $estornosDigital;
-
-            // Injeta os valores na sessão atual para uso no Blade
-            $currentSession->total_vendas_sistema = $totalBruto + $totalVouchers;
-            $currentSession->total_vouchers = $totalVouchers;
         }
 
         return view('bar.cash.index', compact(
             'currentSession',
             'openSession',
-            'sessionsClosed',
+            'sessionsClosed', // 👈 Variável enviada para a lista de reabertura
             'movements',
             'date',
             'dinheiroGeral',

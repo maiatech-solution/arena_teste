@@ -56,27 +56,39 @@ class BarCashController extends Controller
             ->orderBy('closed_at', 'desc')
             ->get()
             ->map(function ($sessao) {
-                // 🎯 BUSCA BLINDADA: Converte o campo para minúsculo no banco antes de comparar
+                // 🔍 DEBUG 1: Quantas movimentações existem para esta sessão?
+                $allMovementsCount = BarCashMovement::where('bar_cash_session_id', $sessao->id)->count();
+
+                // 🔍 DEBUG 2: Quais são os métodos de pagamento registrados nela?
+                $metodosExistentes = BarCashMovement::where('bar_cash_session_id', $sessao->id)
+                    ->pluck('payment_method')
+                    ->toArray();
+
+                // 🔍 DEBUG 3: Soma dos vouchers
                 $vouchers = BarCashMovement::where('bar_cash_session_id', $sessao->id)
-                    ->whereRaw('LOWER(payment_method) LIKE ?', ['%voucher%'])
+                    ->where('type', 'venda')
+                    ->where('payment_method', 'like', '%voucher%')
                     ->sum('amount');
 
-                // Se o faturamento líquido for o que realmente entrou,
-                // usamos o closing_balance que já está com 40.00 no seu debug!
-                $sessao->valor_voucher_debug = (float) $vouchers;
-
-                // 💡 ATENÇÃO: Se o banco diz que o fechamento foi 40,
-                // vamos priorizar o que foi contado (closing_balance)
-                $sessao->faturamento_liquido = ($sessao->closing_balance > 0)
-                    ? (float) $sessao->closing_balance
-                    : (float) $sessao->total_vendas_sistema - (float) $vouchers;
+                $sessao->debug_info = [
+                    'total_movimentacoes' => $allMovementsCount,
+                    'metodos_encontrados' => $metodosExistentes,
+                    'valor_voucher_calculado' => (float)$vouchers,
+                    'valor_bruto_banco' => (float)$sessao->total_vendas_sistema
+                ];
 
                 return $sessao;
             });
 
         // 🚀 GATILHO DO DEBUG: Se a sessão 37 existir, pare tudo e me mostre os dados
         $debugSessao = $sessionsClosed->where('id', 37)->first();
-
+        if ($debugSessao) {
+            dd([
+                'ID_SESSAO' => $debugSessao->id,
+                'DADOS_DEBUG' => $debugSessao->debug_info,
+                'OBJETO_COMPLETO' => $debugSessao->toArray()
+            ]);
+        }
         $mesasAbertasCount = BarTable::where('status', 'occupied')->count();
 
         // Inicialização de variáveis

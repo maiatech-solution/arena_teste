@@ -76,7 +76,13 @@ class BarCashController extends Controller
 
         // 🚀 GATILHO DO DEBUG: Se a sessão 37 existir, pare tudo e me mostre os dados
         $debugSessao = $sessionsClosed->where('id', 37)->first();
-
+        if ($debugSessao) {
+            dd([
+                'ID_SESSAO' => $debugSessao->id,
+                'DADOS_DEBUG' => $debugSessao->debug_info,
+                'OBJETO_COMPLETO' => $debugSessao->toArray()
+            ]);
+        }
         $mesasAbertasCount = BarTable::where('status', 'occupied')->count();
 
         // Inicialização de variáveis
